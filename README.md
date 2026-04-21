@@ -1,1 +1,2 @@
 # CNN
+An exercise
