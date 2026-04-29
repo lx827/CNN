@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MNIST 手写数字识别 - CNN 项目展示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            margin: 30px 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        header .subtitle {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            margin: 5px;
+            font-size: 0.9em;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 20px 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .card h3 {
+            color: #764ba2;
+            margin: 20px 0 10px 0;
+            font-size: 1.3em;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-box {
+            background: linear-gradient(135deg, #667eea15, #764ba215);
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .feature-box h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .feature-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .feature-box li {
+            padding: 5px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .feature-box li:before {
+            content: "✓";
+            color: #667eea;
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+
+        th {
+            background: #667eea;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 10px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .code-block code {
+            color: #50fa7b;
+        }
+
+        .highlight {
+            background: linear-gradient(120deg, #667eea20, #764ba220);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            margin: 15px 0;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 10px;
+        }
+
+        .stat-item .number {
+            font-size: 2em;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stat-item .label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .architecture-diagram {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.8;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            padding: 20px;
+            margin: 30px 0;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2em;
+            }
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔥 MNIST 手写数字识别</h1>
+            <p class="subtitle">基于 PyTorch 的卷积神经网络 (CNN) 深度学习项目</p>
+            <div>
+                <span class="badge">PyTorch</span>
+                <span class="badge">CNN</span>
+                <span class="badge">MNIST</span>
+                <span class="badge">深度学习</span>
+            </div>
+        </header>
+
+        <div class="card">
+            <h2>📊 项目概述</h2>
+            <p>这是一个使用卷积神经网络 (CNN) 进行手写数字识别的深度学习项目。项目基于 PyTorch 框架，使用经典的 MNIST 数据集进行训练和评估。包含两个版本的训练脚本，从基础到优化，适合学习和实践深度学习模型开发。</p>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="number">99%+</span>
+                    <span class="label">测试准确率</span>
+                </div>
+                <div class="stat-item">
+                    <span class="number">60,000</span>
+                    <span class="label">训练样本</span>
+                </div>
+                <div class="stat-item">
+                    <span class="number">10,000</span>
+                    <span class="label">测试样本</span>
+                </div>
+                <div class="stat-item">
+                    <span class="number">2</span>
+                    <span class="label">版本脚本</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🏗️ 模型架构</h2>
+            
+            <h3>V1 基础版 (MNISTCNN)</h3>
+            <div class="architecture-diagram">
+输入(1×28×28) → Conv(32) → BN → ReLU → MaxPool → Conv(64) → BN → ReLU → MaxPool → Flatten → Linear(128) → ReLU → Dropout(0.5) → Linear(10)
+            </div>
+
+            <h3>V2 优化版 (MNISTCNNImproved)</h3>
+            <div class="architecture-diagram">
+输入(1×28×28) 
+  → [Conv(32)→BN→ReLU→Conv(32)→BN→ReLU→MaxPool→Dropout]
+  → [Conv(64)→BN→ReLU→Conv(64)→BN→ReLU→MaxPool→Dropout]
+  → [Conv(128)→BN→ReLU]
+  → Flatten → Linear(256) → ReLU → Dropout(0.3) → Linear(10)
+            </div>
+
+            <div class="highlight">
+                <strong>💡 优化亮点：</strong>V2 版本采用更深的网络结构（3个卷积块 vs 2个），引入数据增强、学习率调度器、早停机制和权重衰减，有效提升了模型泛化能力。
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>⚙️ 超参数对比</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>参数</th>
+                        <th>V1 基础版</th>
+                        <th>V2 优化版</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>训练轮数 (Epochs)</td>
+                        <td>50</td>
+                        <td>40</td>
+                    </tr>
+                    <tr>
+                        <td>学习率</td>
+                        <td>0.001</td>
+                        <td>0.001</td>
+                    </tr>
+                    <tr>
+                        <td>批次大小</td>
+                        <td>64</td>
+                        <td>64</td>
+                    </tr>
+                    <tr>
+                        <td>Dropout</td>
+                        <td>0.5</td>
+                        <td>0.3</td>
+                    </tr>
+                    <tr>
+                        <td>权重衰减</td>
+                        <td>❌</td>
+                        <td>✅ (1e-4)</td>
+                    </tr>
+                    <tr>
+                        <td>数据增强</td>
+                        <td>❌</td>
+                        <td>✅ (RandomAffine)</td>
+                    </tr>
+                    <tr>
+                        <td>学习率调度</td>
+                        <td>❌</td>
+                        <td>✅ (StepLR)</td>
+                    </tr>
+                    <tr>
+                        <td>早停机制</td>
+                        <td>❌</td>
+                        <td>✅ (patience=8)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>🚀 快速开始</h2>
+            
+            <h3>1. 安装依赖</h3>
+            <div class="code-block">
+<code>pip install torch torchvision numpy scikit-learn matplotlib seaborn</code>
+            </div>
+
+            <h3>2. 运行训练</h3>
+            <div class="code-block">
+<code># 运行基础版
+python train_mnist_v1.py
+
+# 运行优化版（推荐）
+python train_mnist_v2.py</code>
+            </div>
+
+            <div class="highlight">
+                <strong>💡 提示：</strong>脚本会自动下载 MNIST 数据集，并在训练完成后生成详细的评估报告和可视化图表。支持 GPU 加速（如可用）。
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📈 输出结果</h2>
+            <p>训练完成后，会自动生成结果目录，包含以下内容：</p>
+
+            <div class="grid-2">
+                <div class="feature-box">
+                    <h4>📄 文本报告</h4>
+                    <ul>
+                        <li>测试集综合指标 (test_metrics.txt)</li>
+                        <li>分类详细报告 (classification_report.csv)</li>
+                        <li>训练日志 (training_log.csv)</li>
+                        <li>混淆矩阵数据 (confusion_matrix.csv)</li>
+                    </ul>
+                </div>
+
+                <div class="feature-box">
+                    <h4>📊 可视化图表 (12张)</h4>
+                    <ul>
+                        <li>训练/验证损失和准确率曲线</li>
+                        <li>混淆矩阵热力图</li>
+                        <li>ROC 曲线</li>
+                        <li>F1 分数分布</li>
+                        <li>误分类样本展示</li>
+                        <li>预测置信度分布</li>
+                    </ul>
+                </div>
+
+                <div class="feature-box">
+                    <h4>💾 模型权重</h4>
+                    <ul>
+                        <li>V1: best_mnist_cnn.pth</li>
+                        <li>V2: best_mnist_cnn_optimized.pth</li>
+                    </ul>
+                </div>
+
+                <div class="feature-box">
+                    <h4>🎯 评估指标</h4>
+                    <ul>
+                        <li>准确率 (Accuracy)</li>
+                        <li>精确率 (Precision)</li>
+                        <li>召回率 (Recall)</li>
+                        <li>F1 分数 (Macro/Weighted)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🛠️ 技术栈</h2>
+            <div class="grid-2">
+                <div class="feature-box">
+                    <h4>核心框架</h4>
+                    <ul>
+                        <li>PyTorch - 深度学习框架</li>
+                        <li>Torchvision - 数据处理与模型</li>
+                        <li>NumPy - 数值计算</li>
+                    </ul>
+                </div>
+
+                <div class="feature-box">
+                    <h4>评估与可视化</h4>
+                    <ul>
+                        <li>Scikit-learn - 评估指标</li>
+                        <li>Matplotlib - 图表绘制</li>
+                        <li>Seaborn - 热力图可视化</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>✨ 项目特性</h2>
+            <div class="feature-box">
+                <ul>
+                    <li><strong>可复现性：</strong>固定随机种子 (seed=42)，保证结果可复现</li>
+                    <li><strong>GPU 加速：</strong>自动检测并使用 GPU（如可用）</li>
+                    <li><strong>数据划分：</strong>55000 训练 / 5000 验证 / 10000 测试</li>
+                    <li><strong>服务器友好：</strong>使用非交互式后端，适合无头环境运行</li>
+                    <li><strong>完整评估：</strong>提供多维度评估指标和可视化分析</li>
+                    <li><strong>学习友好：</strong>从基础到优化的渐进式设计</li>
+                </ul>
+            </div>
+        </div>
+
+        <footer>
+            <p>MNIST CNN 项目 | 基于 PyTorch 的深度学习实践</p>
+            <p style="margin-top: 10px; opacity: 0.8;">📧 有问题？欢迎交流讨论</p>
+        </footer>
+    </div>
+</body>
+</html>
