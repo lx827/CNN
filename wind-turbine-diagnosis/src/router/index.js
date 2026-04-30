@@ -8,25 +8,25 @@ const routes = [
     redirect: '/dashboard',
     children: [
       {
-        path: '/dashboard',
+        path: 'dashboard',
         name: 'Dashboard',
         component: () => import('../views/Dashboard.vue'),
         meta: { title: '设备总览' }
       },
       {
-        path: '/monitor',
+        path: 'monitor',
         name: 'Monitor',
         component: () => import('../views/Monitor.vue'),
         meta: { title: '实时监测' }
       },
       {
-        path: '/diagnosis',
+        path: 'diagnosis',
         name: 'Diagnosis',
         component: () => import('../views/Diagnosis.vue'),
         meta: { title: '故障诊断' }
       },
       {
-        path: '/alarm',
+        path: 'alarm',
         name: 'Alarm',
         component: () => import('../views/Alarm.vue'),
         meta: { title: '告警记录' }
