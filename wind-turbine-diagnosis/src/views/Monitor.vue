@@ -103,9 +103,9 @@ let freqInstance = null
 let timer = null
 
 const sensors = ref([
-  { name: '振动传感器 #1', status: 'normal', statusText: '正常' },
-  { name: '振动传感器 #2', status: 'normal', statusText: '正常' },
-  { name: '振动传感器 #3', status: 'normal', statusText: '正常' },
+  { name: '振动传感器 1', status: 'normal', statusText: '正常' },
+  { name: '振动传感器 2', status: 'normal', statusText: '正常' },
+  { name: '振动传感器 3', status: 'normal', statusText: '正常' },
   { name: '温度传感器', status: 'normal', statusText: '正常' },
   { name: '转速传感器', status: 'normal', statusText: '正常' },
   { name: '压力传感器', status: 'normal', statusText: '正常' }

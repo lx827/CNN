@@ -69,7 +69,7 @@ export const getRealtimeVibrationData = () => {
         }
       ],
       sensorParams: {
-        rpm: 1485 + Math.random() * 10 - 5,
+        rpm: 485 + Math.random() * 10 - 5,
         temperature: 68 + Math.random() * 4 - 2,
         load: 85 + Math.random() * 10 - 5
       }

@@ -23,7 +23,7 @@
         <el-card>
           <template #header>
             <div class="card-header">
-              <span>故障 #{{ index + 1 }}: {{ fault.component }}</span>
+              <span>故障 {{ index + 1 }}: {{ fault.component }}</span>
               <el-tag :type="getSeverityType(fault.severity)">
                 {{ getSeverityText(fault.severity) }}
               </el-tag>
@@ -76,7 +76,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { getFaultDiagnosisResult } from '../api'
 
@@ -192,6 +192,9 @@ onMounted(async () => {
   diagnosisTime.value = res.data.diagnosisTime
   faults.value = res.data.faults
 
+  // 关键：等DOM更新完成后，再初始化图表
+  await nextTick()
+
   // 初始化所有图表
   faults.value.forEach((fault, index) => {
     initIMFChart(index, fault.imfComponents)
@@ -201,11 +204,6 @@ onMounted(async () => {
   window.addEventListener('resize', () => {
     chartInstances.forEach(chart => chart.resize())
   })
-})
-
-onUnmounted(() => {
-  chartInstances.forEach(chart => chart.dispose())
-  window.removeEventListener('resize', () => {})
 })
 </script>
 
