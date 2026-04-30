@@ -96,68 +96,84 @@ npm run preview
 - 告警记录列表（分页）
 - 详情查看对话框
 
-## 🔌 接口说明
+## 🔌 数据层说明
 
-所有接口都在 `src/api/index.js` 中，目前使用模拟数据：
+### 当前架构：前端 → 虚拟数据库
 
-| 接口名 | 说明 | 返回数据 |
-|--------|------|----------|
-| `getDeviceInfo()` | 获取设备信息 | 设备状态、健康度、部件列表 |
-| `getRealtimeVibrationData()` | 获取实时振动数据 | 多通道波形数据、运行参数 |
-| `getFaultDiagnosisResult()` | 获取故障诊断结果 | 故障列表、IMF分量、概率分布 |
-| `getHistoryAlarmList()` | 获取历史告警记录 | 告警列表、总数 |
-| `getStatistics()` | 获取统计数据 | 故障分布、月度趋势 |
+项目使用 **虚拟数据库层** (`src/database/virtual-db.js`) 模拟数据库操作：
 
-## 🔄 如何对接真实后端
+- ✅ 不依赖后端 HTTP 服务
+- ✅ 不依赖真实数据库
+- ✅ 直接在前端模拟数据库读写
+- ✅ 后期可替换为真实数据库连接
 
-### 步骤 1：修改 baseURL
+### 数据流
 
-打开 `src/utils/request.js`，修改 `baseURL`：
+```
+Vue 页面 → src/api/index.js → src/database/virtual-db.js → 虚拟数据表（内存）
+```
+
+### 虚拟数据表
+
+| 表名 | 说明 |
+|------|------|
+| `devicesTable` | 设备信息表 |
+| `componentsTable` | 部件状态表 |
+| `vibrationDataTable` | 振动数据表（实时） |
+| `diagnosisResultTable` | 诊断结果表 |
+| `alarmRecordsTable` | 告警记录表 |
+| `statisticsTable` | 统计表 |
+
+## 🔄 后期对接真实数据库
+
+### 方案 1：保留虚拟数据库，替换数据源
+
+修改 `src/database/virtual-db.js` 中的查询函数，将内存数据替换为真实数据库查询：
+
+```javascript
+// 虚拟数据库 → 真实数据库（以 MySQL 为例）
+import mysql from 'mysql2/promise'
+
+const pool = mysql.createPool({
+  host: 'localhost',
+  user: 'root',
+  password: 'xxx',
+  database: 'wind_turbine'
+})
+
+export const queryDeviceInfo = async (deviceId = 1) => {
+  const [deviceRows] = await pool.execute('SELECT * FROM devices WHERE id = ?', [deviceId])
+  const [componentRows] = await pool.execute('SELECT * FROM components WHERE deviceId = ?', [deviceId])
+  
+  return {
+    code: 200,
+    data: {
+      ...deviceRows[0],
+      components: componentRows
+    }
+  }
+}
+```
+
+### 方案 2：通过后端 API 间接连接
+
+如果后续搭建后端服务，修改 `src/api/index.js`：
+
+```javascript
+import request from '../utils/request'
+
+// 改为 HTTP 请求
+export const getDeviceInfo = () => {
+  return request.get('/device/info')
+}
+```
+
+同时在 `src/utils/request.js` 中配置 baseURL：
 
 ```javascript
 const request = axios.create({
-  baseURL: 'http://your-api-domain.com/api',  // 改成真实后端地址
+  baseURL: 'http://your-api-domain.com/api',
   timeout: 5000
-})
-```
-
-### 步骤 2：替换模拟接口
-
-打开 `src/api/index.js`，将所有 `Promise.resolve()` 替换为真实请求：
-
-```javascript
-// 修改前（模拟数据）
-export const getDeviceInfo = () => {
-  return Promise.resolve({
-    code: 200,
-    data: { ... }
-  })
-}
-
-// 修改后（真实请求）
-export const getDeviceInfo = () => {
-  return request.get('/device/info')  // 调用真实接口
-}
-```
-
-### 步骤 3：处理跨域（如果需要）
-
-如果前后端域名不同，需要在 `vite.config.js` 配置代理：
-
-```javascript
-export default defineConfig({
-  plugins: [vue()],
-  server: {
-    port: 3000,
-    open: true,
-    proxy: {
-      '/api': {
-        target: 'http://your-api-domain.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
-      }
-    }
-  }
 })
 ```
 
