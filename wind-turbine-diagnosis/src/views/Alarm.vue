@@ -53,7 +53,11 @@
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="time" label="告警时间" width="180" />
         <el-table-column prop="component" label="故障部件" width="150" />
-        <el-table-column prop="faultType" label="故障类型" width="160" />
+        <el-table-column prop="faultType" label="故障类型" width="160">
+          <template #default="{ row }">
+            {{ getFaultTypeText(row.faultType) }}
+          </template>
+        </el-table-column>
         <el-table-column label="严重程度" width="120">
           <template #default="{ row }">
             <el-tag :type="getSeverityType(row.severity)">
@@ -92,7 +96,7 @@
       <el-descriptions :column="1" border v-if="selectedAlarm">
         <el-descriptions-item label="告警时间">{{ selectedAlarm.time }}</el-descriptions-item>
         <el-descriptions-item label="故障部件">{{ selectedAlarm.component }}</el-descriptions-item>
-        <el-descriptions-item label="故障类型">{{ selectedAlarm.faultType }}</el-descriptions-item>
+        <el-descriptions-item label="故障类型">{{ getFaultTypeText(selectedAlarm.faultType) }}</el-descriptions-item>
         <el-descriptions-item label="严重程度">
           <el-tag :type="getSeverityType(selectedAlarm.severity)">
             {{ getSeverityText(selectedAlarm.severity) }}
@@ -141,6 +145,20 @@ const getSeverityText = (severity) => {
 const getStatusType = (status) => {
   const map = { 待处理: 'warning', 监测中: 'info', 已处理: 'success' }
   return map[status] || 'info'
+}
+
+const getFaultTypeText = (type) => {
+  const map = {
+    inner_race: '轴承内圈故障',
+    outer_race: '轴承外圈故障',
+    ball: '轴承滚动体故障',
+    broken: '齿轮断齿',
+    missing: '齿轮缺齿',
+    rootcrack: '齿轮齿根裂纹',
+    wear: '齿轮磨损',
+    normal: '正常'
+  }
+  return map[type] || type
 }
 
 const loadData = async () => {

@@ -35,7 +35,7 @@
             <el-col :xs="24" :md="8">
               <el-descriptions :column="1" border>
                 <el-descriptions-item label="故障部件">{{ fault.component }}</el-descriptions-item>
-                <el-descriptions-item label="故障类型">{{ fault.faultType }}</el-descriptions-item>
+                <el-descriptions-item label="故障类型">{{ getFaultTypeText(fault.faultType) }}</el-descriptions-item>
                 <el-descriptions-item label="置信度">
                   <el-progress
                     :percentage="Math.round(fault.confidence * 100)"
@@ -97,6 +97,20 @@ const getSeverityType = (severity) => {
 const getSeverityText = (severity) => {
   const map = { low: '轻度', medium: '中度', high: '重度' }
   return map[severity] || '未知'
+}
+
+const getFaultTypeText = (type) => {
+  const map = {
+    inner_race: '轴承内圈故障',
+    outer_race: '轴承外圈故障',
+    ball: '轴承滚动体故障',
+    broken: '齿轮断齿',
+    missing: '齿轮缺齿',
+    rootcrack: '齿轮齿根裂纹',
+    wear: '齿轮磨损',
+    normal: '正常'
+  }
+  return map[type] || type
 }
 
 const getConfidenceColor = (confidence) => {

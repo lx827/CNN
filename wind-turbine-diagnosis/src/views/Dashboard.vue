@@ -201,6 +201,20 @@ const initGaugeChart = () => {
 const initPieChart = async () => {
   pieInstance = echarts.init(pieChart.value)
   const res = await getStatistics()
+
+  const faultTypeMap = {
+    gear_wear: '齿轮磨损',
+    bearing_outer_race: '轴承外圈故障',
+    bearing_inner_race: '轴承内圈故障',
+    gear_broken: '齿轮断齿',
+    bearing_ball: '轴承滚动体故障'
+  }
+
+  const pieData = res.data.faultDistribution.map(item => ({
+    ...item,
+    name: faultTypeMap[item.name] || item.name
+  }))
+
   const option = {
     tooltip: {
       trigger: 'item',
@@ -230,7 +244,7 @@ const initPieChart = async () => {
             fontWeight: 'bold'
           }
         },
-        data: res.data.faultDistribution,
+        data: pieData,
         color: ['#165DFF', '#52C41A', '#FAAD14', '#F5222D', '#722ED1']
       }
     ]

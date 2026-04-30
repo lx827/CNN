@@ -85,11 +85,11 @@ const diagnosisResultTable = [
     deviceId: 1,
     diagnosisTime: '2024-04-29 14:32:18',
     overallStatus: 'warning',
-    component: '行星齿轮组',
-    faultType: '齿面磨损',
+    component: '高速轴齿轮',
+    faultType: 'wear',
     severity: 'medium',       // low / medium / high
     confidence: 0.87,
-    description: '检测到特征频率幅值增大，建议检查齿轮啮合状态',
+    description: '检测到齿轮磨损特征频率幅值增大，建议检查齿轮啮合状态',
     imfComponents: [
       { name: 'IMF1', energy: 45.2, freq: 125 },
       { name: 'IMF2', energy: 28.6, freq: 250 },
@@ -98,10 +98,10 @@ const diagnosisResultTable = [
       { name: 'IMF5', energy: 3.0, freq: 625 }
     ],
     probabilities: [
-      { type: '齿面磨损', probability: 0.87 },
-      { type: '齿轮点蚀', probability: 0.62 },
-      { type: '齿轮断齿', probability: 0.23 },
-      { type: '正常状态', probability: 0.13 }
+      { type: 'wear', probability: 0.87 },
+      { type: 'broken', probability: 0.62 },
+      { type: 'rootcrack', probability: 0.23 },
+      { type: 'missing', probability: 0.13 }
     ],
     createdAt: '2024-04-29 14:32:18'
   },
@@ -111,7 +111,7 @@ const diagnosisResultTable = [
     diagnosisTime: '2024-04-29 14:32:18',
     overallStatus: 'warning',
     component: '输出轴轴承',
-    faultType: '外圈轻微剥落',
+    faultType: 'outer_race',
     severity: 'low',
     confidence: 0.74,
     description: '轴承外圈故障特征频率轻微突出，持续监测中',
@@ -123,10 +123,10 @@ const diagnosisResultTable = [
       { name: 'IMF5', energy: 1.5, freq: 900 }
     ],
     probabilities: [
-      { type: '外圈剥落', probability: 0.74 },
-      { type: '内圈磨损', probability: 0.35 },
-      { type: '滚动体损伤', probability: 0.28 },
-      { type: '正常状态', probability: 0.26 }
+      { type: 'outer_race', probability: 0.74 },
+      { type: 'inner_race', probability: 0.35 },
+      { type: 'ball', probability: 0.28 },
+      { type: 'normal', probability: 0.26 }
     ],
     createdAt: '2024-04-29 14:32:18'
   }
@@ -134,24 +134,24 @@ const diagnosisResultTable = [
 
 // 告警记录表
 const alarmRecordsTable = [
-  { id: 1, deviceId: 1, time: '2024-04-29 14:32:18', component: '行星齿轮组', faultType: '齿面磨损', severity: 'warning', confidence: '87%', status: '待处理' },
-  { id: 2, deviceId: 1, time: '2024-04-29 09:15:42', component: '输出轴轴承', faultType: '外圈轻微剥落', severity: 'info', confidence: '74%', status: '监测中' },
-  { id: 3, deviceId: 1, time: '2024-04-28 16:23:05', component: '低速轴齿轮', faultType: '齿面点蚀', severity: 'warning', confidence: '82%', status: '已处理' },
-  { id: 4, deviceId: 1, time: '2024-04-27 11:45:33', component: '高速轴齿轮', faultType: '轻微磨损', severity: 'info', confidence: '68%', status: '已处理' },
-  { id: 5, deviceId: 1, time: '2024-04-26 08:12:19', component: '输入轴轴承', faultType: '润滑不足预警', severity: 'info', confidence: '71%', status: '已处理' },
-  { id: 6, deviceId: 1, time: '2024-04-25 15:38:27', component: '中间轴轴承', faultType: '温度异常', severity: 'warning', confidence: '79%', status: '已处理' },
-  { id: 7, deviceId: 1, time: '2024-04-24 10:22:41', component: '行星齿轮组', faultType: '啮合频率异常', severity: 'danger', confidence: '91%', status: '已处理' },
-  { id: 8, deviceId: 1, time: '2024-04-23 14:55:08', component: '输出轴轴承', faultType: '振动超标', severity: 'danger', confidence: '88%', status: '已处理' }
+  { id: 1, deviceId: 1, time: '2024-04-29 14:32:18', component: '高速轴齿轮', faultType: 'wear', severity: 'warning', confidence: '87%', status: '待处理' },
+  { id: 2, deviceId: 1, time: '2024-04-29 09:15:42', component: '输出轴轴承', faultType: 'outer_race', severity: 'info', confidence: '74%', status: '监测中' },
+  { id: 3, deviceId: 1, time: '2024-04-28 16:23:05', component: '低速轴齿轮', faultType: 'rootcrack', severity: 'warning', confidence: '82%', status: '已处理' },
+  { id: 4, deviceId: 1, time: '2024-04-27 11:45:33', component: '高速轴齿轮', faultType: 'broken', severity: 'info', confidence: '68%', status: '已处理' },
+  { id: 5, deviceId: 1, time: '2024-04-26 08:12:19', component: '输入轴轴承', faultType: 'inner_race', severity: 'info', confidence: '71%', status: '已处理' },
+  { id: 6, deviceId: 1, time: '2024-04-25 15:38:27', component: '中间轴轴承', faultType: 'ball', severity: 'warning', confidence: '79%', status: '已处理' },
+  { id: 7, deviceId: 1, time: '2024-04-24 10:22:41', component: '低速轴齿轮', faultType: 'missing', severity: 'danger', confidence: '91%', status: '已处理' },
+  { id: 8, deviceId: 1, time: '2024-04-23 14:55:08', component: '输出轴轴承', faultType: 'outer_race', severity: 'danger', confidence: '88%', status: '已处理' }
 ]
 
 // 统计表
 const statisticsTable = {
   faultDistribution: [
-    { value: 12, name: '齿轮磨损' },
-    { value: 8, name: '轴承损伤' },
-    { value: 5, name: '润滑异常' },
-    { value: 3, name: '不对中' },
-    { value: 2, name: '松动' }
+    { value: 12, name: 'gear_wear' },
+    { value: 8, name: 'bearing_outer_race' },
+    { value: 5, name: 'bearing_inner_race' },
+    { value: 3, name: 'gear_broken' },
+    { value: 2, name: 'bearing_ball' }
   ],
   monthlyTrend: {
     months: ['1月', '2月', '3月', '4月', '5月', '6月'],
@@ -189,7 +189,7 @@ function simulateDelay(ms = 100) {
  */
 export const queryDeviceInfo = async (deviceId = 1) => {
   await simulateDelay()
-  
+
   return {
     code: 200,
     data: {
@@ -210,9 +210,9 @@ export const queryDeviceInfo = async (deviceId = 1) => {
  */
 export const queryRealtimeVibration = async (deviceId = 1) => {
   await simulateDelay()
-  
+
   const length = 500
-  
+
   // 模拟数据动态更新
   vibrationDataTable.timestamp = new Date().toISOString()
   vibrationDataTable.channels = [
@@ -269,9 +269,9 @@ export const queryRealtimeVibration = async (deviceId = 1) => {
  */
 export const queryDiagnosisResult = async (deviceId = 1) => {
   await simulateDelay()
-  
+
   const results = diagnosisResultTable.filter(r => r.deviceId === deviceId)
-  
+
   return {
     code: 200,
     data: {
@@ -288,12 +288,12 @@ export const queryDiagnosisResult = async (deviceId = 1) => {
  */
 export const queryAlarmRecords = async (deviceId = 1, page = 1, pageSize = 10) => {
   await simulateDelay()
-  
+
   const records = alarmRecordsTable.filter(r => r.deviceId === deviceId)
   const total = records.length
   const start = (page - 1) * pageSize
   const list = records.slice(start, start + pageSize)
-  
+
   return {
     code: 200,
     data: {
@@ -309,7 +309,7 @@ export const queryAlarmRecords = async (deviceId = 1, page = 1, pageSize = 10) =
  */
 export const queryStatistics = async () => {
   await simulateDelay()
-  
+
   return {
     code: 200,
     data: statisticsTable
@@ -322,16 +322,16 @@ export const queryStatistics = async () => {
  */
 export const insertAlarm = async (alarmData) => {
   await simulateDelay()
-  
+
   const newAlarm = {
     id: alarmRecordsTable.length + 1,
     deviceId: 1,
     time: new Date().toLocaleString('zh-CN'),
     ...alarmData
   }
-  
+
   alarmRecordsTable.unshift(newAlarm)
-  
+
   return {
     code: 200,
     data: newAlarm,
@@ -345,14 +345,14 @@ export const insertAlarm = async (alarmData) => {
  */
 export const updateAlarmStatus = async (alarmId, newStatus) => {
   await simulateDelay()
-  
+
   const alarm = alarmRecordsTable.find(a => a.id === alarmId)
   if (!alarm) {
     return { code: 404, message: '告警记录不存在' }
   }
-  
+
   alarm.status = newStatus
-  
+
   return {
     code: 200,
     data: alarm,
@@ -366,10 +366,10 @@ export const updateAlarmStatus = async (alarmId, newStatus) => {
  */
 export const updateDeviceHealth = async (deviceId, healthScore) => {
   await simulateDelay()
-  
+
   devicesTable.healthScore = healthScore
   devicesTable.updatedAt = new Date().toLocaleString('zh-CN')
-  
+
   return {
     code: 200,
     data: devicesTable,
