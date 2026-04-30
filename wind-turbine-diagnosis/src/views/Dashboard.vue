@@ -170,12 +170,18 @@ const initGaugeChart = () => {
         },
         axisTick: { show: false },
         splitLine: {
-          length: 15,
+          length: 10,
           lineStyle: { width: 2, color: '#999' }
+        },
+        axisLabel: {
+          show: true,
+          distance: 15, // 数字离外圈的距离，往外移15px
+          fontSize: 14,
+          color: '#666'
         },
         detail: {
           fontSize: 40,
-          offsetCenter: [0, '20%'],
+          offsetCenter: [0, '-20%'],
           formatter: '{value}',
           color: '#165DFF',
           fontWeight: 'bold'
