@@ -30,6 +30,14 @@
             <el-icon><Bell /></el-icon>
             <span>告警记录</span>
           </el-menu-item>
+          <el-menu-item index="/data">
+            <el-icon><DataLine /></el-icon>
+            <span>数据查看</span>
+          </el-menu-item>
+          <el-menu-item index="/settings">
+            <el-icon><Setting /></el-icon>
+            <span>边端配置</span>
+          </el-menu-item>
         </el-menu>
       </div>
     </el-header>

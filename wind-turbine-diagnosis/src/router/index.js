@@ -30,6 +30,18 @@ const routes = [
         name: 'Alarm',
         component: () => import('../views/Alarm.vue'),
         meta: { title: '告警记录' }
+      },
+      {
+        path: '/data',
+        name: 'DataView',
+        component: () => import('../views/DataView.vue'),
+        meta: { title: '数据查看' }
+      },
+      {
+        path: '/settings',
+        name: 'Settings',
+        component: () => import('../views/Settings.vue'),
+        meta: { title: '边端配置' }
       }
     ]
   }
