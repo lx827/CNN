@@ -7,9 +7,28 @@
           <template #header>
             <div class="card-header">
               <span>传感器状态</span>
-              <el-button type="primary" @click="toggleMonitor">
-                {{ isMonitoring ? '暂停监测' : '开始监测' }}
-              </el-button>
+              <div class="header-actions">
+                <el-tag v-if="lastDataSource === 'special'" type="danger" effect="dark" class="special-tag">
+                  <el-icon><Star-Filled /></el-icon> 特殊采集
+                </el-tag>
+                <el-select v-model="selectedCollectDevice" placeholder="选择设备" style="width: 160px" size="default">
+                  <el-option
+                    v-for="d in collectDevices"
+                    :key="d.device_id"
+                    :label="d.name"
+                    :value="d.device_id"
+                  />
+                </el-select>
+                <el-button
+                  type="primary"
+                  :loading="isCollecting"
+                  :disabled="isCollecting || !selectedCollectDevice"
+                  @click="requestCollect"
+                >
+                  <el-icon v-if="!isCollecting"><Video-Play /></el-icon>
+                  {{ isCollecting ? collectionStatus : '请求采集' }}
+                </el-button>
+              </div>
             </div>
           </template>
           <el-row :gutter="20">
@@ -50,6 +69,25 @@
       </el-col>
     </el-row>
 
+    <!-- 采集进度提示 -->
+    <el-row v-if="isCollecting" :gutter="20" class="progress-row">
+      <el-col :span="24">
+        <el-alert
+          :title="collectionStatus"
+          type="info"
+          :closable="false"
+          show-icon
+        >
+          <template #default>
+            <div class="progress-detail">
+              <el-progress :percentage="collectionProgress" :stroke-width="8" />
+              <span class="progress-hint">边端正在按 25600Hz 采集 10s 数据...</span>
+            </div>
+          </template>
+        </el-alert>
+      </el-col>
+    </el-row>
+
     <!-- 振动信号图表 -->
     <el-row :gutter="20" class="chart-row">
       <el-col :span="24">
@@ -57,7 +95,7 @@
           <template #header>
             <div class="card-header">
               <span>振动信号时域波形</span>
-              <el-select v-model="activeChannel" style="width: 200px">
+              <el-select v-model="activeChannel" style="width: 220px">
                 <el-option
                   v-for="(channel, index) in channels"
                   :key="index"
@@ -78,6 +116,7 @@
           <template #header>
             <div class="card-header">
               <span>频域谱图</span>
+              <el-tag v-if="lastDataSource === 'special'" type="danger" size="small" effect="plain">特殊采集数据</el-tag>
             </div>
           </template>
           <div ref="frequencyChart" class="chart"></div>
@@ -88,11 +127,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
-import { getRealtimeVibrationData } from '../api'
+import { getRealtimeVibrationData, requestCollection, getTaskStatus, getDevices } from '../api'
+import { getWebSocketClient } from '../utils/websocket'
+import { ElMessage } from 'element-plus'
 
-const isMonitoring = ref(true)
 const activeChannel = ref(0)
 const channels = ref([])
 const params = ref({})
@@ -100,63 +140,232 @@ const timeDomainChart = ref(null)
 const frequencyChart = ref(null)
 let timeInstance = null
 let freqInstance = null
-let timer = null
+let pollTimer = null
 
-const sensors = ref([
-  { name: '振动传感器 1', status: 'normal', statusText: '正常' },
-  { name: '振动传感器 2', status: 'normal', statusText: '正常' },
-  { name: '振动传感器 3', status: 'normal', statusText: '正常' },
-  { name: '温度传感器', status: 'normal', statusText: '正常' },
-  { name: '转速传感器', status: 'normal', statusText: '正常' },
-  { name: '压力传感器', status: 'normal', statusText: '正常' }
-])
+// 采集状态
+const isCollecting = ref(false)
+const collectionStatus = ref('')
+const collectionProgress = ref(0)
+const currentTaskId = ref(null)
+const lastDataSource = ref('normal') // 'normal' | 'special'
 
-const toggleMonitor = () => {
-  isMonitoring.value = !isMonitoring.value
-  if (isMonitoring.value) {
-    startUpdate()
-  } else {
-    stopUpdate()
+// 设备选择（采集用）
+const collectDevices = ref([])
+const selectedCollectDevice = ref('')
+
+const sensors = ref([])
+
+// 根据通道数据动态构建传感器状态列表
+const buildSensors = (chList) => {
+  const list = []
+  // 振动通道
+  chList.forEach((ch) => {
+    list.push({
+      name: ch.channel_name || ch.name || `振动传感器 ${ch.id || ch.channel}`,
+      status: 'normal',
+      statusText: '正常',
+      type: 'vibration'
+    })
+  })
+  // 固定运行参数传感器
+  list.push(
+    { name: '温度传感器', status: 'normal', statusText: '正常', type: 'param' },
+    { name: '转速传感器', status: 'normal', statusText: '正常', type: 'param' },
+    { name: '压力传感器', status: 'normal', statusText: '正常', type: 'param' }
+  )
+  sensors.value = list
+}
+
+// ============ 请求采集 ============
+// 加载设备列表（用于采集选择）
+const loadCollectDevices = async () => {
+  try {
+    const res = await getDevices()
+    collectDevices.value = res.data || []
+    if (collectDevices.value.length > 0 && !selectedCollectDevice.value) {
+      selectedCollectDevice.value = collectDevices.value[0].device_id
+    }
+  } catch (e) {
+    console.error('加载设备列表失败:', e)
   }
 }
 
-const startUpdate = () => {
-  timer = setInterval(async () => {
-    await updateData()
-  }, 2000)
+const requestCollect = async () => {
+  if (isCollecting.value) return
+  if (!selectedCollectDevice.value) {
+    ElMessage.warning('请先选择设备')
+    return
+  }
+
+  try {
+    isCollecting.value = true
+    collectionStatus.value = '正在创建采集任务...'
+    collectionProgress.value = 10
+    currentTaskId.value = null
+
+    // 1. 向云端发送采集请求
+    const res = await requestCollection(selectedCollectDevice.value)
+    const taskData = res.data
+
+    if (!taskData) {
+      throw new Error('创建任务失败')
+    }
+
+    currentTaskId.value = taskData.task_id
+    collectionStatus.value = '任务已创建，等待边端响应...'
+    collectionProgress.value = 25
+
+    // 2. 开始轮询任务状态
+    startPolling(taskData.task_id)
+
+    ElMessage.success('采集任务已下发，等待边端执行')
+  } catch (e) {
+    console.error('请求采集失败:', e)
+    collectionStatus.value = '创建任务失败'
+    collectionProgress.value = 0
+    isCollecting.value = false
+    ElMessage.error('创建采集任务失败')
+  }
 }
 
-const stopUpdate = () => {
-  clearInterval(timer)
-  timer = null
+// ============ 轮询任务状态 ============
+const startPolling = (taskId) => {
+  let pollCount = 0
+  const maxPolls = 60  // 最多轮询60次（约2分钟）
+
+  const doPoll = async () => {
+    try {
+      pollCount++
+      const res = await getTaskStatus(taskId)
+      const task = res.data
+
+      if (!task) {
+        throw new Error('任务不存在')
+      }
+
+      if (task.status === 'pending') {
+        collectionStatus.value = `等待边端响应... (${pollCount}s)`
+        collectionProgress.value = 25 + Math.min(pollCount, 20)
+      } else if (task.status === 'processing') {
+        collectionStatus.value = `边端采集中... (${pollCount}s)`
+        collectionProgress.value = 50 + Math.min(pollCount, 30)
+      } else if (task.status === 'completed') {
+        collectionStatus.value = '采集完成，正在加载数据...'
+        collectionProgress.value = 90
+        // 任务完成，刷新数据
+        await loadLatestData(true) // true = 优先特殊数据
+        collectionStatus.value = '采集完成！'
+        collectionProgress.value = 100
+        isCollecting.value = false
+        lastDataSource.value = 'special'
+        clearInterval(pollTimer)
+        pollTimer = null
+        ElMessage.success('特殊采集完成，数据已加载')
+        return
+      } else if (task.status === 'failed') {
+        throw new Error(task.error_message || '采集失败')
+      }
+
+      if (pollCount >= maxPolls) {
+        throw new Error('采集超时，请检查边端是否在线')
+      }
+    } catch (e) {
+      console.error('轮询失败:', e)
+      collectionStatus.value = e.message || '采集异常'
+      collectionProgress.value = 0
+      isCollecting.value = false
+      clearInterval(pollTimer)
+      pollTimer = null
+      ElMessage.error(e.message || '采集异常')
+    }
+  }
+
+  // 立即执行一次，然后每2秒轮询
+  doPoll()
+  pollTimer = setInterval(doPoll, 2000)
 }
 
-const updateData = async () => {
-  const res = await getRealtimeVibrationData()
-  channels.value = res.data.channels
-  params.value = res.data.sensorParams
+// ============ 加载最新数据 ============
+const loadLatestData = async (preferSpecial = false) => {
+  try {
+    const res = await getRealtimeVibrationData(preferSpecial)
+    const data = res.data
+    channels.value = data.channels
+    params.value = data.sensorParams
 
-  updateCharts()
+    // 更新传感器状态（根据数据状态）
+    updateSensorStatus(data.channels)
+
+    updateCharts()
+  } catch (e) {
+    console.error('加载数据失败:', e)
+  }
 }
 
+// WebSocket 实时推送
+let wsClient = null
+const setupWebSocket = () => {
+  wsClient = getWebSocketClient()
+  wsClient.on('sensor_update', () => {
+    loadLatestData()
+  })
+  wsClient.on('diagnosis_update', () => {
+    loadLatestData()
+  })
+  wsClient.connect()
+}
+
+const updateSensorStatus = (chList) => {
+  // 根据通道数据更新传感器状态显示
+  // 先重建传感器列表（适应不同通道数）
+  buildSensors(chList)
+  // 更新振动通道状态
+  chList.forEach((ch, idx) => {
+    if (sensors.value[idx]) {
+      const rms = ch.rms || 0
+      if (rms > 5) {
+        sensors.value[idx].status = 'danger'
+        sensors.value[idx].statusText = '异常'
+      } else if (rms > 2) {
+        sensors.value[idx].status = 'warning'
+        sensors.value[idx].statusText = '警告'
+      } else {
+        sensors.value[idx].status = 'normal'
+        sensors.value[idx].statusText = '正常'
+      }
+    }
+  })
+}
+
+// ============ 图表更新 ============
 const updateCharts = () => {
   if (!channels.value[activeChannel.value]) return
 
   const channel = channels.value[activeChannel.value]
   const timeData = channel.timeDomain
   const freqData = channel.frequency
-  const xData = Array.from({ length: timeData.length }, (_, i) => i)
+  const fftFreq = channel.fftFreq || []
+  const sampleRate = channel.sampleRate || 25600
 
+  // 时域图：x 轴为时间（秒）
+  const timeX = Array.from({ length: timeData.length }, (_, i) => (i / sampleRate).toFixed(4))
   timeInstance?.setOption({
-    xAxis: { data: xData },
+    xAxis: { data: timeX },
     series: [{ data: timeData }]
   })
 
+  // 频域图：x 轴为频率 (Hz)
+  const freqX = fftFreq.length > 0 ? fftFreq : Array.from({ length: freqData.length }, (_, i) => i)
   freqInstance?.setOption({
-    xAxis: { data: xData },
+    xAxis: { data: freqX },
     series: [{ data: freqData }]
   })
 }
+
+// 监听通道切换
+watch(activeChannel, () => {
+  updateCharts()
+})
 
 const initCharts = () => {
   timeInstance = echarts.init(timeDomainChart.value)
@@ -168,7 +377,10 @@ const initCharts = () => {
     xAxis: {
       type: 'category',
       data: [],
-      boundaryGap: false
+      boundaryGap: false,
+      name: '时间 (s)',
+      nameLocation: 'middle',
+      nameGap: 25
     },
     yAxis: {
       type: 'value',
@@ -197,11 +409,14 @@ const initCharts = () => {
     xAxis: {
       type: 'category',
       data: [],
-      boundaryGap: false
+      boundaryGap: false,
+      name: '频率 (Hz)',
+      nameLocation: 'middle',
+      nameGap: 25
     },
     yAxis: {
       type: 'value',
-      name: '频率 (Hz)'
+      name: '幅值'
     },
     series: [
       {
@@ -225,19 +440,22 @@ const initCharts = () => {
 }
 
 onMounted(async () => {
-  await updateData()
+  await loadCollectDevices()
+  await loadLatestData()
   initCharts()
+  setupWebSocket()
 
   window.addEventListener('resize', () => {
     timeInstance?.resize()
     freqInstance?.resize()
   })
-
-  startUpdate()
 })
 
 onUnmounted(() => {
-  stopUpdate()
+  if (pollTimer) {
+    clearInterval(pollTimer)
+  }
+  wsClient?.close()
   timeInstance?.dispose()
   freqInstance?.dispose()
   window.removeEventListener('resize', () => {})
@@ -257,8 +475,34 @@ onUnmounted(() => {
   font-size: 16px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.special-tag {
+  font-weight: bold;
+}
+
 .sensor-row {
   margin-bottom: 20px;
+}
+
+.progress-row {
+  margin-bottom: 20px;
+}
+
+.progress-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.progress-hint {
+  font-size: 12px;
+  color: #999;
 }
 
 .chart-row {

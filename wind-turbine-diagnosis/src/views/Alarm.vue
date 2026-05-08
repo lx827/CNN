@@ -42,41 +42,64 @@
       <template #header>
         <div class="card-header">
           <span>告警记录列表</span>
-          <el-button type="primary" @click="handleRefresh">
-            <el-icon><Refresh /></el-icon>
-            刷新
-          </el-button>
+          <div class="header-actions">
+            <el-radio-group v-model="filterLevel" size="small" @change="onFilterChange">
+              <el-radio-button label="">全部</el-radio-button>
+              <el-radio-button label="warning">预警</el-radio-button>
+              <el-radio-button label="critical">严重</el-radio-button>
+            </el-radio-group>
+            <el-button type="primary" size="small" @click="handleRefresh">
+              <el-icon><Refresh /></el-icon>
+              刷新
+            </el-button>
+          </div>
         </div>
       </template>
 
       <el-table :data="alarmList" stripe v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="time" label="告警时间" width="180" />
-        <el-table-column prop="component" label="故障部件" width="150" />
-        <el-table-column prop="faultType" label="故障类型" width="160">
+        <el-table-column prop="time" label="告警时间" width="170" />
+        <el-table-column prop="device_id" label="设备" width="110" />
+        <el-table-column label="通道" width="140">
           <template #default="{ row }">
-            {{ getFaultTypeText(row.faultType) }}
+            <el-tag v-if="row.channel" size="small" type="info">
+              {{ row.channel_name || `通道${row.channel}` }}
+            </el-tag>
+            <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="严重程度" width="120">
+        <el-table-column label="类别" width="110">
           <template #default="{ row }">
-            <el-tag :type="getSeverityType(row.severity)">
-              {{ getSeverityText(row.severity) }}
+            <el-tag size="small">{{ row.category }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="title" label="告警标题" min-width="220" show-overflow-tooltip />
+        <el-table-column label="级别" width="90">
+          <template #default="{ row }">
+            <el-tag :type="getLevelType(row.level)">
+              {{ getLevelText(row.level) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="confidence" label="置信度" width="100" />
-        <el-table-column prop="status" label="处理状态" width="100">
+        <el-table-column label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)">
               {{ row.status }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120">
+        <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleDetail(row)">
-              查看详情
+            <el-button type="primary" link size="small" @click="handleDetail(row)">
+              详情
+            </el-button>
+            <el-button
+              v-if="!row.is_resolved"
+              type="success"
+              link
+              size="small"
+              @click="handleResolve(row)"
+            >
+              标记处理
             </el-button>
           </template>
         </el-table-column>
@@ -88,21 +111,34 @@
         :total="total"
         layout="total, prev, pager, next"
         class="pagination"
+        @current-change="handlePageChange"
       />
     </el-card>
 
     <!-- 详情对话框 -->
-    <el-dialog v-model="dialogVisible" title="告警详情" width="600px">
+    <el-dialog v-model="dialogVisible" title="告警详情" width="640px">
       <el-descriptions :column="1" border v-if="selectedAlarm">
         <el-descriptions-item label="告警时间">{{ selectedAlarm.time }}</el-descriptions-item>
-        <el-descriptions-item label="故障部件">{{ selectedAlarm.component }}</el-descriptions-item>
-        <el-descriptions-item label="故障类型">{{ getFaultTypeText(selectedAlarm.faultType) }}</el-descriptions-item>
-        <el-descriptions-item label="严重程度">
-          <el-tag :type="getSeverityType(selectedAlarm.severity)">
-            {{ getSeverityText(selectedAlarm.severity) }}
+        <el-descriptions-item label="设备">{{ selectedAlarm.device_id }}</el-descriptions-item>
+        <el-descriptions-item label="通道">
+          <el-tag v-if="selectedAlarm.channel" size="small" type="info">
+            {{ selectedAlarm.channel_name || `通道${selectedAlarm.channel}` }}
+          </el-tag>
+          <span v-else>-</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="类别">{{ selectedAlarm.category }}</el-descriptions-item>
+        <el-descriptions-item label="告警标题">{{ selectedAlarm.title }}</el-descriptions-item>
+        <el-descriptions-item label="级别">
+          <el-tag :type="getLevelType(selectedAlarm.level)">
+            {{ getLevelText(selectedAlarm.level) }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="置信度">{{ selectedAlarm.confidence }}</el-descriptions-item>
+        <el-descriptions-item label="详细描述">
+          <div style="white-space: pre-wrap; line-height: 1.6;">{{ selectedAlarm.description }}</div>
+        </el-descriptions-item>
+        <el-descriptions-item label="处理建议">
+          <div style="white-space: pre-wrap; line-height: 1.6;">{{ selectedAlarm.suggestion }}</div>
+        </el-descriptions-item>
         <el-descriptions-item label="处理状态">
           <el-tag :type="getStatusType(selectedAlarm.status)">
             {{ selectedAlarm.status }}
@@ -111,6 +147,13 @@
       </el-descriptions>
       <template #footer>
         <el-button @click="dialogVisible = false">关闭</el-button>
+        <el-button
+          v-if="selectedAlarm && !selectedAlarm.is_resolved"
+          type="success"
+          @click="handleResolveFromDialog"
+        >
+          标记为已处理
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -118,58 +161,61 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { getHistoryAlarmList } from '../api'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getHistoryAlarmList, updateAlarmStatus } from '../api'
 
 const loading = ref(false)
 const alarmList = ref([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
+const filterLevel = ref('')
 const dialogVisible = ref(false)
 const selectedAlarm = ref(null)
 
-const dangerCount = computed(() => alarmList.value.filter(a => a.severity === 'danger').length)
-const warnCount = computed(() => alarmList.value.filter(a => a.severity === 'warning').length)
-const handledCount = computed(() => alarmList.value.filter(a => a.status === '已处理').length)
+const dangerCount = computed(() => alarmList.value.filter(a => a.level === 'critical').length)
+const warnCount = computed(() => alarmList.value.filter(a => a.level === 'warning').length)
+const handledCount = computed(() => alarmList.value.filter(a => a.is_resolved).length)
 
-const getSeverityType = (severity) => {
-  const map = { info: 'info', warning: 'warning', danger: 'danger' }
-  return map[severity] || 'info'
+const getLevelType = (level) => {
+  const map = { info: 'info', warning: 'warning', critical: 'danger' }
+  return map[level] || 'info'
 }
 
-const getSeverityText = (severity) => {
-  const map = { info: '提示', warning: '预警', danger: '严重' }
-  return map[severity] || '未知'
+const getLevelText = (level) => {
+  const map = { info: '提示', warning: '预警', critical: '严重' }
+  return map[level] || '未知'
 }
 
 const getStatusType = (status) => {
-  const map = { 待处理: 'warning', 监测中: 'info', 已处理: 'success' }
+  const map = { 待处理: 'warning', 已处理: 'success' }
   return map[status] || 'info'
-}
-
-const getFaultTypeText = (type) => {
-  const map = {
-    inner_race: '轴承内圈故障',
-    outer_race: '轴承外圈故障',
-    ball: '轴承滚动体故障',
-    broken: '齿轮断齿',
-    missing: '齿轮缺齿',
-    rootcrack: '齿轮齿根裂纹',
-    wear: '齿轮磨损',
-    normal: '正常'
-  }
-  return map[type] || type
 }
 
 const loadData = async () => {
   loading.value = true
   try {
-    const res = await getHistoryAlarmList()
+    const filters = {}
+    if (filterLevel.value) filters.level = filterLevel.value
+    const res = await getHistoryAlarmList(currentPage.value, pageSize.value, filters)
     alarmList.value = res.data.list
     total.value = res.data.total
+  } catch (e) {
+    console.error('加载告警失败:', e)
+    ElMessage.error('加载告警失败')
   } finally {
     loading.value = false
   }
+}
+
+const onFilterChange = () => {
+  currentPage.value = 1
+  loadData()
+}
+
+const handlePageChange = (page) => {
+  currentPage.value = page
+  loadData()
 }
 
 const handleRefresh = () => {
@@ -179,6 +225,28 @@ const handleRefresh = () => {
 const handleDetail = (row) => {
   selectedAlarm.value = row
   dialogVisible.value = true
+}
+
+const handleResolve = async (row) => {
+  try {
+    await ElMessageBox.confirm('确认标记该告警为已处理？', '提示', { type: 'warning' })
+    await updateAlarmStatus(row.id)
+    ElMessage.success('已标记为处理')
+    loadData()
+  } catch (e) {
+    if (e !== 'cancel') {
+      console.error('处理告警失败:', e)
+      ElMessage.error('处理失败')
+    }
+  }
+}
+
+const handleResolveFromDialog = async () => {
+  if (!selectedAlarm.value) return
+  await updateAlarmStatus(selectedAlarm.value.id)
+  ElMessage.success('已标记为处理')
+  dialogVisible.value = false
+  loadData()
 }
 
 onMounted(() => {
@@ -243,6 +311,12 @@ onMounted(() => {
   align-items: center;
   font-weight: 600;
   font-size: 16px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .pagination {
