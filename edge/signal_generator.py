@@ -20,7 +20,6 @@ import os
 # 从环境变量读取，没有则使用默认值
 SAMPLE_RATE = int(os.getenv("SAMPLE_RATE", "25600"))  # Hz
 DURATION = int(os.getenv("DURATION", "10"))           # 秒
-N_SAMPLES = SAMPLE_RATE * DURATION
 
 
 def _add_noise(signal, snr_db=30):
@@ -31,12 +30,15 @@ def _add_noise(signal, snr_db=30):
     return signal + noise
 
 
-def normal_signal():
+def normal_signal(duration=None, sample_rate=None):
     """
     正常工况振动信号
     主要成分：转频 25 Hz + 齿轮啮合频率 180 Hz + 噪声
     """
-    t = np.linspace(0, DURATION, N_SAMPLES, endpoint=False)
+    dur = duration or DURATION
+    sr = sample_rate or SAMPLE_RATE
+    n_samples = sr * dur
+    t = np.linspace(0, dur, n_samples, endpoint=False)
     shaft_freq = 25.0
     mesh_freq = 180.0
 
@@ -48,9 +50,12 @@ def normal_signal():
     return _add_noise(signal, snr_db=35)
 
 
-def gear_wear_signal():
+def gear_wear_signal(duration=None, sample_rate=None):
     """齿轮磨损故障信号"""
-    t = np.linspace(0, DURATION, N_SAMPLES, endpoint=False)
+    dur = duration or DURATION
+    sr = sample_rate or SAMPLE_RATE
+    n_samples = sr * dur
+    t = np.linspace(0, dur, n_samples, endpoint=False)
     shaft_freq = 25.0
     mesh_freq = 180.0
 
@@ -64,9 +69,12 @@ def gear_wear_signal():
     return _add_noise(signal, snr_db=25)
 
 
-def bearing_fault_signal():
+def bearing_fault_signal(duration=None, sample_rate=None):
     """轴承外圈故障信号"""
-    t = np.linspace(0, DURATION, N_SAMPLES, endpoint=False)
+    dur = duration or DURATION
+    sr = sample_rate or SAMPLE_RATE
+    n_samples = sr * dur
+    t = np.linspace(0, dur, n_samples, endpoint=False)
     shaft_freq = 25.0
     mesh_freq = 180.0
     bpfo = 120.0
@@ -76,10 +84,10 @@ def bearing_fault_signal():
         + 0.3 * np.sin(2 * np.pi * mesh_freq * t)
     )
 
-    period_samples = int(SAMPLE_RATE / bpfo)
-    for i in range(0, N_SAMPLES, period_samples):
-        if i < N_SAMPLES - 10:
-            pulse_len = min(20, N_SAMPLES - i)
+    period_samples = int(sr / bpfo)
+    for i in range(0, n_samples, period_samples):
+        if i < n_samples - 10:
+            pulse_len = min(20, n_samples - i)
             pulse_t = np.linspace(0, 0.02, pulse_len)
             pulse = 1.5 * np.sin(2 * np.pi * 3000 * pulse_t) * np.exp(-100 * pulse_t)
             signal[i:i+pulse_len] += pulse[:pulse_len]
@@ -87,9 +95,12 @@ def bearing_fault_signal():
     return _add_noise(signal, snr_db=22)
 
 
-def misalignment_signal():
+def misalignment_signal(duration=None, sample_rate=None):
     """轴不对中故障信号"""
-    t = np.linspace(0, DURATION, N_SAMPLES, endpoint=False)
+    dur = duration or DURATION
+    sr = sample_rate or SAMPLE_RATE
+    n_samples = sr * dur
+    t = np.linspace(0, dur, n_samples, endpoint=False)
     shaft_freq = 25.0
     mesh_freq = 180.0
 
@@ -102,13 +113,15 @@ def misalignment_signal():
     return _add_noise(signal, snr_db=28)
 
 
-def generate_signals(mode: str = "auto", channel_count: int = None) -> dict:
+def generate_signals(mode: str = "auto", channel_count: int = None, duration=None, sample_rate=None) -> dict:
     """
     生成 k 通道振动信号
 
     Args:
         mode: "auto" 随机切换工况，或指定 "normal"/"gear_wear"/"bearing_fault"/"misalignment"
         channel_count: 通道数，传入则优先使用，否则读取环境变量 CHANNEL_COUNT（默认 3）
+        duration: 信号时长（秒），不传则使用全局 DURATION
+        sample_rate: 采样率（Hz），不传则使用全局 SAMPLE_RATE
 
     Returns:
         {"ch1": [...], "ch2": [...], ...}
@@ -139,7 +152,7 @@ def generate_signals(mode: str = "auto", channel_count: int = None) -> dict:
 
     result = {}
     for i, mode_name in enumerate(selected, 1):
-        sig = generators[mode_name]()
+        sig = generators[mode_name](duration=duration, sample_rate=sample_rate)
         result[f"ch{i}"] = sig.tolist()
 
     return result

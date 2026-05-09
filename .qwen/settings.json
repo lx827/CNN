@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(C:\\Users\\Lenovo\\AppData\\Roaming\\Code\\User/**)",
+      "Bash(reg *)",
+      "Bash(powershell *)"
+    ]
+  },
+  "$version": 4
+}
