@@ -102,3 +102,4 @@ coverage.xml
 # ========== Misc ==========
 *.local
 wind-turbine-diagnosis/package-lock.json
+.qwen
