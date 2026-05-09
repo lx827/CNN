@@ -88,7 +88,12 @@ def upload_data(device_id, is_special=False, task_id=None, sample_rate=None, dur
     sr = sample_rate or SAMPLE_RATE
     dur = duration or DURATION
 
-    signals = generate_signals(mode="auto", channel_count=get_device_channel_count(device_id))
+    signals = generate_signals(
+        mode="auto",
+        channel_count=get_device_channel_count(device_id),
+        duration=dur,
+        sample_rate=sr
+    )
 
     if COMPRESSION_ENABLED:
         compressed_info = compress_payload(
@@ -179,6 +184,7 @@ def main():
         config = fetch_device_config(dev_id)
         upload_interval = config.get("upload_interval", DEFAULT_UPLOAD_INTERVAL)
         task_poll_interval = config.get("task_poll_interval", DEFAULT_TASK_POLL_INTERVAL)
+        window_seconds = config.get("window_seconds", DURATION)
 
         device_states[dev_id] = {
             "last_upload_time": 0,
@@ -188,7 +194,7 @@ def main():
         }
 
         print(f"[{datetime.now().strftime('%H:%M:%S')}] [{dev_id}] 初始配置: "
-              f"上传间隔={upload_interval}s, 轮询间隔={task_poll_interval}s")
+              f"上传间隔={upload_interval}s, 轮询间隔={task_poll_interval}s, 窗口={window_seconds}s")
 
     while True:
         current_time = time.time()
@@ -226,10 +232,11 @@ def main():
             state = device_states[dev_id]
             config = state.get("config", {})
             upload_interval = config.get("upload_interval", DEFAULT_UPLOAD_INTERVAL)
+            window_seconds = config.get("window_seconds", DURATION)
 
             if current_time - state["last_upload_time"] >= upload_interval:
                 state["last_upload_time"] = current_time
-                upload_data(device_id=dev_id, is_special=False)
+                upload_data(device_id=dev_id, is_special=False, duration=window_seconds)
 
         # 3. 定期刷新云端配置
         for dev_id in DEVICE_IDS:
@@ -240,9 +247,14 @@ def main():
                 if new_config:
                     old_interval = state["config"].get("upload_interval", DEFAULT_UPLOAD_INTERVAL)
                     new_interval = new_config.get("upload_interval", DEFAULT_UPLOAD_INTERVAL)
+                    old_window = state["config"].get("window_seconds", DURATION)
+                    new_window = new_config.get("window_seconds", DURATION)
                     if old_interval != new_interval:
                         print(f"[{datetime.now().strftime('%H:%M:%S')}] [配置更新] [{dev_id}] "
                               f"上传间隔: {old_interval}s → {new_interval}s")
+                    if old_window != new_window:
+                        print(f"[{datetime.now().strftime('%H:%M:%S')}] [配置更新] [{dev_id}] "
+                              f"窗口时长: {old_window}s → {new_window}s")
                     state["config"] = new_config
 
         # 小睡眠避免CPU空转
