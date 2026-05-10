@@ -208,7 +208,7 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
         fault_probabilities.get("正常运行", 0) * 100 - max_fault_sev * 30 - random.uniform(0, 3)
     )))
 
-    status = "normal" if health_score >= 80 else "warning" if health_score >= 60 else "critical"
+    status = "normal" if health_score >= 80 else "warning" if health_score >= 60 else "fault"
 
     # 8. IMF 能量（取首个通道）
     first_channel = list(channels_data.values())[0]
