@@ -27,9 +27,15 @@
 
 > 不需要 Docker，不需要安装 MySQL。默认使用 SQLite，数据保存在 `cloud/turbine.db` 文件中。
 
-## 快速启动（三步走）
+## 快速启动
 
-### 第一步：启动云端后端
+### 方式一：一键启动（推荐）
+
+双击 `start.bat`（Windows）或运行 `./start.sh`（Linux/Mac），会自动打开三个终端窗口分别启动云端、边端和前端。
+
+### 方式二：手动启动（三个独立终端）
+
+#### 终端 1：启动云端后端
 
 ```bash
 cd cloud
@@ -53,7 +59,7 @@ python -m app.main
 - API 地址：`http://localhost:8000`
 - 自动文档：`http://localhost:8000/docs`（Swagger UI，可在线调试所有接口）
 
-### 第二步：启动边端采集（可选）
+#### 终端 2：启动边端采集（可选）
 
 > 不启动边端，系统也能正常运行（后端会自动用默认数据初始化）。启动边端后会有动态振动数据持续流入。
 
@@ -76,7 +82,7 @@ python edge_client.py
 
 > 后端启动时会自动创建 **5 个模拟设备**（WTG-001 ~ WTG-005），健康度和状态各不相同。边端通过 `DEVICE_IDS` 配置可同时为多个设备上传数据。
 
-### 第三步：启动前端界面
+#### 终端 3：启动前端界面
 
 ```bash
 # 新开一个终端
@@ -90,6 +96,10 @@ npm run dev
 ```
 
 浏览器会自动打开 `http://localhost:3000`
+
+#### 停止系统
+
+在三个终端中分别按 **Ctrl + C**。
 
 ---
 
@@ -114,6 +124,7 @@ CNN/
 ├── architecture.md              # 系统架构设计文档
 ├── README.md                    # 本文件
 ├── OPERATION.md                 # 操作手册（纯步骤）
+├── start.bat / start.sh         # 一键启动脚本
 │
 ├── cloud/                       # 云端后端
 │   ├── app/
@@ -126,7 +137,7 @@ CNN/
 │   │   │   └── websocket.py     # WebSocket 连接管理器
 │   │   ├── api/                 # RESTful 接口
 │   │   │   ├── ingest.py        # 边端数据接入（支持自动解压）
-│   │   │   ├── dashboard.py     # 设备总览
+│   │   │   ├── dashboard.py     # 设备总览（含离线检测）
 │   │   │   ├── monitor.py       # 实时监测（含后端 FFT 计算）
 │   │   │   ├── diagnosis.py     # 诊断结果
 │   │   │   ├── alarms.py        # 告警管理
@@ -155,11 +166,11 @@ CNN/
         ├── api/index.js         # 对接后端 API（数据格式转换兼容现有页面）
         ├── utils/request.js     # Axios 请求工具
         ├── views/               # 页面组件
-        │   ├── Dashboard.vue
-        │   ├── Monitor.vue
-        │   ├── Diagnosis.vue
-        │   ├── Alarm.vue
-        │   └── DataView.vue     # 数据查看（时域/FFT/STFT 可视化）
+        │   ├── Dashboard.vue    # 设备总览（所有设备健康度卡片）
+        │   ├── Monitor.vue      # 实时监测（手动触发采集 + 波形图）
+        │   ├── Diagnosis.vue    # 故障诊断结果
+        │   ├── Alarm.vue        # 告警管理
+        │   └── DataView.vue     # 数据查看（时域/FFT/STFT/包络谱/阶次谱/倒谱/统计指标）
         └── ...
 ```
 
@@ -175,6 +186,8 @@ CNN/
 
 2. 数据存储
    云端接收 → 自动识别压缩/原图模式 → 解压 → 写入 SQLite (sensor_data 表)
+   - 普通数据：最多 16 批次循环覆盖（batch_index 1~16）
+   - 特殊数据（手动触发）：batch_index 从 101 起自增，永不覆盖
 
 3. 定时分析（后台线程每 30 秒）
    读取最近数据
@@ -199,6 +212,7 @@ CNN/
    → DataView：表格展示，点击批次时间展开 FFT/STFT/包络谱/**阶次谱**/**倒谱分析**，支持删除
    → 时域图 x 轴：时间（秒）；频域图 x 轴：频率（Hz）
    → **所有频谱计算自适应实际采样率**（8192Hz / 25600Hz 等）
+```
 
 ### 手动采集流程（特殊数据）
 
@@ -238,7 +252,6 @@ CNN/
 - 使用希尔伯特变换提取信号包络
 - 对包络信号做 FFT，检测轴承特征频率（BPFO/BPFI/BSF/FTF）
 - 适用于轴承内圈/外圈/滚动体故障的早期发现
-```
 
 ---
 
@@ -285,6 +298,66 @@ COMPRESSION_ENABLED=true
 ```
 
 改完后重启边端即可生效。云端**自动兼容压缩/原图两种格式**。
+
+---
+
+## 关键配置
+
+### 云端（`cloud/.env`）
+
+```env
+USE_SQLITE=true              # true=SQLite(默认), false=MySQL
+DB_HOST=localhost            # MySQL 配置
+DB_PORT=3306
+DB_USER=turbine
+DB_PASSWORD=turbine1234
+DB_NAME=turbine_db
+API_PORT=8000
+NN_ENABLED=false             # 神经网络开关
+NN_MODEL_PATH=./models/turbine_fault_model.onnx
+```
+
+### 边端（`edge/.env`）
+
+```env
+CLOUD_INGEST_URL=http://localhost:8000/api/ingest/
+DEVICE_IDS=WTG-001,WTG-002,WTG-003,WTG-004,WTG-005
+SAMPLE_RATE=25600
+DURATION=10
+DOWNSAMPLE_RATIO=8
+COMPRESSION_ENABLED=true
+```
+
+---
+
+## 重要特性
+
+### 边端离线检测
+
+- **机制**：比较设备 `last_seen_at` 与当前时间，超过 **5 分钟** 无数据标记为离线
+- **实现位置**：`cloud/app/api/dashboard.py`
+- **展示**：Dashboard 返回 `is_offline` 标志和 `effective_status`（离线时强制为 "offline"）
+- **局限**：被动检测（仅查询时计算），无主动告警，固定阈值不可配置
+
+### 数据压缩
+
+- **流程**：峰值保持降采样 → msgpack 序列化 → zlib 压缩 → base64 编码
+- **效果**：2 MB → ~100 KB/批，月流量从 ~5 TB 降至 ~250 GB
+- **云端自动兼容** 压缩/原图两种格式
+
+### 神经网络预留接口
+
+- **位置**：`cloud/app/services/nn_predictor.py`
+- **支持框架**：ONNX / PyTorch / TensorFlow
+- **回退机制**：NN 加载失败自动回退到简化规则算法，系统不崩溃
+- **接入步骤**：训练模型 → 导出到 `cloud/models/` → 修改 `.env` 启用 → 实现推理代码 → 重启后端
+
+### 动态配置机制
+
+- 边端启动时从云端拉取配置（`GET /api/devices/edge/config`）
+- 运行中每 **30 秒** 刷新一次
+- 前端 Settings 页面修改后最长 30 秒内同步到边端
+- 本地 `.env` 中的值作为 fallback 兜底
 
 ---
 
@@ -442,10 +515,45 @@ pip install pymysql cryptography
 - 点击保存，约 30 秒内同步到边端
 - 也可编辑 `edge/.env` 中的 `UPLOAD_INTERVAL` 后重启边端
 
-**Q13: 配置修改后多久生效？**
+**Q14: 配置修改后多久生效？**
 - 边端每 30 秒自动从云端拉取最新配置
 - 保存后最长等待 30 秒即可生效
 - 重启边端可立即生效
+
+**Q15: numpy 安装失败（Python 3.13）**
+- `numpy==1.26.4` 不支持 Python 3.13
+- 修改 `requirements.txt` 为 `numpy>=1.26.4` 后重新安装
+
+**Q16: 健康度不变？**
+- 确认边端已启动并正在上传数据
+- 后端需要动态数据才会更新诊断结果；仅初始化数据不会持续变化
+- 启动 `python edge_client.py` 产生动态数据后，等待 30 秒左右观察
+
+---
+
+## 开发约定
+
+### Python 虚拟环境
+
+- 每个模块（cloud/edge）独立虚拟环境，避免依赖冲突
+- 虚拟环境目录名统一为 `venv`
+- 激活后再执行任何 Python 命令
+
+### 前端
+
+- Vite 开发服务器自动代理后端请求到 `localhost:8000`
+- 使用 Axios 进行 HTTP 请求，工具函数在 `src/utils/request.js`
+- API 封装在 `src/api/index.js`
+
+### 数据表
+
+| 表名 | 用途 |
+|------|------|
+| `devices` | 设备信息（健康度、状态、配置参数） |
+| `sensor_data` | 传感器原始数据（普通/特殊批次） |
+| `collection_tasks` | 采集任务（手动触发） |
+| `diagnosis` | 诊断结果（关联批次） |
+| `alarms` | 告警记录（通道级 + 设备级） |
 
 ---
 
