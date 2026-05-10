@@ -37,23 +37,23 @@ scp root@8.137.96.104:/opt/turbine-diagnosis/cloud/turbine.db ./backup.db
 ### 1. 重启后端服务
 **每次修改 `cloud/` 下的 Python 代码后必须执行**：
 ```bash
-systemctl restart turbine-cloud
+systemctl restart CNN
 ```
 
 ### 2. 启动 / 停止服务
 ```bash
-systemctl start turbine-cloud   # 启动
-systemctl stop turbine-cloud    # 停止
-systemctl status turbine-cloud  # 查看状态（绿色表示运行中）
+systemctl start CNN   # 启动
+systemctl stop CNN    # 停止
+systemctl status CNN  # 查看状态（绿色表示运行中）
 ```
 
 ### 3. 查看后端日志
 ```bash
 # 查看最近 50 行日志（找报错）
-journalctl -u turbine-cloud -n 50 --no-pager
+journalctl -u CNN -n 50 --no-pager
 
 # 实时监控日志（类似 tail -f，按 Ctrl+C 退出）
-journalctl -u turbine-cloud -f
+journalctl -u CNN -f
 ```
 
 ---
@@ -117,10 +117,10 @@ sudo journalctl --disk-usage
 sudo ls -lh /var/log/nginx/
 ```
 
-**清空后端服务日志（turbine-cloud）：**
+**清空后端服务日志（CNN）：**
 ```bash
-sudo journalctl --unit=turbine-cloud --rotate
-sudo journalctl --unit=turbine-cloud --vacuum-time=1s
+sudo journalctl --unit=CNN --rotate
+sudo journalctl --unit=CNN --vacuum-time=1s
 ```
 
 **清空 Nginx 日志：**
@@ -164,7 +164,7 @@ cp turbine.db turbine_backup_$(date +%Y%m%d).db
 
 3. **查看后端报错日志**：
    ```bash
-   journalctl -u turbine-cloud -n 50 --no-pager
+   journalctl -u CNN -n 50 --no-pager
    ```
 
 ---
