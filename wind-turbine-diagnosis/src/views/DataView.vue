@@ -796,12 +796,31 @@ const computeSTFT = async () => {
     const maxVal = Math.max(...d.magnitude.flat())
     stftInstance.setOption({
       tooltip: { position: 'top' },
-      grid: { left: '8%', right: '8%', bottom: '12%', top: '10%' },
+      grid: { left: '10%', right: '12%', bottom: '18%', top: '10%' },
       xAxis: { type: 'category', data: d.time, name: '时间 (s)' },
       yAxis: { type: 'category', data: d.freq, name: '频率 (Hz)' },
       dataZoom: [
+        // 鼠标滚轮/拖拽缩放
         { type: 'inside', xAxisIndex: 0, filterMode: 'empty' },
-        { type: 'inside', yAxisIndex: 0, filterMode: 'empty' }
+        { type: 'inside', yAxisIndex: 0, filterMode: 'empty' },
+        // X轴（时间）底部滑动条
+        {
+          type: 'slider', xAxisIndex: 0, filterMode: 'empty',
+          height: 18, bottom: 38,
+          handleSize: '80%', showDetail: false,
+          borderColor: 'transparent', backgroundColor: '#f5f5f5',
+          fillerColor: 'rgba(22, 93, 255, 0.15)',
+          handleStyle: { color: '#165DFF' }
+        },
+        // Y轴（频率）右侧滑动条
+        {
+          type: 'slider', yAxisIndex: 0, filterMode: 'empty',
+          width: 18, right: 10,
+          handleSize: '80%', showDetail: false,
+          borderColor: 'transparent', backgroundColor: '#f5f5f5',
+          fillerColor: 'rgba(22, 93, 255, 0.15)',
+          handleStyle: { color: '#165DFF' }
+        }
       ],
       visualMap: {
         min: minVal, max: maxVal, calculable: true,

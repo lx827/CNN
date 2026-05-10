@@ -22,8 +22,13 @@ from dotenv import load_dotenv
 from signal_generator import generate_signals
 from compressor import compress_payload
 
-# 加载 .env 文件（如果存在）
-load_dotenv()
+# 加载 .env 文件（脚本所在目录）
+script_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(script_dir, ".env")
+if os.path.isfile(env_path):
+    load_dotenv(env_path)
+else:
+    load_dotenv()
 
 # ========== 云端配置 ==========
 CLOUD_BASE_URL = os.getenv("CLOUD_BASE_URL", "http://localhost:8000")
