@@ -7,38 +7,45 @@
           <el-icon :size="28" color="#fff"><Setting /></el-icon>
           <span class="title">风机齿轮箱智能故障诊断系统</span>
         </div>
-        <el-menu
-          :default-active="activeMenu"
-          mode="horizontal"
-          :ellipsis="false"
-          @select="handleMenuSelect"
-          class="nav-menu"
-        >
-          <el-menu-item index="/dashboard">
-            <el-icon><Monitor /></el-icon>
-            <span>设备总览</span>
-          </el-menu-item>
-          <el-menu-item index="/monitor">
-            <el-icon><TrendCharts /></el-icon>
-            <span>实时监测</span>
-          </el-menu-item>
-          <el-menu-item index="/diagnosis">
-            <el-icon><Warning /></el-icon>
-            <span>故障诊断</span>
-          </el-menu-item>
-          <el-menu-item index="/alarm">
-            <el-icon><Bell /></el-icon>
-            <span>告警记录</span>
-          </el-menu-item>
-          <el-menu-item index="/data">
-            <el-icon><DataLine /></el-icon>
-            <span>数据查看</span>
-          </el-menu-item>
-          <el-menu-item index="/settings">
-            <el-icon><Setting /></el-icon>
-            <span>边端配置</span>
-          </el-menu-item>
-        </el-menu>
+        <div class="header-right">
+          <el-menu
+            :default-active="activeMenu"
+            mode="horizontal"
+            :ellipsis="false"
+            @select="handleMenuSelect"
+            class="nav-menu"
+          >
+            <el-menu-item index="/dashboard">
+              <el-icon><Monitor /></el-icon>
+              <span>设备总览</span>
+            </el-menu-item>
+            <el-menu-item index="/monitor">
+              <el-icon><TrendCharts /></el-icon>
+              <span>实时监测</span>
+            </el-menu-item>
+            <el-menu-item index="/diagnosis">
+              <el-icon><Warning /></el-icon>
+              <span>故障诊断</span>
+            </el-menu-item>
+            <el-menu-item index="/alarm">
+              <el-icon><Bell /></el-icon>
+              <span>告警记录</span>
+            </el-menu-item>
+            <el-menu-item index="/data">
+              <el-icon><DataLine /></el-icon>
+              <span>数据查看</span>
+            </el-menu-item>
+            <el-menu-item index="/settings">
+              <el-icon><Setting /></el-icon>
+              <span>边端配置</span>
+            </el-menu-item>
+          </el-menu>
+
+          <el-button class="logout-btn" type="danger" plain size="small" @click="handleLogout">
+            <el-icon><SwitchButton /></el-icon>
+            <span>退出登录</span>
+          </el-button>
+        </div>
       </div>
     </el-header>
 
@@ -61,6 +68,11 @@ const activeMenu = computed(() => route.path)
 const handleMenuSelect = (index) => {
   router.push(index)
 }
+
+const handleLogout = () => {
+  localStorage.removeItem('access_token')
+  router.push('/login')
+}
 </script>
 
 <style scoped>
@@ -82,6 +94,12 @@ const handleMenuSelect = (index) => {
   justify-content: space-between;
   height: 100%;
   padding: 0 24px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .logo {
@@ -119,6 +137,18 @@ const handleMenuSelect = (index) => {
   border-bottom: 3px solid #fff;
 }
 
+.logout-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+.logout-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+
 .main {
   padding: 24px;
   max-width: 1600px;
@@ -130,7 +160,7 @@ const handleMenuSelect = (index) => {
   .title {
     font-size: 16px;
   }
-  
+
   .nav-menu :deep(.el-menu-item span) {
     display: none;
   }

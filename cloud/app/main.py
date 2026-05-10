@@ -17,7 +17,10 @@ from app.core.config import (
     SENSOR_SAMPLE_RATE,
     SENSOR_WINDOW_SECONDS,
 )
-from app.api import ingest, dashboard, monitor, diagnosis, alarms, devices, data_view, collect
+from datetime import datetime
+from app.api import ingest, dashboard, monitor, diagnosis, alarms, devices, data_view, collect, auth
+from app.api.auth import get_current_user, optional_auth
+from fastapi import Depends
 from app.core.websocket import manager
 from app.services.analyzer import analyze_device, compute_channel_features
 from app.services.alarm_service import generate_alarms
@@ -106,12 +109,13 @@ async def analysis_worker():
                         for ch_key, signal in channels_data.items():
                             channel_features[ch_key] = compute_channel_features(signal)
 
-                        # 生成告警（通道级 + 设备级）
+                        # 生成告警（通道级 + 设备级），关联到当前批次
                         generate_alarms(
                             db, device_id,
                             result["health_score"],
                             result["fault_probabilities"],
-                            channel_features
+                            channel_features,
+                            batch_index=batch_index
                         )
 
                         # WebSocket 推送
@@ -212,6 +216,7 @@ async def lifespan(app: FastAPI):
                     runtime_hours=dev_info["runtime_hours"],
                     upload_interval=10,
                     task_poll_interval=5,
+                    last_seen_at=datetime.utcnow(),
                 )
                 db.add(device)
                 print(f"[启动] 创建设备: {dev_info['device_id']} (健康度 {dev_info['health_score']}, 状态 {dev_info['status']})")
@@ -249,14 +254,18 @@ app.add_middleware(
 )
 
 # 注册路由
+# 认证和边端数据接入不需要登录保护
+app.include_router(auth.router)
 app.include_router(ingest.router)
-app.include_router(dashboard.router)
-app.include_router(monitor.router)
-app.include_router(diagnosis.router)
-app.include_router(alarms.router)
-app.include_router(devices.router)
-app.include_router(data_view.router)
-app.include_router(collect.router)
+
+# 需要认证的路由（前端 Bearer Token 或边端 X-Edge-Key）
+app.include_router(dashboard.router, dependencies=[Depends(optional_auth)])
+app.include_router(monitor.router, dependencies=[Depends(optional_auth)])
+app.include_router(diagnosis.router, dependencies=[Depends(optional_auth)])
+app.include_router(alarms.router, dependencies=[Depends(optional_auth)])
+app.include_router(devices.router, dependencies=[Depends(optional_auth)])
+app.include_router(data_view.router, dependencies=[Depends(optional_auth)])
+app.include_router(collect.router, dependencies=[Depends(optional_auth)])
 
 
 # WebSocket 实时推送端点

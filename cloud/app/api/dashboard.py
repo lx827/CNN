@@ -32,7 +32,7 @@ def get_dashboard(db: Session = Depends(get_db)):
         device_list.append({
             "device_id": d.device_id,
             "name": d.name,
-            "health_score": d.health_score,
+            "health_score": None if is_offline else d.health_score,
             "status": effective_status,
             "original_status": d.status,
             "is_offline": is_offline,
@@ -45,6 +45,7 @@ def get_dashboard(db: Session = Depends(get_db)):
     # 2. 最新诊断结果（取每个设备最新一条）
     latest_diag = {}
     for d in devices:
+        is_offline = d.last_seen_at is None or d.last_seen_at < offline_threshold
         diag = db.query(Diagnosis).filter(Diagnosis.device_id == d.device_id) \
             .order_by(Diagnosis.analyzed_at.desc()).first()
         if diag:
@@ -52,6 +53,13 @@ def get_dashboard(db: Session = Depends(get_db)):
                 "health_score": diag.health_score,
                 "fault_probabilities": diag.fault_probabilities or {},
                 "status": diag.status,
+            }
+        elif is_offline:
+            # 离线设备不给默认值，标记为无数据
+            latest_diag[d.device_id] = {
+                "health_score": None,
+                "fault_probabilities": {},
+                "status": "offline",
             }
         else:
             # 还没有分析过，给默认值

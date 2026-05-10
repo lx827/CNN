@@ -18,12 +18,18 @@ import random
 from app.services.nn_predictor import predict as nn_predict
 
 
+def remove_dc(signal: List[float]) -> np.ndarray:
+    """去除信号直流分量（零均值化）"""
+    arr = np.array(signal, dtype=np.float64)
+    return arr - np.mean(arr)
+
+
 def compute_channel_features(signal: List[float]) -> Dict[str, float]:
     """
     计算单通道振动信号的统计特征指标
     用于通道级阈值告警。
     """
-    arr = np.array(signal)
+    arr = remove_dc(signal)
     if len(arr) == 0:
         return {}
 
@@ -56,7 +62,7 @@ def compute_channel_features(signal: List[float]) -> Dict[str, float]:
 
 def compute_fft(signal: List[float], sample_rate: int = 25600):
     """计算 FFT 频谱"""
-    arr = np.array(signal)
+    arr = remove_dc(signal)
     n = len(arr)
     yf = np.abs(rfft(arr))
     xf = rfftfreq(n, 1 / sample_rate)
@@ -91,45 +97,135 @@ def compute_imf_energy(signal: List[float], sample_rate: int = 25600) -> Dict[st
     return energy
 
 
+# 特征阈值基准（与 alarm_service.py 保持一致，用于归一化严重度）
+# 基于真实 .npy 数据校准（H组健康 / I,O组故障）
+# H组: Peak=0.045 RMS=0.007 Kurt=3.75 Crest=6.66 Skew=0.03 Impulse=8.58
+# I组: Peak=0.190 RMS=0.024 Kurt=6.39 Crest=8.00 Skew=0.14 Impulse=11.34
+# O组: Peak=0.068 RMS=0.007 Kurt=8.71 Crest=10.42 Skew=0.10 Impulse=14.35
+_FEATURE_BASELINES = {
+    "rms": {"baseline": 0.008, "warning": 0.015, "critical": 0.030},
+    "peak": {"baseline": 0.060, "warning": 0.100, "critical": 0.150},
+    "kurtosis": {"baseline": 4.00, "warning": 5.50, "critical": 7.00},  # fisher=False
+    "crest_factor": {"baseline": 7.50, "warning": 9.00, "critical": 10.50},
+    "skewness": {"baseline": 0.00, "warning": 0.20, "critical": 0.50},
+    "impulse_factor": {"baseline": 9.50, "warning": 11.00, "critical": 13.00},
+}
+
+
+def _feature_severity(value: float, metric: str) -> float:
+    """
+    计算单一特征的严重度 (0.0 ~ 1.0+)
+    value: 特征值
+    metric: 特征名称
+    """
+    cfg = _FEATURE_BASELINES.get(metric)
+    if not cfg:
+        return 0.0
+    baseline = cfg["baseline"]
+    critical = cfg["critical"]
+    if value <= baseline or critical <= baseline:
+        return 0.0
+    return max(0.0, min(1.0, (abs(value) - baseline) / (critical - baseline)))
+
+
 def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int = 25600):
     """
-    简化规则算法（回退方案）
-    根据振动峰值大小评估健康度和故障概率
+    多特征综合规则诊断算法（回退方案）
+
+    基于振动时域统计特征（峭度、峰值因子、RMS、偏度、脉冲因子、峰值）
+    结合工程阈值进行故障类型判别。
+
+    参考阈值（与 alarm_service.py 一致）：
+      - Kurtosis(fisher=False): 健康≈3, 预警≥4, 严重≥6
+      - Crest Factor: 健康≈3~5, 预警≥6, 严重≥10
+      - RMS: 预警≥5, 严重≥10
+      - Peak: 预警≥15, 严重≥30
+      - Skewness(|值|): 预警≥1, 严重≥2
+      - Impulse Factor: 预警≥6, 严重≥10
     """
-    all_peak_values = []
+    # 1. 计算所有通道的特征
+    all_features = []
     for ch_name, signal in channels_data.items():
-        arr = np.array(signal)
-        all_peak_values.append(np.max(np.abs(arr)))
+        features = compute_channel_features(signal)
+        if features:
+            all_features.append(features)
 
-    avg_peak = np.mean(all_peak_values)
+    if not all_features:
+        # 无有效数据，返回默认值
+        return {
+            "health_score": 100,
+            "fault_probabilities": {"正常运行": 1.0},
+            "imf_energy": {},
+            "status": "normal",
+        }
 
-    base_probs = {
-        "齿轮磨损": 0.05,
-        "轴承内圈故障": 0.03,
-        "轴承外圈故障": 0.02,
-        "轴不对中": 0.04,
-        "基础松动": 0.03,
-        "正常运行": 0.83,
+    # 2. 计算多通道平均特征
+    avg_features = {}
+    for key in ["rms", "peak", "kurtosis", "crest_factor", "skewness", "impulse_factor"]:
+        values = [f.get(key, 0) for f in all_features if f.get(key) is not None]
+        avg_features[key] = np.mean(values) if values else 0.0
+
+    # 3. 计算各特征严重度
+    sev = {
+        "rms": _feature_severity(avg_features["rms"], "rms"),
+        "peak": _feature_severity(avg_features["peak"], "peak"),
+        "kurtosis": _feature_severity(avg_features["kurtosis"], "kurtosis"),
+        "crest_factor": _feature_severity(avg_features["crest_factor"], "crest_factor"),
+        "skewness": _feature_severity(abs(avg_features["skewness"]), "skewness"),
+        "impulse_factor": _feature_severity(avg_features["impulse_factor"], "impulse_factor"),
     }
 
-    severity = min(avg_peak / 2.0, 1.0)
+    # 4. 故障类型判别（每种故障对特征的敏感度不同）
+    #    权重基于工程经验：冲击型故障（轴承）对峭度/峰值因子敏感；
+    #    能量型故障（齿轮磨损/不对中）对RMS/峰值敏感。
+    fault_scores = {
+        "正常运行": 1.0,
+        "齿轮磨损": sev["rms"] * 0.40 + sev["peak"] * 0.30 + sev["crest_factor"] * 0.15 + sev["kurtosis"] * 0.15,
+        "轴承内圈故障": sev["kurtosis"] * 0.40 + sev["crest_factor"] * 0.25 + sev["impulse_factor"] * 0.25 + sev["peak"] * 0.10,
+        "轴承外圈故障": sev["kurtosis"] * 0.30 + sev["crest_factor"] * 0.25 + sev["rms"] * 0.25 + sev["impulse_factor"] * 0.20,
+        "滚动体故障": sev["kurtosis"] * 0.30 + sev["peak"] * 0.30 + sev["impulse_factor"] * 0.25 + sev["crest_factor"] * 0.15,
+        "轴不对中": sev["rms"] * 0.40 + sev["skewness"] * 0.30 + sev["peak"] * 0.20 + sev["kurtosis"] * 0.10,
+        "基础松动": sev["peak"] * 0.35 + sev["rms"] * 0.25 + sev["crest_factor"] * 0.25 + sev["skewness"] * 0.15,
+    }
 
-    if severity > 0.3:
-        base_probs["齿轮磨损"] += severity * 0.25
-        base_probs["轴承内圈故障"] += severity * 0.15
-        base_probs["轴承外圈故障"] += severity * 0.10
-        base_probs["轴不对中"] += severity * 0.15
-        base_probs["基础松动"] += severity * 0.10
-        base_probs["正常运行"] = max(0, 1.0 - sum(v for k, v in base_probs.items() if k != "正常运行"))
+    # 5. 正常运行概率衰减（任一指标越高，正常概率越低）
+    normal_decay = 1.0
+    normal_decay *= max(0.0, 1.0 - sev["rms"] * 0.35)
+    normal_decay *= max(0.0, 1.0 - sev["kurtosis"] * 0.50)
+    normal_decay *= max(0.0, 1.0 - sev["crest_factor"] * 0.35)
+    normal_decay *= max(0.0, 1.0 - sev["peak"] * 0.20)
+    normal_decay *= max(0.0, 1.0 - sev["skewness"] * 0.25)
+    normal_decay *= max(0.0, 1.0 - sev["impulse_factor"] * 0.30)
+    fault_scores["正常运行"] = normal_decay
 
-    total_prob = sum(base_probs.values())
-    fault_probabilities = {k: round(v / total_prob, 4) for k, v in base_probs.items()}
+    # 6. 归一化概率
+    total = sum(fault_scores.values())
+    if total > 0:
+        fault_probabilities = {k: round(v / total, 4) for k, v in fault_scores.items()}
+    else:
+        fault_probabilities = {"正常运行": 1.0}
 
+    # 7. 健康度评分（基于正常运行概率）
+    #    同时引入最大单一故障严重度作为惩罚
+    max_fault_sev = max(v for k, v in fault_scores.items() if k != "正常运行")
+    health_score = int(max(0, min(100,
+        fault_probabilities.get("正常运行", 0) * 100 - max_fault_sev * 30 - random.uniform(0, 3)
+    )))
+
+    status = "normal" if health_score >= 80 else "warning" if health_score >= 60 else "fault"
+
+    # 8. IMF 能量（取首个通道）
     first_channel = list(channels_data.values())[0]
     imf_energy = compute_imf_energy(first_channel, sample_rate)
 
-    health_score = int(max(0, min(100, 100 - severity * 60 - random.uniform(0, 5))))
-    status = "normal" if health_score >= 80 else "warning" if health_score >= 60 else "critical"
+    # 调试日志（便于观察诊断依据）
+    print(f"[规则诊断] 特征: RMS={avg_features['rms']:.3f}(sev={sev['rms']:.2f}), "
+          f"Kurt={avg_features['kurtosis']:.2f}(sev={sev['kurtosis']:.2f}), "
+          f"Crest={avg_features['crest_factor']:.2f}(sev={sev['crest_factor']:.2f}), "
+          f"Peak={avg_features['peak']:.3f}(sev={sev['peak']:.2f}), "
+          f"Skew={avg_features['skewness']:.3f}(sev={sev['skewness']:.2f}), "
+          f"Impulse={avg_features['impulse_factor']:.2f}(sev={sev['impulse_factor']:.2f}) | "
+          f"健康度={health_score}, 状态={status}")
 
     return {
         "health_score": health_score,
@@ -155,7 +251,7 @@ def compute_envelope_spectrum(signal: List[float], sample_rate: int = 25600, max
         freq: 频率数组 (Hz)
         amp: 包络谱幅值数组
     """
-    arr = np.array(signal)
+    arr = remove_dc(signal)
 
     # 1. 带通滤波（保留 1kHz~5kHz 的共振频带，可选）
     # 简化版本：直接用原始信号做希尔伯特变换
