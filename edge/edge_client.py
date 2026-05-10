@@ -41,6 +41,9 @@ DURATION = int(os.getenv("DURATION", "10"))
 DOWNSAMPLE_RATIO = int(os.getenv("DOWNSAMPLE_RATIO", "8"))
 CHANNEL_COUNT = int(os.getenv("CHANNEL_COUNT", "3"))
 
+# 模拟离线设备（用于演示离线检测功能，模拟传感器故障等场景）
+SIMULATE_OFFLINE_DEVICE = os.getenv("SIMULATE_OFFLINE_DEVICE", "").strip()
+
 
 def get_device_channel_count(device_id):
     """
@@ -165,6 +168,8 @@ def main():
     print("=" * 60)
     print("风机边端数据采集客户端（多设备版）")
     print(f"设备列表: {', '.join(DEVICE_IDS)}")
+    if SIMULATE_OFFLINE_DEVICE:
+        print(f"[模拟离线] 设备 {SIMULATE_OFFLINE_DEVICE} 被配置为模拟离线（不上传数据）")
     print(f"目标: {CLOUD_INGEST_URL}")
     print(f"默认采集频率: 每 {DEFAULT_UPLOAD_INTERVAL} 秒上传一批/设备")
     print(f"默认任务轮询频率: 每 {DEFAULT_TASK_POLL_INTERVAL} 秒查询一次")
@@ -201,6 +206,10 @@ def main():
 
         # 1. 轮询所有设备的采集任务（手动触发）
         for dev_id in DEVICE_IDS:
+            # 模拟离线设备：跳过手动采集任务（模拟传感器故障无法响应）
+            if SIMULATE_OFFLINE_DEVICE and dev_id == SIMULATE_OFFLINE_DEVICE:
+                continue
+
             state = device_states[dev_id]
             config = state.get("config", {})
             poll_interval = config.get("task_poll_interval", DEFAULT_TASK_POLL_INTERVAL)
@@ -229,6 +238,10 @@ def main():
 
         # 2. 普通定时采集（自动上传），每个设备独立判断
         for dev_id in DEVICE_IDS:
+            # 模拟离线设备：跳过自动采集（模拟传感器故障不上报数据）
+            if SIMULATE_OFFLINE_DEVICE and dev_id == SIMULATE_OFFLINE_DEVICE:
+                continue
+
             state = device_states[dev_id]
             config = state.get("config", {})
             upload_interval = config.get("upload_interval", DEFAULT_UPLOAD_INTERVAL)
