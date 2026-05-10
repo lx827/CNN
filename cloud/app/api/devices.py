@@ -142,23 +142,34 @@ def update_device_config(device_id: str, payload: dict, db: Session = Depends(ge
 def get_alarm_thresholds(device_id: str, db: Session = Depends(get_db)):
     """
     获取设备的告警阈值配置
+    返回用户自定义配置 + 实际生效阈值（含默认值回退）
     """
+    from app.services.alarm_service import DEFAULT_THRESHOLDS
     device = db.query(Device).filter(Device.device_id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
 
-    thresholds = device.alarm_thresholds or {}
-    # 确保默认键存在
+    user_cfg = device.alarm_thresholds or {}
     default_keys = ["rms", "peak", "kurtosis", "crest_factor"]
+
+    # 计算实际生效的阈值（用户配置 + 默认值回退）
+    effective = {}
     for key in default_keys:
-        if key not in thresholds:
-            thresholds[key] = {"warning": None, "critical": None}
+        user_metric = user_cfg.get(key, {})
+        default_metric = DEFAULT_THRESHOLDS.get(key, {})
+        effective[key] = {
+            "warning": user_metric.get("warning") if user_metric.get("warning") is not None else default_metric.get("warning"),
+            "critical": user_metric.get("critical") if user_metric.get("critical") is not None else default_metric.get("critical"),
+        }
+        if key not in user_cfg:
+            user_cfg[key] = {"warning": None, "critical": None}
 
     return {
         "code": 200,
         "data": {
             "device_id": device.device_id,
-            "alarm_thresholds": thresholds,
+            "alarm_thresholds": user_cfg,
+            "effective_thresholds": effective,
         }
     }
 

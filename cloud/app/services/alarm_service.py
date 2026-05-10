@@ -24,11 +24,15 @@ DEFAULT_THRESHOLDS = {
 
 
 def _get_threshold(device: Device, metric: str, level: str) -> float:
-    """读取设备的阈值配置，未配置则使用默认值"""
+    """读取设备的阈值配置，未配置则使用默认值；显式置空(null)则禁用该级别告警"""
     thresholds = device.alarm_thresholds or {}
-    val = thresholds.get(metric, {}).get(level)
-    if val is not None:
-        return val
+    metric_cfg = thresholds.get(metric)
+    if metric_cfg is not None:
+        val = metric_cfg.get(level)
+        if val is not None:
+            return val
+        # 用户配置了该指标但此级别为 null，返回极大值（不触发此级别告警）
+        return 99999
     return DEFAULT_THRESHOLDS.get(metric, {}).get(level, 99999)
 
 

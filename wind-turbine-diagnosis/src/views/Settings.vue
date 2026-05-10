@@ -340,13 +340,17 @@ const loadConfig = async () => {
 const loadThresholds = async () => {
   try {
     const res = await getAlarmThresholds(form.value.device_id)
-    const data = res.data?.alarm_thresholds || {}
+    const userCfg = res.data?.alarm_thresholds || {}
+    const effective = res.data?.effective_thresholds || {}
     for (const key of Object.keys(thresholdItems)) {
-      const t = data[key] || {}
+      const t = userCfg[key] || {}
+      const eff = effective[key] || {}
+      // 显示实际生效的值（含默认值回退），但标记是否为自定义
       thresholds.value[key] = {
-        warning: t.warning !== null && t.warning !== undefined ? t.warning : null,
-        critical: t.critical !== null && t.critical !== undefined ? t.critical : null,
+        warning: eff.warning !== null && eff.warning !== undefined ? eff.warning : null,
+        critical: eff.critical !== null && eff.critical !== undefined ? eff.critical : null,
       }
+      // 只有用户显式配置了该指标才标记为启用
       thresholdEnabled.value[key] = t.warning !== null || t.critical !== null
     }
   } catch (e) {
