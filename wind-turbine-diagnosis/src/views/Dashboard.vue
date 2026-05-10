@@ -313,6 +313,32 @@ const initPieChart = async () => {
   if (!pieChart.value) return
   if (!pieInstance) pieInstance = echarts.init(pieChart.value)
 
+  const isOffline = selectedDevice.value?.status === 'offline'
+
+  // 离线设备：显示空图表 + 提示文字
+  if (isOffline) {
+    pieInstance.setOption({
+      title: {
+        text: '暂无数据',
+        left: 'center',
+        top: 'center',
+        textStyle: { color: '#999', fontSize: 16 }
+      },
+      tooltip: { show: false },
+      legend: { show: false },
+      series: [
+        {
+          type: 'pie',
+          radius: ['40%', '70%'],
+          center: ['35%', '50%'],
+          label: { show: false },
+          data: [{ value: 1, name: '暂无数据', itemStyle: { color: '#e8e8e8' } }]
+        }
+      ]
+    }, true)
+    return
+  }
+
   // 使用选中设备的诊断数据，按轴承/齿轮/其他归类聚合
   const diag = selectedDevice.value?.diagnosis
   let pieData = []
@@ -325,7 +351,7 @@ const initPieChart = async () => {
       .filter(item => item.value > 0)
   }
 
-  // 如果没有数据，用静态模拟
+  // 如果没有诊断数据，用静态模拟
   if (pieData.length === 0) {
     const res = await getStatistics()
     const faultTypeMap = {
@@ -342,6 +368,7 @@ const initPieChart = async () => {
   }
 
   const option = {
+    title: { show: false },
     tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
     legend: { orient: 'vertical', right: 10, top: 'center' },
     series: [
