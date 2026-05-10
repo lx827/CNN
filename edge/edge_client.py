@@ -44,6 +44,10 @@ CHANNEL_COUNT = int(os.getenv("CHANNEL_COUNT", "3"))
 # 模拟离线设备（用于演示离线检测功能，模拟传感器故障等场景）
 SIMULATE_OFFLINE_DEVICE = os.getenv("SIMULATE_OFFLINE_DEVICE", "").strip()
 
+# 边端 API Key（用于访问受密码保护的云端接口）
+EDGE_API_KEY = "turbine-edge-secret"
+EDGE_HEADERS = {"X-Edge-Key": EDGE_API_KEY}
+
 
 def get_device_channel_count(device_id):
     """
@@ -70,6 +74,7 @@ def fetch_device_config(device_id):
     try:
         response = requests.get(
             f"{CLOUD_CONFIG_URL}?device_id={device_id}",
+            headers=EDGE_HEADERS,
             timeout=5
         )
         if response.status_code == 200:
@@ -152,6 +157,7 @@ def poll_tasks(device_id):
     try:
         response = requests.get(
             f"{CLOUD_TASKS_URL}?device_id={device_id}",
+            headers=EDGE_HEADERS,
             timeout=5
         )
         if response.status_code == 200:

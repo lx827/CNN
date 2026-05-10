@@ -3,7 +3,7 @@
 提供登录和 Token 验证功能
 """
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 
@@ -14,6 +14,9 @@ router = APIRouter(prefix="/api/auth", tags=["认证"])
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
+
+# 边端 API Key（用于区分前端用户和边端设备，简单鉴权）
+EDGE_API_KEY = "turbine-edge-secret"
 
 # auto_error=False 允许我们在依赖中自定义 401 响应
 security = HTTPBearer(auto_error=False)
@@ -61,6 +64,20 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return username
+
+
+async def optional_auth(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> str:
+    """
+    兼容认证：优先检查边端 API Key，没有则检查 JWT Token。
+    用于需要同时被前端（登录用户）和边端（设备）访问的接口。
+    """
+    edge_key = request.headers.get("X-Edge-Key")
+    if edge_key and edge_key == EDGE_API_KEY:
+        return "edge"
+    return await get_current_user(credentials)
 
 
 @router.post("/login", response_model=TokenResponse)

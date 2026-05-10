@@ -19,7 +19,7 @@ from app.core.config import (
 )
 from datetime import datetime
 from app.api import ingest, dashboard, monitor, diagnosis, alarms, devices, data_view, collect, auth
-from app.api.auth import get_current_user
+from app.api.auth import get_current_user, optional_auth
 from fastapi import Depends
 from app.core.websocket import manager
 from app.services.analyzer import analyze_device, compute_channel_features
@@ -257,14 +257,14 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(ingest.router)
 
-# 前端页面调用的接口需要 Bearer Token 认证
-app.include_router(dashboard.router, dependencies=[Depends(get_current_user)])
-app.include_router(monitor.router, dependencies=[Depends(get_current_user)])
-app.include_router(diagnosis.router, dependencies=[Depends(get_current_user)])
-app.include_router(alarms.router, dependencies=[Depends(get_current_user)])
-app.include_router(devices.router, dependencies=[Depends(get_current_user)])
-app.include_router(data_view.router, dependencies=[Depends(get_current_user)])
-app.include_router(collect.router, dependencies=[Depends(get_current_user)])
+# 需要认证的路由（前端 Bearer Token 或边端 X-Edge-Key）
+app.include_router(dashboard.router, dependencies=[Depends(optional_auth)])
+app.include_router(monitor.router, dependencies=[Depends(optional_auth)])
+app.include_router(diagnosis.router, dependencies=[Depends(optional_auth)])
+app.include_router(alarms.router, dependencies=[Depends(optional_auth)])
+app.include_router(devices.router, dependencies=[Depends(optional_auth)])
+app.include_router(data_view.router, dependencies=[Depends(optional_auth)])
+app.include_router(collect.router, dependencies=[Depends(optional_auth)])
 
 
 # WebSocket 实时推送端点
