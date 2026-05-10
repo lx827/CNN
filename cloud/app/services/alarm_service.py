@@ -14,11 +14,12 @@ from app.core.websocket import manager
 
 
 # 默认阈值（当设备未配置时使用）
+# 基于真实 .npy 数据校准（H组健康 / I,O组故障）
 DEFAULT_THRESHOLDS = {
-    "rms": {"warning": 5.0, "critical": 10.0},
-    "peak": {"warning": 15.0, "critical": 30.0},
-    "kurtosis": {"warning": 4.0, "critical": 6.0},
-    "crest_factor": {"warning": 6.0, "critical": 10.0},
+    "rms": {"warning": 0.015, "critical": 0.030},
+    "peak": {"warning": 0.080, "critical": 0.150},
+    "kurtosis": {"warning": 5.0, "critical": 7.0},
+    "crest_factor": {"warning": 7.5, "critical": 10.0},
 }
 
 
