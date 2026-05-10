@@ -68,15 +68,26 @@
 
         <!-- 只读信息 -->
         <el-form-item label="采样率">
-          <el-input v-model="form.sample_rate" disabled style="width: 200px">
-            <template #append>Hz</template>
-          </el-input>
+          <el-input-number
+            v-model="form.sample_rate"
+            :min="1000"
+            :max="100000"
+            :step="100"
+            controls-position="right"
+            style="width: 200px"
+          />
+          <el-text type="info" size="small" style="margin-left: 8px;">Hz，修改后约 30 秒同步到边端</el-text>
         </el-form-item>
 
         <el-form-item label="采集时长">
-          <el-input v-model="form.window_seconds" disabled style="width: 200px">
-            <template #append>秒</template>
-          </el-input>
+          <el-input-number
+            v-model="form.window_seconds"
+            :min="1"
+            :max="60"
+            controls-position="right"
+            style="width: 200px"
+          />
+          <el-text type="info" size="small" style="margin-left: 8px;">秒，修改后约 30 秒同步到边端</el-text>
         </el-form-item>
 
         <el-form-item label="通道数">
@@ -88,6 +99,22 @@
             style="width: 200px"
           />
           <el-text type="info" size="small" style="margin-left: 8px;">修改后约 30 秒同步到边端</el-text>
+        </el-form-item>
+
+        <!-- 通道名称配置 -->
+        <el-form-item label="通道名称">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div v-for="i in form.channel_count" :key="i" style="display: flex; align-items: center; gap: 8px;">
+              <el-text type="info" size="small" style="width: 50px;">通道{{ i }}</el-text>
+              <el-input
+                v-model="channelNames[i]"
+                placeholder="输入通道名称"
+                style="width: 200px"
+                size="small"
+              />
+            </div>
+          </div>
+          <el-text type="info" size="small">通道名称将显示在监测和告警页面中</el-text>
         </el-form-item>
 
         <el-form-item>
@@ -225,6 +252,9 @@ const form = ref({
   channel_count: 3,
 })
 
+// 通道名称
+const channelNames = ref({ 1: '轴承附近', 2: '驱动端', 3: '风扇端' })
+
 // 上传间隔的数值与单位（支持秒/分钟/小时）
 const intervalValue = ref(10)
 const intervalUnit = ref('second')
@@ -252,12 +282,12 @@ const parseInterval = (seconds) => {
   return { value: seconds, unit: 'second' }
 }
 
-// 阈值配置
+// 阈值配置（与后端 DEFAULT_THRESHOLDS 保持一致，基于真实 .npy 数据校准）
 const thresholds = ref({
-  rms: { warning: 5.0, critical: 10.0 },
-  peak: { warning: 15.0, critical: 30.0 },
-  kurtosis: { warning: 4.0, critical: 6.0 },
-  crest_factor: { warning: 6.0, critical: 10.0 },
+  rms: { warning: 0.015, critical: 0.030 },
+  peak: { warning: 0.080, critical: 0.150 },
+  kurtosis: { warning: 5.0, critical: 7.0 },
+  crest_factor: { warning: 7.5, critical: 10.0 },
 })
 
 const thresholdEnabled = ref({
@@ -268,10 +298,10 @@ const thresholdEnabled = ref({
 })
 
 const thresholdItems = {
-  rms: { label: 'RMS 均方根', step: 0.5, precision: 2 },
-  peak: { label: 'Peak 峰值', step: 1, precision: 2 },
-  kurtosis: { label: 'Kurtosis 峭度', step: 0.5, precision: 2 },
-  crest_factor: { label: 'Crest Factor 峰值因子', step: 0.5, precision: 2 },
+  rms: { label: 'RMS 均方根', step: 0.001, precision: 3 },
+  peak: { label: 'Peak 峰值', step: 0.001, precision: 3 },
+  kurtosis: { label: 'Kurtosis 峭度', step: 0.1, precision: 1 },
+  crest_factor: { label: 'Crest Factor 峰值因子', step: 0.1, precision: 1 },
 }
 
 const loadDevices = async () => {
@@ -291,6 +321,12 @@ const loadConfig = async () => {
     form.value.sample_rate = d.sample_rate ?? 25600
     form.value.window_seconds = d.window_seconds ?? 10
     form.value.channel_count = d.channel_count ?? 3
+
+    // 加载通道名称
+    const names = d.channel_names || {}
+    for (let i = 1; i <= 8; i++) {
+      channelNames.value[i] = names[String(i)] || `通道${i}`
+    }
 
     const parsed = parseInterval(form.value.upload_interval)
     intervalValue.value = parsed.value
@@ -327,10 +363,18 @@ const onDeviceChange = () => {
 const onSave = async () => {
   saving.value = true
   try {
+    // 构建通道名称对象
+    const names = {}
+    for (let i = 1; i <= form.value.channel_count; i++) {
+      names[String(i)] = channelNames.value[i] || `通道${i}`
+    }
     await updateDeviceConfig(form.value.device_id, {
       upload_interval: computedSeconds.value,
       task_poll_interval: form.value.task_poll_interval,
+      sample_rate: form.value.sample_rate,
+      window_seconds: form.value.window_seconds,
       channel_count: form.value.channel_count,
+      channel_names: names,
     })
     ElMessage.success('配置已保存，约 30 秒内同步到边端')
   } catch (e) {

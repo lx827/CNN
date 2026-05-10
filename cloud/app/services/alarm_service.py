@@ -26,7 +26,10 @@ DEFAULT_THRESHOLDS = {
 def _get_threshold(device: Device, metric: str, level: str) -> float:
     """读取设备的阈值配置，未配置则使用默认值"""
     thresholds = device.alarm_thresholds or {}
-    return thresholds.get(metric, DEFAULT_THRESHOLDS.get(metric, {})).get(level, 99999)
+    val = thresholds.get(metric, {}).get(level)
+    if val is not None:
+        return val
+    return DEFAULT_THRESHOLDS.get(metric, {}).get(level, 99999)
 
 
 def _has_recent_unresolved_alarm(
@@ -78,6 +81,7 @@ def _check_feature_alarms(
         if value >= crit_thr:
             if _has_recent_unresolved_alarm(db, device.device_id, "振动特征", "critical", channel):
                 continue
+            severity_pct = min(100, int((value - crit_thr) / max(crit_thr * 0.5, 1e-9) * 100))
             alarm = Alarm(
                 device_id=device.device_id,
                 level="critical",
@@ -85,8 +89,14 @@ def _check_feature_alarms(
                 channel=channel,
                 channel_name=channel_name,
                 batch_index=batch_index,
-                title=f"{channel_name} {label}严重超标：{value:.3f}",
-                description=f"通道 {channel}（{channel_name}）的 {label} 达到 {value:.3f}，超过严重阈值 {crit_thr}。",
+                title=f"{channel_name} {label}严重超标：{value:.4f}",
+                description=(
+                    f"通道 {channel}（{channel_name}）的 {label} 检测到异常。\n"
+                    f"• 当前值：{value:.4f}\n"
+                    f"• 严重阈值：{crit_thr}\n"
+                    f"• 预警阈值：{warn_thr}\n"
+                    f"• 超出严重阈值约 {severity_pct}%"
+                ),
                 suggestion=f"1. 检查 {channel_name} 传感器连接；2. 排查该部位机械故障；3. 必要时停机检修。",
             )
             db.add(alarm)
@@ -94,6 +104,7 @@ def _check_feature_alarms(
         elif value >= warn_thr:
             if _has_recent_unresolved_alarm(db, device.device_id, "振动特征", "warning", channel):
                 continue
+            severity_pct = min(100, int((value - warn_thr) / max(crit_thr - warn_thr, 1e-9) * 100))
             alarm = Alarm(
                 device_id=device.device_id,
                 level="warning",
@@ -101,8 +112,14 @@ def _check_feature_alarms(
                 channel=channel,
                 channel_name=channel_name,
                 batch_index=batch_index,
-                title=f"{channel_name} {label}预警：{value:.3f}",
-                description=f"通道 {channel}（{channel_name}）的 {label} 为 {value:.3f}，超过预警阈值 {warn_thr}。",
+                title=f"{channel_name} {label}预警：{value:.4f}",
+                description=(
+                    f"通道 {channel}（{channel_name}）的 {label} 检测到异常。\n"
+                    f"• 当前值：{value:.4f}\n"
+                    f"• 预警阈值：{warn_thr}\n"
+                    f"• 严重阈值：{crit_thr}\n"
+                    f"• 处于预警区间约 {severity_pct}%"
+                ),
                 suggestion=f"1. 加强 {channel_name} 监测频率；2. 观察趋势变化；3. 安排计划性检查。",
             )
             db.add(alarm)
@@ -121,6 +138,18 @@ def _check_diagnosis_alarms(
     new_alarms = []
 
     # 规则 1：健康度过低
+    # 提取 Top-2 故障类型用于描述
+    top_faults = sorted(
+        [(k, v) for k, v in fault_probabilities.items() if k != "正常运行"],
+        key=lambda x: x[1],
+        reverse=True
+    )[:2]
+    fault_desc = ""
+    if top_faults:
+        fault_desc = "\n主要故障概率：\n" + "\n".join(
+            [f"• {name}：{prob:.1%}" for name, prob in top_faults]
+        )
+
     if health_score < 60:
         if not _has_recent_unresolved_alarm(db, device.device_id, "综合健康度", "critical"):
             alarm = Alarm(
@@ -129,7 +158,11 @@ def _check_diagnosis_alarms(
                 category="综合健康度",
                 batch_index=batch_index,
                 title=f"设备健康度严重下降：{health_score} 分",
-                description=f"系统分析显示设备整体健康度已降至 {health_score} 分，建议立即停机检查。",
+                description=(
+                    f"系统分析显示设备整体健康度已降至 {health_score} 分（正常≥80，预警≥60）。"
+                    f"{fault_desc}\n"
+                    f"建议立即停机检查。"
+                ),
                 suggestion="1. 检查齿轮箱润滑状态；2. 检查各轴承温度；3. 联系维修人员现场排查。",
             )
             db.add(alarm)
@@ -142,7 +175,11 @@ def _check_diagnosis_alarms(
                 category="综合健康度",
                 batch_index=batch_index,
                 title=f"设备健康度预警：{health_score} 分",
-                description=f"设备健康度下降至 {health_score} 分，存在潜在故障风险。",
+                description=(
+                    f"设备健康度下降至 {health_score} 分（正常≥80，预警≥60）。"
+                    f"{fault_desc}\n"
+                    f"存在潜在故障风险。"
+                ),
                 suggestion="1. 加强监测频率；2. 关注振动趋势变化；3. 安排计划性检修。",
             )
             db.add(alarm)

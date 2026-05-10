@@ -84,6 +84,7 @@ def get_device_config(device_id: str, db: Session = Depends(get_db)):
             "sample_rate": device.sample_rate,
             "window_seconds": device.window_seconds,
             "channel_count": device.channel_count,
+            "channel_names": device.channel_names,
         }
     }
 
@@ -107,7 +108,7 @@ def update_device_config(device_id: str, payload: dict, db: Session = Depends(ge
     # 更新允许的字段
     allowed_fields = [
         "upload_interval", "task_poll_interval",
-        "sample_rate", "window_seconds", "channel_count"
+        "sample_rate", "window_seconds", "channel_count", "channel_names"
     ]
     updated = {}
     for field in allowed_fields:
@@ -118,6 +119,8 @@ def update_device_config(device_id: str, payload: dict, db: Session = Depends(ge
                 raise HTTPException(status_code=422, detail=f"{field} 必须 >= 1")
             if field in ("sample_rate", "window_seconds", "channel_count") and value < 1:
                 raise HTTPException(status_code=422, detail=f"{field} 必须 >= 1")
+            if field == "channel_names" and not isinstance(value, dict):
+                raise HTTPException(status_code=422, detail="channel_names 必须为对象")
             setattr(device, field, value)
             updated[field] = value
 
