@@ -228,14 +228,26 @@ def get_all_device_data(
             desc(func.max(SensorData.created_at))
         ).all()
 
+        # 预加载该设备的所有诊断结果（按 batch_index）
+        diag_records = db.query(Diagnosis).filter(
+            Diagnosis.device_id == dev.device_id
+        ).all()
+        diag_map = {}
+        for d in diag_records:
+            # 同一 batch 可能有多次诊断，保留最新的
+            if d.batch_index not in diag_map or (d.analyzed_at and d.analyzed_at > diag_map[d.batch_index].analyzed_at):
+                diag_map[d.batch_index] = d
+
         batches = []
         for batch_index, created_at, is_special, ch_count, sr in batch_records:
+            diag = diag_map.get(batch_index)
             batches.append({
                 "batch_index": batch_index,
                 "created_at": created_at.isoformat() if created_at else None,
                 "is_special": bool(is_special),
                 "channel_count": ch_count,
                 "sample_rate": sr or 25600,
+                "diagnosis_status": diag.status if diag else None,
             })
 
         result.append({

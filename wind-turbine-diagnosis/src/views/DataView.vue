@@ -32,7 +32,7 @@
               <el-tag
                 v-for="batch in row.batches"
                 :key="batch.batch_index"
-                :type="batch.is_special ? 'danger' : 'info'"
+                :type="getBatchTagType(batch)"
                 class="batch-tag"
                 :class="{ active: isSelected(row.device_id, batch.batch_index) }"
                 @click="selectBatch(row, batch)"
@@ -609,6 +609,12 @@ const getChannelName = (chNum) => {
 
 const isSelected = (deviceId, batchIndex) => {
   return selectedDevice.value?.device_id === deviceId && selectedBatch.value?.batch_index === batchIndex
+}
+
+const getBatchTagType = (batch) => {
+  if (batch.diagnosis_status === 'fault') return 'danger'
+  if (batch.diagnosis_status === 'warning') return 'warning'
+  return 'info'
 }
 
 // ========== 加载设备表格 ==========
