@@ -285,9 +285,9 @@ const parseInterval = (seconds) => {
 // 阈值配置（与后端 DEFAULT_THRESHOLDS 保持一致，基于真实 .npy 数据校准）
 const thresholds = ref({
   rms: { warning: 0.015, critical: 0.030 },
-  peak: { warning: 0.080, critical: 0.150 },
-  kurtosis: { warning: 5.0, critical: 7.0 },
-  crest_factor: { warning: 8.5, critical: 10.5 },
+  peak: { warning: 0.100, critical: 0.150 },
+  kurtosis: { warning: 5.5, critical: 7.0 },
+  crest_factor: { warning: 9.0, critical: 10.5 },
 })
 
 const thresholdEnabled = ref({

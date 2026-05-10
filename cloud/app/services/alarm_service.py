@@ -17,9 +17,9 @@ from app.core.websocket import manager
 # 基于真实 .npy 数据校准（H组健康 / I,O组故障）
 DEFAULT_THRESHOLDS = {
     "rms": {"warning": 0.015, "critical": 0.030},
-    "peak": {"warning": 0.080, "critical": 0.150},
-    "kurtosis": {"warning": 5.0, "critical": 7.0},
-    "crest_factor": {"warning": 8.5, "critical": 10.5},
+    "peak": {"warning": 0.100, "critical": 0.150},
+    "kurtosis": {"warning": 5.5, "critical": 7.0},
+    "crest_factor": {"warning": 9.0, "critical": 10.5},
 }
 
 

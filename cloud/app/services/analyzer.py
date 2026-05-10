@@ -104,9 +104,9 @@ def compute_imf_energy(signal: List[float], sample_rate: int = 25600) -> Dict[st
 # O组: Peak=0.068 RMS=0.007 Kurt=8.71 Crest=10.42 Skew=0.10 Impulse=14.35
 _FEATURE_BASELINES = {
     "rms": {"baseline": 0.008, "warning": 0.015, "critical": 0.030},
-    "peak": {"baseline": 0.050, "warning": 0.080, "critical": 0.150},
-    "kurtosis": {"baseline": 3.50, "warning": 5.00, "critical": 7.00},  # fisher=False
-    "crest_factor": {"baseline": 7.00, "warning": 8.50, "critical": 10.50},
+    "peak": {"baseline": 0.060, "warning": 0.100, "critical": 0.150},
+    "kurtosis": {"baseline": 4.00, "warning": 5.50, "critical": 7.00},  # fisher=False
+    "crest_factor": {"baseline": 7.50, "warning": 9.00, "critical": 10.50},
     "skewness": {"baseline": 0.00, "warning": 0.20, "critical": 0.50},
     "impulse_factor": {"baseline": 9.50, "warning": 11.00, "critical": 13.00},
 }
