@@ -17,6 +17,7 @@ from app.core.config import (
     SENSOR_SAMPLE_RATE,
     SENSOR_WINDOW_SECONDS,
 )
+from datetime import datetime
 from app.api import ingest, dashboard, monitor, diagnosis, alarms, devices, data_view, collect, auth
 from app.api.auth import get_current_user
 from fastapi import Depends
@@ -214,6 +215,7 @@ async def lifespan(app: FastAPI):
                     runtime_hours=dev_info["runtime_hours"],
                     upload_interval=10,
                     task_poll_interval=5,
+                    last_seen_at=datetime.utcnow(),
                 )
                 db.add(device)
                 print(f"[启动] 创建设备: {dev_info['device_id']} (健康度 {dev_info['health_score']}, 状态 {dev_info['status']})")
