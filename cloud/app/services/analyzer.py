@@ -99,13 +99,16 @@ def compute_imf_energy(signal: List[float], sample_rate: int = 25600) -> Dict[st
 
 # 特征阈值基准（与 alarm_service.py 保持一致，用于归一化严重度）
 # 基于真实 .npy 数据校准（H组健康 / I,O组故障）
+# H组: Peak=0.045 RMS=0.007 Kurt=3.75 Crest=6.66 Skew=0.03 Impulse=8.58
+# I组: Peak=0.190 RMS=0.024 Kurt=6.39 Crest=8.00 Skew=0.14 Impulse=11.34
+# O组: Peak=0.068 RMS=0.007 Kurt=8.71 Crest=10.42 Skew=0.10 Impulse=14.35
 _FEATURE_BASELINES = {
     "rms": {"baseline": 0.008, "warning": 0.015, "critical": 0.030},
     "peak": {"baseline": 0.050, "warning": 0.080, "critical": 0.150},
     "kurtosis": {"baseline": 3.50, "warning": 5.00, "critical": 7.00},  # fisher=False
-    "crest_factor": {"baseline": 5.00, "warning": 7.50, "critical": 10.00},
+    "crest_factor": {"baseline": 7.00, "warning": 8.50, "critical": 10.50},
     "skewness": {"baseline": 0.00, "warning": 0.20, "critical": 0.50},
-    "impulse_factor": {"baseline": 6.00, "warning": 9.00, "critical": 12.00},
+    "impulse_factor": {"baseline": 9.50, "warning": 11.00, "critical": 13.00},
 }
 
 
