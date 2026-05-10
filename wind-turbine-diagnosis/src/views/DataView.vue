@@ -799,6 +799,10 @@ const computeSTFT = async () => {
       grid: { left: '8%', right: '8%', bottom: '12%', top: '10%' },
       xAxis: { type: 'category', data: d.time, name: '时间 (s)' },
       yAxis: { type: 'category', data: d.freq, name: '频率 (Hz)' },
+      dataZoom: [
+        { type: 'inside', xAxisIndex: 0, filterMode: 'empty' },
+        { type: 'inside', yAxisIndex: 0, filterMode: 'empty' }
+      ],
       visualMap: {
         min: minVal, max: maxVal, calculable: true,
         orient: 'horizontal', left: 'center', bottom: '0%',

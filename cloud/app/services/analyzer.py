@@ -18,12 +18,18 @@ import random
 from app.services.nn_predictor import predict as nn_predict
 
 
+def remove_dc(signal: List[float]) -> np.ndarray:
+    """去除信号直流分量（零均值化）"""
+    arr = np.array(signal, dtype=np.float64)
+    return arr - np.mean(arr)
+
+
 def compute_channel_features(signal: List[float]) -> Dict[str, float]:
     """
     计算单通道振动信号的统计特征指标
     用于通道级阈值告警。
     """
-    arr = np.array(signal)
+    arr = remove_dc(signal)
     if len(arr) == 0:
         return {}
 
@@ -56,7 +62,7 @@ def compute_channel_features(signal: List[float]) -> Dict[str, float]:
 
 def compute_fft(signal: List[float], sample_rate: int = 25600):
     """计算 FFT 频谱"""
-    arr = np.array(signal)
+    arr = remove_dc(signal)
     n = len(arr)
     yf = np.abs(rfft(arr))
     xf = rfftfreq(n, 1 / sample_rate)
@@ -98,7 +104,7 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
     """
     all_peak_values = []
     for ch_name, signal in channels_data.items():
-        arr = np.array(signal)
+        arr = remove_dc(signal)
         all_peak_values.append(np.max(np.abs(arr)))
 
     avg_peak = np.mean(all_peak_values)
@@ -155,7 +161,7 @@ def compute_envelope_spectrum(signal: List[float], sample_rate: int = 25600, max
         freq: 频率数组 (Hz)
         amp: 包络谱幅值数组
     """
-    arr = np.array(signal)
+    arr = remove_dc(signal)
 
     # 1. 带通滤波（保留 1kHz~5kHz 的共振频带，可选）
     # 简化版本：直接用原始信号做希尔伯特变换
