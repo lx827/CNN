@@ -285,9 +285,13 @@ def main():
             prefix_by_char.setdefault(p[0], []).append(p)
         sorted_chars = sorted(prefix_by_char.keys())
         print(f"有效工况组: {len(data_groups)} 组，前缀分类 -> { {k: v for k, v in prefix_by_char.items()} }")
-        # 按顺序分配前缀给设备：第1台→H，第2台→I，第3台→O...
+        # 分配前缀：第1台→H（健康），其余设备→故障数据（I/O 循环）
+        fault_chars = [c for c in sorted_chars if c != 'H']
         for i, dev_id in enumerate(DEVICE_IDS):
-            char = sorted_chars[i % len(sorted_chars)]
+            if i == 0:
+                char = 'H'
+            else:
+                char = fault_chars[(i - 1) % len(fault_chars)] if fault_chars else sorted_chars[i % len(sorted_chars)]
             device_data_assignments[dev_id] = char
             print(f"[{dev_id}] 分配前缀组: {char}（含 {prefix_by_char[char]}）")
     else:
