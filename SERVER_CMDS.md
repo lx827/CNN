@@ -17,17 +17,17 @@ ssh root@8.137.96.104
 在**本地电脑** PowerShell 执行：
 ```bash
 # 上传整个文件夹
-scp -r ./cloud/ root@8.137.96.104:/opt/turbine-diagnosis/
+scp -r ./cloud/ root@8.137.96.104:/opt/CNN/
 
 # 上传单个文件
-scp ./cloud/app/main.py root@8.137.96.104:/opt/turbine-diagnosis/cloud/app/
+scp ./cloud/app/main.py root@8.137.96.104:/opt/CNN/cloud/app/
 ```
 
 ### 3. 从服务器下载文件
 在**本地电脑** PowerShell 执行：
 ```bash
 # 下载数据库文件到本地
-scp root@8.137.96.104:/opt/turbine-diagnosis/cloud/turbine.db ./backup.db
+scp root@8.137.96.104:/opt/CNN/cloud/turbine.db ./backup.db
 ```
 
 ---
@@ -63,7 +63,7 @@ journalctl -u CNN -f
 ### 1. 重新构建前端代码
 修改 `wind-turbine-diagnosis/src/` 代码后执行：
 ```bash
-cd /opt/turbine-diagnosis/wind-turbine-diagnosis
+cd /opt/CNN/wind-turbine-diagnosis
 npm run build
 ```
 
@@ -85,7 +85,7 @@ tail -f /var/log/nginx/error.log  # 查看 500 报错原因
 
 ### 1. 清理磁盘空间（删除 node_modules 等垃圾）
 ```bash
-cd /opt/turbine-diagnosis
+cd /opt/CNN
 # 删除前端依赖（服务器会自动重新安装）
 rm -rf wind-turbine-diagnosis/node_modules
 # 删除 Python 虚拟环境（如果上传了本地环境）
@@ -101,7 +101,7 @@ apt update && apt upgrade -y
 
 ### 3. 修改 Python 依赖后重新安装
 ```bash
-cd /opt/turbine-diagnosis/cloud
+cd /opt/CNN/cloud
 source venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -134,7 +134,7 @@ sudo sh -c '> /var/log/nginx/access.log'
 sudo journalctl --vacuum-time=3d
 sudo sh -c '> /var/log/nginx/error.log'
 sudo sh -c '> /var/log/nginx/access.log'
-cd /opt/turbine-diagnosis && sudo find . -name "*.log" -exec sh -c '> {}' \; 2>/dev/null
+cd /opt/CNN && sudo find . -name "*.log" -exec sh -c '> {}' \; 2>/dev/null
 ```
 
 ---
@@ -143,7 +143,7 @@ cd /opt/turbine-diagnosis && sudo find . -name "*.log" -exec sh -c '> {}' \; 2>/
 
 ### 备份 SQLite 数据库
 ```bash
-cd /opt/turbine-diagnosis/cloud
+cd /opt/CNN/cloud
 cp turbine.db turbine_backup_$(date +%Y%m%d).db
 ```
 
