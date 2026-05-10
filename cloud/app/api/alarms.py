@@ -17,6 +17,7 @@ def get_alarms(
     size: int = Query(default=10, ge=1, le=100),
     level: Optional[str] = Query(default=None, description="过滤级别: warning/critical"),
     resolved: Optional[int] = Query(default=None, description="过滤是否已处理: 0/1"),
+    device_id: Optional[str] = Query(default=None, description="过滤设备ID"),
     db: Session = Depends(get_db)
 ):
     """
@@ -28,6 +29,8 @@ def get_alarms(
         query = query.filter(Alarm.level == level)
     if resolved is not None:
         query = query.filter(Alarm.is_resolved == resolved)
+    if device_id:
+        query = query.filter(Alarm.device_id == device_id)
 
     total = query.count()
     items = query.order_by(Alarm.created_at.desc()) \

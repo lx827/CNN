@@ -308,6 +308,7 @@ export const getHistoryAlarmList = async (page = 1, pageSize = 10, filters = {})
   const params = { page, size: pageSize }
   if (filters.level) params.level = filters.level
   if (filters.resolved !== undefined) params.resolved = filters.resolved
+  if (filters.device_id) params.device_id = filters.device_id
   const res = await request.get('/api/alarms/', { params })
   const backend = res.data || {}
   const items = backend.items || []

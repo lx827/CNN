@@ -43,6 +43,9 @@
         <div class="card-header">
           <span>告警记录列表</span>
           <div class="header-actions">
+            <el-select v-model="filterDevice" placeholder="全部设备" size="small" clearable @change="onDeviceFilterChange" style="width: 140px">
+              <el-option v-for="dev in deviceList" :key="dev.device_id" :label="dev.name" :value="dev.device_id" />
+            </el-select>
             <el-radio-group v-model="filterLevel" size="small" @change="onFilterChange">
               <el-radio-button label="">全部</el-radio-button>
               <el-radio-button label="warning">预警</el-radio-button>
@@ -162,7 +165,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getHistoryAlarmList, updateAlarmStatus } from '../api'
+import { getHistoryAlarmList, updateAlarmStatus, getDeviceList } from '../api'
 
 const loading = ref(false)
 const alarmList = ref([])
@@ -170,6 +173,8 @@ const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const filterLevel = ref('')
+const filterDevice = ref('')
+const deviceList = ref([])
 const dialogVisible = ref(false)
 const selectedAlarm = ref(null)
 
@@ -197,6 +202,7 @@ const loadData = async () => {
   try {
     const filters = {}
     if (filterLevel.value) filters.level = filterLevel.value
+    if (filterDevice.value) filters.device_id = filterDevice.value
     const res = await getHistoryAlarmList(currentPage.value, pageSize.value, filters)
     alarmList.value = res.data.list
     total.value = res.data.total
@@ -208,7 +214,21 @@ const loadData = async () => {
   }
 }
 
+const loadDeviceList = async () => {
+  try {
+    const res = await getDevices()
+    deviceList.value = res.data || []
+  } catch (e) {
+    console.error('加载设备列表失败:', e)
+  }
+}
+
 const onFilterChange = () => {
+  currentPage.value = 1
+  loadData()
+}
+
+const onDeviceFilterChange = () => {
   currentPage.value = 1
   loadData()
 }
@@ -250,6 +270,7 @@ const handleResolveFromDialog = async () => {
 }
 
 onMounted(() => {
+  loadDeviceList()
   loadData()
 })
 </script>
