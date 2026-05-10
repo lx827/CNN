@@ -43,6 +43,9 @@
         <div class="card-header">
           <span>告警记录列表</span>
           <div class="header-actions">
+            <el-select v-model="filterDevice" placeholder="全部设备" size="small" clearable @change="onDeviceFilterChange" style="width: 140px">
+              <el-option v-for="dev in deviceList" :key="dev.device_id" :label="dev.name" :value="dev.device_id" />
+            </el-select>
             <el-radio-group v-model="filterLevel" size="small" @change="onFilterChange">
               <el-radio-button label="">全部</el-radio-button>
               <el-radio-button label="warning">预警</el-radio-button>
@@ -72,7 +75,13 @@
             <el-tag size="small">{{ row.category }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="title" label="告警标题" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="title" label="告警标题" min-width="200" show-overflow-tooltip />
+        <el-table-column label="批次" width="80">
+          <template #default="{ row }">
+            <el-tag v-if="row.batch_index" size="small" type="info">#{{ row.batch_index }}</el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="级别" width="90">
           <template #default="{ row }">
             <el-tag :type="getLevelType(row.level)">
@@ -87,10 +96,19 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="handleDetail(row)">
               详情
+            </el-button>
+            <el-button
+              v-if="row.batch_index"
+              type="info"
+              link
+              size="small"
+              @click="handleViewData(row)"
+            >
+              查看数据
             </el-button>
             <el-button
               v-if="!row.is_resolved"
@@ -100,6 +118,14 @@
               @click="handleResolve(row)"
             >
               标记处理
+            </el-button>
+            <el-button
+              type="danger"
+              link
+              size="small"
+              @click="handleDelete(row)"
+            >
+              删除
             </el-button>
           </template>
         </el-table-column>
@@ -127,6 +153,10 @@
           <span v-else>-</span>
         </el-descriptions-item>
         <el-descriptions-item label="类别">{{ selectedAlarm.category }}</el-descriptions-item>
+        <el-descriptions-item label="关联批次">
+          <el-tag v-if="selectedAlarm.batch_index" size="small" type="info">#{{ selectedAlarm.batch_index }}</el-tag>
+          <span v-else>-</span>
+        </el-descriptions-item>
         <el-descriptions-item label="告警标题">{{ selectedAlarm.title }}</el-descriptions-item>
         <el-descriptions-item label="级别">
           <el-tag :type="getLevelType(selectedAlarm.level)">
@@ -148,6 +178,13 @@
       <template #footer>
         <el-button @click="dialogVisible = false">关闭</el-button>
         <el-button
+          v-if="selectedAlarm && selectedAlarm.batch_index"
+          type="primary"
+          @click="handleViewData(selectedAlarm); dialogVisible = false"
+        >
+          查看关联数据
+        </el-button>
+        <el-button
           v-if="selectedAlarm && !selectedAlarm.is_resolved"
           type="success"
           @click="handleResolveFromDialog"
@@ -161,8 +198,11 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getHistoryAlarmList, updateAlarmStatus } from '../api'
+import { getHistoryAlarmList, updateAlarmStatus, deleteAlarm, getDevices } from '../api'
+
+const router = useRouter()
 
 const loading = ref(false)
 const alarmList = ref([])
@@ -170,6 +210,8 @@ const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const filterLevel = ref('')
+const filterDevice = ref('')
+const deviceList = ref([])
 const dialogVisible = ref(false)
 const selectedAlarm = ref(null)
 
@@ -197,6 +239,7 @@ const loadData = async () => {
   try {
     const filters = {}
     if (filterLevel.value) filters.level = filterLevel.value
+    if (filterDevice.value) filters.device_id = filterDevice.value
     const res = await getHistoryAlarmList(currentPage.value, pageSize.value, filters)
     alarmList.value = res.data.list
     total.value = res.data.total
@@ -208,7 +251,21 @@ const loadData = async () => {
   }
 }
 
+const loadDeviceList = async () => {
+  try {
+    const res = await getDevices()
+    deviceList.value = res.data || []
+  } catch (e) {
+    console.error('加载设备列表失败:', e)
+  }
+}
+
 const onFilterChange = () => {
+  currentPage.value = 1
+  loadData()
+}
+
+const onDeviceFilterChange = () => {
   currentPage.value = 1
   loadData()
 }
@@ -249,7 +306,33 @@ const handleResolveFromDialog = async () => {
   loadData()
 }
 
+const handleViewData = (row) => {
+  if (!row.batch_index) {
+    ElMessage.warning('该告警未关联数据批次')
+    return
+  }
+  router.push({
+    path: '/data',
+    query: { device_id: row.device_id, batch_index: row.batch_index }
+  })
+}
+
+const handleDelete = async (row) => {
+  try {
+    await ElMessageBox.confirm('确认删除该告警记录？删除后不可恢复。', '提示', { type: 'warning' })
+    await deleteAlarm(row.id)
+    ElMessage.success('已删除')
+    loadData()
+  } catch (e) {
+    if (e !== 'cancel') {
+      console.error('删除告警失败:', e)
+      ElMessage.error('删除失败')
+    }
+  }
+}
+
 onMounted(() => {
+  loadDeviceList()
   loadData()
 })
 </script>

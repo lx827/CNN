@@ -45,3 +45,9 @@ DEVICE_NAME = "风机齿轮箱 #1"
 # 是否启用神经网络预测（需要训练好模型并放到指定路径）
 NN_ENABLED = os.getenv("NN_ENABLED", "false").lower() in ("true", "1", "yes")
 NN_MODEL_PATH = os.getenv("NN_MODEL_PATH", "./models/turbine_fault_model.onnx")
+
+# ========== 认证配置 ==========
+# 网页访问密码（通过 .env 修改，默认为 admin123）
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+# JWT 签名密钥（生产环境请务必修改为随机长字符串）
+SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production-please")

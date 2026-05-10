@@ -6,6 +6,9 @@
  */
 import request from '../utils/request'
 
+// ==================== 认证 ====================
+export const login = (data) => request.post('/api/auth/login', data)
+
 // ==================== 工具函数 ====================
 
 function calcRms(arr) {
@@ -61,9 +64,10 @@ export const getDeviceInfo = async () => {
 
   // 为每个设备生成部件状态（模拟数据）
   const deviceList = devices.map((device, idx) => {
+    const isOffline = device.status === 'offline'
     const dDiag = diag[device.device_id] || {}
-    const health = dDiag.health_score || device.health_score || 87
-    const status = dDiag.status || device.status || 'normal'
+    const health = isOffline ? null : (dDiag.health_score || device.health_score || 87)
+    const status = isOffline ? 'offline' : (dDiag.status || device.status || 'normal')
 
     // 根据设备通道名称生成对应的部件状态
     const getComponentInfo = (channelName) => {
@@ -82,14 +86,23 @@ export const getDeviceInfo = async () => {
     for (let i = 1; i <= channelCount; i++) {
       const chName = channelNames[String(i)] || `通道${i}`
       const compInfo = getComponentInfo(chName)
-      const compHealth = Math.min(100, Math.max(0, health + compInfo.offset))
-      const compStatus = compHealth > 80 ? 'normal' : compHealth > 60 ? 'warning' : 'fault'
-      components.push({
-        id: i,
-        name: `${compInfo.type}（${chName}）`,
-        status: compStatus,
-        health: compHealth
-      })
+      if (isOffline) {
+        components.push({
+          id: i,
+          name: `${compInfo.type}（${chName}）`,
+          status: 'offline',
+          health: null
+        })
+      } else {
+        const compHealth = Math.min(100, Math.max(0, health + compInfo.offset))
+        const compStatus = compHealth > 80 ? 'normal' : compHealth > 60 ? 'warning' : 'fault'
+        components.push({
+          id: i,
+          name: `${compInfo.type}（${chName}）`,
+          status: compStatus,
+          health: compHealth
+        })
+      }
     }
 
     return {
@@ -305,6 +318,7 @@ export const getHistoryAlarmList = async (page = 1, pageSize = 10, filters = {})
   const params = { page, size: pageSize }
   if (filters.level) params.level = filters.level
   if (filters.resolved !== undefined) params.resolved = filters.resolved
+  if (filters.device_id) params.device_id = filters.device_id
   const res = await request.get('/api/alarms/', { params })
   const backend = res.data || {}
   const items = backend.items || []
@@ -312,6 +326,7 @@ export const getHistoryAlarmList = async (page = 1, pageSize = 10, filters = {})
   const list = items.map(item => ({
     id: item.id,
     device_id: item.device_id,
+    batch_index: item.batch_index,
     time: formatDateTime(item.created_at),
     level: item.level,
     category: item.category,
@@ -333,9 +348,15 @@ export const getHistoryAlarmList = async (page = 1, pageSize = 10, filters = {})
   }
 }
 
-// 预留：处理告警
+// 处理告警（标记为已处理）
 export const updateAlarmStatus = async (alarmId, newStatus) => {
   const res = await request.post(`/api/alarms/${alarmId}/resolve`)
+  return res
+}
+
+// 删除告警
+export const deleteAlarm = async (alarmId) => {
+  const res = await request.delete(`/api/alarms/${alarmId}`)
   return res
 }
 

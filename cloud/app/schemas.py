@@ -14,6 +14,16 @@ class ResponseModel(BaseModel):
     data: Optional[dict] = None
 
 
+# ==================== 认证 ====================
+class LoginRequest(BaseModel):
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
 # ==================== 设备 ====================
 class DeviceOut(BaseModel):
     device_id: str

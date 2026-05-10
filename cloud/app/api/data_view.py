@@ -27,6 +27,12 @@ import io
 router = APIRouter(prefix="/api/data", tags=["振动数据查看"])
 
 
+def remove_dc(signal):
+    """去除信号直流分量（零均值化）"""
+    arr = np.array(signal, dtype=np.float64)
+    return arr - np.mean(arr)
+
+
 def _estimate_rot_freq_spectrum(
     sig: np.ndarray, fs: float,
     freq_range: Tuple[float, float] = (10, 100),
@@ -222,14 +228,26 @@ def get_all_device_data(
             desc(func.max(SensorData.created_at))
         ).all()
 
+        # 预加载该设备的所有诊断结果（按 batch_index）
+        diag_records = db.query(Diagnosis).filter(
+            Diagnosis.device_id == dev.device_id
+        ).all()
+        diag_map = {}
+        for d in diag_records:
+            # 同一 batch 可能有多次诊断，保留最新的
+            if d.batch_index not in diag_map or (d.analyzed_at and d.analyzed_at > diag_map[d.batch_index].analyzed_at):
+                diag_map[d.batch_index] = d
+
         batches = []
         for batch_index, created_at, is_special, ch_count, sr in batch_records:
+            diag = diag_map.get(batch_index)
             batches.append({
                 "batch_index": batch_index,
                 "created_at": created_at.isoformat() if created_at else None,
                 "is_special": bool(is_special),
                 "channel_count": ch_count,
                 "sample_rate": sr or 25600,
+                "diagnosis_status": diag.status if diag else None,
             })
 
         result.append({
@@ -315,6 +333,9 @@ def get_channel_data(
     # 获取通道名称
     device = db.query(Device).filter(Device.device_id == device_id).first()
 
+    # 时域波形返回去均值后的数据，便于观察
+    dc_removed = remove_dc(record.data).tolist()
+
     return {
         "code": 200,
         "data": {
@@ -323,7 +344,7 @@ def get_channel_data(
             "channel": record.channel,
             "channel_name": _get_channel_name(device, record.channel),
             "sample_rate": record.sample_rate,
-            "data": record.data,
+            "data": dc_removed,
             "is_analyzed": record.is_analyzed,
             "is_special": bool(record.is_special),
             "created_at": record.created_at.isoformat() if record.created_at else None,
@@ -404,7 +425,7 @@ def get_channel_stft(
         raise HTTPException(status_code=404, detail="数据不存在")
 
     try:
-        signal = np.array(record.data)
+        signal = remove_dc(record.data)
         sample_rate = record.sample_rate or 25600
 
         # 如果数据太长，截取前 5 秒做 STFT（避免计算量过大）
@@ -475,7 +496,7 @@ def get_channel_stats(
         raise HTTPException(status_code=404, detail="数据不存在")
 
     try:
-        signal = np.array(record.data)
+        signal = remove_dc(record.data)
         sample_rate = record.sample_rate or 25600
 
         # 基本统计量
@@ -650,7 +671,7 @@ def get_channel_order(
         raise HTTPException(status_code=404, detail="数据不存在")
 
     try:
-        sig = np.array(record.data)
+        sig = remove_dc(record.data)
         sample_rate = record.sample_rate or 25600
 
         # 参数校验
@@ -731,7 +752,7 @@ def get_channel_cepstrum(
         raise HTTPException(status_code=404, detail="数据不存在")
 
     try:
-        sig = np.array(record.data)
+        sig = remove_dc(record.data)
         sample_rate = record.sample_rate or 25600
 
         quef_ms, cep, peaks = _compute_cepstrum(sig, sample_rate, max_quefrency)

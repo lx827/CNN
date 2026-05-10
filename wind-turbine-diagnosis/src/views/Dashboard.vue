@@ -86,9 +86,13 @@
 
           <div class="health-section">
             <div class="health-label">健康度</div>
+            <div v-if="dev.status === 'offline'" class="offline-health">
+              <el-icon><Warning /></el-icon> 离线，暂无数据
+            </div>
             <el-progress
-              :percentage="dev.healthScore"
-              :color="getHealthColor(dev.healthScore)"
+              v-else
+              :percentage="dev.healthScore || 0"
+              :color="getHealthColor(dev.healthScore || 0)"
               :stroke-width="12"
               :format="(p) => p"
             />
@@ -149,9 +153,13 @@
               </el-table-column>
               <el-table-column label="健康度" width="300">
                 <template #default="{ row }">
+                  <span v-if="row.status === 'offline'" class="offline-health">
+                    <el-icon><Warning /></el-icon> 离线，暂无数据
+                  </span>
                   <el-progress
-                    :percentage="row.health"
-                    :color="getHealthColor(row.health)"
+                    v-else
+                    :percentage="row.health || 0"
+                    :color="getHealthColor(row.health || 0)"
                     :stroke-width="18"
                   />
                 </template>
@@ -232,17 +240,18 @@ const initGaugeChart = () => {
     gaugeInstance.setOption({
       series: [{
         type: 'gauge',
+        radius: '90%',
         startAngle: 200,
         endAngle: -20,
         min: 0,
         max: 100,
         splitNumber: 10,
         itemStyle: { color: '#d9d9d9' },
-        progress: { show: true, width: 30, itemStyle: { color: '#d9d9d9' } },
+        progress: { show: true, width: 24, itemStyle: { color: '#d9d9d9' } },
         pointer: { show: false },
         axisLine: {
           lineStyle: {
-            width: 30,
+            width: 24,
             color: [[1, '#e8e8e8']]
           }
         },
@@ -251,7 +260,7 @@ const initGaugeChart = () => {
         axisLabel: { show: false },
         detail: {
           fontSize: 28,
-          offsetCenter: [0, '55%'],
+          offsetCenter: [0, '50%'],
           formatter: () => '离线',
           color: '#999',
           fontWeight: 'bold'
@@ -266,17 +275,18 @@ const initGaugeChart = () => {
     series: [
       {
         type: 'gauge',
+        radius: '90%',
         startAngle: 200,
         endAngle: -20,
         min: 0,
         max: 100,
         splitNumber: 10,
         itemStyle: { color: '#165DFF' },
-        progress: { show: true, width: 30 },
+        progress: { show: true, width: 24 },
         pointer: { show: true, length: '60%', width: 5 },
         axisLine: {
           lineStyle: {
-            width: 30,
+            width: 24,
             color: [
               [0.3, '#F5222D'],
               [0.6, '#FAAD14'],
@@ -284,12 +294,18 @@ const initGaugeChart = () => {
             ]
           }
         },
-        axisTick: { show: false },
-        splitLine: { length: 10, lineStyle: { width: 2, color: '#999' } },
-        axisLabel: { show: true, distance: 15, fontSize: 14, color: '#666' },
+        axisTick: { show: true, length: 8, lineStyle: { color: '#999', width: 1 } },
+        splitLine: { length: 16, lineStyle: { width: 2, color: '#999' } },
+        axisLabel: {
+          show: true,
+          distance: -10,
+          fontSize: 13,
+          color: '#666',
+          formatter: (value) => Math.round(value)
+        },
         detail: {
           fontSize: 36,
-          offsetCenter: [0, '55%'],
+          offsetCenter: [0, '50%'],
           formatter: '{value}',
           color: score >= 85 ? '#52C41A' : score >= 60 ? '#FAAD14' : '#F5222D',
           fontWeight: 'bold'
@@ -305,6 +321,32 @@ const initPieChart = async () => {
   if (!pieChart.value) return
   if (!pieInstance) pieInstance = echarts.init(pieChart.value)
 
+  const isOffline = selectedDevice.value?.status === 'offline'
+
+  // 离线设备：显示空图表 + 提示文字
+  if (isOffline) {
+    pieInstance.setOption({
+      title: {
+        text: '暂无数据',
+        left: 'center',
+        top: 'center',
+        textStyle: { color: '#999', fontSize: 16 }
+      },
+      tooltip: { show: false },
+      legend: { show: false },
+      series: [
+        {
+          type: 'pie',
+          radius: ['40%', '70%'],
+          center: ['35%', '50%'],
+          label: { show: false },
+          data: [{ value: 1, name: '暂无数据', itemStyle: { color: '#e8e8e8' } }]
+        }
+      ]
+    }, true)
+    return
+  }
+
   // 使用选中设备的诊断数据，按轴承/齿轮/其他归类聚合
   const diag = selectedDevice.value?.diagnosis
   let pieData = []
@@ -317,7 +359,7 @@ const initPieChart = async () => {
       .filter(item => item.value > 0)
   }
 
-  // 如果没有数据，用静态模拟
+  // 如果没有诊断数据，用静态模拟
   if (pieData.length === 0) {
     const res = await getStatistics()
     const faultTypeMap = {
@@ -334,6 +376,7 @@ const initPieChart = async () => {
   }
 
   const option = {
+    title: { show: false },
     tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
     legend: { orient: 'vertical', right: 10, top: 'center' },
     series: [
@@ -539,6 +582,14 @@ onUnmounted(() => {
   align-items: center;
   font-weight: 600;
   font-size: 16px;
+}
+
+.offline-health {
+  font-size: 13px;
+  color: #909399;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .chart {

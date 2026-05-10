@@ -3,6 +3,12 @@ import Layout from '../components/Layout.vue'
 
 const routes = [
   {
+    path: '/login',
+    name: 'Login',
+    component: () => import('../views/Login.vue'),
+    meta: { public: true }
+  },
+  {
     path: '/',
     component: Layout,
     redirect: '/dashboard',
@@ -50,6 +56,16 @@ const routes = [
 const router = createRouter({
   history: createWebHashHistory(),
   routes
+})
+
+// 全局路由守卫：未登录跳转到登录页
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('access_token')
+  if (!to.meta?.public && !token) {
+    next('/login')
+  } else {
+    next()
+  }
 })
 
 export default router
