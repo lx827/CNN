@@ -10,11 +10,11 @@ export default defineConfig({
     proxy: {
       // 把前端的 /api 和 /ws 请求代理到后端服务
       '/api': {
-        target: 'http://localhost:8000',//不允许修改
+        target: 'http://8.137.96.104:8000',//不允许修改
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8000',//不允许修改
+        target: 'ws://8.137.96.104:8000',//不允许修改
         ws: true,
         changeOrigin: true,
       }
