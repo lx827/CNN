@@ -316,6 +316,7 @@ export const getHistoryAlarmList = async (page = 1, pageSize = 10, filters = {})
   const list = items.map(item => ({
     id: item.id,
     device_id: item.device_id,
+    batch_index: item.batch_index,
     time: formatDateTime(item.created_at),
     level: item.level,
     category: item.category,
@@ -337,9 +338,15 @@ export const getHistoryAlarmList = async (page = 1, pageSize = 10, filters = {})
   }
 }
 
-// 预留：处理告警
+// 处理告警（标记为已处理）
 export const updateAlarmStatus = async (alarmId, newStatus) => {
   const res = await request.post(`/api/alarms/${alarmId}/resolve`)
+  return res
+}
+
+// 删除告警
+export const deleteAlarm = async (alarmId) => {
+  const res = await request.delete(`/api/alarms/${alarmId}`)
   return res
 }
 

@@ -52,7 +52,7 @@ def _has_recent_unresolved_alarm(
 
 
 def _check_feature_alarms(
-    db: Session, device: Device, channel: int, channel_name: str, features: dict
+    db: Session, device: Device, channel: int, channel_name: str, features: dict, batch_index: int = None
 ) -> list:
     """
     检查单通道振动特征是否超过阈值，生成通道级告警。
@@ -83,6 +83,7 @@ def _check_feature_alarms(
                 category="振动特征",
                 channel=channel,
                 channel_name=channel_name,
+                batch_index=batch_index,
                 title=f"{channel_name} {label}严重超标：{value:.3f}",
                 description=f"通道 {channel}（{channel_name}）的 {label} 达到 {value:.3f}，超过严重阈值 {crit_thr}。",
                 suggestion=f"1. 检查 {channel_name} 传感器连接；2. 排查该部位机械故障；3. 必要时停机检修。",
@@ -98,6 +99,7 @@ def _check_feature_alarms(
                 category="振动特征",
                 channel=channel,
                 channel_name=channel_name,
+                batch_index=batch_index,
                 title=f"{channel_name} {label}预警：{value:.3f}",
                 description=f"通道 {channel}（{channel_name}）的 {label} 为 {value:.3f}，超过预警阈值 {warn_thr}。",
                 suggestion=f"1. 加强 {channel_name} 监测频率；2. 观察趋势变化；3. 安排计划性检查。",
@@ -109,7 +111,7 @@ def _check_feature_alarms(
 
 
 def _check_diagnosis_alarms(
-    db: Session, device: Device, health_score: int, fault_probabilities: dict
+    db: Session, device: Device, health_score: int, fault_probabilities: dict, batch_index: int = None
 ) -> list:
     """
     基于诊断结果生成设备级告警。
@@ -124,6 +126,7 @@ def _check_diagnosis_alarms(
                 device_id=device.device_id,
                 level="critical",
                 category="综合健康度",
+                batch_index=batch_index,
                 title=f"设备健康度严重下降：{health_score} 分",
                 description=f"系统分析显示设备整体健康度已降至 {health_score} 分，建议立即停机检查。",
                 suggestion="1. 检查齿轮箱润滑状态；2. 检查各轴承温度；3. 联系维修人员现场排查。",
@@ -136,6 +139,7 @@ def _check_diagnosis_alarms(
                 device_id=device.device_id,
                 level="warning",
                 category="综合健康度",
+                batch_index=batch_index,
                 title=f"设备健康度预警：{health_score} 分",
                 description=f"设备健康度下降至 {health_score} 分，存在潜在故障风险。",
                 suggestion="1. 加强监测频率；2. 关注振动趋势变化；3. 安排计划性检修。",
@@ -153,6 +157,7 @@ def _check_diagnosis_alarms(
                     device_id=device.device_id,
                     level="critical",
                     category="故障诊断",
+                    batch_index=batch_index,
                     title=f"高置信度故障：{fault_name} ({prob:.1%})",
                     description=f"诊断算法判定 '{fault_name}' 概率高达 {prob:.1%}，建议重点排查。",
                     suggestion=f"请针对 {fault_name} 进行专项检查，必要时更换相关部件。",
@@ -165,6 +170,7 @@ def _check_diagnosis_alarms(
                     device_id=device.device_id,
                     level="warning",
                     category="故障诊断",
+                    batch_index=batch_index,
                     title=f"疑似故障：{fault_name} ({prob:.1%})",
                     description=f"诊断算法检测到 '{fault_name}' 概率为 {prob:.1%}，建议关注。",
                     suggestion=f"持续观察该故障趋势，如概率继续上升请安排检修。",
@@ -181,6 +187,7 @@ def generate_alarms(
     health_score: int,
     fault_probabilities: dict,
     channel_features: dict = None,
+    batch_index: int = None,
 ):
     """
     综合告警生成入口
@@ -190,6 +197,7 @@ def generate_alarms(
       health_score: 健康度
       fault_probabilities: 故障概率字典
       channel_features: 通道级特征，格式 {ch_name: {rms:..., peak:..., ...}}
+      batch_index: 关联的数据批次号
     """
     device = db.query(Device).filter(Device.device_id == device_id).first()
     if not device:
@@ -204,11 +212,11 @@ def generate_alarms(
             # ch_key 可能是 "ch1", "ch2"...
             ch_num = int(ch_key.replace("ch", "")) if ch_key.startswith("ch") else 1
             ch_name = channel_names.get(str(ch_num), f"通道{ch_num}")
-            alarms = _check_feature_alarms(db, device, ch_num, ch_name, features)
+            alarms = _check_feature_alarms(db, device, ch_num, ch_name, features, batch_index)
             new_alarms.extend(alarms)
 
     # 2. 设备级诊断结果告警
-    diag_alarms = _check_diagnosis_alarms(db, device, health_score, fault_probabilities)
+    diag_alarms = _check_diagnosis_alarms(db, device, health_score, fault_probabilities, batch_index)
     new_alarms.extend(diag_alarms)
 
     if new_alarms:

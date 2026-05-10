@@ -93,6 +93,7 @@ class Alarm(Base):
     title = Column(String(200), comment="告警标题")
     description = Column(Text, comment="详细描述")
     suggestion = Column(Text, comment="处理建议")
+    batch_index = Column(Integer, nullable=True, comment="关联的 sensor_data 批次号")
     is_resolved = Column(Integer, default=0, comment="是否已处理 0/1")
     created_at = Column(DateTime, default=datetime.utcnow)
     resolved_at = Column(DateTime, nullable=True)

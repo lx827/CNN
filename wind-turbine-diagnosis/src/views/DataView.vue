@@ -1227,6 +1227,20 @@ const onDeleteAllSpecial = async () => {
   }
 }
 
+const autoSelectFromQuery = () => {
+  const qDeviceId = route.query.device_id
+  const qBatchIndex = route.query.batch_index
+  if (!qDeviceId || !qBatchIndex) return
+
+  const device = deviceTableData.value.find(d => d.device_id === qDeviceId)
+  if (!device) return
+
+  const batch = device.batches.find(b => String(b.batch_index) === String(qBatchIndex))
+  if (!batch) return
+
+  selectBatch(device, batch)
+}
+
 onMounted(async () => {
   await loadAllDevices()
   autoSelectFromQuery()

@@ -53,6 +53,7 @@ def get_alarms(
                     "suggestion": a.suggestion,
                     "channel": a.channel,
                     "channel_name": a.channel_name,
+                    "batch_index": a.batch_index,
                     "is_resolved": a.is_resolved,
                     "created_at": a.created_at.isoformat() if a.created_at else None,
                     "resolved_at": a.resolved_at.isoformat() if a.resolved_at else None,
@@ -78,3 +79,17 @@ def resolve_alarm(alarm_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"code": 200, "message": "告警已处理"}
+
+
+@router.delete("/{alarm_id}")
+def delete_alarm(alarm_id: int, db: Session = Depends(get_db)):
+    """
+    删除一条告警记录
+    """
+    alarm = db.query(Alarm).filter(Alarm.id == alarm_id).first()
+    if not alarm:
+        return {"code": 404, "message": "告警不存在"}
+
+    db.delete(alarm)
+    db.commit()
+    return {"code": 200, "message": "告警已删除"}

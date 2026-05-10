@@ -75,7 +75,13 @@
             <el-tag size="small">{{ row.category }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="title" label="告警标题" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="title" label="告警标题" min-width="200" show-overflow-tooltip />
+        <el-table-column label="批次" width="80">
+          <template #default="{ row }">
+            <el-tag v-if="row.batch_index" size="small" type="info">#{{ row.batch_index }}</el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="级别" width="90">
           <template #default="{ row }">
             <el-tag :type="getLevelType(row.level)">
@@ -90,10 +96,19 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="handleDetail(row)">
               详情
+            </el-button>
+            <el-button
+              v-if="row.batch_index"
+              type="info"
+              link
+              size="small"
+              @click="handleViewData(row)"
+            >
+              查看数据
             </el-button>
             <el-button
               v-if="!row.is_resolved"
@@ -103,6 +118,14 @@
               @click="handleResolve(row)"
             >
               标记处理
+            </el-button>
+            <el-button
+              type="danger"
+              link
+              size="small"
+              @click="handleDelete(row)"
+            >
+              删除
             </el-button>
           </template>
         </el-table-column>
@@ -130,6 +153,10 @@
           <span v-else>-</span>
         </el-descriptions-item>
         <el-descriptions-item label="类别">{{ selectedAlarm.category }}</el-descriptions-item>
+        <el-descriptions-item label="关联批次">
+          <el-tag v-if="selectedAlarm.batch_index" size="small" type="info">#{{ selectedAlarm.batch_index }}</el-tag>
+          <span v-else>-</span>
+        </el-descriptions-item>
         <el-descriptions-item label="告警标题">{{ selectedAlarm.title }}</el-descriptions-item>
         <el-descriptions-item label="级别">
           <el-tag :type="getLevelType(selectedAlarm.level)">
@@ -151,6 +178,13 @@
       <template #footer>
         <el-button @click="dialogVisible = false">关闭</el-button>
         <el-button
+          v-if="selectedAlarm && selectedAlarm.batch_index"
+          type="primary"
+          @click="handleViewData(selectedAlarm); dialogVisible = false"
+        >
+          查看关联数据
+        </el-button>
+        <el-button
           v-if="selectedAlarm && !selectedAlarm.is_resolved"
           type="success"
           @click="handleResolveFromDialog"
@@ -164,8 +198,11 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getHistoryAlarmList, updateAlarmStatus, getDeviceList } from '../api'
+import { getHistoryAlarmList, updateAlarmStatus, deleteAlarm, getDevices } from '../api'
+
+const router = useRouter()
 
 const loading = ref(false)
 const alarmList = ref([])
@@ -267,6 +304,31 @@ const handleResolveFromDialog = async () => {
   ElMessage.success('已标记为处理')
   dialogVisible.value = false
   loadData()
+}
+
+const handleViewData = (row) => {
+  if (!row.batch_index) {
+    ElMessage.warning('该告警未关联数据批次')
+    return
+  }
+  router.push({
+    path: '/data',
+    query: { device_id: row.device_id, batch_index: row.batch_index }
+  })
+}
+
+const handleDelete = async (row) => {
+  try {
+    await ElMessageBox.confirm('确认删除该告警记录？删除后不可恢复。', '提示', { type: 'warning' })
+    await deleteAlarm(row.id)
+    ElMessage.success('已删除')
+    loadData()
+  } catch (e) {
+    if (e !== 'cancel') {
+      console.error('删除告警失败:', e)
+      ElMessage.error('删除失败')
+    }
+  }
 }
 
 onMounted(() => {

@@ -109,12 +109,13 @@ async def analysis_worker():
                         for ch_key, signal in channels_data.items():
                             channel_features[ch_key] = compute_channel_features(signal)
 
-                        # 生成告警（通道级 + 设备级）
+                        # 生成告警（通道级 + 设备级），关联到当前批次
                         generate_alarms(
                             db, device_id,
                             result["health_score"],
                             result["fault_probabilities"],
-                            channel_features
+                            channel_features,
+                            batch_index=batch_index
                         )
 
                         # WebSocket 推送
