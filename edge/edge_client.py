@@ -157,9 +157,12 @@ def generate_device_signals(device_id, sample_rate, duration):
     - USE_REAL_DATA=false: 用 signal_generator 模拟
     """
     if USE_REAL_DATA:
-        prefix = device_data_assignments.get(device_id)
-        if not prefix:
+        char = device_data_assignments.get(device_id)
+        if not char:
             raise ValueError(f"设备 {device_id} 未分配工况")
+        # 从该前缀组中随机选一个具体工况（如 H 组下随机选 H-A/H-B/H-C/H-D）
+        candidates = [p for p in data_groups.keys() if p.startswith(char)]
+        prefix = random.choice(candidates)
         return load_group_data(data_groups, prefix), REAL_SAMPLE_RATE, REAL_DURATION
     else:
         signals = generate_signals(
@@ -271,13 +274,17 @@ def main():
         print(f"真实采样率: {REAL_SAMPLE_RATE} Hz")
         # 扫描数据
         data_groups = scan_data_groups(DATA_DIR)
-        prefixes = list(data_groups.keys())
-        print(f"有效工况组: {len(prefixes)} 组 -> {prefixes}")
-        # 为每个设备随机分配工况
-        for dev_id in DEVICE_IDS:
-            prefix = random.choice(prefixes)
-            device_data_assignments[dev_id] = prefix
-            print(f"[{dev_id}] 分配工况: {prefix}")
+        # 按前缀首字母分组（H/I/O）
+        prefix_by_char = {}
+        for p in data_groups.keys():
+            prefix_by_char.setdefault(p[0], []).append(p)
+        sorted_chars = sorted(prefix_by_char.keys())
+        print(f"有效工况组: {len(data_groups)} 组，前缀分类 -> { {k: v for k, v in prefix_by_char.items()} }")
+        # 按顺序分配前缀给设备：第1台→H，第2台→I，第3台→O...
+        for i, dev_id in enumerate(DEVICE_IDS):
+            char = sorted_chars[i % len(sorted_chars)]
+            device_data_assignments[dev_id] = char
+            print(f"[{dev_id}] 分配前缀组: {char}（含 {prefix_by_char[char]}）")
     else:
         print(f"采样: {SAMPLE_RATE} Hz × {DURATION} s = {SAMPLE_RATE * DURATION} 点/通道")
 
