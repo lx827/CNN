@@ -86,9 +86,13 @@
 
           <div class="health-section">
             <div class="health-label">健康度</div>
+            <div v-if="dev.status === 'offline'" class="offline-health">
+              <el-icon><Warning /></el-icon> 离线，暂无数据
+            </div>
             <el-progress
-              :percentage="dev.healthScore"
-              :color="getHealthColor(dev.healthScore)"
+              v-else
+              :percentage="dev.healthScore || 0"
+              :color="getHealthColor(dev.healthScore || 0)"
               :stroke-width="12"
               :format="(p) => p"
             />
@@ -149,9 +153,13 @@
               </el-table-column>
               <el-table-column label="健康度" width="300">
                 <template #default="{ row }">
+                  <span v-if="row.status === 'offline'" class="offline-health">
+                    <el-icon><Warning /></el-icon> 离线，暂无数据
+                  </span>
                   <el-progress
-                    :percentage="row.health"
-                    :color="getHealthColor(row.health)"
+                    v-else
+                    :percentage="row.health || 0"
+                    :color="getHealthColor(row.health || 0)"
                     :stroke-width="18"
                   />
                 </template>
@@ -539,6 +547,14 @@ onUnmounted(() => {
   align-items: center;
   font-weight: 600;
   font-size: 16px;
+}
+
+.offline-health {
+  font-size: 13px;
+  color: #909399;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .chart {

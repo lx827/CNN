@@ -64,9 +64,10 @@ export const getDeviceInfo = async () => {
 
   // 为每个设备生成部件状态（模拟数据）
   const deviceList = devices.map((device, idx) => {
+    const isOffline = device.status === 'offline'
     const dDiag = diag[device.device_id] || {}
-    const health = dDiag.health_score || device.health_score || 87
-    const status = dDiag.status || device.status || 'normal'
+    const health = isOffline ? null : (dDiag.health_score || device.health_score || 87)
+    const status = isOffline ? 'offline' : (dDiag.status || device.status || 'normal')
 
     // 根据设备通道名称生成对应的部件状态
     const getComponentInfo = (channelName) => {
@@ -85,14 +86,23 @@ export const getDeviceInfo = async () => {
     for (let i = 1; i <= channelCount; i++) {
       const chName = channelNames[String(i)] || `通道${i}`
       const compInfo = getComponentInfo(chName)
-      const compHealth = Math.min(100, Math.max(0, health + compInfo.offset))
-      const compStatus = compHealth > 80 ? 'normal' : compHealth > 60 ? 'warning' : 'fault'
-      components.push({
-        id: i,
-        name: `${compInfo.type}（${chName}）`,
-        status: compStatus,
-        health: compHealth
-      })
+      if (isOffline) {
+        components.push({
+          id: i,
+          name: `${compInfo.type}（${chName}）`,
+          status: 'offline',
+          health: null
+        })
+      } else {
+        const compHealth = Math.min(100, Math.max(0, health + compInfo.offset))
+        const compStatus = compHealth > 80 ? 'normal' : compHealth > 60 ? 'warning' : 'fault'
+        components.push({
+          id: i,
+          name: `${compInfo.type}（${chName}）`,
+          status: compStatus,
+          health: compHealth
+        })
+      }
     }
 
     return {
