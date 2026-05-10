@@ -106,6 +106,37 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### 4. 清理日志释放磁盘空间
+
+**查看日志占用：**
+```bash
+# Systemd 日志总大小
+sudo journalctl --disk-usage
+
+# Nginx 日志大小
+sudo ls -lh /var/log/nginx/
+```
+
+**清空后端服务日志（turbine-cloud）：**
+```bash
+sudo journalctl --unit=turbine-cloud --rotate
+sudo journalctl --unit=turbine-cloud --vacuum-time=1s
+```
+
+**清空 Nginx 日志：**
+```bash
+sudo sh -c '> /var/log/nginx/error.log'
+sudo sh -c '> /var/log/nginx/access.log'
+```
+
+**一键清理所有日志（保留最近 3 天）：**
+```bash
+sudo journalctl --vacuum-time=3d
+sudo sh -c '> /var/log/nginx/error.log'
+sudo sh -c '> /var/log/nginx/access.log'
+cd /opt/turbine-diagnosis && sudo find . -name "*.log" -exec sh -c '> {}' \; 2>/dev/null
+```
+
 ---
 
 ## 五、数据库备份
