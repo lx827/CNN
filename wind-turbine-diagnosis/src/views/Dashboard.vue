@@ -240,17 +240,18 @@ const initGaugeChart = () => {
     gaugeInstance.setOption({
       series: [{
         type: 'gauge',
+        radius: '90%',
         startAngle: 200,
         endAngle: -20,
         min: 0,
         max: 100,
         splitNumber: 10,
         itemStyle: { color: '#d9d9d9' },
-        progress: { show: true, width: 30, itemStyle: { color: '#d9d9d9' } },
+        progress: { show: true, width: 24, itemStyle: { color: '#d9d9d9' } },
         pointer: { show: false },
         axisLine: {
           lineStyle: {
-            width: 30,
+            width: 24,
             color: [[1, '#e8e8e8']]
           }
         },
@@ -259,7 +260,7 @@ const initGaugeChart = () => {
         axisLabel: { show: false },
         detail: {
           fontSize: 28,
-          offsetCenter: [0, '55%'],
+          offsetCenter: [0, '50%'],
           formatter: () => '离线',
           color: '#999',
           fontWeight: 'bold'
@@ -274,17 +275,18 @@ const initGaugeChart = () => {
     series: [
       {
         type: 'gauge',
+        radius: '90%',
         startAngle: 200,
         endAngle: -20,
         min: 0,
         max: 100,
         splitNumber: 10,
         itemStyle: { color: '#165DFF' },
-        progress: { show: true, width: 30 },
+        progress: { show: true, width: 24 },
         pointer: { show: true, length: '60%', width: 5 },
         axisLine: {
           lineStyle: {
-            width: 30,
+            width: 24,
             color: [
               [0.3, '#F5222D'],
               [0.6, '#FAAD14'],
@@ -292,12 +294,18 @@ const initGaugeChart = () => {
             ]
           }
         },
-        axisTick: { show: false },
-        splitLine: { length: 10, lineStyle: { width: 2, color: '#999' } },
-        axisLabel: { show: true, distance: 15, fontSize: 14, color: '#666' },
+        axisTick: { show: true, length: 6, lineStyle: { color: '#999', width: 1 } },
+        splitLine: { length: 14, lineStyle: { width: 2, color: '#999' } },
+        axisLabel: {
+          show: true,
+          distance: -30,
+          fontSize: 13,
+          color: '#666',
+          formatter: (value) => Math.round(value)
+        },
         detail: {
           fontSize: 36,
-          offsetCenter: [0, '55%'],
+          offsetCenter: [0, '50%'],
           formatter: '{value}',
           color: score >= 85 ? '#52C41A' : score >= 60 ? '#FAAD14' : '#F5222D',
           fontWeight: 'bold'
