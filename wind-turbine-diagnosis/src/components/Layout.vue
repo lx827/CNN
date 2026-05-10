@@ -46,6 +46,14 @@
     <el-main class="main">
       <router-view />
     </el-main>
+
+    <!-- 退出登录按钮 -->
+    <div class="logout-btn">
+      <el-button type="danger" plain size="small" @click="handleLogout">
+        <el-icon><SwitchButton /></el-icon>
+        退出登录
+      </el-button>
+    </div>
   </div>
 </template>
 
@@ -60,6 +68,11 @@ const activeMenu = computed(() => route.path)
 
 const handleMenuSelect = (index) => {
   router.push(index)
+}
+
+const handleLogout = () => {
+  localStorage.removeItem('access_token')
+  router.push('/login')
 }
 </script>
 
@@ -126,11 +139,30 @@ const handleMenuSelect = (index) => {
   width: 100%;
 }
 
+  .logout-btn {
+    position: fixed;
+    top: 16px;
+    right: 24px;
+    z-index: 100;
+  }
+
+  .logout-btn :deep(.el-button) {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #fff;
+  }
+
+  .logout-btn :deep(.el-button:hover) {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #fff;
+  }
+
 @media (max-width: 1200px) {
   .title {
     font-size: 16px;
   }
-  
+
   .nav-menu :deep(.el-menu-item span) {
     display: none;
   }

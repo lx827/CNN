@@ -17,7 +17,9 @@ from app.core.config import (
     SENSOR_SAMPLE_RATE,
     SENSOR_WINDOW_SECONDS,
 )
-from app.api import ingest, dashboard, monitor, diagnosis, alarms, devices, data_view, collect
+from app.api import ingest, dashboard, monitor, diagnosis, alarms, devices, data_view, collect, auth
+from app.api.auth import get_current_user
+from fastapi import Depends
 from app.core.websocket import manager
 from app.services.analyzer import analyze_device, compute_channel_features
 from app.services.alarm_service import generate_alarms
@@ -249,14 +251,18 @@ app.add_middleware(
 )
 
 # 注册路由
+# 认证和边端数据接入不需要登录保护
+app.include_router(auth.router)
 app.include_router(ingest.router)
-app.include_router(dashboard.router)
-app.include_router(monitor.router)
-app.include_router(diagnosis.router)
-app.include_router(alarms.router)
-app.include_router(devices.router)
-app.include_router(data_view.router)
-app.include_router(collect.router)
+
+# 前端页面调用的接口需要 Bearer Token 认证
+app.include_router(dashboard.router, dependencies=[Depends(get_current_user)])
+app.include_router(monitor.router, dependencies=[Depends(get_current_user)])
+app.include_router(diagnosis.router, dependencies=[Depends(get_current_user)])
+app.include_router(alarms.router, dependencies=[Depends(get_current_user)])
+app.include_router(devices.router, dependencies=[Depends(get_current_user)])
+app.include_router(data_view.router, dependencies=[Depends(get_current_user)])
+app.include_router(collect.router, dependencies=[Depends(get_current_user)])
 
 
 # WebSocket 实时推送端点

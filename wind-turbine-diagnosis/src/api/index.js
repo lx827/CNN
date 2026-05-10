@@ -6,6 +6,9 @@
  */
 import request from '../utils/request'
 
+// ==================== 认证 ====================
+export const login = (data) => request.post('/api/auth/login', data)
+
 // ==================== 工具函数 ====================
 
 function calcRms(arr) {
