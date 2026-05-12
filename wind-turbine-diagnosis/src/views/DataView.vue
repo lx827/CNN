@@ -169,8 +169,8 @@
           <el-card size="small" style="margin-bottom: 16px">
             <template #header>
               <span style="font-weight: 600;">🔍 频域/阶次诊断明细</span>
-              <el-text v-if="selectedBatch.rot_freq" type="info" size="small" style="margin-left: 12px;">
-                估计转频: {{ selectedBatch.rot_freq.toFixed(2) }} Hz / {{ (selectedBatch.rot_freq * 60).toFixed(0) }} RPM
+              <el-text v-if="selectedBatch.rot_freq || (orderData && orderData.rot_freq)" type="info" size="small" style="margin-left: 12px;">
+                估计转频: {{ (orderData?.rot_freq ?? selectedBatch.rot_freq).toFixed(2) }} Hz / {{ ((orderData?.rot_freq ?? selectedBatch.rot_freq) * 60).toFixed(0) }} RPM
               </el-text>
             </template>
             <el-descriptions :column="2" size="small" border>
@@ -1150,6 +1150,15 @@ const orderAnalysisFlat = computed(() => {
     }
   }
   walk(batch.order_analysis)
+
+  // 如果当前通道已实时计算阶次追踪，用其 rot_freq 覆盖历史诊断值，确保上下一致
+  if (orderData.value && orderData.value.rot_freq) {
+    const rotFreqItem = result.find(item => item.key === 'rot_freq_hz')
+    if (rotFreqItem) rotFreqItem.value = orderData.value.rot_freq
+    const rotRpmItem = result.find(item => item.key === 'rot_rpm')
+    if (rotRpmItem) rotRpmItem.value = orderData.value.rot_rpm
+  }
+
   return result
 })
 
