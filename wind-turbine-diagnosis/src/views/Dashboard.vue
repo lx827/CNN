@@ -351,10 +351,16 @@ const initPieChart = async () => {
   const diag = selectedDevice.value?.diagnosis
   let pieData = []
 
+  // 有效故障类型白名单（与后端保持一致，排除已废弃的轴不对中、基础松动）
+  const validFaultTypes = new Set([
+    '齿轮磨损', '轴承内圈故障', '轴承外圈故障', '滚动体故障',
+    '齿轮断齿', '齿轮缺齿', '齿轮齿根裂纹'
+  ])
+
   if (diag && diag.fault_probabilities) {
     const probs = diag.fault_probabilities
     pieData = Object.entries(probs)
-      .filter(([name]) => name !== '正常运行')
+      .filter(([name]) => name !== '正常运行' && validFaultTypes.has(name))
       .map(([name, value]) => ({ name, value: Math.round(value * 100) }))
       .filter(item => item.value > 0)
   }
