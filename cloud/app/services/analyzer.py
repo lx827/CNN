@@ -10,7 +10,7 @@
 """
 import numpy as np
 from scipy.fft import rfft, rfftfreq
-from scipy.signal import hilbert
+from scipy.signal import hilbert, detrend
 from scipy import stats
 from typing import Dict, List
 import random
@@ -19,9 +19,9 @@ from app.services.nn_predictor import predict as nn_predict
 
 
 def remove_dc(signal: List[float]) -> np.ndarray:
-    """去除信号直流分量（零均值化）"""
+    """去除信号线性趋势与直流分量（基频漂移导致的 y=kx+b 趋势）"""
     arr = np.array(signal, dtype=np.float64)
-    return arr - np.mean(arr)
+    return detrend(arr, type='linear')
 
 
 def compute_channel_features(signal: List[float]) -> Dict[str, float]:
