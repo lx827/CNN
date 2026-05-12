@@ -2,16 +2,38 @@
 规则诊断算法（回退方案）
 """
 import logging
-import random
 import numpy as np
 from scipy.fft import rfft, rfftfreq
 from scipy.signal import hilbert
 from typing import Dict, List
-from .features import compute_channel_features, compute_fft, compute_imf_energy, _get_channel_params
+from .features import (
+    compute_channel_features, compute_fft, compute_imf_energy,
+    _get_channel_params, remove_dc, _compute_bearing_fault_freqs, _compute_bearing_fault_orders,
+)
 from .order_tracking import _compute_order_spectrum_multi_frame, _compute_order_spectrum_varying_speed
-from .features import _compute_bearing_fault_freqs, _compute_bearing_fault_orders
 
 logger = logging.getLogger(__name__)
+
+# 特征阈值配置（用于 _feature_severity）
+FEATURE_THRESHOLDS = {
+    "rms": {"baseline": 2.0, "critical": 15.0},
+    "peak": {"baseline": 5.0, "critical": 40.0},
+    "kurtosis": {"baseline": 3.0, "critical": 15.0},
+    "crest_factor": {"baseline": 3.0, "critical": 12.0},
+    "skewness": {"baseline": 0.3, "critical": 2.0},
+    "impulse_factor": {"baseline": 5.0, "critical": 20.0},
+}
+
+
+def _order_band_energy(order_axis, spectrum, center_order: float, bandwidth: float) -> float:
+    """计算指定阶次带能量（阶次域版 _band_energy）"""
+    order_axis = np.asarray(order_axis)
+    spectrum = np.asarray(spectrum)
+    mask = (order_axis >= center_order - bandwidth) & (order_axis <= center_order + bandwidth)
+    if not np.any(mask):
+        return 0.0
+    return float(np.sum(spectrum[mask] ** 2))
+
 
 def _feature_severity(value: float, metric: str) -> float:
     """
@@ -181,9 +203,9 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
 
     max_fault_sev = max(v for k, v in fault_scores.items() if k != "正常运行")
     health_score = int(max(0, min(100,
-        fault_probabilities.get("正常运行", 0) * 100 - max_fault_sev * 30 - random.uniform(0, 3)
+        fault_probabilities.get("正常运行", 0) * 100 - max_fault_sev * 30
     )))
-    status = "normal" if health_score >= 80 else "warning" if health_score >= 60 else "fault"
+    status = "normal" if health_score >= 85 else "warning" if health_score >= 60 else "fault"
 
     # 10. IMF 能量
     imf_energy = compute_imf_energy(first_channel, sample_rate)

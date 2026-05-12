@@ -23,8 +23,25 @@ def _generate_recommendation(
 
     # 齿轮建议
     gear_ind = gear_result.get("fault_indicators", {})
-    if gear_ind.get("ser", {}).get("warning"):
+    if gear_ind.get("ser", {}).get("critical"):
+        parts.append("齿轮边频带能量严重超标，建议立即停机检查啮合状态。")
+    elif gear_ind.get("ser", {}).get("warning"):
         parts.append("齿轮边频带能量异常，建议关注啮合状态及载荷波动。")
+
+    if gear_ind.get("sideband_count", {}).get("critical"):
+        parts.append("齿轮边频数量达到危险水平，建议立即检查。")
+    elif gear_ind.get("sideband_count", {}).get("warning"):
+        parts.append("齿轮边频数量异常，建议关注。")
+
+    if gear_ind.get("fm0", {}).get("critical"):
+        parts.append("齿轮粗故障指标(FM0)达到危险阈值，建议立即检查齿面状态。")
+    elif gear_ind.get("fm0", {}).get("warning"):
+        parts.append("齿轮粗故障指标(FM0)异常，建议关注齿面磨损。")
+
+    if gear_ind.get("car", {}).get("critical"):
+        parts.append("齿轮倒频谱幅值比(CAR)严重超标，建议立即检查。")
+    elif gear_ind.get("car", {}).get("warning"):
+        parts.append("齿轮倒频谱幅值比(CAR)异常，建议关注。")
 
     if not parts:
         parts.append("检测到异常信号特征，建议结合工况进一步分析。")

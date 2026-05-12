@@ -20,6 +20,16 @@ from ..signal_utils import (
 )
 
 
+def _order_band_amplitude(order_axis, spectrum, center_order: float, bandwidth: float) -> float:
+    """计算指定阶次带幅值和（非能量和）"""
+    order_axis = np.asarray(order_axis)
+    spectrum = np.asarray(spectrum)
+    mask = (order_axis >= center_order - bandwidth) & (order_axis <= center_order + bandwidth)
+    if not np.any(mask):
+        return 0.0
+    return float(np.sum(np.abs(spectrum[mask])))
+
+
 def compute_fm4(differential_signal: np.ndarray) -> float:
     """
     FM4 — 局部故障检测（单/双齿点蚀/裂纹）
@@ -145,7 +155,7 @@ def compute_ser_order(
     order_axis = np.asarray(order_axis)
     spectrum = np.asarray(spectrum)
 
-    mesh_amp = _order_band_energy(order_axis, spectrum, mesh_order, 0.5)
+    mesh_amp = _order_band_amplitude(order_axis, spectrum, mesh_order, 0.5)
     if mesh_amp < 1e-12:
         return 0.0
 
@@ -153,8 +163,8 @@ def compute_ser_order(
     for i in range(1, n_sidebands + 1):
         sb_low = mesh_order - i
         sb_high = mesh_order + i
-        total_sideband += _order_band_energy(order_axis, spectrum, sb_low, sideband_bw)
-        total_sideband += _order_band_energy(order_axis, spectrum, sb_high, sideband_bw)
+        total_sideband += _order_band_amplitude(order_axis, spectrum, sb_low, sideband_bw)
+        total_sideband += _order_band_amplitude(order_axis, spectrum, sb_high, sideband_bw)
 
     return float(total_sideband / mesh_amp)
 
@@ -174,7 +184,7 @@ def analyze_sidebands_order(
     order_axis = np.asarray(order_axis)
     spectrum = np.asarray(spectrum)
 
-    mesh_amp = _order_band_energy(order_axis, spectrum, mesh_order, 0.5)
+    mesh_amp = _order_band_amplitude(order_axis, spectrum, mesh_order, 0.5)
     if mesh_amp < 1e-12:
         return {"sidebands": [], "ser": 0.0, "mesh_amp": 0.0}
 
@@ -185,8 +195,8 @@ def analyze_sidebands_order(
         sb_low = mesh_order - i
         sb_high = mesh_order + i
 
-        amp_low = _order_band_energy(order_axis, spectrum, sb_low, 0.3)
-        amp_high = _order_band_energy(order_axis, spectrum, sb_high, 0.3)
+        amp_low = _order_band_amplitude(order_axis, spectrum, sb_low, 0.3)
+        amp_high = _order_band_amplitude(order_axis, spectrum, sb_high, 0.3)
 
         total_sb += amp_low + amp_high
 
@@ -230,7 +240,7 @@ def compute_fm0_order(
 
     harmonics_sum = 0.0
     for i in range(1, n_harmonics + 1):
-        harmonics_sum += _order_band_energy(order_axis, spectrum, mesh_order * i, 0.5)
+        harmonics_sum += _order_band_amplitude(order_axis, spectrum, mesh_order * i, 0.5)
 
     if harmonics_sum < 1e-12:
         return 0.0

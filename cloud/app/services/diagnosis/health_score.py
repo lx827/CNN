@@ -59,11 +59,11 @@ def _compute_health_score(
                 bearing_mild += 1
 
     if bearing_significant >= 2:
-        deductions.append(("bearing_multi", 12))  # 多故障特征同时显著
+        deductions.append(("bearing_multi_warning", 12))  # 多故障特征同时显著
     elif bearing_significant == 1:
-        deductions.append(("bearing_single", 5))   # 单一故障特征
+        deductions.append(("bearing_single_warning", 5))   # 单一故障特征
     if bearing_mild >= 2:
-        deductions.append(("bearing_mild", 3))
+        deductions.append(("bearing_mild_warning", 3))
 
     # ===== 齿轮故障扣分（仅在存在齿轮参数时）=====
     gear_ind = gear_result.get("fault_indicators", {})

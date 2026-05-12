@@ -6,12 +6,13 @@
 import numpy as np
 from scipy import stats
 from scipy.fft import rfft, rfftfreq
-from scipy.signal import hilbert
+from scipy.signal import hilbert, detrend
 from typing import Dict, List, Tuple, Optional
 
 from .signal_utils import (
     prepare_signal, rms, peak_value, crest_factor, kurtosis, skewness,
     compute_fft_spectrum, bandpass_filter, lowpass_filter, _band_energy,
+    estimate_rot_freq_spectrum as _estimate_rot_freq_simple,
 )
 
 
@@ -145,12 +146,24 @@ def compute_envelope_features(
     """
     arr = prepare_signal(signal)
 
-    # 包络提取
+    # Step 1: 带通滤波（选取 2~20 kHz 共振频带，根据采样率自适应）
+    if fs >= 10000:
+        bp_low = max(100, fs * 0.05)
+        bp_high = min(fs / 2 - 100, fs * 0.25)
+        if bp_low < bp_high:
+            arr = bandpass_filter(arr, fs, bp_low, bp_high)
+
+    # Step 2-3: 希尔伯特变换 → 包络
     analytic = hilbert(arr)
     envelope = np.abs(analytic)
+
+    # Step 4: 低通滤波（截止频率 500~2000 Hz）
+    lp_cutoff = min(2000.0, fs * 0.08)
+    if lp_cutoff > 100:
+        envelope = lowpass_filter(envelope, fs, lp_cutoff)
     envelope = envelope - np.mean(envelope)
 
-    # 包络谱 FFT
+    # Step 5: FFT 包络谱
     n = len(envelope)
     yf = np.abs(rfft(envelope))
     xf = rfftfreq(n, 1.0 / fs)
@@ -197,16 +210,6 @@ def compute_envelope_features(
     return features
 
 
-# 统一使用 utils.py 中的高精度转频估计（含包络解调辅助 + 齿数验证）
-from .signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_simple
-
-
-# 向后兼容：轴承特征频率计算
-from .signal_utils import (
-    prepare_signal, rms, peak_value, crest_factor, kurtosis, skewness,
-    compute_fft_spectrum, bandpass_filter, lowpass_filter,
-)
-
 def remove_dc(signal: List[float]) -> np.ndarray:
     """去除信号线性趋势与直流分量（基频漂移导致的 y=kx+b 趋势）"""
     arr = np.array(signal, dtype=np.float64)
@@ -224,26 +227,28 @@ def compute_channel_features(signal: List[float]) -> Dict[str, float]:
 
     # 基本统计量
     peak = float(np.max(np.abs(arr)))
-    rms = float(np.sqrt(np.mean(arr ** 2)))
+    rms_val = float(np.sqrt(np.mean(arr ** 2)))
     mean_abs = float(np.mean(np.abs(arr)))
 
     # 峭度与偏度
-    kurtosis = float(stats.kurtosis(arr, fisher=False))
-    skewness = float(stats.skew(arr))
+    kurt = float(stats.kurtosis(arr, fisher=False))
+    skew = float(stats.skew(arr))
 
     # 无量纲指标
-    margin = peak / rms if rms > 1e-12 else 0.0
-    shape_factor = rms / mean_abs if mean_abs > 1e-12 else 0.0
+    # Margin = Peak / (mean(sqrt(|x|)))^2
+    mean_sqrt = float(np.mean(np.sqrt(np.abs(arr) + 1e-12)))
+    margin = peak / (mean_sqrt ** 2) if mean_sqrt > 1e-12 else 0.0
+    shape_factor = rms_val / mean_abs if mean_abs > 1e-12 else 0.0
     impulse_factor = peak / mean_abs if mean_abs > 1e-12 else 0.0
-    crest_factor = peak / rms if rms > 1e-12 else 0.0
+    crest = peak / rms_val if rms_val > 1e-12 else 0.0
 
     return {
         "peak": round(peak, 6),
-        "rms": round(rms, 6),
-        "kurtosis": round(kurtosis, 4),
-        "skewness": round(skewness, 4),
+        "rms": round(rms_val, 6),
+        "kurtosis": round(kurt, 4),
+        "skewness": round(skew, 4),
         "margin": round(margin, 4),
-        "crest_factor": round(crest_factor, 4),
+        "crest_factor": round(crest, 4),
         "shape_factor": round(shape_factor, 4),
         "impulse_factor": round(impulse_factor, 4),
     }
@@ -330,5 +335,7 @@ def _compute_bearing_fault_freqs(rot_freq: float, bearing_params: dict) -> dict:
 
 def _compute_bearing_fault_orders(rot_freq: float, bearing_params: dict) -> dict:
     """计算轴承故障特征阶次 (order = freq / rot_freq)"""
+    if rot_freq <= 0:
+        return {}
     freqs = _compute_bearing_fault_freqs(rot_freq, bearing_params)
     return {k: v / rot_freq for k, v in freqs.items()}

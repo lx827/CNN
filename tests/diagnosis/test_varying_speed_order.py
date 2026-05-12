@@ -18,8 +18,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from app.services.diagnosis.utils import estimate_rot_freq_spectrum
-from app.api.data_view import (
+from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
+from app.services.diagnosis.order_tracking import (
     _compute_order_spectrum,
     _compute_order_spectrum_multi_frame,
     _compute_order_spectrum_varying_speed,

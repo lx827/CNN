@@ -37,6 +37,17 @@ def analyze_device(channels_data: Dict[str, List[float]], sample_rate: int = 256
       2. 新诊断引擎（DiagnosisEngine，支持 Fast Kurtogram / CPW / MED 等高级算法）
       3. 简化规则算法（回退方案）
     """
+    # 防御：空数据
+    if not channels_data:
+        return {
+            "health_score": 100,
+            "status": "normal",
+            "fault_probabilities": {"正常运行": 1.0},
+            "imf_energy": {},
+            "order_analysis": None,
+            "rot_freq": None,
+        }
+
     # 1. 神经网络优先
     nn_result = nn_predict(channels_data, sample_rate)
     if nn_result is not None:
@@ -79,9 +90,10 @@ def analyze_device(channels_data: Dict[str, List[float]], sample_rate: int = 256
                     merged_probs.setdefault("轴承" + fault_name, 0)
                     merged_probs["轴承" + fault_name] = max(merged_probs["轴承" + fault_name], min(1.0, prob.get("snr", 0) / 10))
             for fault_name, prob in r.get("gear", {}).get("fault_indicators", {}).items():
-                if isinstance(prob, dict) and prob.get("warning"):
+                if isinstance(prob, dict):
                     merged_probs.setdefault("齿轮" + fault_name, 0)
-                    merged_probs["齿轮" + fault_name] = max(merged_probs["齿轮" + fault_name], 0.3 if prob.get("warning") else 0)
+                    if prob.get("warning"):
+                        merged_probs["齿轮" + fault_name] = max(merged_probs["齿轮" + fault_name], 0.3)
                     if prob.get("critical"):
                         merged_probs["齿轮" + fault_name] = max(merged_probs["齿轮" + fault_name], 0.6)
 
@@ -91,11 +103,16 @@ def analyze_device(channels_data: Dict[str, List[float]], sample_rate: int = 256
 
         first_ch, first_result = channel_results[0]
 
+        # 计算 IMF 能量分布（兼容旧接口）
+        from app.services.diagnosis.features import compute_imf_energy
+        first_signal = list(channels_data.values())[0]
+        imf_energy = compute_imf_energy(first_signal, sample_rate)
+
         legacy_result = {
             "health_score": worst_health,
             "status": worst_status,
             "fault_probabilities": fault_probabilities,
-            "imf_energy": first_result.get("time_features", {}),
+            "imf_energy": imf_energy,
             "order_analysis": {
                 "engine_result": first_result,
                 "channels": {ch: r for ch, r in channel_results},

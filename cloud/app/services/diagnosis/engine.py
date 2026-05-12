@@ -40,6 +40,7 @@ from .features import (
     compute_fft_features,
     compute_envelope_features,
 )
+from .signal_utils import highpass_filter
 from .health_score import _compute_health_score
 from .recommendation import (
     _generate_recommendation,
@@ -131,6 +132,7 @@ class DiagnosisEngine:
         signal: np.ndarray,
         fs: float,
         rot_freq: Optional[float] = None,
+        preprocess: bool = True,
     ) -> Dict[str, Any]:
         """
         轴承诊断分析
@@ -144,7 +146,7 @@ class DiagnosisEngine:
                 "fault_indicators": Dict,
             }
         """
-        arr = self.preprocess(signal)
+        arr = self.preprocess(signal) if preprocess else np.array(signal, dtype=np.float64) if preprocess else np.array(signal, dtype=np.float64)
 
         if rot_freq is None:
             rot_freq = self._estimate_rot_freq(arr, fs)
@@ -186,7 +188,7 @@ class DiagnosisEngine:
             "method": self.bearing_method.value,
             "strategy": self.strategy.value,
             "rot_freq_hz": round(rot_freq, 3),
-            **result,
+            **{k: v for k, v in result.items() if k != "method"},
             "features": env_features,
             "fault_indicators": indicators,
         }
@@ -196,6 +198,7 @@ class DiagnosisEngine:
         signal: np.ndarray,
         fs: float,
         rot_freq: Optional[float] = None,
+        preprocess: bool = True,
     ) -> Dict[str, Any]:
         """
         齿轮诊断分析
@@ -238,7 +241,7 @@ class DiagnosisEngine:
 
         rot_freq = float(rot_freq_used)
 
-        z_in = (self.gear_teeth.get("input") or 0) if self.gear_teeth else 0
+        z_in = int(float(self.gear_teeth.get("input") or 0)) if self.gear_teeth else 0
         mesh_freq = rot_freq * z_in if z_in > 0 else None
         mesh_order = float(z_in) if z_in > 0 else None
 
@@ -264,7 +267,6 @@ class DiagnosisEngine:
 
         # 高级齿轮指标（也基于阶次谱）
         if self.gear_method == GearMethod.ADVANCED and mesh_order and mesh_order > 0:
-            from .signal_utils import highpass_filter
             result["fm0"] = round(compute_fm0_order(arr, order_axis, order_spectrum, mesh_order), 4)
             result["car"] = round(compute_car(arr, fs, rot_freq), 4)
 
@@ -310,11 +312,11 @@ class DiagnosisEngine:
         # 时域特征
         time_features = compute_time_features(arr)
 
-        # 轴承分析
-        bearing_result = self.analyze_bearing(arr, fs, rot_freq)
+        # 轴承分析（避免重复预处理）
+        bearing_result = self.analyze_bearing(arr, fs, rot_freq, preprocess=False)
 
-        # 齿轮分析
-        gear_result = self.analyze_gear(arr, fs, rot_freq)
+        # 齿轮分析（避免重复预处理）
+        gear_result = self.analyze_gear(arr, fs, rot_freq, preprocess=False)
 
         # 综合健康度评分
         health_score, status = _compute_health_score(
@@ -441,10 +443,10 @@ def _evaluate_bearing_faults(
     amp_arr = np.array(env_amp)
 
     # 计算轴承特征频率
-    n_balls = bearing_params.get("n") or 0
-    d = bearing_params.get("d") or 0
-    D = bearing_params.get("D") or 0
-    alpha = np.radians(bearing_params.get("alpha") or 0)
+    n_balls = int(float(bearing_params.get("n") or 0))
+    d = float(bearing_params.get("d") or 0)
+    D = float(bearing_params.get("D") or 0)
+    alpha = np.radians(float(bearing_params.get("alpha") or 0))
 
     if n_balls <= 0 or d <= 0 or D <= 0:
         return {}
