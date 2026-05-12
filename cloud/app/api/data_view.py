@@ -1320,13 +1320,19 @@ async def reanalyze_batch(
     for r in records:
         channels_data[f"ch{r.channel}"] = r.data
 
-    # 4. 执行分析
+    # 4. 执行分析（重新诊断跳过耗时去噪，避免 VMD 超时/内存不足）
     sample_rate = records[0].sample_rate or device.sample_rate or 25600
+    original_denoise = getattr(device, "denoise_method", "none")
+    # 使用 object.__setattr__ 绕过 SQLAlchemy 属性跟踪，避免误写库
+    object.__setattr__(device, "denoise_method", "none")
     try:
         result = await asyncio.to_thread(analyze_device, channels_data, sample_rate, device)
     except Exception as e:
         logger.error(f"重新诊断失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"重新诊断失败: {e}")
+    finally:
+        # 恢复原始配置（仅内存状态，不写库）
+        object.__setattr__(device, "denoise_method", original_denoise)
 
     # 5. 更新或创建诊断记录
     diag = db.query(Diagnosis).filter(
