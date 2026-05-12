@@ -18,6 +18,16 @@ from sqlalchemy import func, desc
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis, Alarm
 from app.services.analyzer import compute_fft, compute_envelope_spectrum
+from app.services.diagnosis import (
+    DiagnosisEngine,
+    BearingMethod,
+    GearMethod,
+    DenoiseMethod,
+)
+from app.services.diagnosis.utils import (
+    estimate_rot_freq_envelope as _estimate_rot_freq_envelope,
+    estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum,
+)
 from typing import Optional, Tuple
 import numpy as np
 from scipy.fft import rfft, rfftfreq
@@ -37,157 +47,6 @@ def prepare_signal(signal, detrend=False):
     if detrend:
         return scipy_signal.detrend(arr, type='linear')
     return arr - np.mean(arr)
-
-
-def _parabolic_interpolation(freqs, spectrum, idx):
-    """抛物线插值精确定位谱峰频率"""
-    if idx <= 0 or idx >= len(spectrum) - 1:
-        return freqs[idx]
-    alpha = spectrum[idx - 1]
-    beta = spectrum[idx]
-    gamma = spectrum[idx + 1]
-    if beta <= max(alpha, gamma):
-        return freqs[idx]
-    p = 0.5 * (alpha - gamma) / (alpha - 2 * beta + gamma)
-    return float(freqs[idx] + p * (freqs[1] - freqs[0]))
-
-
-def _estimate_rot_freq_envelope(
-    sig: np.ndarray, fs: float,
-    f_center: float,
-    bw: float = 60.0,
-    freq_range: Tuple[float, float] = (10, 100)
-) -> Optional[float]:
-    """在指定中心频率附近做带通滤波+包络解调，返回包络谱峰值频率"""
-    low = max(10.0, f_center - bw)
-    high = min(fs / 2 - 10.0, f_center + bw)
-    b, a = scipy_signal.butter(4, [low / (fs / 2), high / (fs / 2)], btype='band')
-    bp_sig = scipy_signal.filtfilt(b, a, sig)
-    envelope = np.abs(scipy_signal.hilbert(bp_sig))
-    envelope = envelope - np.mean(envelope)
-    env_spec = np.abs(rfft(envelope))
-    env_freqs = rfftfreq(len(envelope), d=1.0 / fs)
-    mask = (env_freqs >= freq_range[0]) & (env_freqs <= freq_range[1])
-    if not np.any(mask):
-        return None
-    peak_idx = np.argmax(env_spec[mask])
-    return float(env_freqs[mask][peak_idx])
-
-
-def _estimate_rot_freq_spectrum(
-    sig: np.ndarray, fs: float,
-    freq_range: Tuple[float, float] = (10, 100),
-    harmonics_num: int = 5,
-    bandwidth_hz: float = 3.0,
-    smooth_win_hz: float = 1.5
-) -> float:
-    """
-    通过频谱峰值法估计转频（改进版：平滑 + 频带积分 + 插值 + 包络解调辅助）
-    针对齿轮箱等啮合频率强、基频弱的数据，引入包络解调和齿数整数验证启发式。
-    """
-    N = len(sig)
-    spectrum = np.abs(rfft(sig))
-    freqs = rfftfreq(N, d=1.0 / fs)
-    df = freqs[1] - freqs[0]
-
-    # 1. 谱平滑：抑制随机噪声尖峰
-    if smooth_win_hz > 0 and df > 0:
-        kernel_size = max(1, int(round(smooth_win_hz / df)))
-        if kernel_size > 1:
-            kernel = np.ones(kernel_size) / kernel_size
-            spectrum = np.convolve(spectrum, kernel, mode='same')
-
-    # 2. 归一化
-    spectrum_norm = spectrum / (spectrum.max() + 1e-10)
-
-    mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
-    search_freqs = freqs[mask]
-    search_spectrum = spectrum_norm[mask]
-
-    if len(search_freqs) == 0:
-        return freq_range[0]
-
-    bw_bins = max(1, int(round(bandwidth_hz / df / 2)))
-    # 降低阈值，让弱基频也能参与竞争
-    min_base_energy = 0.015 * (2 * bw_bins + 1)
-
-    best_freq_spec = search_freqs[0]
-    best_energy = 0.0
-    best_idx_global = None
-
-    for f in search_freqs:
-        idx_base = np.argmin(np.abs(freqs - f))
-        base_band = spectrum_norm[
-            max(0, idx_base - bw_bins):min(len(spectrum), idx_base + bw_bins + 1)
-        ]
-        base_energy = float(np.sum(base_band))
-        if base_energy < min_base_energy:
-            continue
-
-        energy = 0.0
-        for h in range(1, harmonics_num + 1):
-            harmonic_freq = f * h
-            if harmonic_freq > fs / 2:
-                break
-            idx = np.argmin(np.abs(freqs - harmonic_freq))
-            band = spectrum_norm[
-                max(0, idx - bw_bins):min(len(spectrum), idx + bw_bins + 1)
-            ]
-            weight = 1.0 / h
-            energy += float(np.sum(band)) * weight
-
-        if energy > best_energy:
-            best_energy = energy
-            best_freq_spec = f
-            best_idx_global = idx_base
-
-    if best_energy == 0.0:
-        # fallback：搜索范围内最强峰
-        best_local_idx = int(np.argmax(search_spectrum))
-        best_idx_global = int(np.argmin(np.abs(freqs - search_freqs[best_local_idx])))
-        best_freq_spec = freqs[best_idx_global]
-    else:
-        best_freq_spec = _parabolic_interpolation(freqs, spectrum, best_idx_global)
-
-    # ---------- 包络解调辅助 ----------
-    # 对啮合频率常见区域（200~500Hz）和全局高频峰做包络解调，收集候选
-    candidates = [(best_freq_spec, "spectrum")]
-
-    # 中频带（200~500Hz）：常见啮合频率区域
-    mid_mask = (freqs >= 200) & (freqs <= 500)
-    if np.any(mid_mask):
-        mid_peak = freqs[mid_mask][np.argmax(spectrum[mid_mask])]
-        env_est = _estimate_rot_freq_envelope(sig, fs, mid_peak, freq_range=freq_range)
-        if env_est:
-            candidates.append((env_est, "envelope_mesh"))
-
-    # 全局高频最强峰（100Hz ~ fs/4）
-    high_mask = (freqs >= 100) & (freqs <= fs / 4)
-    if np.any(high_mask):
-        top_idx = np.argmax(spectrum[high_mask])
-        high_peak = freqs[high_mask][top_idx]
-        env_est = _estimate_rot_freq_envelope(sig, fs, high_peak, freq_range=freq_range)
-        if env_est:
-            candidates.append((env_est, "envelope_high"))
-
-    # ---------- 启发式仲裁 ----------
-    # 优先选择通过“齿数整数”验证的包络法候选：
-    # 如果带通中心频率 / 候选转频 ≈ 整数，且齿数在合理范围（8~50），
-    # 说明该候选与啮合频率强相关，可信度最高。
-    for f_est, method in candidates:
-        if method.startswith("envelope"):
-            # 反推对应的带通中心频率
-            if method == "envelope_mesh":
-                f_center = freqs[mid_mask][np.argmax(spectrum[mid_mask])]
-            else:
-                f_center = freqs[high_mask][np.argmax(spectrum[high_mask])]
-            teeth = f_center / f_est
-            teeth_rounded = round(teeth)
-            if abs(teeth - teeth_rounded) < 0.35 and 8 <= teeth_rounded <= 50:
-                return float(f_est)
-
-    # 没有通过齿数验证的包络候选，fallback 到频谱法
-    return float(best_freq_spec)
 
 
 def _order_tracking(
@@ -595,6 +454,7 @@ def get_channel_fft(
     batch_index: int,
     channel: int,
     max_freq: Optional[int] = 5000,
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
     db: Session = Depends(get_db)
 ):
     """
@@ -612,7 +472,8 @@ def get_channel_fft(
 
     try:
         sample_rate = record.sample_rate or 25600
-        freq, amp = compute_fft(record.data, sample_rate)
+        signal = prepare_signal(record.data, detrend=detrend)
+        freq, amp = compute_fft(signal.tolist(), sample_rate)
         freq_amp = [fa for fa in zip(freq, amp) if fa[0] <= max_freq]
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
@@ -831,12 +692,14 @@ def get_channel_envelope(
     batch_index: int,
     channel: int,
     max_freq: Optional[int] = 1000,
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
+    method: str = Query(default="envelope", description="包络分析方法: envelope/kurtogram/cpw/med"),
     db: Session = Depends(get_db)
 ):
     """
     实时计算某批次某通道的包络谱（Envelope Spectrum）
-    用于轴承故障诊断，请求时计算，不预存。
-    自动适配实际采样率。
+    支持多种轴承诊断方法：标准包络 / Fast Kurtogram / CPW / MED
+    请求时计算，不预存。
     """
     record = db.query(SensorData).filter(
         SensorData.device_id == device_id,
@@ -849,10 +712,34 @@ def get_channel_envelope(
 
     try:
         sample_rate = record.sample_rate or 25600
-        freq, amp = compute_envelope_spectrum(record.data, sample_rate, max_freq)
+        signal = prepare_signal(record.data, detrend=detrend)
 
+        # 获取设备参数
         device = db.query(Device).filter(Device.device_id == device_id).first()
+        bearing_params = {}
+        gear_teeth = {}
+        if device:
+            bearing_params = device.bearing_params or {}
+            gear_teeth = device.gear_teeth or {}
 
+        # 方法映射
+        method_map = {
+            "envelope": BearingMethod.ENVELOPE,
+            "kurtogram": BearingMethod.KURTOGRAM,
+            "cpw": BearingMethod.CPW,
+            "med": BearingMethod.MED,
+        }
+        bearing_method = method_map.get(method, BearingMethod.ENVELOPE)
+
+        engine = DiagnosisEngine(
+            bearing_method=bearing_method,
+            bearing_params=bearing_params,
+            gear_teeth=gear_teeth,
+        )
+
+        result = engine.analyze_bearing(signal, sample_rate)
+
+        # 兼容原有返回格式
         return {
             "code": 200,
             "data": {
@@ -862,8 +749,18 @@ def get_channel_envelope(
                 "channel_name": _get_channel_name(device, record.channel),
                 "sample_rate": sample_rate,
                 "is_special": bool(record.is_special),
-                "envelope_freq": freq,
-                "envelope_amp": amp,
+                "method": result.get("method", method),
+                "envelope_freq": result.get("envelope_freq", []),
+                "envelope_amp": result.get("envelope_amp", []),
+                "optimal_fc": result.get("optimal_fc"),
+                "optimal_bw": result.get("optimal_bw"),
+                "max_kurtosis": result.get("max_kurtosis"),
+                "comb_frequencies": result.get("comb_frequencies"),
+                "med_filter_len": result.get("med_filter_len"),
+                "kurtosis_before": result.get("kurtosis_before"),
+                "kurtosis_after": result.get("kurtosis_after"),
+                "features": result.get("features", {}),
+                "fault_indicators": result.get("fault_indicators", {}),
             }
         }
     except Exception as e:
@@ -1187,3 +1084,157 @@ def export_channel_csv(
         media_type="text/csv; charset=utf-8-sig",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+@router.get("/{device_id}/{batch_index}/{channel}/gear")
+def get_channel_gear(
+    device_id: str,
+    batch_index: int,
+    channel: int,
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
+    method: str = Query(default="standard", description="齿轮诊断方法: standard/advanced"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd"),
+    db: Session = Depends(get_db)
+):
+    """
+    实时计算某批次某通道的齿轮诊断分析
+    支持标准边频带分析和高级时域指标。
+    """
+    record = db.query(SensorData).filter(
+        SensorData.device_id == device_id,
+        SensorData.batch_index == batch_index,
+        SensorData.channel == channel
+    ).first()
+
+    if not record or not record.data:
+        raise HTTPException(status_code=404, detail="数据不存在")
+
+    try:
+        sample_rate = record.sample_rate or 25600
+        signal = prepare_signal(record.data, detrend=detrend)
+
+        device = db.query(Device).filter(Device.device_id == device_id).first()
+        gear_teeth = {}
+        if device:
+            gear_teeth = device.gear_teeth or {}
+
+        method_map = {
+            "standard": GearMethod.STANDARD,
+            "advanced": GearMethod.ADVANCED,
+        }
+        denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET, "vmd": DenoiseMethod.VMD}
+        gear_method = method_map.get(method, GearMethod.STANDARD)
+        denoise_method = denoise_map.get(denoise, DenoiseMethod.NONE)
+
+        engine = DiagnosisEngine(
+            gear_method=gear_method,
+            denoise_method=denoise_method,
+            gear_teeth=gear_teeth,
+        )
+
+        result = engine.analyze_gear(signal, sample_rate)
+
+        return {
+            "code": 200,
+            "data": {
+                "device_id": record.device_id,
+                "batch_index": record.batch_index,
+                "channel": record.channel,
+                "channel_name": _get_channel_name(device, record.channel),
+                "sample_rate": sample_rate,
+                "is_special": bool(record.is_special),
+                "method": result.get("method", method),
+                "rot_freq_hz": result.get("rot_freq_hz"),
+                "mesh_freq_hz": result.get("mesh_freq_hz"),
+                "ser": result.get("ser"),
+                "sidebands": result.get("sidebands", []),
+                "fm0": result.get("fm0"),
+                "fm4": result.get("fm4"),
+                "car": result.get("car"),
+                "m6a": result.get("m6a"),
+                "m8a": result.get("m8a"),
+                "fault_indicators": result.get("fault_indicators", {}),
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"齿轮诊断失败: {e}")
+
+
+@router.get("/{device_id}/{batch_index}/{channel}/analyze")
+def get_channel_analyze(
+    device_id: str,
+    batch_index: int,
+    channel: int,
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
+    strategy: str = Query(default="standard", description="诊断策略: standard/advanced/expert"),
+    bearing_method: str = Query(default="envelope", description="轴承方法: envelope/kurtogram/cpw/med"),
+    gear_method: str = Query(default="standard", description="齿轮方法: standard/advanced"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet"),
+    db: Session = Depends(get_db)
+):
+    """
+    综合故障诊断分析（新诊断引擎统一入口）
+
+    支持前端配置选择诊断策略、轴承方法、齿轮方法和预处理方法。
+    返回轴承诊断、齿轮诊断、时域特征和综合健康度评分。
+    """
+    record = db.query(SensorData).filter(
+        SensorData.device_id == device_id,
+        SensorData.batch_index == batch_index,
+        SensorData.channel == channel
+    ).first()
+
+    if not record or not record.data:
+        raise HTTPException(status_code=404, detail="数据不存在")
+
+    try:
+        sample_rate = record.sample_rate or 25600
+        signal = prepare_signal(record.data, detrend=detrend)
+
+        device = db.query(Device).filter(Device.device_id == device_id).first()
+        bearing_params = {}
+        gear_teeth = {}
+        if device:
+            bearing_params = device.bearing_params or {}
+            gear_teeth = device.gear_teeth or {}
+
+        # 映射前端参数到枚举
+        strategy_map = {"standard": "standard", "advanced": "advanced", "expert": "expert"}
+        bearing_map = {
+            "envelope": BearingMethod.ENVELOPE,
+            "kurtogram": BearingMethod.KURTOGRAM,
+            "cpw": BearingMethod.CPW,
+            "med": BearingMethod.MED,
+        }
+        gear_map = {"standard": GearMethod.STANDARD, "advanced": GearMethod.ADVANCED}
+        denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET}
+
+        engine = DiagnosisEngine(
+            strategy=strategy_map.get(strategy, "standard"),
+            bearing_method=bearing_map.get(bearing_method, BearingMethod.ENVELOPE),
+            gear_method=gear_map.get(gear_method, GearMethod.STANDARD),
+            denoise_method=denoise_map.get(denoise, DenoiseMethod.NONE),
+            bearing_params=bearing_params,
+            gear_teeth=gear_teeth,
+        )
+
+        result = engine.analyze_comprehensive(signal, sample_rate)
+
+        return {
+            "code": 200,
+            "data": {
+                "device_id": record.device_id,
+                "batch_index": record.batch_index,
+                "channel": record.channel,
+                "channel_name": _get_channel_name(device, record.channel),
+                "sample_rate": sample_rate,
+                "is_special": bool(record.is_special),
+                "strategy": strategy,
+                "bearing_method": bearing_method,
+                "gear_method": gear_method,
+                "denoise": denoise,
+                **result,
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"综合分析失败: {e}")

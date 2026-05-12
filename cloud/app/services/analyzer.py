@@ -3,10 +3,10 @@
 
 分析流程：
   1. 优先调用神经网络模型（nn_predictor.py）
-  2. 如果神经网络未启用或失败，回退到简化规则算法（FFT + IMF能量 + 阈值判断）
+  2. 如果神经网络未启用，调用新诊断引擎（DiagnosisEngine，支持多种算法配置）
+  3. 如果新引擎失败，回退到简化规则算法（FFT + IMF能量 + 阈值判断）
 
-注意：这里的算法是"教学级"简化实现，目的是让整个系统跑起来。
-真实工业场景会使用更复杂的 EMD/VMD 分解、小波包分析、深度学习模型等。
+注意：旧规则算法保留作为回退方案，新引擎为默认诊断方式。
 """
 import numpy as np
 from scipy.fft import rfft, rfftfreq
@@ -16,6 +16,8 @@ from typing import Dict, List
 import random
 
 from app.services.nn_predictor import predict as nn_predict
+from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod
+from app.services.diagnosis.utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
 
 
 def remove_dc(signal: List[float]) -> np.ndarray:
@@ -411,80 +413,6 @@ def _order_band_energy(order_axis, spectrum, center_order: float, bandwidth: flo
     return float(np.sum(spectrum[mask] ** 2))
 
 
-def _estimate_rot_freq_spectrum(sig: np.ndarray, fs: float,
-                                 freq_range=(10, 100),
-                                 harmonics_num: int = 5,
-                                 bandwidth_hz: float = 3.0,
-                                 smooth_win_hz: float = 1.5) -> float:
-    """
-    通过频谱峰值法估计转频（从 data_view.py 移植，避免循环导入）
-    """
-    from scipy.fft import rfft, rfftfreq
-    N = len(sig)
-    spectrum = np.abs(rfft(sig))
-    freqs = rfftfreq(N, d=1.0 / fs)
-    df = freqs[1] - freqs[0]
-
-    if smooth_win_hz > 0 and df > 0:
-        kernel_size = max(1, int(round(smooth_win_hz / df)))
-        if kernel_size > 1:
-            kernel = np.ones(kernel_size) / kernel_size
-            spectrum = np.convolve(spectrum, kernel, mode='same')
-
-    spectrum_norm = spectrum / (spectrum.max() + 1e-10)
-    mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
-    search_freqs = freqs[mask]
-    search_spectrum = spectrum_norm[mask]
-
-    if len(search_freqs) == 0:
-        return freq_range[0]
-
-    bw_bins = max(1, int(round(bandwidth_hz / df / 2)))
-    min_base_energy = 0.015 * (2 * bw_bins + 1)
-
-    best_freq = search_freqs[0]
-    best_energy = 0.0
-    best_idx_global = None
-
-    for f in search_freqs:
-        idx_base = np.argmin(np.abs(freqs - f))
-        base_band = spectrum_norm[max(0, idx_base - bw_bins):min(len(spectrum), idx_base + bw_bins + 1)]
-        base_energy = float(np.sum(base_band))
-        if base_energy < min_base_energy:
-            continue
-
-        energy = 0.0
-        for h in range(1, harmonics_num + 1):
-            harmonic_freq = f * h
-            if harmonic_freq > fs / 2:
-                break
-            idx = np.argmin(np.abs(freqs - harmonic_freq))
-            band = spectrum_norm[max(0, idx - bw_bins):min(len(spectrum), idx + bw_bins + 1)]
-            weight = 1.0 / h
-            energy += float(np.sum(band)) * weight
-
-        if energy > best_energy:
-            best_energy = energy
-            best_freq = f
-            best_idx_global = idx_base
-
-    if best_energy == 0.0:
-        best_local_idx = int(np.argmax(search_spectrum))
-        best_idx_global = int(np.argmin(np.abs(freqs - search_freqs[best_local_idx])))
-        best_freq = freqs[best_idx_global]
-    else:
-        # 抛物线插值
-        if best_idx_global > 0 and best_idx_global < len(spectrum) - 1:
-            alpha = spectrum[best_idx_global - 1]
-            beta = spectrum[best_idx_global]
-            gamma = spectrum[best_idx_global + 1]
-            if beta > max(alpha, gamma):
-                p = 0.5 * (alpha - gamma) / (alpha - 2 * beta + gamma)
-                best_freq = float(freqs[best_idx_global] + p * (freqs[1] - freqs[0]))
-
-    return float(best_freq)
-
-
 def _extract_spectrum_features(freq, amp, rot_freq: float, gear_teeth: dict, bearing_params: dict) -> dict:
     """从频谱提取齿轮/轴承相关特征"""
     freq = np.asarray(freq)
@@ -610,12 +538,92 @@ def _extract_order_features(order_axis, spectrum, rot_freq: float, gear_teeth: d
 def analyze_device(channels_data: Dict[str, List[float]], sample_rate: int = 25600, device=None):
     """
     综合分析主函数
-    优先调用神经网络，失败回退简化规则算法
+
+    优先级：
+      1. 神经网络模型（nn_predictor.py）
+      2. 新诊断引擎（DiagnosisEngine，支持 Fast Kurtogram / CPW / MED 等高级算法）
+      3. 简化规则算法（回退方案）
     """
+    # 1. 神经网络优先
     nn_result = nn_predict(channels_data, sample_rate)
     if nn_result is not None:
         print("[分析] 使用神经网络模型预测结果")
         return nn_result
 
-    print("[分析] 神经网络未启用，使用简化规则算法")
+    # 2. 新诊断引擎（默认方案）
+    try:
+        bearing_params = getattr(device, "bearing_params", None) if device else None
+        gear_teeth = getattr(device, "gear_teeth", None) if device else None
+
+        # 从设备配置读取诊断策略（如果有的话）
+        strategy = getattr(device, "diagnosis_strategy", "advanced") if device else "advanced"
+        bearing_method = getattr(device, "bearing_method", "kurtogram") if device else "kurtogram"
+        gear_method = getattr(device, "gear_method", "standard") if device else "standard"
+        denoise = getattr(device, "denoise_method", "none") if device else "none"
+
+        engine = DiagnosisEngine(
+            strategy=strategy,
+            bearing_method=bearing_method,
+            gear_method=gear_method,
+            denoise_method=denoise,
+            bearing_params=bearing_params,
+            gear_teeth=gear_teeth,
+        )
+
+        # 对每个通道分别分析，然后融合
+        channel_results = []
+        for ch_name, signal in channels_data.items():
+            result = engine.analyze_comprehensive(np.array(signal, dtype=np.float64), sample_rate)
+            channel_results.append((ch_name, result))
+
+        # 融合多通道结果：取最差健康度
+        worst_health = min(r["health_score"] for _, r in channel_results)
+        worst_status = max(
+            ([r["status"] for _, r in channel_results]),
+            key=lambda s: {"normal": 0, "warning": 1, "fault": 2}[s]
+        )
+
+        # 合并故障概率（取各通道最大概率）
+        merged_probs = {}
+        for _, r in channel_results:
+            for fault_name, prob in r.get("bearing", {}).get("fault_indicators", {}).items():
+                if prob.get("significant"):
+                    merged_probs.setdefault("轴承" + fault_name, 0)
+                    merged_probs["轴承" + fault_name] = max(merged_probs["轴承" + fault_name], min(1.0, prob.get("snr", 0) / 10))
+            for fault_name, prob in r.get("gear", {}).get("fault_indicators", {}).items():
+                if isinstance(prob, dict) and prob.get("warning"):
+                    merged_probs.setdefault("齿轮" + fault_name, 0)
+                    merged_probs["齿轮" + fault_name] = max(merged_probs["齿轮" + fault_name], 0.3 if prob.get("warning") else 0)
+                    if prob.get("critical"):
+                        merged_probs["齿轮" + fault_name] = max(merged_probs["齿轮" + fault_name], 0.6)
+
+        # 构建兼容旧格式的 fault_probabilities
+        fault_probabilities = {"正常运行": max(0.0, 1.0 - sum(merged_probs.values()))}
+        for k, v in merged_probs.items():
+            fault_probabilities[k] = round(v, 4)
+
+        # 取第一个通道的详细分析作为 order_analysis
+        first_ch, first_result = channel_results[0]
+
+        # 构建兼容旧格式的结果
+        legacy_result = {
+            "health_score": worst_health,
+            "status": worst_status,
+            "fault_probabilities": fault_probabilities,
+            "imf_energy": first_result.get("time_features", {}),
+            "order_analysis": {
+                "engine_result": first_result,
+                "channels": {ch: r for ch, r in channel_results},
+            },
+            "rot_freq": first_result.get("bearing", {}).get("rot_freq_hz"),
+        }
+
+        print(f"[分析] 新诊断引擎完成，健康度={worst_health}，状态={worst_status}")
+        return legacy_result
+
+    except Exception as e:
+        print(f"[分析] 新诊断引擎异常: {e}，回退到规则算法")
+
+    # 3. 回退到简化规则算法
+    print("[分析] 使用简化规则算法")
     return _rule_based_analyze(channels_data, sample_rate, device)

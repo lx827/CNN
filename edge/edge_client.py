@@ -59,6 +59,16 @@ REAL_DURATION = 10  # 真实数据固定 10 秒
 # ========== 模拟离线设备 ==========
 SIMULATE_OFFLINE_DEVICE = os.getenv("SIMULATE_OFFLINE_DEVICE", "").strip()
 
+# ========== 离线检测与超时配置 ==========
+# 连接超时（秒）：TCP 建立连接的最大等待时间
+CONNECT_TIMEOUT = float(os.getenv("CONNECT_TIMEOUT", "10.0"))
+# 读取超时（秒）：等待响应体的最大时间
+READ_TIMEOUT = float(os.getenv("READ_TIMEOUT", "180.0"))
+# 连续失败多少次后标记为离线
+OFFLINE_THRESHOLD = int(os.getenv("OFFLINE_THRESHOLD", "3"))
+# 离线后轮询间隔（秒）
+OFFLINE_POLL_INTERVAL = int(os.getenv("OFFLINE_POLL_INTERVAL", "60"))
+
 # ========== 边端认证 ==========
 EDGE_API_KEY = os.getenv("EDGE_API_KEY", "turbine-edge-secret")
 EDGE_HEADERS = {"X-Edge-Key": EDGE_API_KEY}
@@ -146,13 +156,15 @@ def fetch_device_config(device_id):
         response = requests.get(
             f"{CLOUD_CONFIG_URL}?device_id={device_id}",
             headers=EDGE_HEADERS,
-            timeout=5
+            timeout=(CONNECT_TIMEOUT, 5)
         )
         if response.status_code == 200:
             data = response.json()
             config = data.get("data", {})
             if config:
                 return config
+    except requests.exceptions.Timeout:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] [{device_id}] 拉取配置超时")
     except requests.exceptions.ConnectionError:
         pass
     except Exception as e:
@@ -203,13 +215,11 @@ def upload_data(device_id, signals, sample_rate, is_special=False, task_id=None,
         cloud_comp = config.get("compression_enabled")
         if cloud_comp is not None:
             comp_enabled = bool(cloud_comp)
-        cloud_ratio = config.get("downsample_ratio")
-        if cloud_ratio is not None:
-            ratio = int(cloud_ratio)
-
-    # 真实数据模式下：若云端未指定压缩比，默认不压缩（ratio=1）
-    if USE_REAL_DATA and config and config.get("downsample_ratio") is None:
-        ratio = 1
+        # 真实数据模式下：优先尊重 .env 中的 DOWNSAMPLE_RATIO，不被云端配置覆盖
+        if not USE_REAL_DATA:
+            cloud_ratio = config.get("downsample_ratio")
+            if cloud_ratio is not None:
+                ratio = int(cloud_ratio)
 
     if comp_enabled:
         compressed_info = compress_payload(
@@ -238,7 +248,8 @@ def upload_data(device_id, signals, sample_rate, is_special=False, task_id=None,
 
     try:
         response = requests.post(
-            CLOUD_INGEST_URL, json=payload, headers=EDGE_HEADERS, timeout=15
+            CLOUD_INGEST_URL, json=payload, headers=EDGE_HEADERS,
+            timeout=(CONNECT_TIMEOUT, READ_TIMEOUT)
         )
         if response.status_code == 200:
             mode_str = "[特殊采集]" if is_special else "[自动采集]"
@@ -269,13 +280,16 @@ def poll_tasks(device_id):
         response = requests.get(
             f"{CLOUD_TASKS_URL}?device_id={device_id}",
             headers=EDGE_HEADERS,
-            timeout=5
+            timeout=(CONNECT_TIMEOUT, 5)
         )
         if response.status_code == 200:
             data = response.json()
             task_data = data.get("data", {})
             if task_data.get("has_task"):
                 return True, task_data
+        return False, None
+    except requests.exceptions.Timeout:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] [{device_id}] 任务轮询超时")
         return False, None
     except Exception:
         return False, None
@@ -342,6 +356,8 @@ def main():
             "last_poll_time": 0,
             "last_config_fetch": 0,
             "config": config,
+            "consecutive_failures": 0,
+            "is_offline": False,
         }
 
         print(f"[{datetime.now().strftime('%H:%M:%S')}] [{dev_id}] 初始配置: "
@@ -357,7 +373,9 @@ def main():
 
             state = device_states[dev_id]
             config = state.get("config", {})
-            poll_interval = config.get("task_poll_interval", DEFAULT_TASK_POLL_INTERVAL)
+            base_poll_interval = config.get("task_poll_interval", DEFAULT_TASK_POLL_INTERVAL)
+            # 离线状态下使用延长间隔，避免无意义轮询
+            poll_interval = OFFLINE_POLL_INTERVAL if state.get("is_offline") else base_poll_interval
 
             if current_time - state["last_poll_time"] >= poll_interval:
                 state["last_poll_time"] = current_time
@@ -380,9 +398,22 @@ def main():
                             config=state.get("config")
                         )
                         if success:
+                            # 上传成功：重置失败计数，若之前离线则恢复
+                            if state.get("is_offline"):
+                                print(f"[{datetime.now().strftime('%H:%M:%S')}] [{dev_id}] 设备恢复在线")
+                                state["is_offline"] = False
+                            state["consecutive_failures"] = 0
                             print(f"[{datetime.now().strftime('%H:%M:%S')}] [任务完成] [{dev_id}] 特殊采集数据已上传")
                         else:
-                            print(f"[{datetime.now().strftime('%H:%M:%S')}] [任务失败] [{dev_id}] 特殊采集中断")
+                            # 上传失败：增加失败计数
+                            state["consecutive_failures"] = state.get("consecutive_failures", 0) + 1
+                            if state["consecutive_failures"] >= OFFLINE_THRESHOLD and not state.get("is_offline"):
+                                state["is_offline"] = True
+                                print(f"[{datetime.now().strftime('%H:%M:%S')}] [{dev_id}] 设备标记为离线 "
+                                      f"(连续失败 {state['consecutive_failures']} 次)")
+                            else:
+                                print(f"[{datetime.now().strftime('%H:%M:%S')}] [任务失败] [{dev_id}] 特殊采集中断 "
+                                      f"(连续失败 {state['consecutive_failures']} 次)")
                         state["last_upload_time"] = current_time
                     except Exception as e:
                         print(f"[{datetime.now().strftime('%H:%M:%S')}] [任务失败] [{dev_id}] 信号生成/读取异常: {e}")
@@ -394,20 +425,33 @@ def main():
 
             state = device_states[dev_id]
             config = state.get("config", {})
-            upload_interval = config.get("upload_interval", DEFAULT_UPLOAD_INTERVAL)
+            base_upload_interval = config.get("upload_interval", DEFAULT_UPLOAD_INTERVAL)
+            # 离线状态下使用延长间隔
+            upload_interval = OFFLINE_POLL_INTERVAL if state.get("is_offline") else base_upload_interval
             window_seconds = config.get("window_seconds", DURATION)
 
             if current_time - state["last_upload_time"] >= upload_interval:
                 state["last_upload_time"] = current_time
                 try:
                     signals, sr, dur = generate_device_signals(dev_id, SAMPLE_RATE, window_seconds)
-                    upload_data(
+                    success = upload_data(
                         device_id=dev_id,
                         signals=signals,
                         sample_rate=sr,
                         is_special=False,
                         config=state.get("config")
                     )
+                    if success:
+                        if state.get("is_offline"):
+                            print(f"[{datetime.now().strftime('%H:%M:%S')}] [{dev_id}] 设备恢复在线")
+                            state["is_offline"] = False
+                        state["consecutive_failures"] = 0
+                    else:
+                        state["consecutive_failures"] = state.get("consecutive_failures", 0) + 1
+                        if state["consecutive_failures"] >= OFFLINE_THRESHOLD and not state.get("is_offline"):
+                            state["is_offline"] = True
+                            print(f"[{datetime.now().strftime('%H:%M:%S')}] [{dev_id}] 设备标记为离线 "
+                                  f"(连续失败 {state['consecutive_failures']} 次)")
                 except Exception as e:
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] [{dev_id}] 信号生成/读取异常: {e}")
 

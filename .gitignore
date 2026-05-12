@@ -104,3 +104,4 @@ coverage.xml
 wind-turbine-diagnosis/package-lock.json
 .qwen
 wind-turbine-diagnosis/vite.config.js
+tests/diagnosis/output/**.png
