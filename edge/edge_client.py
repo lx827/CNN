@@ -60,7 +60,7 @@ REAL_DURATION = 10  # 真实数据固定 10 秒
 SIMULATE_OFFLINE_DEVICE = os.getenv("SIMULATE_OFFLINE_DEVICE", "").strip()
 
 # ========== 边端认证 ==========
-EDGE_API_KEY = "turbine-edge-secret"
+EDGE_API_KEY = os.getenv("EDGE_API_KEY", "turbine-edge-secret")
 EDGE_HEADERS = {"X-Edge-Key": EDGE_API_KEY}
 
 # 配置刷新间隔（秒）
