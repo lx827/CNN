@@ -115,6 +115,13 @@
               <el-option label="5000 Hz" :value="5000" />
               <el-option label="8192 Hz" :value="8192" />
             </el-select>
+            <el-switch
+              v-model="enableDetrend"
+              active-text="去趋势"
+              inline-prompt
+              style="margin-left: 12px"
+              @change="onDetrendChange"
+            />
             <el-button
               type="primary"
               size="small"
@@ -583,6 +590,7 @@ const selectedBatch = ref(null)
 const selectedChannel = ref(1)
 const maxFreq = ref(5000)
 const channelOptions = ref([1, 2, 3])
+const enableDetrend = ref(false)
 
 const timeChart = ref(null)
 const fftChart = ref(null)
@@ -805,6 +813,20 @@ const onChannelChange = () => {
   })
 }
 
+const onDetrendChange = () => {
+  // 去趋势开关切换时，重新加载当前已显示的内容
+  timeInstance?.dispose(); timeInstance = null
+  nextTick(() => {
+    loadTimeDomain()
+  })
+  if (computedFFT.value) { fftInstance?.dispose(); fftInstance = null; computeFFT() }
+  if (computedSTFT.value) { stftInstance?.dispose(); stftInstance = null; computeSTFT() }
+  if (computedEnvelope.value) { envelopeInstance?.dispose(); envelopeInstance = null; computeEnvelope() }
+  if (computedOrder.value) { orderInstance?.dispose(); orderInstance = null; computeOrder() }
+  if (computedCepstrum.value) { cepstrumInstance?.dispose(); cepstrumInstance = null; computeCepstrum() }
+  if (computedStats.value) { windowedInstance?.dispose(); windowedInstance = null; computeStats() }
+}
+
 const onMaxFreqChange = () => {
   // 频率范围改变时，如果已计算 FFT/STFT/包络/阶次，重新计算
   if (computedFFT.value) computeFFT()
@@ -819,7 +841,8 @@ const loadTimeDomain = async () => {
     const res = await getChannelData(
       selectedDevice.value.device_id,
       selectedBatch.value.batch_index,
-      selectedChannel.value
+      selectedChannel.value,
+      enableDetrend.value
     )
     const d = res.data
     if (!d) return
@@ -855,7 +878,8 @@ const computeFFT = async () => {
       selectedDevice.value.device_id,
       selectedBatch.value.batch_index,
       selectedChannel.value,
-      maxFreq.value
+      maxFreq.value,
+      enableDetrend.value
     )
     const d = res.data
     if (!d) return
@@ -903,7 +927,8 @@ const computeSTFT = async () => {
       selectedChannel.value,
       maxFreq.value,
       stftNperseg.value,
-      stftNoverlap.value
+      stftNoverlap.value,
+      enableDetrend.value
     )
     const d = res.data
     if (!d) return
@@ -976,7 +1001,8 @@ const computeEnvelope = async () => {
       selectedDevice.value.device_id,
       selectedBatch.value.batch_index,
       selectedChannel.value,
-      1000
+      1000,
+      enableDetrend.value
     )
     const d = res.data
     if (!d) return
@@ -1024,7 +1050,9 @@ const computeOrder = async () => {
       selectedChannel.value,
       orderFreqMin.value,
       orderFreqMax.value,
-      orderSamplesPerRev.value
+      orderSamplesPerRev.value,
+      50,
+      enableDetrend.value
     )
     const d = res.data
     if (!d) return
@@ -1091,7 +1119,8 @@ const computeCepstrum = async () => {
       selectedDevice.value.device_id,
       selectedBatch.value.batch_index,
       selectedChannel.value,
-      cepstrumMaxQuefrency.value
+      cepstrumMaxQuefrency.value,
+      enableDetrend.value
     )
     const d = res.data
     if (!d) return
@@ -1156,7 +1185,8 @@ const computeStats = async () => {
       selectedBatch.value.batch_index,
       selectedChannel.value,
       statsWindowSize.value,
-      statsStep.value
+      statsStep.value,
+      enableDetrend.value
     )
     statsData.value = res.data
     computedStats.value = true
@@ -1267,7 +1297,8 @@ const onExportCSV = () => {
   exportChannelCSV(
     selectedDevice.value.device_id,
     selectedBatch.value.batch_index,
-    selectedChannel.value
+    selectedChannel.value,
+    enableDetrend.value
   )
 }
 

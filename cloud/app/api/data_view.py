@@ -27,9 +27,15 @@ import io
 router = APIRouter(prefix="/api/data", tags=["振动数据查看"])
 
 
-def remove_dc(signal):
-    """去除信号直流分量（零均值化）"""
+def prepare_signal(signal, detrend=False):
+    """
+    信号预处理：零均值化或线性去趋势
+    detrend=False: 去直流（零均值化）
+    detrend=True:  线性去趋势（消除 y=kx+b 漂移）
+    """
     arr = np.array(signal, dtype=np.float64)
+    if detrend:
+        return scipy_signal.detrend(arr, type='linear')
     return arr - np.mean(arr)
 
 
@@ -546,6 +552,7 @@ def get_channel_data(
     device_id: str,
     batch_index: int,
     channel: int,
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
     db: Session = Depends(get_db)
 ):
     """
@@ -564,7 +571,7 @@ def get_channel_data(
     device = db.query(Device).filter(Device.device_id == device_id).first()
 
     # 时域波形返回去均值后的数据，便于观察
-    dc_removed = remove_dc(record.data).tolist()
+    dc_removed = prepare_signal(record.data, detrend=detrend).tolist()
 
     return {
         "code": 200,
@@ -635,6 +642,7 @@ def get_channel_stft(
     max_freq: Optional[int] = 5000,
     nperseg: int = Query(default=512, ge=64, le=4096, description="STFT 窗口长度（点数）"),
     noverlap: int = Query(default=256, ge=0, le=4095, description="STFT 窗口重叠长度（点数）"),
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
     db: Session = Depends(get_db)
 ):
     """
@@ -655,7 +663,7 @@ def get_channel_stft(
         raise HTTPException(status_code=404, detail="数据不存在")
 
     try:
-        signal = remove_dc(record.data)
+        signal = prepare_signal(record.data, detrend=detrend)
         sample_rate = record.sample_rate or 25600
 
         # 如果数据太长，截取前 5 秒做 STFT（避免计算量过大）
@@ -706,6 +714,7 @@ def get_channel_stats(
     channel: int,
     window_size: int = Query(default=1024, ge=64, le=8192, description="加窗窗口大小（点数）"),
     step: int = Query(default=None, ge=1, le=4096, description="滑动步长（点数），默认窗口大小的一半"),
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
     db: Session = Depends(get_db)
 ):
     """
@@ -726,7 +735,7 @@ def get_channel_stats(
         raise HTTPException(status_code=404, detail="数据不存在")
 
     try:
-        signal = remove_dc(record.data)
+        signal = prepare_signal(record.data, detrend=detrend)
         sample_rate = record.sample_rate or 25600
 
         # 基本统计量
@@ -871,6 +880,7 @@ def get_channel_order(
     samples_per_rev: int = Query(default=1024, ge=64, le=4096, description="每转采样点数"),
     max_order: int = Query(default=50, ge=5, le=200, description="返回的最大阶次"),
     rot_freq: Optional[float] = Query(default=None, ge=1.0, le=500.0, description="直接指定转频(Hz)，传入则跳过自动估计"),
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
     db: Session = Depends(get_db)
 ):
     """
@@ -907,7 +917,7 @@ def get_channel_order(
         raise HTTPException(status_code=404, detail="数据不存在")
 
     try:
-        sig = remove_dc(record.data)
+        sig = prepare_signal(record.data, detrend=detrend)
         sample_rate = record.sample_rate or 25600
 
         # 参数校验
@@ -966,6 +976,7 @@ def get_channel_cepstrum(
     batch_index: int,
     channel: int,
     max_quefrency: float = Query(default=500.0, ge=10.0, le=2000.0, description="最大倒频率 (ms)"),
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
     db: Session = Depends(get_db)
 ):
     """
@@ -994,7 +1005,7 @@ def get_channel_cepstrum(
         raise HTTPException(status_code=404, detail="数据不存在")
 
     try:
-        sig = remove_dc(record.data)
+        sig = prepare_signal(record.data, detrend=detrend)
         sample_rate = record.sample_rate or 25600
 
         quef_ms, cep, peaks = _compute_cepstrum(sig, sample_rate, max_quefrency)
@@ -1142,6 +1153,7 @@ def export_channel_csv(
     device_id: str,
     batch_index: int,
     channel: int,
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
     db: Session = Depends(get_db)
 ):
     """
@@ -1157,7 +1169,7 @@ def export_channel_csv(
     if not record:
         raise HTTPException(status_code=404, detail="数据不存在")
 
-    signal = record.data or []
+    signal = prepare_signal(record.data, detrend=detrend).tolist() if record.data else []
     sample_rate = record.sample_rate or 25600
 
     # 生成 CSV

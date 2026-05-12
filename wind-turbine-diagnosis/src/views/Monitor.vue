@@ -52,18 +52,30 @@
             </div>
           </template>
           <div class="params">
-            <div class="param-item">
-              <div class="param-label">转速</div>
-              <div class="param-value">{{ params.rpm?.toFixed(1) || 0 }} <span class="unit">RPM</span></div>
-            </div>
-            <div class="param-item">
-              <div class="param-label">温度</div>
-              <div class="param-value">{{ params.temperature?.toFixed(1) || 0 }} <span class="unit">°C</span></div>
-            </div>
-            <div class="param-item">
-              <div class="param-label">负载</div>
-              <div class="param-value">{{ params.load?.toFixed(1) || 0 }} <span class="unit">%</span></div>
-            </div>
+            <template v-if="Object.keys(params).length === 0">
+              <div class="param-item empty">
+                <div class="param-label">运行参数</div>
+                <div class="param-value" style="font-size: 14px; color: #999;">暂无数据</div>
+              </div>
+            </template>
+            <template v-else>
+              <div class="param-item" v-if="params.rpm != null">
+                <div class="param-label">转速</div>
+                <div class="param-value">{{ params.rpm.toFixed(1) }} <span class="unit">RPM</span></div>
+              </div>
+              <div class="param-item" v-if="params.estimated_rpm != null">
+                <div class="param-label">转速 <el-tag type="warning" size="small" effect="plain">估计</el-tag></div>
+                <div class="param-value">{{ params.estimated_rpm.toFixed(1) }} <span class="unit">RPM</span></div>
+              </div>
+              <div class="param-item" v-if="params.temperature != null">
+                <div class="param-label">温度</div>
+                <div class="param-value">{{ params.temperature.toFixed(1) }} <span class="unit">°C</span></div>
+              </div>
+              <div class="param-item" v-if="params.load != null">
+                <div class="param-label">负载</div>
+                <div class="param-value">{{ params.load.toFixed(1) }} <span class="unit">%</span></div>
+              </div>
+            </template>
           </div>
         </el-card>
       </el-col>
@@ -155,10 +167,9 @@ const selectedCollectDevice = ref('')
 
 const sensors = ref([])
 
-// 根据通道数据动态构建传感器状态列表
+// 根据通道数据动态构建传感器状态列表（只显示实际收到的振动通道）
 const buildSensors = (chList) => {
   const list = []
-  // 振动通道
   chList.forEach((ch) => {
     list.push({
       name: ch.channel_name || ch.name || `振动传感器 ${ch.id || ch.channel}`,
@@ -167,12 +178,6 @@ const buildSensors = (chList) => {
       type: 'vibration'
     })
   })
-  // 固定运行参数传感器
-  list.push(
-    { name: '温度传感器', status: 'normal', statusText: '正常', type: 'param' },
-    { name: '转速传感器', status: 'normal', statusText: '正常', type: 'param' },
-    { name: '压力传感器', status: 'normal', statusText: '正常', type: 'param' }
-  )
   sensors.value = list
 }
 
