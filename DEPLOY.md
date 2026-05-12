@@ -206,22 +206,22 @@ cd wind-turbine-diagnosis
 # 安装依赖
 npm install
 
-# 修改 API 代理配置（vite.config.js）
-# 将 localhost:8000 改为你的公网 IP
+# vite.config.js 中的代理地址已预设为生产环境地址，无需修改
 ```
 
-修改 `vite.config.js`：
+`vite.config.js`（开发代理配置，已预设）：
 
 ```javascript
 server: {
   proxy: {
     '/api': {
-      target: 'http://你的公网IP:8000',  // 改这里
+      target: 'http://8.137.96.104:8000',  // 保持现有配置
       changeOrigin: true,
     },
     '/ws': {
-      target: 'ws://你的公网IP:8000',    // 改这里
+      target: 'ws://8.137.96.104:8000',    // 保持现有配置
       ws: true,
+      changeOrigin: true,
     }
   }
 }
@@ -330,10 +330,13 @@ pip install -r requirements.txt
 CLOUD_INGEST_URL=http://你的公网IP:8000/api/ingest/
 
 DEVICE_IDS=WTG-001,WTG-002,WTG-003,WTG-004,WTG-005
-SAMPLE_RATE=25600
-DURATION=10
-COMPRESSION_ENABLED=true
+SAMPLE_RATE=25600        # 仅模拟模式生效
+DURATION=10              # fallback，优先使用云端 window_seconds
+COMPRESSION_ENABLED=true # fallback，优先使用云端 compression_enabled
+DOWNSAMPLE_RATIO=8       # fallback，优先使用云端 downsample_ratio
 ```
+
+> **提示**：压缩行为现在由**云端 Settings 页面**控制，`.env` 仅作为 fallback。推荐通过前端统一管理所有设备的压缩配置。
 
 启动：
 

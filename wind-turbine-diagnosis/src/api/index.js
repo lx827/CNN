@@ -135,6 +135,7 @@ export const getRealtimeVibrationData = async (preferSpecial = false) => {
     params: { prefer_special: preferSpecial }
   })
   const backendList = res.data || []
+  const sensorParams = res.sensor_params || {}
 
   const defaultChannelNames = ['通道1-轴承附近', '通道2-驱动端', '通道3-风扇端']
 
@@ -163,11 +164,7 @@ export const getRealtimeVibrationData = async (preferSpecial = false) => {
     data: {
       timestamp: backendList[0]?.timestamp || new Date().toISOString(),
       channels,
-      sensorParams: {
-        rpm: 1485 + (Math.random() * 10 - 5),
-        temperature: 68 + (Math.random() * 4 - 2),
-        load: 85 + (Math.random() * 10 - 5)
-      }
+      sensorParams
     }
   }
 }
@@ -387,48 +384,50 @@ export const getDeviceBatches = async (deviceId) => {
   return res
 }
 
-export const getChannelData = async (deviceId, batchIndex, channel) => {
-  const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}`)
+export const getChannelData = async (deviceId, batchIndex, channel, detrend = false) => {
+  const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}`, {
+    params: { detrend }
+  })
   return res
 }
 
-export const getChannelFFT = async (deviceId, batchIndex, channel, maxFreq = 5000) => {
+export const getChannelFFT = async (deviceId, batchIndex, channel, maxFreq = 5000, detrend = false) => {
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/fft`, {
-    params: { max_freq: maxFreq }
+    params: { max_freq: maxFreq, detrend }
   })
   return res
 }
 
-export const getChannelSTFT = async (deviceId, batchIndex, channel, maxFreq = 5000, nperseg = 512, noverlap = 256) => {
+export const getChannelSTFT = async (deviceId, batchIndex, channel, maxFreq = 5000, nperseg = 512, noverlap = 256, detrend = false) => {
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/stft`, {
-    params: { max_freq: maxFreq, nperseg, noverlap }
+    params: { max_freq: maxFreq, nperseg, noverlap, detrend }
   })
   return res
 }
 
-export const getChannelEnvelope = async (deviceId, batchIndex, channel, maxFreq = 1000) => {
+export const getChannelEnvelope = async (deviceId, batchIndex, channel, maxFreq = 1000, detrend = false) => {
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/envelope`, {
-    params: { max_freq: maxFreq }
+    params: { max_freq: maxFreq, detrend }
   })
   return res
 }
 
-export const getChannelOrder = async (deviceId, batchIndex, channel, freqMin = 10, freqMax = 100, samplesPerRev = 1024, maxOrder = 50) => {
+export const getChannelOrder = async (deviceId, batchIndex, channel, freqMin = 10, freqMax = 100, samplesPerRev = 1024, maxOrder = 50, detrend = false) => {
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/order`, {
-    params: { freq_min: freqMin, freq_max: freqMax, samples_per_rev: samplesPerRev, max_order: maxOrder }
+    params: { freq_min: freqMin, freq_max: freqMax, samples_per_rev: samplesPerRev, max_order: maxOrder, detrend }
   })
   return res
 }
 
-export const getChannelCepstrum = async (deviceId, batchIndex, channel, maxQuefrency = 500) => {
+export const getChannelCepstrum = async (deviceId, batchIndex, channel, maxQuefrency = 500, detrend = false) => {
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/cepstrum`, {
-    params: { max_quefrency: maxQuefrency }
+    params: { max_quefrency: maxQuefrency, detrend }
   })
   return res
 }
 
-export const getChannelStats = async (deviceId, batchIndex, channel, windowSize = 1024, step = null) => {
-  const params = { window_size: windowSize }
+export const getChannelStats = async (deviceId, batchIndex, channel, windowSize = 1024, step = null, detrend = false) => {
+  const params = { window_size: windowSize, detrend }
   if (step !== null) params.step = step
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/stats`, { params })
   return res
@@ -476,7 +475,7 @@ export const updateAlarmThresholds = async (deviceId, thresholds) => {
   return res
 }
 
-export const exportChannelCSV = (deviceId, batchIndex, channel) => {
-  const url = `/api/data/${deviceId}/${batchIndex}/${channel}/export`
+export const exportChannelCSV = (deviceId, batchIndex, channel, detrend = false) => {
+  const url = `/api/data/${deviceId}/${batchIndex}/${channel}/export?detrend=${detrend}`
   window.open(url, '_blank')
 }

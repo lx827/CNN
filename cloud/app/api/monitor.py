@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
-from app.models import SensorData, Device
+from app.models import SensorData, Device, Diagnosis
 from app.services.analyzer import compute_fft
 from typing import List
 
@@ -133,6 +133,17 @@ def get_latest_monitor(
                 "fft_amp": fft_amp,
             })
 
+    # 查询最新诊断结果，获取估计转频
+    latest_diag = db.query(Diagnosis).filter(
+        Diagnosis.device_id == device_id
+    ).order_by(Diagnosis.analyzed_at.desc()).first()
+
+    sensor_params = {}
+    if latest_diag and latest_diag.rot_freq:
+        sensor_params["estimated_rpm"] = round(latest_diag.rot_freq * 60, 1)
+        sensor_params["rot_freq"] = round(latest_diag.rot_freq, 3)
+        sensor_params["rpm_source"] = "estimated"
+
     # 如果没有真实数据，返回模拟数据保证前端不白屏
     if not results:
         import random
@@ -153,7 +164,7 @@ def get_latest_monitor(
                 "fft_amp": [],
             })
 
-    return {"code": 200, "data": results}
+    return {"code": 200, "data": results, "sensor_params": sensor_params}
 
 
 @router.get("/history")

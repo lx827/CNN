@@ -201,8 +201,11 @@ npm run dev
 | 采集时长 | 每次采集的窗口时长（秒） |
 | 通道数 | 采集通道数量（1~8） |
 | 通道名称 | 为每个通道设置显示名称（如"驱动端轴承"、"齿轮箱输入轴"） |
+| 数据压缩 | 启用/关闭边端数据压缩；压缩比 1~20（1=不压缩） |
+| 机械参数 | 齿轮齿数（输入轴/输出轴）、轴承参数（滚子数/直径/节径/接触角），用于阶次跟踪自动标定故障特征频率 |
 | 告警阈值 | 按设备独立设置 RMS、峰值、峭度、峰值因子的预警/严重阈值 |
-| 保存配置 | 修改后点击"保存配置"，约 30 秒内同步到边端 |
+| 保存配置 | 修改后点击"保存配置"；勾选"应用到所有设备"可一键同步所有 WTG 设备 |
+| 批量配置 | 勾选"应用到所有设备"复选框后保存，当前配置会同步到所有设备（无需逐个切换） |
 
 ---
 
@@ -236,14 +239,16 @@ NN_MODEL_PATH=./models/turbine_fault_model.onnx
 ```
 CLOUD_INGEST_URL=http://localhost:8000/api/ingest/
 DEVICE_IDS=WTG-001,WTG-002,WTG-003,WTG-004,WTG-005
-UPLOAD_INTERVAL=10           # 上传间隔，单位秒
-POLL_INTERVAL=2              # 轮询间隔，单位秒
-SAMPLE_RATE=8192             # 采样率 Hz
-DURATION=10                  # 采集时长 秒
+UPLOAD_INTERVAL=10           # 上传间隔，单位秒（fallback，优先使用云端配置）
+POLL_INTERVAL=2              # 轮询间隔，单位秒（fallback，优先使用云端配置）
+SAMPLE_RATE=8192             # 采样率 Hz（仅模拟模式生效，真实数据由文件决定）
+DURATION=10                  # 采集时长 秒（fallback，优先使用云端 window_seconds）
 USE_REAL_DATA=true           # 使用真实 .npy 数据
 DATA_DIR=D:\code\wavelet_study\dataset\CW\down8192_CW
 SIMULATE_OFFLINE_DEVICE=WTG-003  # 模拟离线的设备
 ```
+
+> **注意**：边端优先使用**云端配置**（前端 Settings 页面设置），`.env` 仅作为 fallback。真实数据模式下，数据采样率由 `.npy` 文件本身决定，压缩行为由云端 `compression_enabled` 和 `downsample_ratio` 控制。
 
 ---
 
