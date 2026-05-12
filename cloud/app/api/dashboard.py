@@ -39,7 +39,10 @@ def get_dashboard(db: Session = Depends(get_db)):
     for d in devices:
         offline_threshold = _get_offline_threshold(d, now)
         # 判断离线：last_seen_at 为空 或 超过阈值未上传
-        is_offline = d.last_seen_at is None or d.last_seen_at < offline_threshold
+        last_seen = d.last_seen_at
+        if last_seen and last_seen.tzinfo is not None:
+            last_seen = last_seen.replace(tzinfo=None)
+        is_offline = last_seen is None or last_seen < offline_threshold
         effective_status = "offline" if is_offline else d.status
         device_list.append({
             "device_id": d.device_id,
@@ -58,7 +61,10 @@ def get_dashboard(db: Session = Depends(get_db)):
     latest_diag = {}
     for d in devices:
         offline_threshold = _get_offline_threshold(d, now)
-        is_offline = d.last_seen_at is None or d.last_seen_at < offline_threshold
+        last_seen = d.last_seen_at
+        if last_seen and last_seen.tzinfo is not None:
+            last_seen = last_seen.replace(tzinfo=None)
+        is_offline = last_seen is None or last_seen < offline_threshold
         diag = db.query(Diagnosis).filter(Diagnosis.device_id == d.device_id) \
             .order_by(Diagnosis.analyzed_at.desc()).first()
         if diag:
