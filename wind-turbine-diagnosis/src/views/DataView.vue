@@ -138,6 +138,15 @@
               <el-icon><Download /></el-icon> 导出 CSV
             </el-button>
             <el-button
+              type="warning"
+              size="small"
+              style="margin-left: 8px"
+              :loading="reanalyzing"
+              @click="onReanalyze"
+            >
+              <el-icon><Refresh /></el-icon> 重新诊断
+            </el-button>
+            <el-button
               type="danger"
               size="small"
               style="margin-left: 8px"
@@ -806,13 +815,15 @@ import {
   deleteBatch,
   deleteSpecialBatches,
   exportChannelCSV,
-  updateBatchDiagnosis
+  updateBatchDiagnosis,
+  reanalyzeBatch
 } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const route = useRoute()
 const loading = ref(false)
 const deleteLoading = ref(false)
+const reanalyzing = ref(false)
 const deviceTableData = ref([])
 
 // 批量删除
@@ -1856,6 +1867,34 @@ const onExportCSV = () => {
     selectedChannel.value,
     enableDetrend.value
   )
+}
+
+// ========== 重新诊断 ==========
+const onReanalyze = async () => {
+  if (!selectedDevice.value || !selectedBatch.value) return
+  try {
+    reanalyzing.value = true
+    const res = await reanalyzeBatch(
+      selectedDevice.value.device_id,
+      selectedBatch.value.batch_index
+    )
+    const d = res.data?.data || {}
+    ElMessage.success(`重新诊断完成，健康度 ${d.health_score} 分`)
+    // 更新本地选中批次数据
+    selectedBatch.value.health_score = d.health_score
+    selectedBatch.value.diagnosis_status = d.status
+    selectedBatch.value.rot_freq = d.rot_freq
+    if (d.order_analysis) {
+      selectedBatch.value.order_analysis = d.order_analysis
+    }
+    // 刷新设备列表以同步最新状态
+    await loadAllDevices()
+  } catch (e) {
+    console.error('重新诊断失败:', e)
+    ElMessage.error('重新诊断失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    reanalyzing.value = false
+  }
 }
 
 // ========== 删除 ==========

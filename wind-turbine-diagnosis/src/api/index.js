@@ -452,6 +452,11 @@ export const updateBatchDiagnosis = async (deviceId, batchIndex, data) => {
   return res
 }
 
+export const reanalyzeBatch = async (deviceId, batchIndex) => {
+  const res = await request.post(`/api/data/${deviceId}/${batchIndex}/reanalyze`)
+  return res
+}
+
 export const getChannelCepstrum = async (deviceId, batchIndex, channel, maxQuefrency = 500, detrend = false) => {
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/cepstrum`, {
     params: { max_quefrency: maxQuefrency, detrend }
