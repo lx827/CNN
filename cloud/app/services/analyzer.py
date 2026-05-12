@@ -368,10 +368,10 @@ def _compute_bearing_fault_freqs(rot_freq: float, bearing_params: dict) -> dict:
     计算轴承故障特征频率 (Hz)
     公式针对深沟球轴承 / 圆柱滚子轴承通用形式
     """
-    n = bearing_params.get("n", 0)
-    d = bearing_params.get("d", 0)
-    D = bearing_params.get("D", 0)
-    alpha = np.radians(bearing_params.get("alpha", 0))
+    n = bearing_params.get("n") or 0
+    d = bearing_params.get("d") or 0
+    D = bearing_params.get("D") or 0
+    alpha = np.radians(bearing_params.get("alpha") or 0)
 
     if n <= 0 or d <= 0 or D <= 0:
         return {}
@@ -422,8 +422,8 @@ def _extract_spectrum_features(freq, amp, rot_freq: float, gear_teeth: dict, bea
 
     # --- 齿轮特征 ---
     if gear_teeth and isinstance(gear_teeth, dict):
-        z_in = gear_teeth.get("input", 0)
-        z_out = gear_teeth.get("output", 0)
+        z_in = gear_teeth.get("input") or 0
+        z_out = gear_teeth.get("output") or 0
         if z_in > 0:
             mesh_freq = rot_freq * z_in
             features["mesh_freq_hz"] = round(mesh_freq, 2)
@@ -495,8 +495,8 @@ def _extract_order_features(order_axis, spectrum, rot_freq: float, gear_teeth: d
 
     # --- 齿轮阶次特征 ---
     if gear_teeth and isinstance(gear_teeth, dict):
-        z_in = gear_teeth.get("input", 0)
-        z_out = gear_teeth.get("output", 0)
+        z_in = gear_teeth.get("input") or 0
+        z_out = gear_teeth.get("output") or 0
         if z_in > 0:
             mesh_order = float(z_in)
             features["mesh_order"] = mesh_order

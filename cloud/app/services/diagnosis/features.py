@@ -89,7 +89,7 @@ def compute_fft_features(
 
     # --- 齿轮特征 ---
     if gear_teeth and isinstance(gear_teeth, dict):
-        z_in = gear_teeth.get("input", 0)
+        z_in = gear_teeth.get("input") or 0
         if z_in > 0:
             mesh_freq = rot_freq * z_in
             features["mesh_freq_hz"] = round(mesh_freq, 2)
@@ -110,7 +110,7 @@ def compute_fft_features(
 
     # --- 轴承特征 ---
     if bearing_params and isinstance(bearing_params, dict):
-        from .utils import _compute_bearing_fault_freqs
+        from app.services.analyzer import _compute_bearing_fault_freqs
         bfreqs = _compute_bearing_fault_freqs(rot_freq, bearing_params)
         for name, f_hz in bfreqs.items():
             features[f"{name}_hz"] = round(f_hz, 2)
@@ -171,10 +171,10 @@ def compute_envelope_features(
         rot_freq = _estimate_rot_freq_simple(arr, fs)
 
     # 计算轴承特征频率
-    n_balls = bearing_params.get("n", 0)
-    d = bearing_params.get("d", 0)
-    D = bearing_params.get("D", 0)
-    alpha = np.radians(bearing_params.get("alpha", 0))
+    n_balls = bearing_params.get("n") or 0
+    d = bearing_params.get("d") or 0
+    D = bearing_params.get("D") or 0
+    alpha = np.radians(bearing_params.get("alpha") or 0)
 
     if n_balls > 0 and d > 0 and D > 0:
         cos_a = np.cos(alpha)
