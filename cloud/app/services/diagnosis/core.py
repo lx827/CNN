@@ -691,7 +691,7 @@ class DiagnosisEngine:
 
         # ===== 齿轮故障扣分（仅在存在齿轮参数时）=====
         gear_ind = gear_result.get("fault_indicators", {})
-        has_gear_params = self.gear_teeth and self.gear_teeth.get("input", 0) > 0
+        has_gear_params = self.gear_teeth and (self.gear_teeth.get("input") or 0) > 0
 
         if has_gear_params:
             ser_info = gear_ind.get("ser", {}) if isinstance(gear_ind.get("ser"), dict) else {}
