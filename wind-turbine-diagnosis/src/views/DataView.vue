@@ -1143,6 +1143,30 @@ const keyLabelMap = {
   'BPFI_order_harmonic_ratio': '内圈阶次谐波能量比',
   'BSF_order_harmonic_ratio': '滚动体阶次谐波能量比',
   'FTF_order_harmonic_ratio': '保持架阶次谐波能量比',
+  'engine_result': '引擎结果',
+  'channels': '各通道',
+  'bearing': '轴承',
+  'gear': '齿轮',
+  'method': '方法',
+  'strategy': '策略',
+  'health_score': '健康度',
+  'status': '状态',
+  'time_features': '时域特征',
+  'recommendation': '建议',
+  'fault_indicators': '故障指示器',
+  'envelope_freq': '包络频率',
+  'envelope_amp': '包络幅值',
+  'band_center': '中心频率',
+  'band_width': '带宽',
+  'optimal_fc': '最优中心频率',
+  'optimal_bw': '最优带宽',
+  'max_kurtosis': '最大峭度',
+  'comb_frequencies': '梳状频率',
+  'med_filter_len': 'MED滤波长度',
+  'kurtosis_before': 'MED前峭度',
+  'kurtosis_after': 'MED后峭度',
+  'sidebands': '边频带',
+  'mesh_amp': '啮合幅值',
 }
 
 const orderAnalysisFlat = computed(() => {
@@ -1156,7 +1180,8 @@ const orderAnalysisFlat = computed(() => {
       const rawKey = prefix ? `${prefix} / ${k}` : k
       if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
         walk(v, label)
-      } else {
+      } else if (!Array.isArray(v)) {
+        // 跳过数组类型（如 envelope_amp, kurtogram），避免显示乱码
         result.push({ key: rawKey, label, value: v })
       }
     }
