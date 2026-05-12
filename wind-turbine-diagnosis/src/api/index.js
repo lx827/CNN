@@ -405,10 +405,29 @@ export const getChannelSTFT = async (deviceId, batchIndex, channel, maxFreq = 50
   return res
 }
 
-export const getChannelEnvelope = async (deviceId, batchIndex, channel, maxFreq = 1000, detrend = false) => {
+export const getChannelEnvelope = async (deviceId, batchIndex, channel, maxFreq = 1000, detrend = false, method = 'envelope') => {
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/envelope`, {
-    params: { max_freq: maxFreq, detrend }
+    params: { max_freq: maxFreq, detrend, method }
   })
+  return res
+}
+
+export const getChannelGear = async (deviceId, batchIndex, channel, detrend = false, method = 'standard', denoise = 'none') => {
+  const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/gear`, {
+    params: { detrend, method, denoise }
+  })
+  return res
+}
+
+export const getChannelAnalyze = async (deviceId, batchIndex, channel, config = {}) => {
+  const params = {
+    detrend: config.detrend ?? false,
+    strategy: config.strategy || 'standard',
+    bearing_method: config.bearing_method || 'envelope',
+    gear_method: config.gear_method || 'standard',
+    denoise: config.denoise || 'none',
+  }
+  const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/analyze`, { params })
   return res
 }
 
