@@ -273,6 +273,228 @@ class DiagnosisEngine:
             "recommendation": self._generate_recommendation(bearing_result, gear_result, status),
         }
 
+    def analyze_all_methods(
+        self,
+        signal: np.ndarray,
+        fs: float,
+        rot_freq: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        全算法对比分析（运行所有轴承方法和所有齿轮方法）
+
+        Returns:
+            {
+                "health_score": int,
+                "status": str,
+                "rot_freq_hz": float,
+                "time_features": Dict,
+                "bearing_results": Dict[str, Dict],   # key: method name
+                "gear_results": Dict[str, Dict],      # key: method name
+                "summary": Dict,                       # 各方法检出结论汇总
+                "recommendation": str,
+            }
+        """
+        arr = np.array(signal, dtype=np.float64)
+        if self.denoise_method != DenoiseMethod.NONE:
+            arr = self.preprocess(arr)
+
+        if rot_freq is None:
+            rot_freq = _estimate_rot_freq_simple(arr, fs)
+
+        # 保存原始方法配置
+        original_bearing = self.bearing_method
+        original_gear = self.gear_method
+
+        # 运行所有轴承诊断方法
+        bearing_results = {}
+        for method in BearingMethod:
+            self.bearing_method = method
+            try:
+                result = self.analyze_bearing(arr, fs, rot_freq)
+                bearing_results[method.value] = result
+            except Exception as e:
+                bearing_results[method.value] = {"error": str(e)}
+
+        # 运行所有齿轮诊断方法
+        gear_results = {}
+        for method in GearMethod:
+            self.gear_method = method
+            try:
+                result = self.analyze_gear(arr, fs, rot_freq)
+                gear_results[method.value] = result
+            except Exception as e:
+                gear_results[method.value] = {"error": str(e)}
+
+        # 恢复原始配置
+        self.bearing_method = original_bearing
+        self.gear_method = original_gear
+
+        # 时域特征
+        time_features = compute_time_features(arr)
+
+        # 综合评估：取所有方法中最差的健康状态
+        all_health_scores = []
+        all_statuses = []
+        for br in bearing_results.values():
+            if "health_score" in br:
+                all_health_scores.append(br["health_score"])
+            if "status" in br:
+                all_statuses.append(br["status"])
+        for gr in gear_results.values():
+            if "health_score" in gr:
+                all_health_scores.append(gr["health_score"])
+            if "status" in gr:
+                all_statuses.append(gr["status"])
+
+        # 用默认的 bearing=包络, gear=标准 计算综合健康度
+        health_score, status = self._compute_health_score(
+            time_features,
+            bearing_results.get(BearingMethod.ENVELOPE.value, {}),
+            gear_results.get(GearMethod.STANDARD.value, {}),
+        )
+
+        # 生成各方法检出结论汇总
+        summary = self._summarize_all_methods(bearing_results, gear_results)
+
+        return {
+            "health_score": health_score,
+            "status": status,
+            "rot_freq_hz": round(rot_freq, 3),
+            "time_features": time_features,
+            "bearing_results": bearing_results,
+            "gear_results": gear_results,
+            "summary": summary,
+            "recommendation": self._generate_recommendation_all(bearing_results, gear_results, status),
+        }
+
+    def _summarize_all_methods(self, bearing_results: Dict, gear_results: Dict) -> Dict[str, Any]:
+        """汇总所有方法的检出结论"""
+        summary = {
+            "bearing_detections": [],
+            "gear_detections": [],
+        }
+
+        # 轴承各方法检出情况
+        method_name_map = {
+            "envelope": "标准包络分析",
+            "kurtogram": "Fast Kurtogram",
+            "cpw": "CPW预白化+包络",
+            "med": "MED最小熵解卷积+包络",
+        }
+        for method_key, result in bearing_results.items():
+            if "error" in result:
+                continue
+            indicators = result.get("fault_indicators", {})
+            detected = []
+            for fname, info in indicators.items():
+                if info.get("significant"):
+                    detected.append({
+                        "fault_type": fname,
+                        "theory_hz": info.get("theory_hz"),
+                        "detected_hz": info.get("detected_hz"),
+                        "snr": info.get("snr"),
+                    })
+            if detected:
+                summary["bearing_detections"].append({
+                    "method": method_name_map.get(method_key, method_key),
+                    "method_key": method_key,
+                    "detected_faults": detected,
+                    "features": result.get("features", {}),
+                })
+            else:
+                summary["bearing_detections"].append({
+                    "method": method_name_map.get(method_key, method_key),
+                    "method_key": method_key,
+                    "detected_faults": [],
+                    "features": result.get("features", {}),
+                })
+
+        # 齿轮各方法检出情况
+        gear_method_name_map = {
+            "standard": "标准边频带分析",
+            "advanced": "高级时域指标",
+        }
+        for method_key, result in gear_results.items():
+            if "error" in result:
+                continue
+            indicators = result.get("fault_indicators", {})
+            detected = []
+            for fname, info in indicators.items():
+                if isinstance(info, dict) and info.get("critical"):
+                    detected.append({
+                        "indicator": fname,
+                        "value": info.get("value"),
+                        "level": "critical",
+                    })
+                elif isinstance(info, dict) and info.get("warning"):
+                    detected.append({
+                        "indicator": fname,
+                        "value": info.get("value"),
+                        "level": "warning",
+                    })
+            # 边频带显著数量
+            sidebands = result.get("sidebands", [])
+            sig_sb = [sb for sb in sidebands if sb.get("significant")]
+            summary["gear_detections"].append({
+                "method": gear_method_name_map.get(method_key, method_key),
+                "method_key": method_key,
+                "detected_indicators": detected,
+                "ser": result.get("ser"),
+                "sideband_count": len(sig_sb),
+                "sidebands": sidebands,
+                "fm0": result.get("fm0"),
+                "fm4": result.get("fm4"),
+                "car": result.get("car"),
+                "m6a": result.get("m6a"),
+                "m8a": result.get("m8a"),
+            })
+
+        return summary
+
+    def _generate_recommendation_all(self, bearing_results: Dict, gear_results: Dict, status: str) -> str:
+        """基于所有方法结果生成建议"""
+        if status == "normal":
+            return "设备运行正常，所有诊断方法均未检出显著故障特征，建议按周期继续监测。"
+
+        parts = []
+
+        # 统计各轴承方法检出的故障
+        bearing_faults = {}
+        for result in bearing_results.values():
+            indicators = result.get("fault_indicators", {})
+            for fname, info in indicators.items():
+                if info.get("significant"):
+                    bearing_faults.setdefault(fname, 0)
+                    bearing_faults[fname] += 1
+
+        if bearing_faults:
+            # 按被多少种方法检出来排序
+            sorted_faults = sorted(bearing_faults.items(), key=lambda x: x[1], reverse=True)
+            fault_desc = ", ".join([f"{name}({count}种方法)" for name, count in sorted_faults])
+            parts.append(f"轴承诊断：{fault_desc}检出显著特征。")
+
+        # 齿轮指标
+        gear_warnings = []
+        gear_criticals = []
+        for result in gear_results.values():
+            indicators = result.get("fault_indicators", {})
+            for fname, info in indicators.items():
+                if isinstance(info, dict):
+                    if info.get("critical"):
+                        gear_criticals.append(fname)
+                    elif info.get("warning"):
+                        gear_warnings.append(fname)
+
+        if gear_criticals:
+            parts.append(f"齿轮诊断：{'/'.join(set(gear_criticals))}指标达到危险阈值，建议立即检查。")
+        elif gear_warnings:
+            parts.append(f"齿轮诊断：{'/'.join(set(gear_warnings))}指标达到预警阈值，建议关注啮合状态。")
+
+        if not parts:
+            parts.append("检测到部分异常信号特征，建议结合工况进一步分析。")
+
+        return " ".join(parts)
+
     def _evaluate_bearing_faults(
         self,
         env_freq: List[float],

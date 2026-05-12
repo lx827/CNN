@@ -306,6 +306,8 @@ export const getFaultDiagnosisResult = async (deviceId = 'WTG-001') => {
       batchIndex: d.batch_index || 0,
       orderAnalysis: d.order_analysis || null,
       rotFreq: d.rot_freq || null,
+      engineResult: d.engine_result || null,
+      channelsDetail: d.channels_detail || null,
       faults
     }
   }
@@ -428,6 +430,15 @@ export const getChannelAnalyze = async (deviceId, batchIndex, channel, config = 
     denoise: config.denoise || 'none',
   }
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/analyze`, { params })
+  return res
+}
+
+export const getChannelFullAnalysis = async (deviceId, batchIndex, channel, config = {}) => {
+  const params = {
+    detrend: config.detrend ?? false,
+    denoise: config.denoise || 'none',
+  }
+  const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/full-analysis`, { params })
   return res
 }
 

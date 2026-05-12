@@ -3,6 +3,7 @@ FastAPI 应用入口
 启动命令：python -m app.main
 """
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -27,6 +28,10 @@ from app.services.alarm_service import generate_alarms
 
 
 # ==================== 后台分析任务 ====================
+# 信号量：一次只允许一个分析批次在运行，防止多批次并发导致内存爆掉
+ANALYSIS_SEM = asyncio.Semaphore(1)
+
+
 async def analysis_worker():
     """
     后台协程：扫描所有设备的未检测批次，执行分析，标记为已检测
@@ -78,7 +83,10 @@ async def analysis_worker():
                             channels_data[f"ch{r.channel}"] = r.data
 
                         # 执行分析（传入 device 以获取齿轮/轴承参数）
-                        result = analyze_device(channels_data, sample_rate, device)
+                        # CPU 密集型计算放到线程池，避免阻塞 asyncio 事件循环
+                        # Semaphore 确保一次只分析一个批次
+                        async with ANALYSIS_SEM:
+                            result = await asyncio.to_thread(analyze_device, channels_data, sample_rate, device)
 
                         # 写入诊断结果（关联到批次）
                         diag = Diagnosis(
@@ -106,10 +114,12 @@ async def analysis_worker():
 
                         db.commit()
 
-                        # 计算通道级振动特征
+                        # 计算通道级振动特征（CPU 密集型，放入线程池）
+                        # 复用同一个 Semaphore，确保和 analyze_device 串行执行
                         channel_features = {}
-                        for ch_key, signal in channels_data.items():
-                            channel_features[ch_key] = compute_channel_features(signal)
+                        async with ANALYSIS_SEM:
+                            for ch_key, signal in channels_data.items():
+                                channel_features[ch_key] = await asyncio.to_thread(compute_channel_features, signal)
 
                         # 提取通道级诊断结果（含齿轮/轴承详细指标）
                         channel_diagnosis = result.get("order_analysis", {}).get("channels", {})
@@ -232,6 +242,13 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    # 限制全局默认线程池为 2 个线程（阿里云 2核2G 必须严格控制）
+    # 所有 asyncio.to_thread / loop.run_in_executor(None, ...) 都会使用此线程池
+    cpu_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="cpu_worker")
+    loop = asyncio.get_running_loop()
+    loop.set_default_executor(cpu_executor)
+    print("[启动] CPU 线程池已限制为 max_workers=2")
+
     # 启动后台分析任务
     task = asyncio.create_task(analysis_worker())
     print("[启动] 后台分析任务已启动")
@@ -240,7 +257,8 @@ async def lifespan(app: FastAPI):
 
     # 关闭时
     task.cancel()
-    print("[关闭] 后台分析任务已停止")
+    cpu_executor.shutdown(wait=True)
+    print("[关闭] 后台分析任务已停止，CPU 线程池已关闭")
 
 
 # ==================== 创建 FastAPI 应用 ====================
