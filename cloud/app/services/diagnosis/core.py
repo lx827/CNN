@@ -123,10 +123,11 @@ class DiagnosisEngine:
             # CPW 需要齿轮/轴频作为 comb_frequencies
             comb_freqs = []
             if self.gear_teeth:
-                z_in = self.gear_teeth.get("input", 0)
-                if z_in > 0:
+                z_in = (self.gear_teeth.get("input") or 0) if self.gear_teeth else 0
+                if z_in > 0 and rot_freq is not None and rot_freq > 0:
                     comb_freqs.append(rot_freq * z_in)
-            comb_freqs.append(rot_freq)
+            if rot_freq is not None and rot_freq > 0:
+                comb_freqs.append(rot_freq)
             result = cpw_envelope_analysis(arr, fs, comb_frequencies=comb_freqs)
         elif self.bearing_method == BearingMethod.MED:
             result = med_envelope_analysis(arr, fs)

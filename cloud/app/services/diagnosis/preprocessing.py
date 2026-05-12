@@ -108,7 +108,7 @@ def cepstrum_pre_whitening(
         quefrency = np.arange(N) * dt
 
         for f_target in comb_frequencies:
-            if f_target <= 0:
+            if f_target is None or f_target <= 0:
                 continue
             tau_target = 1.0 / f_target
             # 对该频率及其整数倍的倒频谱线进行陷波
