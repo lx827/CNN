@@ -170,7 +170,7 @@
             <template #header>
               <span style="font-weight: 600;">🔍 频域/阶次诊断明细</span>
               <el-text v-if="selectedBatch.rot_freq" type="info" size="small" style="margin-left: 12px;">
-                Est Rot Freq: {{ selectedBatch.rot_freq.toFixed(2) }} Hz / {{ (selectedBatch.rot_freq * 60).toFixed(0) }} RPM
+                估计转频: {{ selectedBatch.rot_freq.toFixed(2) }} Hz / {{ (selectedBatch.rot_freq * 60).toFixed(0) }} RPM
               </el-text>
             </template>
             <el-descriptions :column="2" size="small" border>
@@ -382,27 +382,27 @@
                   {{ gearData.car.toFixed(2) }}
                 </el-tag>
               </el-descriptions-item>
-              <el-descriptions-item label="Rot Freq" v-if="gearData.rot_freq_hz">
+              <el-descriptions-item label="转频" v-if="gearData.rot_freq_hz">
                 {{ gearData.rot_freq_hz }} Hz / {{ (gearData.rot_freq_hz * 60).toFixed(0) }} RPM
               </el-descriptions-item>
             </el-descriptions>
             <el-table v-if="gearData.sidebands && gearData.sidebands.length > 0" :data="gearData.sidebands" size="small" style="margin-top: 8px;" max-height="200">
-              <el-table-column prop="order" label="Order" width="60" />
-              <el-table-column prop="order_low" label="Lower SB Order" width="110" />
-              <el-table-column prop="order_high" label="Upper SB Order" width="110" />
-              <el-table-column prop="amp_low" label="Lower Amp" width="90" />
-              <el-table-column prop="amp_high" label="Upper Amp" width="90" />
-              <el-table-column prop="asymmetry" label="Asymmetry" width="90" />
-              <el-table-column label="Significant">
+              <el-table-column prop="order" label="阶次" width="60" />
+              <el-table-column prop="order_low" label="下边频阶次" width="110" />
+              <el-table-column prop="order_high" label="上边频阶次" width="110" />
+              <el-table-column prop="amp_low" label="下幅值" width="90" />
+              <el-table-column prop="amp_high" label="上幅值" width="90" />
+              <el-table-column prop="asymmetry" label="不对称度" width="90" />
+              <el-table-column label="显著">
                 <template #default="{ row }">
                   <el-tag :type="row.significant ? 'warning' : 'info'" size="small">
-                    {{ row.significant ? 'Yes' : 'No' }}
+                    {{ row.significant ? '是' : '否' }}
                   </el-tag>
                 </template>
               </el-table-column>
             </el-table>
             <div v-else style="margin-top: 8px; color: #999; font-size: 13px;">
-              No mesh frequency parameters detected, sideband analysis unavailable
+              未检测到啮合频率参数，无法计算边频带
             </div>
           </div>
           <div v-else-if="loadingGear" class="placeholder">
@@ -466,18 +466,18 @@
               <template #header>
                 <span style="font-weight: 600;">📊 时域特征参数</span>
                 <el-text v-if="fullAnalysisData.rot_freq_hz" type="info" size="small" style="margin-left: 12px;">
-                  Est Rot Freq: {{ fullAnalysisData.rot_freq_hz }} Hz / {{ (fullAnalysisData.rot_freq_hz * 60).toFixed(0) }} RPM
+                  估计转频: {{ fullAnalysisData.rot_freq_hz }} Hz / {{ (fullAnalysisData.rot_freq_hz * 60).toFixed(0) }} RPM
                 </el-text>
               </template>
               <el-descriptions :column="4" size="small" border v-if="fullAnalysisData.time_features">
-                <el-descriptions-item label="Peak">{{ fullAnalysisData.time_features.peak?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="峰值">{{ fullAnalysisData.time_features.peak?.toFixed(4) }}</el-descriptions-item>
                 <el-descriptions-item label="RMS">{{ fullAnalysisData.time_features.rms?.toFixed(4) }}</el-descriptions-item>
-                <el-descriptions-item label="Kurtosis">{{ fullAnalysisData.time_features.kurtosis?.toFixed(4) }}</el-descriptions-item>
-                <el-descriptions-item label="Skewness">{{ fullAnalysisData.time_features.skewness?.toFixed(4) }}</el-descriptions-item>
-                <el-descriptions-item label="Margin">{{ fullAnalysisData.time_features.margin?.toFixed(4) }}</el-descriptions-item>
-                <el-descriptions-item label="Crest Factor">{{ fullAnalysisData.time_features.crest_factor?.toFixed(4) }}</el-descriptions-item>
-                <el-descriptions-item label="Shape Factor">{{ fullAnalysisData.time_features.shape_factor?.toFixed(4) }}</el-descriptions-item>
-                <el-descriptions-item label="Impulse Factor">{{ fullAnalysisData.time_features.impulse_factor?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="峭度">{{ fullAnalysisData.time_features.kurtosis?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="偏度">{{ fullAnalysisData.time_features.skewness?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="裕度">{{ fullAnalysisData.time_features.margin?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="峰值因子">{{ fullAnalysisData.time_features.crest_factor?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="波形因子">{{ fullAnalysisData.time_features.shape_factor?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="脉冲因子">{{ fullAnalysisData.time_features.impulse_factor?.toFixed(4) }}</el-descriptions-item>
               </el-descriptions>
             </el-card>
 
@@ -554,7 +554,7 @@
                     <span :class="row.car > 2 ? 'text-danger' : row.car > 1.2 ? 'text-warning' : ''">{{ row.car?.toFixed(2) ?? '-' }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column prop="sideband_count" label="Sig SB Count" width="110" />
+                <el-table-column prop="sideband_count" label="显著边频数" width="110" />
                 <el-table-column prop="alerts" label="阈值告警">
                   <template #default="{ row }">
                     <el-tag v-for="(a, idx) in row.alerts" :key="idx" :type="a.level === 'critical' ? 'danger' : 'warning'" size="small" style="margin-right: 6px; margin-bottom: 4px;">
@@ -582,7 +582,7 @@
             <span class="chart-title">阶次谱（阶次跟踪）</span>
             <div style="display: flex; align-items: center; gap: 8px;">
               <template v-if="!computedOrder">
-                <el-text type="info" size="small">Rot Freq Range</el-text>
+                <el-text type="info" size="small">转频范围</el-text>
                 <el-input-number
                   v-model="orderFreqMin"
                   :min="1"
@@ -629,10 +629,10 @@
           </div>
           <div v-if="computedOrder && orderData" class="order-info">
             <el-tag type="success" size="small" effect="plain">
-              Est RPM {{ orderData.rot_rpm }} (Rot Freq {{ orderData.rot_freq }} Hz)
+              估计转速 {{ orderData.rot_rpm }} RPM（转频 {{ orderData.rot_freq }} Hz）
             </el-tag>
             <el-tag type="info" size="small" effect="plain" style="margin-left: 8px;">
-              Samples/Rev {{ orderData.samples_per_rev }}
+              每转 {{ orderData.samples_per_rev }} 点
             </el-tag>
           </div>
           <div v-if="computedOrder" ref="orderChart" class="chart"></div>
@@ -640,7 +640,7 @@
             <el-skeleton :rows="3" animated />
           </div>
           <div v-else class="placeholder">
-            <el-empty description="Set rot freq search range to compute order spectrum" :image-size="80" />
+            <el-empty description="设置转频搜索范围后计算阶次谱" :image-size="80" />
           </div>
         </el-col>
       </el-row>
@@ -1486,9 +1486,9 @@ const computeOrder = async () => {
           symbol: 'none',
           lineStyle: { type: 'dashed', color: '#999' },
           data: [
-            { xAxis: idx1x, name: '1× Rot Freq' },
-            { xAxis: idx2x, name: '2× Rot Freq' },
-            { xAxis: idx3x, name: '3× Rot Freq' }
+            { xAxis: idx1x, name: '1×转频' },
+            { xAxis: idx2x, name: '2×转频' },
+            { xAxis: idx3x, name: '3×转频' }
           ],
           label: { formatter: '{b}', position: 'insideEndTop', fontSize: 10 }
         }
