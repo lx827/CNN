@@ -98,3 +98,7 @@ def _get_channel_name(device: Device, channel_num: int) -> str:
         3: "通道3-风扇端",
     }
     return defaults.get(channel_num, f"通道{channel_num}")
+
+
+# 导入子模块以注册路由
+from . import core, spectrum, envelope, order, cepstrum, gear, export, diagnosis_ops
