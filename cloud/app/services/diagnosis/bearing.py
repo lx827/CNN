@@ -12,7 +12,7 @@ from scipy.signal import hilbert
 from scipy.fft import rfft, rfftfreq
 from typing import Dict, Tuple, Optional, List
 
-from .utils import (
+from .signal_utils import (
     prepare_signal, bandpass_filter, lowpass_filter, compute_snr,
     parabolic_interpolation,
 )

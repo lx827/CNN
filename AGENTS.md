@@ -27,7 +27,10 @@ CNN/
 ├── cloud/                          # 云端 FastAPI 后端
 │   ├── venv/                       # Python 虚拟环境（Windows）
 │   ├── app/
-│   │   ├── main.py                 # FastAPI 入口 + 后台分析 + WebSocket
+│   │   ├── main.py                 # FastAPI 入口 + 路由注册 + WebSocket
+│   │   ├── lifespan.py             # 生命周期 + 后台分析 worker + 线程池
+│   │   ├── startup.py              # 数据库初始化 + 默认设备创建
+│   │   ├── middleware.py           # CORS / 静态文件挂载
 │   │   ├── database.py             # SQLite/MySQL 连接
 │   │   ├── models.py               # SQLAlchemy 数据模型
 │   │   ├── core/config.py          # 全局配置（端口、采样率、NN开关）
@@ -37,12 +40,19 @@ CNN/
 │   │   │   ├── dashboard.py        # 设备总览 + 离线检测
 │   │   │   ├── diagnosis.py        # 诊断结果查询
 │   │   │   ├── alarms.py           # 告警管理
-│   │   │   ├── devices.py          # 设备配置
+│   │   │   ├── devices/            # 设备配置
+│   │   │   │   ├── __init__.py     # router + 公共导入
+│   │   │   │   ├── core.py         # 设备 CRUD
+│   │   │   │   └── config.py       # 通道参数、告警阈值、机械参数
 │   │   │   ├── collect.py          # 手动采集任务
 │   │   │   └── system.py           # 系统日志（journalctl）
 │   │   └── services/
 │   │       ├── analyzer.py         # 分析引擎（多通道综合分析）
-│   │       ├── alarm_service.py    # 告警生成逻辑
+│   │       ├── alarms/             # 告警生成逻辑
+│   │       │   ├── __init__.py     # 统一导出 generate_alarms
+│   │       │   ├── channel.py      # 通道级振动特征告警
+│   │       │   ├── device.py       # 设备级综合告警
+│   │       │   └── diagnosis.py    # 诊断结果告警
 │   │       ├── diagnosis/          # 诊断算法库
 │   │       │   ├── core.py         # DiagnosisEngine（轴承/齿轮/综合）
 │   │       │   ├── bearing.py      # 轴承诊断（包络/Kurtogram/CPW/MED）

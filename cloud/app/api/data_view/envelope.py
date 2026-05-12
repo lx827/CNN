@@ -3,11 +3,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device
 from app.services.diagnosis.features import compute_envelope_spectrum
-from app.services.diagnosis.utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
+from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
 from . import router, prepare_signal
 from datetime import datetime
 import logging
 import numpy as np
+import asyncio
 
 logger = logging.getLogger(__name__)
 

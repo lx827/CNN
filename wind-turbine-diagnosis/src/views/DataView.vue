@@ -183,7 +183,7 @@
       <el-row :gutter="16">
         <el-col :span="24">
           <div class="chart-title">时域波形</div>
-          <div ref="timeChart" class="chart"></div>
+          <VibrationChart :option="timeOption" />
         </el-col>
       </el-row>
 
@@ -269,7 +269,7 @@
               <el-icon><Close /></el-icon> 收起
             </el-button>
           </div>
-          <div v-if="computedFFT" ref="fftChart" class="chart"></div>
+          <VibrationChart v-if="computedFFT" :option="fftOption" />
           <div v-else-if="loadingFFT" class="placeholder">
             <el-skeleton :rows="3" animated />
           </div>
@@ -320,7 +320,7 @@
               MED后峭度 {{ envelopeData.kurtosis_after.toFixed(2) }}
             </el-tag>
           </div>
-          <div v-if="computedEnvelope" ref="envelopeChart" class="chart"></div>
+          <VibrationChart v-if="computedEnvelope" :option="envelopeOption" />
           <div v-else-if="loadingEnvelope" class="placeholder">
             <el-skeleton :rows="3" animated />
           </div>
@@ -630,7 +630,7 @@
               每转 {{ orderData.samples_per_rev }} 点
             </el-tag>
           </div>
-          <div v-if="computedOrder" ref="orderChart" class="chart"></div>
+          <VibrationChart v-if="computedOrder" :option="orderOption" />
           <div v-else-if="loadingOrder" class="placeholder">
             <el-skeleton :rows="3" animated />
           </div>
@@ -685,7 +685,7 @@
             </el-tag>
             <el-text v-if="!cepstrumData.peaks || cepstrumData.peaks.length === 0" type="info" size="small">未检测到显著峰值</el-text>
           </div>
-          <div v-if="computedCepstrum" ref="cepstrumChart" class="chart"></div>
+          <VibrationChart v-if="computedCepstrum" :option="cepstrumOption" />
           <div v-else-if="loadingCepstrum" class="placeholder">
             <el-skeleton :rows="3" animated />
           </div>
@@ -736,7 +736,7 @@
               </el-button>
             </div>
           </div>
-          <div v-if="computedSTFT" ref="stftChart" class="chart" style="height: 600px"></div>
+          <VibrationChart v-if="computedSTFT" :option="stftOption" height="600px" />
           <div v-else-if="loadingSTFT" class="placeholder">
             <el-skeleton :rows="4" animated />
           </div>
@@ -786,7 +786,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import * as echarts from 'echarts'
+import VibrationChart from '../components/charts/VibrationChart.vue'
 import {
   getAllDeviceData,
   getChannelData,
@@ -888,20 +888,13 @@ const envelopeMethodLabel = computed(() => {
   return labels[envelopeMethod.value] || envelopeMethod.value
 })
 
-const timeChart = ref(null)
-const fftChart = ref(null)
-const stftChart = ref(null)
-const envelopeChart = ref(null)
-const windowedChart = ref(null)
-const orderChart = ref(null)
-const cepstrumChart = ref(null)
-let timeInstance = null
-let fftInstance = null
-let stftInstance = null
-let envelopeInstance = null
-let windowedInstance = null
-let orderInstance = null
-let cepstrumInstance = null
+const timeOption = ref(null)
+const fftOption = ref(null)
+const stftOption = ref(null)
+const envelopeOption = ref(null)
+const windowedOption = ref(null)
+const orderOption = ref(null)
+const cepstrumOption = ref(null)
 
 // 按需计算状态
 const computedFFT = ref(false)
@@ -1100,12 +1093,6 @@ const loadAllDevices = async () => {
 
 // ========== 选择批次 ==========
 const selectBatch = (device, batch) => {
-  // 清理旧图表实例
-  timeInstance?.dispose(); timeInstance = null
-  fftInstance?.dispose(); fftInstance = null
-  stftInstance?.dispose(); stftInstance = null
-  envelopeInstance?.dispose(); envelopeInstance = null
-
   // 重置按需计算状态
   resetComputedState()
 
@@ -1135,21 +1122,19 @@ const resetComputedState = () => {
   cepstrumData.value = null
   gearData.value = null
   fullAnalysisData.value = null
-  windowedInstance?.dispose(); windowedInstance = null
-  orderInstance?.dispose(); orderInstance = null
-  cepstrumInstance?.dispose(); cepstrumInstance = null
+  timeOption.value = null
+  fftOption.value = null
+  stftOption.value = null
+  envelopeOption.value = null
+  windowedOption.value = null
+  orderOption.value = null
+  cepstrumOption.value = null
 }
 
 const onChannelChange = () => {
   // 通道切换时，时域图重新加载，其他收起
   resetComputedState()
-  timeInstance?.dispose(); timeInstance = null
-  fftInstance?.dispose(); fftInstance = null
-  stftInstance?.dispose(); stftInstance = null
-  envelopeInstance?.dispose(); envelopeInstance = null
-  windowedInstance?.dispose(); windowedInstance = null
-  orderInstance?.dispose(); orderInstance = null
-  cepstrumInstance?.dispose(); cepstrumInstance = null
+  timeOption.value = null
   envelopeData.value = null
   gearData.value = null
   nextTick(() => {
@@ -1159,18 +1144,18 @@ const onChannelChange = () => {
 
 const onDetrendChange = () => {
   // 去趋势开关切换时，重新加载当前已显示的内容
-  timeInstance?.dispose(); timeInstance = null
+  timeOption.value = null
   nextTick(() => {
     loadTimeDomain()
   })
-  if (computedFFT.value) { fftInstance?.dispose(); fftInstance = null; computeFFT() }
-  if (computedSTFT.value) { stftInstance?.dispose(); stftInstance = null; computeSTFT() }
-  if (computedEnvelope.value) { envelopeInstance?.dispose(); envelopeInstance = null; computeEnvelope() }
-  if (computedOrder.value) { orderInstance?.dispose(); orderInstance = null; computeOrder() }
-  if (computedCepstrum.value) { cepstrumInstance?.dispose(); cepstrumInstance = null; computeCepstrum() }
-  if (computedStats.value) { windowedInstance?.dispose(); windowedInstance = null; computeStats() }
-  if (computedGear.value) { computeGear() }
-  if (computedFullAnalysis.value) { computeFullAnalysis() }
+  if (computedFFT.value) computeFFT()
+  if (computedSTFT.value) computeSTFT()
+  if (computedEnvelope.value) computeEnvelope()
+  if (computedOrder.value) computeOrder()
+  if (computedCepstrum.value) computeCepstrum()
+  if (computedStats.value) { windowedOption.value = null; computeStats() }
+  if (computedGear.value) computeGear()
+  if (computedFullAnalysis.value) computeFullAnalysis()
 }
 
 const onMaxFreqChange = () => {
@@ -1209,8 +1194,7 @@ const loadTimeDomain = async () => {
     const timeData = d.data || []
     const timeX = timeData.map((_, i) => (i / sr).toFixed(4))
 
-    if (!timeInstance) timeInstance = echarts.init(timeChart.value)
-    timeInstance.setOption({
+    timeOption.value = {
       tooltip: { trigger: 'axis', triggerOn: 'click' },
       grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
       xAxis: { type: 'category', data: timeX, name: '时间 (s)', nameGap: 25 },
@@ -1223,7 +1207,7 @@ const loadTimeDomain = async () => {
         sampling: 'lttb',
         lineStyle: { width: 1, color: '#165DFF' }
       }]
-    }, true)
+    }
   } catch (e) {
     console.error('时域加载失败:', e)
   }
@@ -1244,10 +1228,7 @@ const computeFFT = async () => {
     if (!d) return
 
     computedFFT.value = true
-    await nextTick()
-
-    if (!fftInstance) fftInstance = echarts.init(fftChart.value)
-    fftInstance.setOption({
+    fftOption.value = {
       tooltip: { trigger: 'axis', triggerOn: 'click' },
       grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
       xAxis: { type: 'category', data: d.fft_freq, name: '频率 (Hz)', nameGap: 25 },
@@ -1261,7 +1242,7 @@ const computeFFT = async () => {
         areaStyle: { color: 'rgba(22, 93, 255, 0.2)' },
         lineStyle: { width: 1.5, color: '#165DFF' }
       }]
-    }, true)
+    }
   } catch (e) {
     console.error('FFT 计算失败:', e)
     ElMessage.error('FFT 计算失败')
@@ -1273,8 +1254,7 @@ const computeFFT = async () => {
 
 const clearFFT = () => {
   computedFFT.value = false
-  fftInstance?.dispose()
-  fftInstance = null
+  fftOption.value = null
 }
 
 // ========== 按需计算：STFT ==========
@@ -1294,12 +1274,9 @@ const computeSTFT = async () => {
     if (!d) return
 
     computedSTFT.value = true
-    await nextTick()
-
-    if (!stftInstance) stftInstance = echarts.init(stftChart.value)
     const minVal = Math.min(...d.magnitude.flat())
     const maxVal = Math.max(...d.magnitude.flat())
-    stftInstance.setOption({
+    stftOption.value = {
       tooltip: { position: 'top', triggerOn: 'click' },
       grid: { left: '10%', right: '12%', bottom: '18%', top: '10%' },
       xAxis: { type: 'category', data: d.time, name: '时间 (s)' },
@@ -1337,7 +1314,7 @@ const computeSTFT = async () => {
         data: d.magnitude.flatMap((row, y) => row.map((val, x) => [x, y, val])),
         emphasis: { itemStyle: { borderColor: '#333', borderWidth: 1 } }
       }]
-    }, true)
+    }
   } catch (e) {
     console.error('STFT 计算失败:', e)
     ElMessage.error('STFT 计算失败')
@@ -1349,8 +1326,7 @@ const computeSTFT = async () => {
 
 const clearSTFT = () => {
   computedSTFT.value = false
-  stftInstance?.dispose()
-  stftInstance = null
+  stftOption.value = null
 }
 
 // ========== 按需计算：包络谱 ==========
@@ -1370,10 +1346,7 @@ const computeEnvelope = async () => {
 
     envelopeData.value = d
     computedEnvelope.value = true
-    await nextTick()
-
-    if (!envelopeInstance) envelopeInstance = echarts.init(envelopeChart.value)
-    envelopeInstance.setOption({
+    envelopeOption.value = {
       tooltip: { trigger: 'axis', triggerOn: 'click' },
       grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
       xAxis: { type: 'category', data: d.envelope_freq, name: '频率 (Hz)', nameGap: 25 },
@@ -1386,7 +1359,7 @@ const computeEnvelope = async () => {
         areaStyle: { color: 'rgba(250, 173, 20, 0.2)' },
         lineStyle: { width: 1.5, color: '#FAAD14' }
       }]
-    }, true)
+    }
   } catch (e) {
     console.error('包络谱计算失败:', e)
     ElMessage.error('包络谱计算失败: ' + (e.response?.data?.detail || e.message))
@@ -1398,8 +1371,7 @@ const computeEnvelope = async () => {
 
 const clearEnvelope = () => {
   computedEnvelope.value = false
-  envelopeInstance?.dispose()
-  envelopeInstance = null
+  envelopeOption.value = null
 }
 
 // ========== 按需计算：阶次追踪 ==========
@@ -1449,15 +1421,12 @@ const computeOrder = async () => {
       }
     }
 
-    await nextTick()
-
-    if (!orderInstance) orderInstance = echarts.init(orderChart.value)
     // category 轴的 markLine xAxis 是索引而非数值，需换算
     const orderStep = d.orders[1] - d.orders[0]
     const idx1x = Math.min(Math.round(1 / orderStep), d.orders.length - 1)
     const idx2x = Math.min(Math.round(2 / orderStep), d.orders.length - 1)
     const idx3x = Math.min(Math.round(3 / orderStep), d.orders.length - 1)
-    orderInstance.setOption({
+    orderOption.value = {
       tooltip: { trigger: 'axis', triggerOn: 'click', formatter: (params) => {
         const p = params[0]
         return `阶次: ${p.name}<br/>幅值: ${p.value}`
@@ -1484,7 +1453,7 @@ const computeOrder = async () => {
           label: { formatter: '{b}', position: 'insideEndTop', fontSize: 10 }
         }
       }]
-    }, true)
+    }
   } catch (e) {
     console.error('阶次谱计算失败:', e)
     ElMessage.error('阶次谱计算失败: ' + (e.response?.data?.detail || e.message))
@@ -1497,8 +1466,7 @@ const computeOrder = async () => {
 const clearOrder = () => {
   computedOrder.value = false
   orderData.value = null
-  orderInstance?.dispose()
-  orderInstance = null
+  orderOption.value = null
 }
 
 // ========== 按需计算：倒谱分析 ==========
@@ -1517,16 +1485,13 @@ const computeCepstrum = async () => {
 
     cepstrumData.value = d
     computedCepstrum.value = true
-    await nextTick()
-
-    if (!cepstrumInstance) cepstrumInstance = echarts.init(cepstrumChart.value)
     // value 轴避免 category 轴标签重叠（12800 个点）
     const xyData = d.quefrency.map((q, i) => [q, d.cepstrum[i]])
     const markLines = (d.peaks || []).map(p => ({
       xAxis: p.quefrency_ms,
       name: `${p.freq_hz}Hz`
     }))
-    cepstrumInstance.setOption({
+    cepstrumOption.value = {
       tooltip: { trigger: 'axis', triggerOn: 'click', formatter: (params) => {
         const p = params[0]
         return `倒频率: ${p.value[0]} ms<br/>幅值: ${p.value[1]}`
@@ -1549,7 +1514,7 @@ const computeCepstrum = async () => {
           label: { formatter: '{b}', position: 'insideEndTop', fontSize: 10 }
         } : undefined
       }]
-    }, true)
+    }
   } catch (e) {
     console.error('倒谱计算失败:', e)
     ElMessage.error('倒谱计算失败: ' + (e.response?.data?.detail || e.message))
@@ -1562,8 +1527,7 @@ const computeCepstrum = async () => {
 const clearCepstrum = () => {
   computedCepstrum.value = false
   cepstrumData.value = null
-  cepstrumInstance?.dispose()
-  cepstrumInstance = null
+  cepstrumOption.value = null
 }
 
 // ========== 按需计算：齿轮诊断 ==========
@@ -1655,8 +1619,7 @@ const computeStats = async () => {
 const clearStats = () => {
   computedStats.value = false
   statsData.value = null
-  windowedInstance?.dispose()
-  windowedInstance = null
+  windowedOption.value = null
 }
 
 // 初始化加窗统计量时序图
@@ -1664,8 +1627,7 @@ const initWindowedChart = () => {
   const ws = statsData.value?.window_series
   if (!ws || !ws.time || ws.time.length === 0) return
 
-  if (!windowedInstance) windowedInstance = echarts.init(windowedChart.value)
-  windowedInstance.setOption({
+  windowedOption.value = {
     tooltip: { trigger: 'axis', triggerOn: 'click' },
     legend: {
       data: ['峭度', '偏度', 'RMS', '峰值', '裕度', '峰值因子', '波形因子', '脉冲因子'],
@@ -1739,7 +1701,7 @@ const initWindowedChart = () => {
         lineStyle: { width: 1.5, color: '#FAAD14' }
       }
     ]
-  }, true)
+  }
 }
 
 // ========== 导出 CSV ==========
@@ -1874,25 +1836,10 @@ const autoSelectFromQuery = () => {
 onMounted(async () => {
   await loadAllDevices()
   autoSelectFromQuery()
-  window.addEventListener('resize', () => {
-    timeInstance?.resize()
-    fftInstance?.resize()
-    stftInstance?.resize()
-    envelopeInstance?.resize()
-    windowedInstance?.resize()
-    orderInstance?.resize()
-    cepstrumInstance?.resize()
-  })
 })
 
 onUnmounted(() => {
-  timeInstance?.dispose()
-  fftInstance?.dispose()
-  stftInstance?.dispose()
-  envelopeInstance?.dispose()
-  windowedInstance?.dispose()
-  orderInstance?.dispose()
-  cepstrumInstance?.dispose()
+  // VibrationChart 组件内部会自动 dispose
 })
 </script>
 

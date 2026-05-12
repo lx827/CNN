@@ -1,67 +1,13 @@
 """
-设备管理接口
-提供设备列表查询、边端配置读写
+设备配置接口
+包含边端配置、告警阈值、机械参数
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Device
 
-router = APIRouter(prefix="/api/devices", tags=["设备管理"])
-
-
-def _get_channel_params(device, channel_index, field):
-    """
-    从设备配置中按通道索引提取参数。
-    支持两种格式：
-      - 旧格式（设备级共用）: {input:18, output:27}
-      - 新格式（通道级独立）: {"1":{input:18}, "2":{input:27}}
-    """
-    raw = getattr(device, field, None) if device else None
-    if raw is None:
-        return None
-    ch_key = str(channel_index)
-    if ch_key in raw:
-        return raw[ch_key]
-    # 旧格式兼容：如果顶层包含业务字段而非通道键，直接返回
-    if "input" in raw or "n" in raw or "output" in raw:
-        return raw
-    return None
-
-
-@router.get("/")
-def get_devices(db: Session = Depends(get_db)):
-    """
-    获取所有设备列表
-    """
-    devices = db.query(Device).all()
-    return {
-        "code": 200,
-        "data": [
-            {
-                "id": d.id,
-                "device_id": d.device_id,
-                "name": d.name,
-                "location": d.location,
-                "channel_count": d.channel_count,
-                "channel_names": d.channel_names,
-                "sample_rate": d.sample_rate,
-                "window_seconds": d.window_seconds,
-                "health_score": d.health_score,
-                "status": d.status,
-                "runtime_hours": d.runtime_hours,
-                "upload_interval": d.upload_interval,
-                "task_poll_interval": d.task_poll_interval,
-                "alarm_thresholds": d.alarm_thresholds,
-                "gear_teeth": d.gear_teeth,
-                "bearing_params": d.bearing_params,
-                "compression_enabled": d.compression_enabled,
-                "downsample_ratio": d.downsample_ratio,
-                "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
-            }
-            for d in devices
-        ]
-    }
+router = APIRouter()
 
 
 # ========== 边端专用接口（必须放在 /{device_id}/config 之前）==========

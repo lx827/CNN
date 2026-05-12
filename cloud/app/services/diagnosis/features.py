@@ -9,7 +9,7 @@ from scipy.fft import rfft, rfftfreq
 from scipy.signal import hilbert
 from typing import Dict, List, Tuple, Optional
 
-from .utils import (
+from .signal_utils import (
     prepare_signal, rms, peak_value, crest_factor, kurtosis, skewness,
     compute_fft_spectrum, bandpass_filter, lowpass_filter, _band_energy,
 )
@@ -198,11 +198,11 @@ def compute_envelope_features(
 
 
 # 统一使用 utils.py 中的高精度转频估计（含包络解调辅助 + 齿数验证）
-from .utils import estimate_rot_freq_spectrum as _estimate_rot_freq_simple
+from .signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_simple
 
 
 # 向后兼容：轴承特征频率计算
-from .utils import (
+from .signal_utils import (
     prepare_signal, rms, peak_value, crest_factor, kurtosis, skewness,
     compute_fft_spectrum, bandpass_filter, lowpass_filter,
 )

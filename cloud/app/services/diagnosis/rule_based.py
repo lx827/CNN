@@ -8,7 +8,7 @@ from scipy.fft import rfft, rfftfreq
 from scipy.signal import hilbert
 from typing import Dict, List
 from .features import compute_channel_features, compute_fft, compute_imf_energy, _get_channel_params
-from .utils import _compute_order_spectrum_multi_frame, _compute_order_spectrum_varying_speed
+from .order_tracking import _compute_order_spectrum_multi_frame, _compute_order_spectrum_varying_speed
 from .features import _compute_bearing_fault_freqs, _compute_bearing_fault_orders
 
 logger = logging.getLogger(__name__)

@@ -9,7 +9,7 @@
     engine = DiagnosisEngine(strategy="advanced")
     result = engine.analyze(signal, sample_rate, bearing_params, gear_teeth)
 """
-from .core import DiagnosisEngine, DiagnosisStrategy, BearingMethod, GearMethod, DenoiseMethod
+from .engine import DiagnosisEngine, DiagnosisStrategy, BearingMethod, GearMethod, DenoiseMethod
 from .bearing import (
     envelope_analysis,
     fast_kurtogram,
