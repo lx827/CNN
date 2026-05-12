@@ -76,7 +76,7 @@
 #### 1.1.4 代码实现映射
 
 ```python
-# 参考实现位置：cloud/app/services/analyzer.py -> _compute_bearing_fault_freqs
+# 参考实现位置：cloud/app/services/diagnosis/features.py -> _compute_bearing_fault_freqs
 def _compute_bearing_fault_freqs(rot_freq: float, bearing_params: dict) -> dict:
     n = bearing_params.get("n", 0)   # 滚动体数 N
     d = bearing_params.get("d", 0)   # 滚动体直径
@@ -138,7 +138,7 @@ $$SNR_{peak} = \frac{P_{detect}}{\text{Median}[E(f)]}$$
 #### 1.2.5 代码实现映射
 
 ```python
-# 参考实现位置：cloud/app/services/analyzer.py -> compute_envelope_spectrum
+# 参考实现位置：cloud/app/services/diagnosis/features.py -> compute_envelope_spectrum
 from scipy.signal import hilbert
 from scipy.fft import rfft, rfftfreq
 

@@ -53,13 +53,21 @@ cloud/
 │   │   ├── monitor.py       # 实时监测数据查询
 │   │   ├── diagnosis.py     # 诊断结果查询
 │   │   ├── alarms.py        # 告警列表与处理
-│   │   ├── devices.py       # 设备 CRUD 与管理
-│   │   ├── data_view.py     # 原始数据 / 频谱 / 特征查看
+│   │   ├── devices/         # 设备 CRUD 与管理
+│   │   ├── data_view/       # 原始数据 / 频谱 / 特征查看
 │   │   └── collect.py       # 采集任务下发（前端 → 边端）
 │   └── services/
-│       ├── analyzer.py      # 故障分析引擎（FFT / IMF / 阶次分析）
+│       ├── analyzer.py      # 故障分析引擎主入口（NN + DiagnosisEngine + 回退）
 │       ├── nn_predictor.py  # 神经网络预测器（ONNX 等格式）
-│       └── alarm_service.py # 告警生成逻辑
+│       ├── diagnosis/       # 诊断算法库
+│       │   ├── engine.py    # DiagnosisEngine 主调度器
+│       │   ├── features.py  # 特征提取（FFT / 包络 / 阶次）
+│       │   ├── rule_based.py # 规则诊断（回退方案）
+│       │   └── ...
+│       └── alarms/          # 告警生成逻辑
+│           ├── channel.py   # 通道级振动特征告警
+│           ├── device.py    # 设备级综合告警
+│           └── diagnosis.py # 诊断结果告警
 ├── models/                  # 神经网络模型文件存放目录（.gitignore 忽略）
 │   └── README.md
 ├── requirements.txt         # Python 依赖
@@ -186,7 +194,7 @@ pip install -r requirements.txt
 
 数据入库后 `is_analyzed=0`，等待后台分析任务处理。
 
-### 7.2 后台分析任务（`main.py` 中的 `analysis_worker`）
+### 7.2 后台分析任务（`lifespan.py` 中的 `analysis_worker`）
 
 启动后以 `ANALYZE_INTERVAL_SECONDS` 为周期循环：
 
@@ -195,7 +203,7 @@ pip install -r requirements.txt
 3. 调用 `analyzer.py` 执行故障诊断
 4. 写入 `diagnosis` 表，标记数据为已分析
 5. 更新设备健康度与状态
-6. 调用 `alarm_service.py` 生成告警
+6. 调用 `alarms/` 包生成告警
 7. 通过 WebSocket 广播诊断结果
 
 ### 7.3 故障分析引擎（`services/analyzer.py`）
