@@ -330,6 +330,85 @@
         </el-col>
       </el-row>
 
+      <!-- 齿轮诊断 -->
+      <el-row :gutter="16" class="spectrum-row">
+        <el-col :span="24">
+          <div class="section-header">
+            <span class="chart-title">齿轮诊断分析</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <el-select
+                v-if="!computedGear"
+                v-model="gearMethod"
+                size="small"
+                style="width: 140px"
+              >
+                <el-option label="标准边频带" value="standard" />
+                <el-option label="高级指标" value="advanced" />
+              </el-select>
+              <el-tag v-else type="success" size="small" effect="plain">{{ gearMethodLabel }}</el-tag>
+              <el-button
+                v-if="!computedGear"
+                type="primary"
+                size="small"
+                :loading="loadingGear"
+                @click="computeGear"
+              >
+                <el-icon><DataAnalysis /></el-icon> 计算
+              </el-button>
+              <el-button v-else type="info" size="small" @click="clearGear">
+                <el-icon><Close /></el-icon> 收起
+              </el-button>
+            </div>
+          </div>
+          <div v-if="computedGear && gearData" class="gear-info">
+            <el-descriptions :column="4" size="small" border>
+              <el-descriptions-item label="SER" v-if="gearData.ser != null">
+                <el-tag :type="gearData.ser > 3 ? 'danger' : gearData.ser > 1.5 ? 'warning' : 'success'" size="small">
+                  {{ gearData.ser.toFixed(3) }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="FM0" v-if="gearData.fm0 != null">
+                <el-tag :type="gearData.fm0 > 10 ? 'danger' : gearData.fm0 > 5 ? 'warning' : 'success'" size="small">
+                  {{ gearData.fm0.toFixed(2) }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="CAR" v-if="gearData.car != null">
+                <el-tag :type="gearData.car > 2 ? 'danger' : gearData.car > 1.2 ? 'warning' : 'success'" size="small">
+                  {{ gearData.car.toFixed(2) }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="转频" v-if="gearData.rot_freq_hz">
+                {{ gearData.rot_freq_hz }} Hz / {{ (gearData.rot_freq_hz * 60).toFixed(0) }} RPM
+              </el-descriptions-item>
+            </el-descriptions>
+            <el-table v-if="gearData.sidebands && gearData.sidebands.length > 0" :data="gearData.sidebands" size="small" style="margin-top: 8px;" max-height="200">
+              <el-table-column prop="order" label="阶次" width="60" />
+              <el-table-column prop="freq_low" label="下边频(Hz)" width="110" />
+              <el-table-column prop="freq_high" label="上边频(Hz)" width="110" />
+              <el-table-column prop="amp_low" label="下幅值" width="90" />
+              <el-table-column prop="amp_high" label="上幅值" width="90" />
+              <el-table-column prop="asymmetry" label="不对称度" width="90" />
+              <el-table-column label="显著">
+                <template #default="{ row }">
+                  <el-tag :type="row.significant ? 'warning' : 'info'" size="small">
+                    {{ row.significant ? '是' : '否' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div v-else style="margin-top: 8px; color: #999; font-size: 13px;">
+              未检测到啮合频率参数，无法计算边频带
+            </div>
+          </div>
+          <div v-else-if="loadingGear" class="placeholder">
+            <el-skeleton :rows="2" animated />
+          </div>
+          <div v-else class="placeholder">
+            <el-empty description="选择方法后计算齿轮诊断" :image-size="80" />
+          </div>
+        </el-col>
+      </el-row>
+
       <!-- 阶次追踪 -->
       <el-row :gutter="16" class="spectrum-row">
         <el-col :span="24">
@@ -553,6 +632,7 @@ import {
   getChannelFFT,
   getChannelSTFT,
   getChannelEnvelope,
+  getChannelGear,
   getChannelStats,
   getChannelOrder,
   getChannelCepstrum,
@@ -624,6 +704,14 @@ const envelopeMethod = ref('envelope')
 const gearMethod = ref('standard')
 const denoiseMethod = ref('none')
 
+const gearMethodLabel = computed(() => {
+  const labels = {
+    standard: '标准边频带',
+    advanced: '高级指标',
+  }
+  return labels[gearMethod.value] || gearMethod.value
+})
+
 const envelopeMethodLabel = computed(() => {
   const labels = {
     envelope: '标准包络',
@@ -656,15 +744,18 @@ const computedEnvelope = ref(false)
 const computedStats = ref(false)
 const computedOrder = ref(false)
 const computedCepstrum = ref(false)
+const computedGear = ref(false)
 const loadingFFT = ref(false)
 const loadingSTFT = ref(false)
 const loadingEnvelope = ref(false)
 const loadingStats = ref(false)
 const loadingOrder = ref(false)
 const loadingCepstrum = ref(false)
+const loadingGear = ref(false)
 const statsData = ref(null)
 const orderData = ref(null)
 const cepstrumData = ref(null)
+const gearData = ref(null)
 const envelopeData = ref(null)
 
 // 统计指标加窗参数
@@ -833,9 +924,11 @@ const resetComputedState = () => {
   computedStats.value = false
   computedOrder.value = false
   computedCepstrum.value = false
+  computedGear.value = false
   statsData.value = null
   orderData.value = null
   cepstrumData.value = null
+  gearData.value = null
   windowedInstance?.dispose(); windowedInstance = null
   orderInstance?.dispose(); orderInstance = null
   cepstrumInstance?.dispose(); cepstrumInstance = null
@@ -852,6 +945,7 @@ const onChannelChange = () => {
   orderInstance?.dispose(); orderInstance = null
   cepstrumInstance?.dispose(); cepstrumInstance = null
   envelopeData.value = null
+  gearData.value = null
   nextTick(() => {
     loadTimeDomain()
   })
@@ -869,6 +963,7 @@ const onDetrendChange = () => {
   if (computedOrder.value) { orderInstance?.dispose(); orderInstance = null; computeOrder() }
   if (computedCepstrum.value) { cepstrumInstance?.dispose(); cepstrumInstance = null; computeCepstrum() }
   if (computedStats.value) { windowedInstance?.dispose(); windowedInstance = null; computeStats() }
+  if (computedGear.value) { computeGear() }
 }
 
 const onMaxFreqChange = () => {
@@ -1220,6 +1315,36 @@ const clearCepstrum = () => {
   cepstrumData.value = null
   cepstrumInstance?.dispose()
   cepstrumInstance = null
+}
+
+// ========== 按需计算：齿轮诊断 ==========
+const computeGear = async () => {
+  loadingGear.value = true
+  try {
+    const res = await getChannelGear(
+      selectedDevice.value.device_id,
+      selectedBatch.value.batch_index,
+      selectedChannel.value,
+      enableDetrend.value,
+      gearMethod.value
+    )
+    const d = res.data
+    if (!d) return
+
+    gearData.value = d
+    computedGear.value = true
+  } catch (e) {
+    console.error('齿轮诊断失败:', e)
+    ElMessage.error('齿轮诊断失败: ' + (e.response?.data?.detail || e.message))
+    computedGear.value = false
+  } finally {
+    loadingGear.value = false
+  }
+}
+
+const clearGear = () => {
+  computedGear.value = false
+  gearData.value = null
 }
 
 // ========== 按需计算：统计指标 ==========
@@ -1607,6 +1732,14 @@ onUnmounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+
+.gear-info {
+  margin-bottom: 8px;
+  padding: 12px;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 6px;
 }
 
 .stats-grid :deep(.el-statistic__head) {
