@@ -294,11 +294,11 @@ const initGaugeChart = () => {
             ]
           }
         },
-        axisTick: { show: true, length: 8, lineStyle: { color: '#999', width: 1 } },
-        splitLine: { length: 16, lineStyle: { width: 2, color: '#999' } },
+        axisTick: { show: true, length: 14, lineStyle: { color: '#999', width: 1 } },
+        splitLine: { length: 20, lineStyle: { width: 2, color: '#999' } },
         axisLabel: {
           show: true,
-          distance: -10,
+          distance: 25,
           fontSize: 13,
           color: '#666',
           formatter: (value) => Math.round(value)
