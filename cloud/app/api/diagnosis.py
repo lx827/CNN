@@ -34,6 +34,8 @@ def get_diagnosis(
                 "health_score": diag.health_score,
                 "fault_probabilities": diag.fault_probabilities or {},
                 "imf_energy": diag.imf_energy or {},
+                "order_analysis": diag.order_analysis or {},
+                "rot_freq": diag.rot_freq,
                 "status": diag.status,
                 "analyzed_at": diag.analyzed_at.isoformat() if diag.analyzed_at else None,
             }

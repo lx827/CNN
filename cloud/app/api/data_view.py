@@ -454,6 +454,8 @@ def get_all_device_data(
                 "health_score": diag.health_score if diag else None,
                 "top_fault": top_fault,
                 "analyzed_at": diag.analyzed_at.isoformat() if diag and diag.analyzed_at else None,
+                "order_analysis": diag.order_analysis if diag else None,
+                "rot_freq": diag.rot_freq if diag else None,
             })
 
         result.append({
@@ -532,6 +534,8 @@ def get_device_batches(
             "health_score": diag.health_score if diag else None,
             "top_fault": top_fault,
             "analyzed_at": diag.analyzed_at.isoformat() if diag and diag.analyzed_at else None,
+            "order_analysis": diag.order_analysis if diag else None,
+            "rot_freq": diag.rot_freq if diag else None,
         })
 
     return {"code": 200, "data": items}

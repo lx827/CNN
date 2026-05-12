@@ -149,6 +149,27 @@
         </el-col>
       </el-row>
 
+      <!-- 阶次/包络诊断明细 -->
+      <el-row v-if="selectedBatch.order_analysis" :gutter="16">
+        <el-col :span="24">
+          <el-card size="small" style="margin-bottom: 16px">
+            <template #header>
+              <span style="font-weight: 600;">🔍 频域/阶次诊断明细</span>
+              <el-text v-if="selectedBatch.rot_freq" type="info" size="small" style="margin-left: 12px;">
+                估计转频: {{ selectedBatch.rot_freq.toFixed(2) }} Hz / {{ (selectedBatch.rot_freq * 60).toFixed(0) }} RPM
+              </el-text>
+            </template>
+            <el-descriptions :column="2" size="small" border>
+              <template v-for="(val, key) in orderAnalysisFlat" :key="key">
+                <el-descriptions-item :label="key" v-if="val !== null && val !== undefined">
+                  <span :class="{ 'text-danger': isAnomalyKey(key, val) }">{{ formatAnalysisValue(val) }}</span>
+                </el-descriptions-item>
+              </template>
+            </el-descriptions>
+          </el-card>
+        </el-col>
+      </el-row>
+
       <!-- 时域波形：始终自动加载 -->
       <el-row :gutter="16">
         <el-col :span="24">
@@ -659,6 +680,9 @@ const diagnosisDesc = computed(() => {
   if (batch.health_score != null) {
     parts.push(`健康度评分: ${batch.health_score} 分`)
   }
+  if (batch.rot_freq != null) {
+    parts.push(`估计转速: ${(batch.rot_freq * 60).toFixed(0)} RPM`)
+  }
   if (batch.top_fault) {
     parts.push(`主要异常: ${batch.top_fault}`)
   } else if (batch.diagnosis_status === 'fault') {
@@ -668,6 +692,44 @@ const diagnosisDesc = computed(() => {
   }
   return parts.join('；')
 })
+
+// 将嵌套的 order_analysis 展平为 key-value，便于 el-descriptions 展示
+const orderAnalysisFlat = computed(() => {
+  const batch = selectedBatch.value
+  if (!batch || !batch.order_analysis) return {}
+  const flat = {}
+  const walk = (obj, prefix = '') => {
+    for (const [k, v] of Object.entries(obj)) {
+      const label = prefix ? `${prefix} / ${k}` : k
+      if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+        walk(v, label)
+      } else {
+        flat[label] = v
+      }
+    }
+  }
+  walk(batch.order_analysis)
+  return flat
+})
+
+function formatAnalysisValue(val) {
+  if (typeof val === 'number') {
+    if (Math.abs(val) < 0.001) return val.toExponential(2)
+    if (Math.abs(val) >= 100) return val.toFixed(1)
+    return val.toFixed(4)
+  }
+  return String(val)
+}
+
+function isAnomalyKey(key, val) {
+  if (typeof val !== 'number') return false
+  // 高能量占比或高比例视为异常
+  if (key.includes('_ratio') && val > 0.05) return true
+  if (key.includes('_count') && val >= 2) return true
+  if (key.includes('_env_ratio') && val > 0.03) return true
+  if (key.includes('_order_ratio') && val > 0.03) return true
+  return false
+}
 
 // ========== 加载设备表格 ==========
 const loadAllDevices = async () => {
