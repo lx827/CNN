@@ -46,6 +46,28 @@ def _parabolic_interpolation(freqs, spectrum, idx):
     return float(freqs[idx] + p * (freqs[1] - freqs[0]))
 
 
+def _estimate_rot_freq_envelope(
+    sig: np.ndarray, fs: float,
+    f_center: float,
+    bw: float = 60.0,
+    freq_range: Tuple[float, float] = (10, 100)
+) -> Optional[float]:
+    """在指定中心频率附近做带通滤波+包络解调，返回包络谱峰值频率"""
+    low = max(10.0, f_center - bw)
+    high = min(fs / 2 - 10.0, f_center + bw)
+    b, a = scipy_signal.butter(4, [low / (fs / 2), high / (fs / 2)], btype='band')
+    bp_sig = scipy_signal.filtfilt(b, a, sig)
+    envelope = np.abs(scipy_signal.hilbert(bp_sig))
+    envelope = envelope - np.mean(envelope)
+    env_spec = np.abs(rfft(envelope))
+    env_freqs = rfftfreq(len(envelope), d=1.0 / fs)
+    mask = (env_freqs >= freq_range[0]) & (env_freqs <= freq_range[1])
+    if not np.any(mask):
+        return None
+    peak_idx = np.argmax(env_spec[mask])
+    return float(env_freqs[mask][peak_idx])
+
+
 def _estimate_rot_freq_spectrum(
     sig: np.ndarray, fs: float,
     freq_range: Tuple[float, float] = (10, 100),
@@ -53,7 +75,10 @@ def _estimate_rot_freq_spectrum(
     bandwidth_hz: float = 3.0,
     smooth_win_hz: float = 1.5
 ) -> float:
-    """通过频谱峰值法估计转频（改进版：平滑 + 频带积分 + 插值）"""
+    """
+    通过频谱峰值法估计转频（改进版：平滑 + 频带积分 + 插值 + 包络解调辅助）
+    针对齿轮箱等啮合频率强、基频弱的数据，引入包络解调和齿数整数验证启发式。
+    """
     N = len(sig)
     spectrum = np.abs(rfft(sig))
     freqs = rfftfreq(N, d=1.0 / fs)
@@ -77,9 +102,10 @@ def _estimate_rot_freq_spectrum(
         return freq_range[0]
 
     bw_bins = max(1, int(round(bandwidth_hz / df / 2)))
-    energy_threshold = 0.08 * (2 * bw_bins + 1)
+    # 降低阈值，让弱基频也能参与竞争
+    min_base_energy = 0.015 * (2 * bw_bins + 1)
 
-    best_freq = search_freqs[0]
+    best_freq_spec = search_freqs[0]
     best_energy = 0.0
     best_idx_global = None
 
@@ -89,7 +115,7 @@ def _estimate_rot_freq_spectrum(
             max(0, idx_base - bw_bins):min(len(spectrum), idx_base + bw_bins + 1)
         ]
         base_energy = float(np.sum(base_band))
-        if base_energy < energy_threshold:
+        if base_energy < min_base_energy:
             continue
 
         energy = 0.0
@@ -106,16 +132,56 @@ def _estimate_rot_freq_spectrum(
 
         if energy > best_energy:
             best_energy = energy
-            best_freq = f
+            best_freq_spec = f
             best_idx_global = idx_base
 
     if best_energy == 0.0:
+        # fallback：搜索范围内最强峰
         best_local_idx = int(np.argmax(search_spectrum))
         best_idx_global = int(np.argmin(np.abs(freqs - search_freqs[best_local_idx])))
+        best_freq_spec = freqs[best_idx_global]
     else:
-        best_freq = _parabolic_interpolation(freqs, spectrum, best_idx_global)
+        best_freq_spec = _parabolic_interpolation(freqs, spectrum, best_idx_global)
 
-    return float(best_freq)
+    # ---------- 包络解调辅助 ----------
+    # 对啮合频率常见区域（200~500Hz）和全局高频峰做包络解调，收集候选
+    candidates = [(best_freq_spec, "spectrum")]
+
+    # 中频带（200~500Hz）：常见啮合频率区域
+    mid_mask = (freqs >= 200) & (freqs <= 500)
+    if np.any(mid_mask):
+        mid_peak = freqs[mid_mask][np.argmax(spectrum[mid_mask])]
+        env_est = _estimate_rot_freq_envelope(sig, fs, mid_peak, freq_range=freq_range)
+        if env_est:
+            candidates.append((env_est, "envelope_mesh"))
+
+    # 全局高频最强峰（100Hz ~ fs/4）
+    high_mask = (freqs >= 100) & (freqs <= fs / 4)
+    if np.any(high_mask):
+        top_idx = np.argmax(spectrum[high_mask])
+        high_peak = freqs[high_mask][top_idx]
+        env_est = _estimate_rot_freq_envelope(sig, fs, high_peak, freq_range=freq_range)
+        if env_est:
+            candidates.append((env_est, "envelope_high"))
+
+    # ---------- 启发式仲裁 ----------
+    # 优先选择通过“齿数整数”验证的包络法候选：
+    # 如果带通中心频率 / 候选转频 ≈ 整数，且齿数在合理范围（8~50），
+    # 说明该候选与啮合频率强相关，可信度最高。
+    for f_est, method in candidates:
+        if method.startswith("envelope"):
+            # 反推对应的带通中心频率
+            if method == "envelope_mesh":
+                f_center = freqs[mid_mask][np.argmax(spectrum[mid_mask])]
+            else:
+                f_center = freqs[high_mask][np.argmax(spectrum[high_mask])]
+            teeth = f_center / f_est
+            teeth_rounded = round(teeth)
+            if abs(teeth - teeth_rounded) < 0.35 and 8 <= teeth_rounded <= 50:
+                return float(f_est)
+
+    # 没有通过齿数验证的包络候选，fallback 到频谱法
+    return float(best_freq_spec)
 
 
 def _order_tracking(
@@ -771,22 +837,25 @@ def get_channel_order(
     freq_max: float = Query(default=100.0, ge=1.0, le=500.0, description="转频搜索上限 (Hz)"),
     samples_per_rev: int = Query(default=1024, ge=64, le=4096, description="每转采样点数"),
     max_order: int = Query(default=50, ge=5, le=200, description="返回的最大阶次"),
+    rot_freq: Optional[float] = Query(default=None, ge=1.0, le=500.0, description="直接指定转频(Hz)，传入则跳过自动估计"),
     db: Session = Depends(get_db)
 ):
     """
     实时计算阶次谱（Order Tracking / 阶次跟踪）
-    改进：采用短时多帧平均，自适应处理缓慢转速变化。
+    改进：采用短时多帧平均，自适应处理缓慢转速变化；支持直接传入转频。
 
     流程：
-      1. 将信号分帧（默认 1 秒/帧，50% 重叠）
-      2. 每帧估计转频，并用 MAD 剔除异常帧
-      3. 各帧独立阶次跟踪后，插值到公共阶次轴并平均
-      4. 返回平均阶次谱 + 转速变化信息
+      1. 若传入 rot_freq，直接用它做阶次跟踪（跳过估计）
+      2. 否则将信号分帧（默认 1 秒/帧，50% 重叠）
+      3. 每帧估计转频（频谱法 + 包络解调辅助），并用 MAD 剔除异常帧
+      4. 各帧独立阶次跟踪后，插值到公共阶次轴并平均
+      5. 返回平均阶次谱 + 转速变化信息
 
     参数：
       freq_min/freq_max: 转频搜索范围，默认 10~100 Hz
       samples_per_rev:   每转采样点数，默认 1024
       max_order:         返回的最大阶次，默认 50
+      rot_freq:          直接指定转频(Hz)，传入则跳过自动估计
 
     返回：
       rot_freq:      中位数转频 (Hz)
@@ -812,15 +881,26 @@ def get_channel_order(
         if freq_min >= freq_max:
             raise ValueError("freq_min 必须小于 freq_max")
 
-        # 多帧自适应阶次跟踪
-        order_axis, spectrum, rot_freq, rot_freq_std = _compute_order_spectrum_multi_frame(
-            sig, sample_rate,
-            freq_range=(freq_min, freq_max),
-            samples_per_rev=samples_per_rev,
-            max_order=max_order,
-            frame_duration=1.0,
-            overlap=0.5,
-        )
+        if rot_freq is not None:
+            # 直接指定转频，做单帧阶次跟踪
+            order_axis, spectrum = _compute_order_spectrum(
+                sig, sample_rate, rot_freq, samples_per_rev
+            )
+            mask = order_axis <= max_order
+            order_axis = order_axis[mask]
+            spectrum = spectrum[mask]
+            rot_freq_val = float(rot_freq)
+            rot_freq_std = 0.0
+        else:
+            # 多帧自适应阶次跟踪
+            order_axis, spectrum, rot_freq_val, rot_freq_std = _compute_order_spectrum_multi_frame(
+                sig, sample_rate,
+                freq_range=(freq_min, freq_max),
+                samples_per_rev=samples_per_rev,
+                max_order=max_order,
+                frame_duration=1.0,
+                overlap=0.5,
+            )
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
 
@@ -833,8 +913,8 @@ def get_channel_order(
                 "channel_name": _get_channel_name(device, record.channel),
                 "sample_rate": sample_rate,
                 "is_special": bool(record.is_special),
-                "rot_freq": round(rot_freq, 3),
-                "rot_rpm": round(rot_freq * 60.0, 1),
+                "rot_freq": round(rot_freq_val, 3),
+                "rot_rpm": round(rot_freq_val * 60.0, 1),
                 "rot_freq_std": round(rot_freq_std, 3),
                 "samples_per_rev": samples_per_rev,
                 "orders": [round(float(o), 3) for o in order_axis.tolist()],
