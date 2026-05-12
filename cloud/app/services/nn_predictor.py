@@ -17,10 +17,13 @@
   4. 修改 cloud/.env：NN_ENABLED=true，NN_MODEL_PATH=./models/your_model.onnx
   5. 在 predict() 函数中补充模型加载和推理代码
 """
+import logging
 import os
 import numpy as np
 from typing import Dict, Optional
 from app.core.config import NN_ENABLED, NN_MODEL_PATH
+
+logger = logging.getLogger(__name__)
 
 # 全局模型句柄（延迟加载，第一次调用时才初始化）
 _model = None
@@ -37,7 +40,7 @@ def _load_model():
         return _model
 
     if not os.path.exists(NN_MODEL_PATH):
-        print(f"[NN] 模型文件不存在: {NN_MODEL_PATH}，跳过加载")
+        logger.warning(f"[NN] 模型文件不存在: {NN_MODEL_PATH}，跳过加载")
         return None
 
     # ==================== 示例：ONNX Runtime ====================
@@ -56,7 +59,7 @@ def _load_model():
     # _model = tf.saved_model.load(NN_MODEL_PATH)
     # print(f"[NN] TensorFlow 模型加载成功: {NN_MODEL_PATH}")
 
-    print(f"[NN] 模型路径存在但未配置加载代码，请修改 nn_predictor.py")
+    logger.warning(f"[NN] 模型路径存在但未配置加载代码，请修改 nn_predictor.py")
     return None
 
 
@@ -149,9 +152,9 @@ def predict(channels_data: Dict[str, list], sample_rate: int = 1000) -> Optional
         #     "status": status
         # }
 
-        print("[NN] 模型已加载，但推理代码尚未实现，请修改 nn_predictor.py")
+        logger.warning("[NN] 模型已加载，但推理代码尚未实现，请修改 nn_predictor.py")
         return None
 
     except Exception as e:
-        print(f"[NN] 推理异常: {e}")
+        logger.error(f"[NN] 推理异常: {e}")
         return None

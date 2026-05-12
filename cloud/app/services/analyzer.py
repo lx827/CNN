@@ -8,12 +8,15 @@
 
 注意：旧规则算法保留作为回退方案，新引擎为默认诊断方式。
 """
+import logging
 import numpy as np
 from scipy.fft import rfft, rfftfreq
 from scipy.signal import hilbert, detrend
 from scipy import stats
 from typing import Dict, List
 import random
+
+logger = logging.getLogger(__name__)
 
 from app.services.nn_predictor import predict as nn_predict
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod
@@ -305,13 +308,13 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
     }
 
     # 调试日志
-    print(f"[规则诊断] 时域: RMS={avg_features['rms']:.3f}(sev={sev['rms']:.2f}), "
-          f"Kurt={avg_features['kurtosis']:.2f}(sev={sev['kurtosis']:.2f}), "
-          f"Crest={avg_features['crest_factor']:.2f}(sev={sev['crest_factor']:.2f}) | "
-          f"频域: mesh={mesh_sev:.2f}, sb={sideband_sev:.2f} | "
-          f"包络: BPFO={bpfo_env_sev:.2f}, BPFI={bpfi_env_sev:.2f}, BSF={bsf_env_sev:.2f} | "
-          f"阶次: BPFO={bpfo_order_sev:.2f}, BPFI={bpfi_order_sev:.2f}, BSF={bsf_order_sev:.2f} | "
-          f"健康度={health_score}, 状态={status}")
+    logger.info(f"[规则诊断] 时域: RMS={avg_features['rms']:.3f}(sev={sev['rms']:.2f}), "
+                f"Kurt={avg_features['kurtosis']:.2f}(sev={sev['kurtosis']:.2f}), "
+                f"Crest={avg_features['crest_factor']:.2f}(sev={sev['crest_factor']:.2f}) | "
+                f"频域: mesh={mesh_sev:.2f}, sb={sideband_sev:.2f} | "
+                f"包络: BPFO={bpfo_env_sev:.2f}, BPFI={bpfi_env_sev:.2f}, BSF={bsf_env_sev:.2f} | "
+                f"阶次: BPFO={bpfo_order_sev:.2f}, BPFI={bpfi_order_sev:.2f}, BSF={bsf_order_sev:.2f} | "
+                f"健康度={health_score}, 状态={status}")
 
     return {
         "health_score": health_score,
@@ -550,7 +553,7 @@ def analyze_device(channels_data: Dict[str, List[float]], sample_rate: int = 256
     # 1. 神经网络优先
     nn_result = nn_predict(channels_data, sample_rate)
     if nn_result is not None:
-        print("[分析] 使用神经网络模型预测结果")
+        logger.info("[分析] 使用神经网络模型预测结果")
         return nn_result
 
     # 2. 新诊断引擎（默认方案）
@@ -621,12 +624,12 @@ def analyze_device(channels_data: Dict[str, List[float]], sample_rate: int = 256
             "rot_freq": first_result.get("bearing", {}).get("rot_freq_hz"),
         }
 
-        print(f"[分析] 新诊断引擎完成，健康度={worst_health}，状态={worst_status}")
+        logger.info(f"[分析] 新诊断引擎完成，健康度={worst_health}，状态={worst_status}")
         return legacy_result
 
     except Exception as e:
-        print(f"[分析] 新诊断引擎异常: {e}，回退到规则算法")
+        logger.error(f"[分析] 新诊断引擎异常: {e}，回退到规则算法")
 
     # 3. 回退到简化规则算法
-    print("[分析] 使用简化规则算法")
+    logger.info("[分析] 使用简化规则算法")
     return _rule_based_analyze(channels_data, sample_rate, device)

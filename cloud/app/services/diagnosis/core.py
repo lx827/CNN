@@ -563,23 +563,23 @@ class DiagnosisEngine:
         """评估齿轮故障指示器"""
         indicators = {}
 
-        ser = gear_result.get("ser", 0.0)
+        ser = gear_result.get("ser") if gear_result.get("ser") is not None else 0.0
         indicators["ser"] = {
             "value": round(ser, 4),
             "warning": ser > 1.5,
             "critical": ser > 3.0,
         }
 
-        if "fm0" in gear_result:
-            fm0 = gear_result["fm0"]
+        fm0 = gear_result.get("fm0")
+        if fm0 is not None:
             indicators["fm0"] = {
                 "value": round(fm0, 4),
                 "warning": fm0 > 5,
                 "critical": fm0 > 10,
             }
 
-        if "car" in gear_result:
-            car = gear_result["car"]
+        car = gear_result.get("car")
+        if car is not None:
             indicators["car"] = {
                 "value": round(car, 4),
                 "warning": car > 1.2,
@@ -615,8 +615,15 @@ class DiagnosisEngine:
         score = 100.0
         deductions = []  # 记录各项扣分，用于调试
 
+        # 防御性处理：确保 time_features 中的值都是有效数字
+        def _safe_float(val, default=0.0):
+            try:
+                return float(val) if val is not None else default
+            except (TypeError, ValueError):
+                return default
+
         # ===== 时域特征扣分 =====
-        kurt = time_features.get("kurtosis", 3.0)
+        kurt = _safe_float(time_features.get("kurtosis"), 3.0)
         if kurt > 15:
             deductions.append(("kurtosis_critical", 15))
         elif kurt > 8:
@@ -624,24 +631,25 @@ class DiagnosisEngine:
         elif kurt > 5:
             deductions.append(("kurtosis_mild", 4))
 
-        crest = time_features.get("crest_factor", 5.0)
+        crest = _safe_float(time_features.get("crest_factor"), 5.0)
         if crest > 12:
             deductions.append(("crest_critical", 8))
         elif crest > 9:
             deductions.append(("crest_warning", 4))
-
-        rms = time_features.get("rms", 0.0)
-        # RMS 异常通常表示整体振动水平升高
 
         # ===== 轴承故障扣分（权重降低，多故障叠加增强）=====
         bearing_ind = bearing_result.get("fault_indicators", {})
         bearing_significant = 0
         bearing_mild = 0
         for name, info in bearing_ind.items():
+            if not isinstance(info, dict):
+                continue
             if info.get("significant"):
                 bearing_significant += 1
-            elif info.get("snr", 0) > 2:
-                bearing_mild += 1
+            else:
+                snr = _safe_float(info.get("snr"), 0.0)
+                if snr > 2:
+                    bearing_mild += 1
 
         if bearing_significant >= 2:
             deductions.append(("bearing_multi", 12))  # 多故障特征同时显著
@@ -655,19 +663,22 @@ class DiagnosisEngine:
         has_gear_params = self.gear_teeth and self.gear_teeth.get("input", 0) > 0
 
         if has_gear_params:
-            if gear_ind.get("ser", {}).get("critical"):
+            ser_info = gear_ind.get("ser", {}) if isinstance(gear_ind.get("ser"), dict) else {}
+            if ser_info.get("critical"):
                 deductions.append(("gear_ser_critical", 12))
-            elif gear_ind.get("ser", {}).get("warning"):
+            elif ser_info.get("warning"):
                 deductions.append(("gear_ser_warning", 6))
 
-            if gear_ind.get("sideband_count", {}).get("critical"):
+            sb_info = gear_ind.get("sideband_count", {}) if isinstance(gear_ind.get("sideband_count"), dict) else {}
+            if sb_info.get("critical"):
                 deductions.append(("gear_sb_critical", 8))
-            elif gear_ind.get("sideband_count", {}).get("warning"):
+            elif sb_info.get("warning"):
                 deductions.append(("gear_sb_warning", 4))
 
-            if gear_ind.get("fm0", {}).get("critical"):
+            fm0_info = gear_ind.get("fm0", {}) if isinstance(gear_ind.get("fm0"), dict) else {}
+            if fm0_info.get("critical"):
                 deductions.append(("gear_fm0_critical", 8))
-            elif gear_ind.get("fm0", {}).get("warning"):
+            elif fm0_info.get("warning"):
                 deductions.append(("gear_fm0_warning", 4))
 
         # ===== 计算总分（累加扣分，但封顶）=====
