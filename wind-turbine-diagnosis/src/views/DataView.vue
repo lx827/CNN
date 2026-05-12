@@ -1316,7 +1316,7 @@ const loadTimeDomain = async () => {
 
     if (!timeInstance) timeInstance = echarts.init(timeChart.value)
     timeInstance.setOption({
-      tooltip: { trigger: 'axis' },
+      tooltip: { trigger: 'axis', triggerOn: 'click' },
       grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
       xAxis: { type: 'category', data: timeX, name: '时间 (s)', nameGap: 25 },
       yAxis: { type: 'value', name: '幅值' },
@@ -1325,6 +1325,7 @@ const loadTimeDomain = async () => {
         type: 'line',
         data: timeData,
         showSymbol: false,
+        sampling: 'lttb',
         lineStyle: { width: 1, color: '#165DFF' }
       }]
     }, true)
@@ -1352,7 +1353,7 @@ const computeFFT = async () => {
 
     if (!fftInstance) fftInstance = echarts.init(fftChart.value)
     fftInstance.setOption({
-      tooltip: { trigger: 'axis' },
+      tooltip: { trigger: 'axis', triggerOn: 'click' },
       grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
       xAxis: { type: 'category', data: d.fft_freq, name: '频率 (Hz)', nameGap: 25 },
       yAxis: { type: 'value', name: '幅值' },
@@ -1361,6 +1362,7 @@ const computeFFT = async () => {
         type: 'line',
         data: d.fft_amp,
         showSymbol: false,
+        sampling: 'lttb',
         areaStyle: { color: 'rgba(22, 93, 255, 0.2)' },
         lineStyle: { width: 1.5, color: '#165DFF' }
       }]
@@ -1403,7 +1405,7 @@ const computeSTFT = async () => {
     const minVal = Math.min(...d.magnitude.flat())
     const maxVal = Math.max(...d.magnitude.flat())
     stftInstance.setOption({
-      tooltip: { position: 'top' },
+      tooltip: { position: 'top', triggerOn: 'click' },
       grid: { left: '10%', right: '12%', bottom: '18%', top: '10%' },
       xAxis: { type: 'category', data: d.time, name: '时间 (s)' },
       yAxis: { type: 'category', data: d.freq, name: '频率 (Hz)' },
@@ -1477,7 +1479,7 @@ const computeEnvelope = async () => {
 
     if (!envelopeInstance) envelopeInstance = echarts.init(envelopeChart.value)
     envelopeInstance.setOption({
-      tooltip: { trigger: 'axis' },
+      tooltip: { trigger: 'axis', triggerOn: 'click' },
       grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
       xAxis: { type: 'category', data: d.envelope_freq, name: '频率 (Hz)', nameGap: 25 },
       yAxis: { type: 'value', name: '包络幅值' },
@@ -1561,7 +1563,7 @@ const computeOrder = async () => {
     const idx2x = Math.min(Math.round(2 / orderStep), d.orders.length - 1)
     const idx3x = Math.min(Math.round(3 / orderStep), d.orders.length - 1)
     orderInstance.setOption({
-      tooltip: { trigger: 'axis', formatter: (params) => {
+      tooltip: { trigger: 'axis', triggerOn: 'click', formatter: (params) => {
         const p = params[0]
         return `阶次: ${p.name}<br/>幅值: ${p.value}`
       }},
@@ -1630,7 +1632,7 @@ const computeCepstrum = async () => {
       name: `${p.freq_hz}Hz`
     }))
     cepstrumInstance.setOption({
-      tooltip: { trigger: 'axis', formatter: (params) => {
+      tooltip: { trigger: 'axis', triggerOn: 'click', formatter: (params) => {
         const p = params[0]
         return `倒频率: ${p.value[0]} ms<br/>幅值: ${p.value[1]}`
       }},
@@ -1769,7 +1771,7 @@ const initWindowedChart = () => {
 
   if (!windowedInstance) windowedInstance = echarts.init(windowedChart.value)
   windowedInstance.setOption({
-    tooltip: { trigger: 'axis' },
+    tooltip: { trigger: 'axis', triggerOn: 'click' },
     legend: {
       data: ['峭度', '偏度', 'RMS', '峰值', '裕度', '峰值因子', '波形因子', '脉冲因子'],
       type: 'scroll',
