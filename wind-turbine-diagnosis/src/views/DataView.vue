@@ -1724,7 +1724,7 @@ const onReanalyze = async () => {
       selectedDevice.value.device_id,
       selectedBatch.value.batch_index
     )
-    const d = res.data?.data || {}
+    const d = res.data || {}
     ElMessage.success(`重新诊断完成，健康度 ${d.health_score} 分`)
     // 更新本地选中批次数据
     selectedBatch.value.health_score = d.health_score
