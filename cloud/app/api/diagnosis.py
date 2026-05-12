@@ -18,6 +18,7 @@ def get_diagnosis(
 ):
     """
     获取某设备最新诊断结果（或指定批次）
+    返回包含综合健康度、故障概率、以及各算法详细检出结论的完整数据。
     """
     query = db.query(Diagnosis).filter(Diagnosis.device_id == device_id)
     if batch_index is not None:
@@ -26,6 +27,14 @@ def get_diagnosis(
     diag = query.order_by(Diagnosis.analyzed_at.desc()).first()
 
     if diag:
+        order_analysis = diag.order_analysis or {}
+        # 提取通道级详细诊断（如果存在新引擎的详细结果）
+        engine_result = {}
+        channels_detail = {}
+        if isinstance(order_analysis, dict):
+            engine_result = order_analysis.get("engine_result", {})
+            channels_detail = order_analysis.get("channels", {})
+
         return {
             "code": 200,
             "data": {
@@ -34,7 +43,9 @@ def get_diagnosis(
                 "health_score": diag.health_score,
                 "fault_probabilities": diag.fault_probabilities or {},
                 "imf_energy": diag.imf_energy or {},
-                "order_analysis": diag.order_analysis or {},
+                "order_analysis": order_analysis,
+                "engine_result": engine_result,
+                "channels_detail": channels_detail,
                 "rot_freq": diag.rot_freq,
                 "status": diag.status,
                 "analyzed_at": diag.analyzed_at.isoformat() if diag.analyzed_at else None,
@@ -63,6 +74,8 @@ def get_diagnosis(
                 "IMF4": 12.1,
                 "IMF5": 5.6,
             },
+            "engine_result": {},
+            "channels_detail": {},
             "status": "normal",
             "analyzed_at": None,
         }
