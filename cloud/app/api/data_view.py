@@ -27,12 +27,17 @@ from app.services.diagnosis import (
 from app.services.diagnosis.utils import (
     estimate_rot_freq_envelope as _estimate_rot_freq_envelope,
     estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum,
+    _order_tracking,
+    _compute_order_spectrum,
+    _compute_order_spectrum_multi_frame,
+    _compute_order_spectrum_varying_speed,
 )
 from typing import Optional, Tuple
 import numpy as np
 from scipy.fft import rfft, rfftfreq
 from scipy import signal as scipy_signal
 import io
+import asyncio
 
 router = APIRouter(prefix="/api/data", tags=["振动数据查看"])
 
@@ -49,236 +54,6 @@ def prepare_signal(signal, detrend=False):
     return arr - np.mean(arr)
 
 
-def _order_tracking(
-    sig: np.ndarray, fs: float,
-    rot_freq: float,
-    samples_per_rev: int = 1024
-) -> Tuple[np.ndarray, np.ndarray]:
-    """阶次跟踪：时域 → 角域重采样"""
-    duration = len(sig) / fs
-    num_revs = duration * rot_freq
-    n_points = int(num_revs * samples_per_rev)
-
-    if n_points < 10:
-        raise ValueError(f"转数太少 ({num_revs:.1f})，无法进行阶次跟踪")
-
-    times = np.arange(len(sig)) / fs
-    target_times = np.linspace(0, duration, n_points, endpoint=False)
-    sig_order = np.interp(target_times, times, sig)
-    orders = np.arange(n_points) / num_revs
-    return sig_order, orders
-
-
-def _compute_order_spectrum(
-    sig: np.ndarray, fs: float,
-    rot_freq: float,
-    samples_per_rev: int = 1024
-) -> Tuple[np.ndarray, np.ndarray]:
-    """计算阶次谱（加 Hanning 窗减少频谱泄漏）"""
-    sig_order, orders = _order_tracking(sig, fs, rot_freq, samples_per_rev)
-    sig_order = sig_order - sig_order.mean()
-    N = len(sig_order)
-    # Hanning 窗减少频谱泄漏
-    window = np.hanning(N)
-    sig_windowed = sig_order * window
-    # 幅度恢复补偿：Hanning 窗能量损失约 1.633 倍
-    amplitude_scale = np.sqrt(N / np.sum(window ** 2))
-    spectrum = np.abs(rfft(sig_windowed))[:N // 2] * amplitude_scale
-    order_axis = orders[:N // 2]
-    return order_axis, spectrum
-
-
-def _compute_order_spectrum_multi_frame(
-    sig: np.ndarray, fs: float,
-    freq_range: Tuple[float, float] = (10, 100),
-    samples_per_rev: int = 1024,
-    max_order: int = 50,
-    frame_duration: float = 1.0,
-    overlap: float = 0.5,
-) -> Tuple[np.ndarray, np.ndarray, float, float]:
-    """
-    短时/分帧阶次跟踪（自适应多帧平均）
-    适用于转速缓慢变化的工况。
-    """
-    frame_len = int(frame_duration * fs)
-    hop = int(frame_len * (1 - overlap))
-
-    # 如果信号比一帧还短，直接 fallback 到单帧
-    if frame_len >= len(sig):
-        rot_freq = _estimate_rot_freq_spectrum(sig, fs, freq_range)
-        order_axis, spectrum = _compute_order_spectrum(sig, fs, rot_freq, samples_per_rev)
-        mask = order_axis <= max_order
-        return order_axis[mask], spectrum[mask], float(rot_freq), 0.0
-
-    frames = []
-    rot_freqs = []
-
-    start = 0
-    while start + frame_len <= len(sig):
-        frame = sig[start:start + frame_len]
-        rot_freq = _estimate_rot_freq_spectrum(frame, fs, freq_range)
-        rot_freqs.append(rot_freq)
-        frames.append(frame)
-        start += hop
-
-    rot_freqs_arr = np.array(rot_freqs)
-    median_rf = float(np.median(rot_freqs_arr))
-    mad = float(np.median(np.abs(rot_freqs_arr - median_rf)))
-    if mad < 1e-6:
-        mad = 1e-6
-
-    # MAD 离群值剔除：偏离中位数超过 2.5 个 MAD 的帧扔掉
-    valid_mask = np.abs(rot_freqs_arr - median_rf) <= 2.5 * mad
-    valid_indices = np.where(valid_mask)[0]
-
-    if len(valid_indices) == 0:
-        valid_indices = np.arange(len(rot_freqs_arr))
-
-    # 公共阶次轴
-    common_orders = np.linspace(0, max_order, samples_per_rev)
-
-    spectra_list = []
-    for idx in valid_indices:
-        frame = frames[idx]
-        rf = rot_freqs_arr[idx]
-
-        sig_order, _ = _order_tracking(frame, fs, rf, samples_per_rev)
-        sig_order = sig_order - sig_order.mean()
-        N = len(sig_order)
-        if N < 10:
-            continue
-
-        window = np.hanning(N)
-        sig_windowed = sig_order * window
-        amplitude_scale = np.sqrt(N / np.sum(window ** 2))
-        spectrum = np.abs(rfft(sig_windowed)) * amplitude_scale
-
-        # 该帧阶次轴
-        duration = len(frame) / fs
-        num_revs = duration * rf
-        orders_frame = np.arange(len(spectrum)) / num_revs
-
-        # 插值到公共阶次轴
-        spectrum_interp = np.interp(
-            common_orders,
-            orders_frame,
-            spectrum,
-            left=0.0,
-            right=0.0
-        )
-        spectra_list.append(spectrum_interp)
-
-    if not spectra_list:
-        # fallback
-        rot_freq = _estimate_rot_freq_spectrum(sig, fs, freq_range)
-        order_axis, spectrum = _compute_order_spectrum(sig, fs, rot_freq, samples_per_rev)
-        mask = order_axis <= max_order
-        return order_axis[mask], spectrum[mask], float(rot_freq), 0.0
-
-    avg_spectrum = np.mean(spectra_list, axis=0)
-    std_rf = float(np.std(rot_freqs_arr[valid_indices]))
-
-    return common_orders, avg_spectrum, median_rf, std_rf
-
-
-def _compute_order_spectrum_varying_speed(
-    sig: np.ndarray,
-    fs: float,
-    freq_range: Tuple[float, float] = (10, 100),
-    samples_per_rev: int = 1024,
-    max_order: int = 50,
-    nperseg: int = 512,
-    noverlap: int = 384,
-) -> Tuple[np.ndarray, np.ndarray, float, float]:
-    """
-    变速工况阶次跟踪（基于 STFT 瞬时频率积分 + 等角度重采样）
-
-    适用于转速剧烈变化（如启停机、扫频）的信号。
-    核心思想：
-      1. STFT 时频谱峰值追踪得到瞬时频率 f_inst(t)
-      2. 对 f_inst 做 Savitzky-Golay 平滑去噪
-      3. 数值积分得到瞬时相位 phi(t) = 2*pi * cumsum(f_inst) * dt
-      4. 在等相位点（等角度）重采样 → 角域信号
-      5. FFT 得到阶次谱
-
-    Args:
-        sig: 时域信号
-        fs: 采样率
-        freq_range: 转频搜索范围
-        samples_per_rev: 每转采样点数（角域分辨率）
-        max_order: 返回最大阶次
-        nperseg: STFT 窗口长度
-        noverlap: STFT 重叠长度
-
-    Returns:
-        (orders, spectrum, median_rot_freq, rot_freq_std)
-    """
-    import numpy as np
-    from scipy import signal as scipy_signal
-    from scipy.fft import rfft
-
-    arr = np.array(sig, dtype=np.float64)
-
-    # 1. STFT 时频分析
-    f, t, Zxx = scipy_signal.stft(arr, fs=fs, nperseg=nperseg, noverlap=noverlap)
-    magnitude = np.abs(Zxx)
-
-    # 2. 在 freq_range 内追踪每个时间片的峰值频率（瞬时频率）
-    freq_mask = (f >= freq_range[0]) & (f <= freq_range[1])
-    search_f = f[freq_mask]
-    search_mag = magnitude[freq_mask, :]
-
-    if search_f.size == 0 or search_mag.shape[1] == 0:
-        # fallback 到单帧
-        rot_freq = _estimate_rot_freq_spectrum(arr, fs, freq_range)
-        order_axis, spectrum = _compute_order_spectrum(arr, fs, rot_freq, samples_per_rev)
-        mask = order_axis <= max_order
-        return order_axis[mask], spectrum[mask], float(rot_freq), 0.0
-
-    inst_freq = np.array([
-        float(search_f[np.argmax(search_mag[:, i])])
-        for i in range(search_mag.shape[1])
-    ])
-
-    # 3. 平滑瞬时频率（Savitzky-Golay，抑制 STFT 峰值噪声）
-    sg_win = min(11, len(inst_freq) // 2 * 2 + 1)
-    if sg_win >= 5:
-        inst_freq = scipy_signal.savgol_filter(inst_freq, sg_win, 3)
-
-    # 4. 插值到每个采样点
-    times_stft = t
-    times_sig = np.arange(len(arr)) / fs
-    inst_freq_per_sample = np.interp(
-        times_sig, times_stft, inst_freq,
-        left=inst_freq[0], right=inst_freq[-1]
-    )
-
-    # 5. 数值积分得到瞬时相位
-    dt = 1.0 / fs
-    inst_phase = 2.0 * np.pi * np.cumsum(inst_freq_per_sample) * dt
-
-    # 6. 等相位（等角度）重采样
-    total_revs = inst_phase[-1] / (2.0 * np.pi)
-    n_points = max(10, int(total_revs * samples_per_rev))
-    target_phase = np.linspace(0, inst_phase[-1], n_points, endpoint=False)
-    sig_order = np.interp(target_phase, inst_phase, arr, left=arr[0], right=arr[-1])
-    sig_order = sig_order - np.mean(sig_order)
-
-    # 7. FFT 阶次谱
-    N = len(sig_order)
-    window = np.hanning(N)
-    sig_windowed = sig_order * window
-    amplitude_scale = np.sqrt(N / np.sum(window ** 2))
-    spectrum = np.abs(rfft(sig_windowed)) * amplitude_scale
-
-    # 阶次轴：每阶对应一个转频倍数
-    orders = np.arange(len(spectrum)) / total_revs
-    mask = orders <= max_order
-
-    median_rf = float(np.median(inst_freq))
-    std_rf = float(np.std(inst_freq))
-
-    return orders[mask], spectrum[mask], median_rf, std_rf
 
 
 def _compute_cepstrum(
@@ -598,7 +373,7 @@ def get_channel_fft(
 
 
 @router.get("/{device_id}/{batch_index}/{channel}/stft")
-def get_channel_stft(
+async def get_channel_stft(
     device_id: str,
     batch_index: int,
     channel: int,
@@ -639,7 +414,10 @@ def get_channel_stft(
         nov = min(noverlap, ns - 1)
         nfft = max(1024, ns)
 
-        f, t, Zxx = stft(signal, fs=sample_rate, nperseg=ns, noverlap=nov, nfft=nfft)
+        # CPU 密集型 STFT 计算放入线程池，避免阻塞事件循环
+        f, t, Zxx = await asyncio.to_thread(
+            stft, signal, fs=sample_rate, nperseg=ns, noverlap=nov, nfft=nfft
+        )
 
         # 只保留 0~max_freq Hz 范围
         freq_mask = f <= max_freq
@@ -702,6 +480,11 @@ def get_channel_stats(
     try:
         signal = prepare_signal(record.data, detrend=detrend)
         sample_rate = record.sample_rate or 25600
+
+        # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）
+        max_samples = sample_rate * 5
+        if len(signal) > max_samples:
+            signal = signal[:max_samples]
 
         # 基本统计量
         peak = float(np.max(np.abs(signal)))
@@ -793,7 +576,7 @@ def get_channel_stats(
 
 
 @router.get("/{device_id}/{batch_index}/{channel}/envelope")
-def get_channel_envelope(
+async def get_channel_envelope(
     device_id: str,
     batch_index: int,
     channel: int,
@@ -820,6 +603,11 @@ def get_channel_envelope(
         sample_rate = record.sample_rate or 25600
         signal = prepare_signal(record.data, detrend=detrend)
 
+        # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）
+        max_samples = sample_rate * 5
+        if len(signal) > max_samples:
+            signal = signal[:max_samples]
+
         # 获取设备参数
         device = db.query(Device).filter(Device.device_id == device_id).first()
         bearing_params = {}
@@ -843,7 +631,8 @@ def get_channel_envelope(
             gear_teeth=gear_teeth,
         )
 
-        result = engine.analyze_bearing(signal, sample_rate)
+        # CPU 密集型轴承分析放入线程池
+        result = await asyncio.to_thread(engine.analyze_bearing, signal, sample_rate)
 
         # 兼容原有返回格式
         return {
@@ -876,7 +665,7 @@ def get_channel_envelope(
 
 
 @router.get("/{device_id}/{batch_index}/{channel}/order")
-def get_channel_order(
+async def get_channel_order(
     device_id: str,
     batch_index: int,
     channel: int,
@@ -925,14 +714,19 @@ def get_channel_order(
         sig = prepare_signal(record.data, detrend=detrend)
         sample_rate = record.sample_rate or 25600
 
+        # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）
+        max_samples = sample_rate * 5
+        if len(sig) > max_samples:
+            sig = sig[:max_samples]
+
         # 参数校验
         if freq_min >= freq_max:
             raise ValueError("freq_min 必须小于 freq_max")
 
         if rot_freq is not None:
             # 直接指定转频，做单帧阶次跟踪
-            order_axis, spectrum = _compute_order_spectrum(
-                sig, sample_rate, rot_freq, samples_per_rev
+            order_axis, spectrum = await asyncio.to_thread(
+                _compute_order_spectrum, sig, sample_rate, rot_freq, samples_per_rev
             )
             mask = order_axis <= max_order
             order_axis = order_axis[mask]
@@ -942,7 +736,8 @@ def get_channel_order(
             tracking_method = "single_frame"
         else:
             # 先用多帧法估计转速及变化程度
-            order_axis, spectrum, rot_freq_val, rot_freq_std = _compute_order_spectrum_multi_frame(
+            order_axis, spectrum, rot_freq_val, rot_freq_std = await asyncio.to_thread(
+                _compute_order_spectrum_multi_frame,
                 sig, sample_rate,
                 freq_range=(freq_min, freq_max),
                 samples_per_rev=samples_per_rev,
@@ -954,7 +749,8 @@ def get_channel_order(
 
             # 若转速变化剧烈（变异系数 > 10%），启用变速阶次跟踪
             if rot_freq_val > 0 and (rot_freq_std / rot_freq_val) > 0.10:
-                order_axis, spectrum, rot_freq_val, rot_freq_std = _compute_order_spectrum_varying_speed(
+                order_axis, spectrum, rot_freq_val, rot_freq_std = await asyncio.to_thread(
+                    _compute_order_spectrum_varying_speed,
                     sig, sample_rate,
                     freq_range=(freq_min, freq_max),
                     samples_per_rev=samples_per_rev,
@@ -991,7 +787,7 @@ def get_channel_order(
 
 
 @router.get("/{device_id}/{batch_index}/{channel}/cepstrum")
-def get_channel_cepstrum(
+async def get_channel_cepstrum(
     device_id: str,
     batch_index: int,
     channel: int,
@@ -1028,7 +824,13 @@ def get_channel_cepstrum(
         sig = prepare_signal(record.data, detrend=detrend)
         sample_rate = record.sample_rate or 25600
 
-        quef_ms, cep, peaks = _compute_cepstrum(sig, sample_rate, max_quefrency)
+        # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）
+        max_samples = sample_rate * 5
+        if len(sig) > max_samples:
+            sig = sig[:max_samples]
+
+        # CPU 密集型倒谱计算放入线程池
+        quef_ms, cep, peaks = await asyncio.to_thread(_compute_cepstrum, sig, sample_rate, max_quefrency)
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
 
@@ -1212,7 +1014,7 @@ def export_channel_csv(
 
 
 @router.get("/{device_id}/{batch_index}/{channel}/gear")
-def get_channel_gear(
+async def get_channel_gear(
     device_id: str,
     batch_index: int,
     channel: int,
@@ -1257,7 +1059,8 @@ def get_channel_gear(
             gear_teeth=gear_teeth,
         )
 
-        result = engine.analyze_gear(signal, sample_rate)
+        # CPU 密集型齿轮分析放入线程池
+        result = await asyncio.to_thread(engine.analyze_gear, signal, sample_rate)
 
         return {
             "code": 200,
@@ -1288,7 +1091,7 @@ def get_channel_gear(
 
 
 @router.get("/{device_id}/{batch_index}/{channel}/analyze")
-def get_channel_analyze(
+async def get_channel_analyze(
     device_id: str,
     batch_index: int,
     channel: int,
@@ -1345,7 +1148,8 @@ def get_channel_analyze(
             gear_teeth=gear_teeth,
         )
 
-        result = engine.analyze_comprehensive(signal, sample_rate)
+        # CPU 密集型综合分析放入线程池
+        result = await asyncio.to_thread(engine.analyze_comprehensive, signal, sample_rate)
 
         return {
             "code": 200,

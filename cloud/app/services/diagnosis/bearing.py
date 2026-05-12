@@ -76,8 +76,8 @@ def envelope_analysis(
 
     mask = xf <= max_freq
     return {
-        "envelope_freq": xf[mask].tolist(),
-        "envelope_amp": yf[mask].tolist(),
+        "envelope_freq": [round(float(f), 2) for f in xf[mask]],
+        "envelope_amp": [round(float(a), 4) for a in yf[mask]],
         "band_center": fc,
         "band_width": bw,
     }

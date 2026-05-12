@@ -17,7 +17,10 @@ import random
 
 from app.services.nn_predictor import predict as nn_predict
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod
-from app.services.diagnosis.utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
+from app.services.diagnosis.utils import (
+    estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum,
+    _compute_order_spectrum_multi_frame,
+)
 
 
 def remove_dc(signal: List[float]) -> np.ndarray:
@@ -210,8 +213,8 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
     env_freq, env_amp = compute_envelope_spectrum(first_channel, sample_rate, max_freq=1000)
     env_features = _extract_envelope_features(env_freq, env_amp, rot_freq, bearing_params)
 
-    order_axis, spectrum = _compute_order_spectrum_simple(
-        first_arr, sample_rate, rot_freq, samples_per_rev=1024, max_order=50
+    order_axis, spectrum, _, _ = _compute_order_spectrum_multi_frame(
+        first_arr, sample_rate, rot_freq=rot_freq, samples_per_rev=1024, max_order=50
     )
     order_features = _extract_order_features(order_axis, spectrum, rot_freq, gear_teeth, bearing_params)
 
