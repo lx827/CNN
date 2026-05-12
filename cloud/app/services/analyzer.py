@@ -3,10 +3,10 @@
 
 分析流程：
   1. 优先调用神经网络模型（nn_predictor.py）
-  2. 如果神经网络未启用或失败，回退到简化规则算法（FFT + IMF能量 + 阈值判断）
+  2. 如果神经网络未启用，调用新诊断引擎（DiagnosisEngine，支持多种算法配置）
+  3. 如果新引擎失败，回退到简化规则算法（FFT + IMF能量 + 阈值判断）
 
-注意：这里的算法是"教学级"简化实现，目的是让整个系统跑起来。
-真实工业场景会使用更复杂的 EMD/VMD 分解、小波包分析、深度学习模型等。
+注意：旧规则算法保留作为回退方案，新引擎为默认诊断方式。
 """
 import numpy as np
 from scipy.fft import rfft, rfftfreq
@@ -16,6 +16,7 @@ from typing import Dict, List
 import random
 
 from app.services.nn_predictor import predict as nn_predict
+from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod
 
 
 def remove_dc(signal: List[float]) -> np.ndarray:

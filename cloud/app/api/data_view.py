@@ -18,6 +18,12 @@ from sqlalchemy import func, desc
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis, Alarm
 from app.services.analyzer import compute_fft, compute_envelope_spectrum
+from app.services.diagnosis import (
+    DiagnosisEngine,
+    BearingMethod,
+    GearMethod,
+    DenoiseMethod,
+)
 from typing import Optional, Tuple
 import numpy as np
 from scipy.fft import rfft, rfftfreq
@@ -834,12 +840,13 @@ def get_channel_envelope(
     channel: int,
     max_freq: Optional[int] = 1000,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
+    method: str = Query(default="envelope", description="包络分析方法: envelope/kurtogram/cpw/med"),
     db: Session = Depends(get_db)
 ):
     """
     实时计算某批次某通道的包络谱（Envelope Spectrum）
-    用于轴承故障诊断，请求时计算，不预存。
-    自动适配实际采样率。
+    支持多种轴承诊断方法：标准包络 / Fast Kurtogram / CPW / MED
+    请求时计算，不预存。
     """
     record = db.query(SensorData).filter(
         SensorData.device_id == device_id,
@@ -853,10 +860,33 @@ def get_channel_envelope(
     try:
         sample_rate = record.sample_rate or 25600
         signal = prepare_signal(record.data, detrend=detrend)
-        freq, amp = compute_envelope_spectrum(signal.tolist(), sample_rate, max_freq)
 
+        # 获取设备参数
         device = db.query(Device).filter(Device.device_id == device_id).first()
+        bearing_params = {}
+        gear_teeth = {}
+        if device:
+            bearing_params = device.bearing_params or {}
+            gear_teeth = device.gear_teeth or {}
 
+        # 方法映射
+        method_map = {
+            "envelope": BearingMethod.ENVELOPE,
+            "kurtogram": BearingMethod.KURTOGRAM,
+            "cpw": BearingMethod.CPW,
+            "med": BearingMethod.MED,
+        }
+        bearing_method = method_map.get(method, BearingMethod.ENVELOPE)
+
+        engine = DiagnosisEngine(
+            bearing_method=bearing_method,
+            bearing_params=bearing_params,
+            gear_teeth=gear_teeth,
+        )
+
+        result = engine.analyze_bearing(signal, sample_rate)
+
+        # 兼容原有返回格式
         return {
             "code": 200,
             "data": {
@@ -866,8 +896,18 @@ def get_channel_envelope(
                 "channel_name": _get_channel_name(device, record.channel),
                 "sample_rate": sample_rate,
                 "is_special": bool(record.is_special),
-                "envelope_freq": freq,
-                "envelope_amp": amp,
+                "method": result.get("method", method),
+                "envelope_freq": result.get("envelope_freq", []),
+                "envelope_amp": result.get("envelope_amp", []),
+                "optimal_fc": result.get("optimal_fc"),
+                "optimal_bw": result.get("optimal_bw"),
+                "max_kurtosis": result.get("max_kurtosis"),
+                "comb_frequencies": result.get("comb_frequencies"),
+                "med_filter_len": result.get("med_filter_len"),
+                "kurtosis_before": result.get("kurtosis_before"),
+                "kurtosis_after": result.get("kurtosis_after"),
+                "features": result.get("features", {}),
+                "fault_indicators": result.get("fault_indicators", {}),
             }
         }
     except Exception as e:
@@ -1191,3 +1231,150 @@ def export_channel_csv(
         media_type="text/csv; charset=utf-8-sig",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+@router.get("/{device_id}/{batch_index}/{channel}/gear")
+def get_channel_gear(
+    device_id: str,
+    batch_index: int,
+    channel: int,
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
+    method: str = Query(default="standard", description="齿轮诊断方法: standard/advanced"),
+    db: Session = Depends(get_db)
+):
+    """
+    实时计算某批次某通道的齿轮诊断分析
+    支持标准边频带分析和高级时域指标。
+    """
+    record = db.query(SensorData).filter(
+        SensorData.device_id == device_id,
+        SensorData.batch_index == batch_index,
+        SensorData.channel == channel
+    ).first()
+
+    if not record or not record.data:
+        raise HTTPException(status_code=404, detail="数据不存在")
+
+    try:
+        sample_rate = record.sample_rate or 25600
+        signal = prepare_signal(record.data, detrend=detrend)
+
+        device = db.query(Device).filter(Device.device_id == device_id).first()
+        gear_teeth = {}
+        if device:
+            gear_teeth = device.gear_teeth or {}
+
+        method_map = {
+            "standard": GearMethod.STANDARD,
+            "advanced": GearMethod.ADVANCED,
+        }
+        gear_method = method_map.get(method, GearMethod.STANDARD)
+
+        engine = DiagnosisEngine(
+            gear_method=gear_method,
+            gear_teeth=gear_teeth,
+        )
+
+        result = engine.analyze_gear(signal, sample_rate)
+
+        return {
+            "code": 200,
+            "data": {
+                "device_id": record.device_id,
+                "batch_index": record.batch_index,
+                "channel": record.channel,
+                "channel_name": _get_channel_name(device, record.channel),
+                "sample_rate": sample_rate,
+                "is_special": bool(record.is_special),
+                "method": result.get("method", method),
+                "rot_freq_hz": result.get("rot_freq_hz"),
+                "mesh_freq_hz": result.get("mesh_freq_hz"),
+                "ser": result.get("ser"),
+                "sidebands": result.get("sidebands", []),
+                "fm0": result.get("fm0"),
+                "car": result.get("car"),
+                "fault_indicators": result.get("fault_indicators", {}),
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"齿轮诊断失败: {e}")
+
+
+@router.get("/{device_id}/{batch_index}/{channel}/analyze")
+def get_channel_analyze(
+    device_id: str,
+    batch_index: int,
+    channel: int,
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
+    strategy: str = Query(default="standard", description="诊断策略: standard/advanced/expert"),
+    bearing_method: str = Query(default="envelope", description="轴承方法: envelope/kurtogram/cpw/med"),
+    gear_method: str = Query(default="standard", description="齿轮方法: standard/advanced"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet"),
+    db: Session = Depends(get_db)
+):
+    """
+    综合故障诊断分析（新诊断引擎统一入口）
+
+    支持前端配置选择诊断策略、轴承方法、齿轮方法和预处理方法。
+    返回轴承诊断、齿轮诊断、时域特征和综合健康度评分。
+    """
+    record = db.query(SensorData).filter(
+        SensorData.device_id == device_id,
+        SensorData.batch_index == batch_index,
+        SensorData.channel == channel
+    ).first()
+
+    if not record or not record.data:
+        raise HTTPException(status_code=404, detail="数据不存在")
+
+    try:
+        sample_rate = record.sample_rate or 25600
+        signal = prepare_signal(record.data, detrend=detrend)
+
+        device = db.query(Device).filter(Device.device_id == device_id).first()
+        bearing_params = {}
+        gear_teeth = {}
+        if device:
+            bearing_params = device.bearing_params or {}
+            gear_teeth = device.gear_teeth or {}
+
+        # 映射前端参数到枚举
+        strategy_map = {"standard": "standard", "advanced": "advanced", "expert": "expert"}
+        bearing_map = {
+            "envelope": BearingMethod.ENVELOPE,
+            "kurtogram": BearingMethod.KURTOGRAM,
+            "cpw": BearingMethod.CPW,
+            "med": BearingMethod.MED,
+        }
+        gear_map = {"standard": GearMethod.STANDARD, "advanced": GearMethod.ADVANCED}
+        denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET}
+
+        engine = DiagnosisEngine(
+            strategy=strategy_map.get(strategy, "standard"),
+            bearing_method=bearing_map.get(bearing_method, BearingMethod.ENVELOPE),
+            gear_method=gear_map.get(gear_method, GearMethod.STANDARD),
+            denoise_method=denoise_map.get(denoise, DenoiseMethod.NONE),
+            bearing_params=bearing_params,
+            gear_teeth=gear_teeth,
+        )
+
+        result = engine.analyze_comprehensive(signal, sample_rate)
+
+        return {
+            "code": 200,
+            "data": {
+                "device_id": record.device_id,
+                "batch_index": record.batch_index,
+                "channel": record.channel,
+                "channel_name": _get_channel_name(device, record.channel),
+                "sample_rate": sample_rate,
+                "is_special": bool(record.is_special),
+                "strategy": strategy,
+                "bearing_method": bearing_method,
+                "gear_method": gear_method,
+                "denoise": denoise,
+                **result,
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"综合分析失败: {e}")

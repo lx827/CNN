@@ -282,25 +282,50 @@
         <el-col :xs="24" :md="12">
           <div class="section-header">
             <span class="chart-title">包络谱（轴承诊断）</span>
-            <el-button
-              v-if="!computedEnvelope"
-              type="primary"
-              size="small"
-              :loading="loadingEnvelope"
-              @click="computeEnvelope"
-            >
-              <el-icon><DataAnalysis /></el-icon> 计算包络谱
-            </el-button>
-            <el-button v-else type="info" size="small" @click="clearEnvelope">
-              <el-icon><Close /></el-icon> 收起
-            </el-button>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <el-select
+                v-if="!computedEnvelope"
+                v-model="envelopeMethod"
+                size="small"
+                style="width: 150px"
+              >
+                <el-option label="标准包络" value="envelope" />
+                <el-option label="Fast Kurtogram" value="kurtogram" />
+                <el-option label="CPW+包络" value="cpw" />
+                <el-option label="MED+包络" value="med" />
+              </el-select>
+              <el-tag v-else type="success" size="small" effect="plain">{{ envelopeMethodLabel }}</el-tag>
+              <el-button
+                v-if="!computedEnvelope"
+                type="primary"
+                size="small"
+                :loading="loadingEnvelope"
+                @click="computeEnvelope"
+              >
+                <el-icon><DataAnalysis /></el-icon> 计算
+              </el-button>
+              <el-button v-else type="info" size="small" @click="clearEnvelope">
+                <el-icon><Close /></el-icon> 收起
+              </el-button>
+            </div>
+          </div>
+          <div v-if="computedEnvelope && envelopeData" class="envelope-info">
+            <el-tag v-if="envelopeData.optimal_fc" type="info" size="small" effect="plain">
+              最优频段 {{ envelopeData.optimal_fc }}±{{ (envelopeData.optimal_bw/2).toFixed(0) }} Hz
+            </el-tag>
+            <el-tag v-if="envelopeData.max_kurtosis != null" type="info" size="small" effect="plain" style="margin-left: 8px;">
+              峭度 {{ envelopeData.max_kurtosis.toFixed(2) }}
+            </el-tag>
+            <el-tag v-if="envelopeData.kurtosis_after != null" type="info" size="small" effect="plain" style="margin-left: 8px;">
+              MED后峭度 {{ envelopeData.kurtosis_after.toFixed(2) }}
+            </el-tag>
           </div>
           <div v-if="computedEnvelope" ref="envelopeChart" class="chart"></div>
           <div v-else-if="loadingEnvelope" class="placeholder">
             <el-skeleton :rows="3" animated />
           </div>
           <div v-else class="placeholder">
-            <el-empty description="点击按钮计算包络谱" :image-size="80" />
+            <el-empty description="选择方法后计算包络谱" :image-size="80" />
           </div>
         </el-col>
       </el-row>
@@ -594,6 +619,21 @@ const maxFreq = ref(5000)
 const channelOptions = ref([1, 2, 3])
 const enableDetrend = ref(false)
 
+// 诊断方法选择
+const envelopeMethod = ref('envelope')
+const gearMethod = ref('standard')
+const denoiseMethod = ref('none')
+
+const envelopeMethodLabel = computed(() => {
+  const labels = {
+    envelope: '标准包络',
+    kurtogram: 'Fast Kurtogram',
+    cpw: 'CPW+包络',
+    med: 'MED+包络',
+  }
+  return labels[envelopeMethod.value] || envelopeMethod.value
+})
+
 const timeChart = ref(null)
 const fftChart = ref(null)
 const stftChart = ref(null)
@@ -625,6 +665,7 @@ const loadingCepstrum = ref(false)
 const statsData = ref(null)
 const orderData = ref(null)
 const cepstrumData = ref(null)
+const envelopeData = ref(null)
 
 // 统计指标加窗参数
 const statsWindowSize = ref(1024)
@@ -810,6 +851,7 @@ const onChannelChange = () => {
   windowedInstance?.dispose(); windowedInstance = null
   orderInstance?.dispose(); orderInstance = null
   cepstrumInstance?.dispose(); cepstrumInstance = null
+  envelopeData.value = null
   nextTick(() => {
     loadTimeDomain()
   })
@@ -1004,11 +1046,13 @@ const computeEnvelope = async () => {
       selectedBatch.value.batch_index,
       selectedChannel.value,
       1000,
-      enableDetrend.value
+      enableDetrend.value,
+      envelopeMethod.value
     )
     const d = res.data
     if (!d) return
 
+    envelopeData.value = d
     computedEnvelope.value = true
     await nextTick()
 
@@ -1029,7 +1073,7 @@ const computeEnvelope = async () => {
     }, true)
   } catch (e) {
     console.error('包络谱计算失败:', e)
-    ElMessage.error('包络谱计算失败')
+    ElMessage.error('包络谱计算失败: ' + (e.response?.data?.detail || e.message))
     computedEnvelope.value = false
   } finally {
     loadingEnvelope.value = false
@@ -1546,6 +1590,18 @@ onUnmounted(() => {
   padding: 8px 12px;
   background: #f9f0ff;
   border: 1px solid #d3adf7;
+  border-radius: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.envelope-info {
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
   border-radius: 6px;
   display: flex;
   flex-wrap: wrap;
