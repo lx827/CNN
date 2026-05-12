@@ -90,11 +90,11 @@ CNN/
 ### 3.1 本地 Windows
 
 ```bash
-# 后端
+# 云端后端（cloud）
  cd /d/code/CNN/cloud
  . venv/Scripts/activate
 
-# 边端
+# 边端（edge）
  cd /d/code/CNN/edge
  . venv/Scripts/activate
 ```
@@ -117,7 +117,7 @@ CNN/
 
 ## 4. 开发命令
 
-### 4.1 后端（cloud）
+### 4.1 云端后端（cloud）
 
 ```bash
  cd /d/code/CNN/cloud
@@ -201,63 +201,11 @@ start.bat
 
 ---
 
-## 6. 生产部署（服务器）
-
-### 6.1 更新代码并重启服务
-
-```bash
- ssh root@8.137.96.104
- cd /opt/CNN
- git pull
-
-# 后端
- cd cloud
- source venv/bin/activate
- pip install -r requirements.txt
- sudo systemctl restart CNN
-
-# 前端
- cd /opt/CNN/wind-turbine-diagnosis
- npm install
- npm run build
-# dist/ 目录由 Nginx 直接 serve
-```
-
-### 6.2 查看服务状态和日志
-
-```bash
-# 服务状态
- sudo systemctl status CNN
-
-# 实时日志
- sudo journalctl -u CNN -f
-
-# 最近100行日志
- sudo journalctl -u CNN -n 100
-```
-
-### 6.3 systemd 服务文件位置
-
-```
-/etc/systemd/system/CNN.service
-```
-
-### 6.4 数据库重置
-
-```bash
-# SQLite：直接删除数据库文件，重启后自动重建
- cd /opt/CNN/cloud
- rm turbine.db
- sudo systemctl restart CNN
-```
-
----
-
-## 7. 线程与内存限制（2G 服务器关键）
+## 6. 线程与内存限制（2G 服务器关键）
 
 **服务器配置：2核 CPU + 2GB 内存**
 
-### 7.1 全局线程池限制
+### 6.1 全局线程池限制
 
 `cloud/app/main.py` 在 lifespan 中创建：**`ThreadPoolExecutor(max_workers=2)`**，并设为 asyncio 默认 executor。
 
@@ -265,7 +213,7 @@ start.bat
 - 后台分析 + DataView 实时计算共享这 2 个线程
 - **绝对不要增加 max_workers**，否则可能 OOM
 
-### 7.2 后台分析串行化
+### 6.2 后台分析串行化
 
 ```python
 ANALYSIS_SEM = asyncio.Semaphore(1)
@@ -273,7 +221,7 @@ ANALYSIS_SEM = asyncio.Semaphore(1)
 
 后台分析 worker 一次只分析一个批次，即使多个设备有待分析数据也排队执行。
 
-### 7.3 DataView 实时计算
+### 6.3 DataView 实时计算
 
 以下接口已改为 `async def`，核心计算放入线程池：
 
@@ -286,7 +234,7 @@ ANALYSIS_SEM = asyncio.Semaphore(1)
 
 计算快的接口保持 `def`（FastAPI 自动用 anyio 线程池）：FFT、统计指标、原始数据查询等。
 
-### 7.4 信号长度截断
+### 6.4 信号长度截断
 
 所有 DataView 实时计算接口限制最多处理 **5 秒数据**：
 
@@ -298,9 +246,9 @@ if len(signal) > max_samples:
 
 ---
 
-## 8. 关键配置
+## 7. 关键配置
 
-### 8.1 后端 `cloud/.env`
+### 7.1 后端 `cloud/.env`
 
 ```env
 USE_SQLITE=true              # true=SQLite(默认), false=MySQL
@@ -314,7 +262,7 @@ SECRET_KEY=change-me-in-production-please
 EDGE_API_KEY=turbine-edge-secret
 ```
 
-### 8.2 边端 `edge/.env`
+### 7.2 边端 `edge/.env`
 
 ```env
 CLOUD_INGEST_URL=http://localhost:8000/api/ingest/
@@ -327,7 +275,7 @@ COMPRESSION_ENABLED=true
 DOWNSAMPLE_RATIO=8
 ```
 
-### 8.3 前端代理 `wind-turbine-diagnosis/vite.config.js`
+### 7.3 前端代理 `wind-turbine-diagnosis/vite.config.js`
 
 ```javascript
 proxy: {
@@ -340,9 +288,9 @@ proxy: {
 
 ---
 
-## 9. 诊断引擎关键代码路径
+## 8. 诊断引擎关键代码路径
 
-### 9.1 诊断策略调度器
+### 8.1 诊断策略调度器
 
 ```
 cloud/app/services/diagnosis/core.py
@@ -353,7 +301,7 @@ cloud/app/services/diagnosis/core.py
 - `analyze_bearing()`: envelope / kurtogram / CPW / MED
 - `analyze_gear()`: standard / advanced
 
-### 9.2 阶次跟踪算法
+### 8.2 阶次跟踪算法
 
 ```
 cloud/app/services/diagnosis/utils.py
@@ -363,7 +311,7 @@ cloud/app/services/diagnosis/utils.py
 - `_compute_order_spectrum_multi_frame()`: 多帧平均（转速缓变）
 - `_compute_order_spectrum_varying_speed()`: 变速跟踪（STFT + 等相位重采样）
 
-### 9.3 轴承诊断
+### 8.3 轴承诊断
 
 ```
 cloud/app/services/diagnosis/bearing.py
@@ -374,7 +322,7 @@ cloud/app/services/diagnosis/bearing.py
 - `cpw_envelope_analysis()`: 倒频谱预白化 + 包络
 - `med_envelope_analysis()`: 最小熵解卷积 + 包络
 
-### 9.4 后台分析入口
+### 8.4 后台分析入口
 
 ```
 cloud/app/services/analyzer.py
@@ -387,7 +335,7 @@ cloud/app/services/analyzer.py
 
 ---
 
-## 10. 数据集
+## 9. 数据集
 
 **HUSTbear 轴承数据集：**
 
@@ -406,7 +354,7 @@ cloud/app/services/analyzer.py
 
 ---
 
-## 11. 数据库表
+## 10. 数据库表
 
 | 表名 | 用途 |
 |------|------|
@@ -418,7 +366,7 @@ cloud/app/services/analyzer.py
 
 ---
 
-## 12. 编码规范
+## 11. 编码规范
 
 - **Python**：UTF-8 编码，所有文件含中文注释
 - **字符串替换**：使用 `StrReplaceFile` 工具，不要用 Shell `sed`
@@ -428,7 +376,7 @@ cloud/app/services/analyzer.py
 
 ---
 
-## 13. 常见问题速查
+## 12. 常见问题速查
 
 | 问题 | 解决 |
 |------|------|
