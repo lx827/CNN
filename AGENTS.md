@@ -35,7 +35,16 @@ CNN/
 │   │   ├── models.py               # SQLAlchemy 数据模型
 │   │   ├── core/config.py          # 全局配置（端口、采样率、NN开关）
 │   │   ├── api/
-│   │   │   ├── data_view.py        # 实时频谱计算（FFT/STFT/包络/阶次/倒谱/统计）
+│   │   │   ├── data_view/          # 实时频谱计算（FFT/STFT/包络/阶次/倒谱/统计）
+│   │   │   │   ├── __init__.py     # router + 公共函数
+│   │   │   │   ├── core.py         # 设备/批次/原始数据/删除
+│   │   │   │   ├── spectrum.py     # FFT / STFT / 统计
+│   │   │   │   ├── envelope.py     # 包络谱
+│   │   │   │   ├── order.py        # 阶次跟踪
+│   │   │   │   ├── cepstrum.py     # 倒谱
+│   │   │   │   ├── gear.py         # 齿轮诊断 + 全分析
+│   │   │   │   ├── export.py       # CSV 导出
+│   │   │   │   └── diagnosis_ops.py # 诊断更新 + 重新诊断
 │   │   │   ├── ingest.py           # 边端数据接入
 │   │   │   ├── dashboard.py        # 设备总览 + 离线检测
 │   │   │   ├── diagnosis.py        # 诊断结果查询
@@ -54,13 +63,19 @@ CNN/
 │   │       │   ├── device.py       # 设备级综合告警
 │   │       │   └── diagnosis.py    # 诊断结果告警
 │   │       ├── diagnosis/          # 诊断算法库
-│   │       │   ├── core.py         # DiagnosisEngine（轴承/齿轮/综合）
+│   │       │   ├── engine.py       # DiagnosisEngine 主类（调度器）
+│   │       │   ├── health_score.py # 综合健康度评分
+│   │       │   ├── recommendation.py # 诊断建议生成
 │   │       │   ├── bearing.py      # 轴承诊断（包络/Kurtogram/CPW/MED）
-│   │       │   ├── gear.py         # 齿轮诊断（边频带/FM0/FM4/SER/CAR）
+│   │       │   ├── gear/           # 齿轮诊断
+│   │       │   │   ├── __init__.py # 齿轮诊断公共接口
+│   │       │   │   └── metrics.py  # FM0/FM4/CAR/M6A/M8A/SER 指标
 │   │       │   ├── preprocessing.py# 小波去噪 / CPW / MED
 │   │       │   ├── vmd_denoise.py  # VMD 变分模态分解
-│   │       │   ├── features.py     # 频域/阶次/包络特征提取
-│   │       │   └── utils.py        # 阶次跟踪算法（单帧/多帧/变速）
+│   │       │   ├── features.py     # 时域/频域/阶次/包络特征提取
+│   │       │   ├── rule_based.py   # 规则诊断算法（回退方案）
+│   │       │   ├── order_tracking.py # 阶次跟踪算法（单帧/多帧/变速）
+│   │       │   └── signal_utils.py # 通用信号处理辅助函数
 │   │       └── nn_predictor.py     # 【神经网络预留接口】
 │   ├── models/                     # 模型文件存放目录
 │   ├── turbine.db                  # SQLite 数据库（自动生成）
@@ -203,7 +218,7 @@ start.bat
 
 # 验证语法
  python -c "import ast; ast.parse(open('app/main.py', encoding='utf-8').read())"
- python -c "import ast; ast.parse(open('app/api/data_view.py', encoding='utf-8').read())"
+ python -c "import ast; ast.parse(open('app/api/data_view/__init__.py', encoding='utf-8').read())"
 
 # 验证 FastAPI 可导入
  python -c "from app.main import app; print('OK')"
@@ -217,7 +232,7 @@ start.bat
 
 ### 6.1 全局线程池限制
 
-`cloud/app/main.py` 在 lifespan 中创建：**`ThreadPoolExecutor(max_workers=2)`**，并设为 asyncio 默认 executor。
+`cloud/app/lifespan.py` 在 lifespan 中创建：**`ThreadPoolExecutor(max_workers=2)`**，并设为 asyncio 默认 executor。
 
 - 所有 `asyncio.to_thread()` 调用复用此线程池
 - 后台分析 + DataView 实时计算共享这 2 个线程
@@ -303,25 +318,36 @@ proxy: {
 ### 8.1 诊断策略调度器
 
 ```
-cloud/app/services/diagnosis/core.py
+cloud/app/services/diagnosis/engine.py
 ```
 
-- `DiagnosisEngine` 类：轴承/齿轮/综合分析入口
+- `DiagnosisEngine` 类：轴承/齿轮/综合分析入口（调度器）
 - `preprocess()`: wavelet / VMD 去噪
-- `analyze_bearing()`: envelope / kurtogram / CPW / MED
-- `analyze_gear()`: standard / advanced
+- `analyze_bearing()`: 调用 bearing.py 中的具体算法
+- `analyze_gear()`: 调用 gear/ 中的具体算法
+- `analyze_comprehensive()`: 综合分析（轴承 + 齿轮 + 时域特征）
 
-### 8.2 阶次跟踪算法
+### 8.2 健康度评分与建议
 
 ```
-cloud/app/services/diagnosis/utils.py
+cloud/app/services/diagnosis/health_score.py
+cloud/app/services/diagnosis/recommendation.py
+```
+
+- `_compute_health_score()`: 综合健康度评分 (0-100)
+- `_generate_recommendation()`: 根据故障指示器生成维护建议
+
+### 8.3 阶次跟踪算法
+
+```
+cloud/app/services/diagnosis/order_tracking.py
 ```
 
 - `_compute_order_spectrum()`: 单帧阶次跟踪（恒定转速）
 - `_compute_order_spectrum_multi_frame()`: 多帧平均（转速缓变）
 - `_compute_order_spectrum_varying_speed()`: 变速跟踪（STFT + 等相位重采样）
 
-### 8.3 轴承诊断
+### 8.4 轴承诊断
 
 ```
 cloud/app/services/diagnosis/bearing.py
@@ -332,16 +358,26 @@ cloud/app/services/diagnosis/bearing.py
 - `cpw_envelope_analysis()`: 倒频谱预白化 + 包络
 - `med_envelope_analysis()`: 最小熵解卷积 + 包络
 
-### 8.4 后台分析入口
+### 8.5 齿轮诊断指标
+
+```
+cloud/app/services/diagnosis/gear/metrics.py
+```
+
+- `compute_fm0_order()`: 粗故障检测
+- `compute_fm4()`: 局部故障检测
+- `compute_car()`: 倒频谱幅值比
+- `compute_ser_order()`: 边频带能量比
+
+### 8.6 后台分析入口
 
 ```
 cloud/app/services/analyzer.py
 ```
 
-- `analyze_device()`: 多通道综合分析（被 main.py 后台 worker 调用）
-- `compute_channel_features()`: 单通道振动特征
-- `compute_fft()`: FFT 计算
-- `compute_envelope_spectrum()`: 包络谱计算
+- `analyze_device()`: 多通道综合分析（被 lifespan.py 后台 worker 调用）
+- 特征计算已移至 `cloud/app/services/diagnosis/features.py`
+- 规则诊断已移至 `cloud/app/services/diagnosis/rule_based.py`
 
 ---
 
@@ -392,7 +428,7 @@ cloud/app/services/analyzer.py
 |------|------|
 | `ModuleNotFoundError` | 检查是否在对应 venv 中，是否 `pip install -r requirements.txt` |
 | 后端 HTTP 超时 | 检查 journalctl 日志，`asyncio.to_thread` 是否正常工作 |
-| 阶次谱和诊断结果不一致 | 检查 `analyzer.py` 和 `data_view.py` 是否调用同一套 `utils.py` 函数 |
+| 阶次谱和诊断结果不一致 | 检查 `analyzer.py` 和 `data_view/order.py` 是否调用同一套 `order_tracking.py` 函数 |
 | 前端空白 | 检查 `npm install` 是否完成，代理是否连通 |
 | 内存不足 OOM | 检查线程池是否超过 2 个，信号是否截断到 5 秒 |
 | 数据清空 | 删除 `cloud/turbine.db`，重启后端 |

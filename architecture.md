@@ -136,14 +136,10 @@
           │              模型未启用或失败
           ▼                        ▼
      ┌─────────────────────────────────────────────────────────────┐
-     │  analyzer.py（回退方案）                                     │
-     │  - FFT 频谱分析（自适应实际采样率）                            │
-     │  - 包络谱分析（Hilbert 变换，轴承故障诊断）                    │
-    │  - 阶次谱分析（阶次跟踪：时域→角域重采样→FFT）                │
-    │  - 倒谱分析（Cepstrum：FFT→对数→IFFT，检测频谱周期性）        │
-    │  - 频带能量模拟 IMF 分布                                      │
-    │  - 参数化故障诊断（基于齿轮齿数/轴承参数自动计算特征频率）      │
-    │  - 多特征融合规则诊断（时域+频谱+包络+阶次 加权融合）           │
+     │  analyzer.py（回退方案入口）                                  │
+     │  - 优先调用 DiagnosisEngine（engine.py）进行综合诊断           │
+     │  - 异常时自动回退到 rule_based.py（规则诊断）                 │
+     │  - 特征提取统一由 features.py 处理                            │
      └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -375,7 +371,10 @@ CNN/
 │
 ├── cloud/                       # 云端服务
 │   ├── app/
-│   │   ├── main.py              # FastAPI 入口 + 后台分析 + WebSocket
+│   │   ├── main.py              # FastAPI 入口
+│   │   ├── lifespan.py          # 应用生命周期（线程池 + 后台任务 + WebSocket）
+│   │   ├── startup.py           # 启动初始化
+│   │   ├── middleware.py        # 中间件（CORS、认证等）
 │   │   ├── database.py          # SQLite / MySQL 连接
 │   │   ├── models.py            # SQLAlchemy 数据表
 │   │   ├── schemas.py           # Pydantic 校验模型
@@ -388,12 +387,23 @@ CNN/
 │   │   │   ├── monitor.py       # 实时监测（含后端 FFT）
 │   │   │   ├── diagnosis.py     # 诊断结果
 │   │   │   ├── alarms.py        # 告警管理
-│   │   │   ├── devices.py       # 设备列表
-│   │   │   ├── data_view.py     # 数据查看（时域/FFT/STFT 实时计算）
+│   │   │   ├── devices/         # 设备管理
+│   │   │   ├── data_view/       # 数据查看（时域/FFT/STFT 实时计算）
 │   │   │   └── collect.py       # 采集任务（手动触发）
 │   │   └── services/
-│   │       ├── analyzer.py      # 分析引擎（NN + 回退算法）
-│   │       ├── alarm_service.py # 告警生成（通道级振动特征阈值 + 设备级诊断结果）
+│   │       ├── analyzer.py      # 分析引擎主入口（NN + DiagnosisEngine + 回退）
+│   │       ├── diagnosis/       # 诊断算法库
+│   │       │   ├── engine.py    # DiagnosisEngine 主调度器
+│   │       │   ├── features.py  # 特征提取
+│   │       │   ├── rule_based.py # 规则诊断（回退方案）
+│   │       │   ├── bearing.py   # 轴承诊断
+│   │       │   ├── gear/        # 齿轮诊断
+│   │       │   ├── order_tracking.py # 阶次跟踪
+│   │       │   └── ...
+│   │       ├── alarms/          # 告警生成（通道级振动特征阈值 + 设备级诊断结果）
+│   │       │   ├── channel.py   # 通道级告警
+│   │       │   ├── device.py    # 设备级告警
+│   │       │   └── diagnosis.py # 诊断关联告警
 │   │       └── nn_predictor.py  # 【神经网络预留接口】
 │   ├── models/                  # 存放训练好的模型文件
 │   ├── turbine.db               # SQLite 数据库（自动生成）
