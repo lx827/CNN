@@ -406,7 +406,7 @@
               </el-button>
             </div>
           </div>
-          <div v-if="computedSTFT" ref="stftChart" class="chart" style="height: 400px"></div>
+          <div v-if="computedSTFT" ref="stftChart" class="chart" style="height: 600px"></div>
           <div v-else-if="loadingSTFT" class="placeholder">
             <el-skeleton :rows="4" animated />
           </div>
