@@ -111,6 +111,9 @@ async def analysis_worker():
                         for ch_key, signal in channels_data.items():
                             channel_features[ch_key] = compute_channel_features(signal)
 
+                        # 提取通道级诊断结果（含齿轮/轴承详细指标）
+                        channel_diagnosis = result.get("order_analysis", {}).get("channels", {})
+
                         # 生成告警（通道级 + 设备级），关联到当前批次
                         generate_alarms(
                             db, device_id,
@@ -118,7 +121,8 @@ async def analysis_worker():
                             result["fault_probabilities"],
                             channel_features,
                             batch_index=batch_index,
-                            order_analysis=result.get("order_analysis")
+                            order_analysis=result.get("order_analysis"),
+                            channel_diagnosis=channel_diagnosis,
                         )
 
                         # WebSocket 推送

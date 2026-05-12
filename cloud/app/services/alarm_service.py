@@ -20,6 +20,11 @@ DEFAULT_THRESHOLDS = {
     "peak": {"warning": 0.100, "critical": 0.150},
     "kurtosis": {"warning": 5.5, "critical": 7.0},
     "crest_factor": {"warning": 9.0, "critical": 10.5},
+    # 齿轮诊断指标阈值
+    "ser": {"warning": 1.5, "critical": 3.0},
+    "fm0": {"warning": 5.0, "critical": 10.0},
+    "car": {"warning": 1.2, "critical": 2.0},
+    "sideband_count": {"warning": 2, "critical": 4},
 }
 
 
@@ -252,6 +257,95 @@ def _check_diagnosis_alarms(
     return new_alarms
 
 
+def _check_gear_alarms(
+    db: Session, device: Device, channel_diagnosis: dict, batch_index: int = None
+) -> list:
+    """
+    检查齿轮诊断指标，生成通道级告警。
+    channel_diagnosis 格式: {ch_name: {"gear": {...}, ...}}
+    """
+    new_alarms = []
+    channel_names = device.channel_names or {}
+    metric_labels = {
+        "ser": "齿轮边频带能量比 (SER)",
+        "fm0": "齿轮FM0指标",
+        "car": "齿轮倒频谱幅值比 (CAR)",
+        "sideband_count": "齿轮边频带显著数量",
+    }
+
+    for ch_key, diagnosis in channel_diagnosis.items():
+        ch_num = int(ch_key.replace("ch", "")) if ch_key.startswith("ch") else 1
+        ch_name = channel_names.get(str(ch_num), f"通道{ch_num}")
+        gear = diagnosis.get("gear", {})
+        if not gear:
+            continue
+
+        # 提取指标值
+        indicators = gear.get("fault_indicators", {})
+        metrics = {
+            "ser": indicators.get("ser", {}).get("value", gear.get("ser", 0)),
+            "fm0": indicators.get("fm0", {}).get("value", gear.get("fm0", 0)),
+            "car": indicators.get("car", {}).get("value", gear.get("car", 0)),
+            "sideband_count": indicators.get("sideband_count", {}).get("value", len([sb for sb in gear.get("sidebands", []) if sb.get("significant")])),
+        }
+
+        for metric, label in metric_labels.items():
+            value = metrics.get(metric)
+            if value is None:
+                continue
+            warn_thr = _get_threshold(device, metric, "warning")
+            crit_thr = _get_threshold(device, metric, "critical")
+
+            if value >= crit_thr:
+                if _has_recent_unresolved_alarm(db, device.device_id, "齿轮诊断", "critical", ch_num):
+                    continue
+                severity_pct = min(100, int((value - crit_thr) / max(crit_thr * 0.5, 1e-9) * 100))
+                alarm = Alarm(
+                    device_id=device.device_id,
+                    level="critical",
+                    category="齿轮诊断",
+                    channel=ch_num,
+                    channel_name=ch_name,
+                    batch_index=batch_index,
+                    title=f"{ch_name} {label}严重超标：{value:.4f}",
+                    description=(
+                        f"通道 {ch_num}（{ch_name}）的 {label} 检测到严重异常。\n"
+                        f"• 当前值：{value:.4f}\n"
+                        f"• 严重阈值：{crit_thr}\n"
+                        f"• 预警阈值：{warn_thr}\n"
+                        f"• 超出严重阈值约 {severity_pct}%"
+                    ),
+                    suggestion="1. 检查齿轮箱润滑状态；2. 检查齿轮啮合间隙；3. 排查齿面磨损或点蚀；4. 必要时停机检修。",
+                )
+                db.add(alarm)
+                new_alarms.append(alarm)
+            elif value >= warn_thr:
+                if _has_recent_unresolved_alarm(db, device.device_id, "齿轮诊断", "warning", ch_num):
+                    continue
+                severity_pct = min(100, int((value - warn_thr) / max(crit_thr - warn_thr, 1e-9) * 100))
+                alarm = Alarm(
+                    device_id=device.device_id,
+                    level="warning",
+                    category="齿轮诊断",
+                    channel=ch_num,
+                    channel_name=ch_name,
+                    batch_index=batch_index,
+                    title=f"{ch_name} {label}预警：{value:.4f}",
+                    description=(
+                        f"通道 {ch_num}（{ch_name}）的 {label} 检测到异常。\n"
+                        f"• 当前值：{value:.4f}\n"
+                        f"• 预警阈值：{warn_thr}\n"
+                        f"• 严重阈值：{crit_thr}\n"
+                        f"• 处于预警区间约 {severity_pct}%"
+                    ),
+                    suggestion="1. 加强齿轮箱监测频率；2. 观察振动趋势变化；3. 安排计划性检查。",
+                )
+                db.add(alarm)
+                new_alarms.append(alarm)
+
+    return new_alarms
+
+
 def generate_alarms(
     db: Session,
     device_id: str,
@@ -260,6 +354,7 @@ def generate_alarms(
     channel_features: dict = None,
     batch_index: int = None,
     order_analysis: dict = None,
+    channel_diagnosis: dict = None,
 ):
     """
     综合告警生成入口
@@ -270,6 +365,8 @@ def generate_alarms(
       fault_probabilities: 故障概率字典
       channel_features: 通道级特征，格式 {ch_name: {rms:..., peak:..., ...}}
       batch_index: 关联的数据批次号
+      order_analysis: 阶次分析结果
+      channel_diagnosis: 通道级诊断结果，格式 {ch_name: {gear: {...}, bearing: {...}}}
     """
     device = db.query(Device).filter(Device.device_id == device_id).first()
     if not device:
@@ -287,7 +384,12 @@ def generate_alarms(
             alarms = _check_feature_alarms(db, device, ch_num, ch_name, features, batch_index)
             new_alarms.extend(alarms)
 
-    # 2. 设备级诊断结果告警
+    # 2. 通道级齿轮诊断告警
+    if channel_diagnosis:
+        gear_alarms = _check_gear_alarms(db, device, channel_diagnosis, batch_index)
+        new_alarms.extend(gear_alarms)
+
+    # 3. 设备级诊断结果告警
     diag_alarms = _check_diagnosis_alarms(db, device, health_score, fault_probabilities, batch_index, order_analysis)
     new_alarms.extend(diag_alarms)
 
