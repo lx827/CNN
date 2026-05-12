@@ -595,6 +595,7 @@ def get_channel_fft(
     batch_index: int,
     channel: int,
     max_freq: Optional[int] = 5000,
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
     db: Session = Depends(get_db)
 ):
     """
@@ -612,7 +613,8 @@ def get_channel_fft(
 
     try:
         sample_rate = record.sample_rate or 25600
-        freq, amp = compute_fft(record.data, sample_rate)
+        signal = prepare_signal(record.data, detrend=detrend)
+        freq, amp = compute_fft(signal.tolist(), sample_rate)
         freq_amp = [fa for fa in zip(freq, amp) if fa[0] <= max_freq]
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
@@ -831,6 +833,7 @@ def get_channel_envelope(
     batch_index: int,
     channel: int,
     max_freq: Optional[int] = 1000,
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
     db: Session = Depends(get_db)
 ):
     """
@@ -849,7 +852,8 @@ def get_channel_envelope(
 
     try:
         sample_rate = record.sample_rate or 25600
-        freq, amp = compute_envelope_spectrum(record.data, sample_rate, max_freq)
+        signal = prepare_signal(record.data, detrend=detrend)
+        freq, amp = compute_envelope_spectrum(signal.tolist(), sample_rate, max_freq)
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
 
