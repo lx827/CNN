@@ -174,9 +174,9 @@
               </el-text>
             </template>
             <el-descriptions :column="2" size="small" border>
-              <template v-for="(val, key) in orderAnalysisFlat" :key="key">
-                <el-descriptions-item :label="key" v-if="val !== null && val !== undefined">
-                  <span :class="{ 'text-danger': isAnomalyKey(key, val) }">{{ formatAnalysisValue(val) }}</span>
+              <template v-for="item in orderAnalysisFlat" :key="item.key">
+                <el-descriptions-item :label="item.label" v-if="item.value !== null && item.value !== undefined">
+                  <span :class="{ 'text-danger': isAnomalyKey(item.key, item.value) }">{{ formatAnalysisValue(item.value) }}</span>
                 </el-descriptions-item>
               </template>
             </el-descriptions>
@@ -1078,23 +1078,79 @@ const diagnosisDesc = computed(() => {
   return parts.join('；')
 })
 
-// 将嵌套的 order_analysis 展平为 key-value，便于 el-descriptions 展示
+// 将嵌套的 order_analysis 展平为 {key, label, value} 数组，便于 el-descriptions 展示
+// key 保留英文（用于 isAnomalyKey 判断），label 映射为中文
+const keyLabelMap = {
+  'rot_freq_hz': '转频',
+  'rot_rpm': '转速',
+  'spectrum_features': '频谱特征',
+  'envelope_features': '包络特征',
+  'order_features': '阶次特征',
+  'mesh_freq_hz': '啮合频率',
+  'mesh_freq_ratio': '啮合频率能量比',
+  'sideband_total_ratio': '边频带总能量比',
+  'sideband_count': '边频带数量',
+  'output_mesh_freq_hz': '输出轴啮合频率',
+  'output_mesh_ratio': '输出轴啮合能量比',
+  'BPFO_hz': '外圈故障频率',
+  'BPFI_hz': '内圈故障频率',
+  'BSF_hz': '滚动体故障频率',
+  'FTF_hz': '保持架故障频率',
+  'BPFO_ratio': '外圈能量比',
+  'BPFI_ratio': '内圈能量比',
+  'BSF_ratio': '滚动体能量比',
+  'FTF_ratio': '保持架能量比',
+  'BPFO_harmonic_ratio': '外圈谐波能量比',
+  'BPFI_harmonic_ratio': '内圈谐波能量比',
+  'BSF_harmonic_ratio': '滚动体谐波能量比',
+  'FTF_harmonic_ratio': '保持架谐波能量比',
+  'BPFO_env_ratio': '外圈包络能量比',
+  'BPFI_env_ratio': '内圈包络能量比',
+  'BSF_env_ratio': '滚动体包络能量比',
+  'FTF_env_ratio': '保持架包络能量比',
+  'BPFO_env_harmonic_ratio': '外圈包络谐波能量比',
+  'BPFI_env_harmonic_ratio': '内圈包络谐波能量比',
+  'BSF_env_harmonic_ratio': '滚动体包络谐波能量比',
+  'FTF_env_harmonic_ratio': '保持架包络谐波能量比',
+  'total_env_energy': '包络总能量',
+  'mesh_order': '啮合阶次',
+  'mesh_order_ratio': '啮合阶次能量比',
+  'sideband_order_total_ratio': '边频阶次总能量比',
+  'sideband_order_count': '边频阶次数量',
+  'output_mesh_order': '输出轴啮合阶次',
+  'output_mesh_order_ratio': '输出轴啮合阶次能量比',
+  'BPFO_order': '外圈故障阶次',
+  'BPFI_order': '内圈故障阶次',
+  'BSF_order': '滚动体故障阶次',
+  'FTF_order': '保持架故障阶次',
+  'BPFO_order_ratio': '外圈阶次能量比',
+  'BPFI_order_ratio': '内圈阶次能量比',
+  'BSF_order_ratio': '滚动体阶次能量比',
+  'FTF_order_ratio': '保持架阶次能量比',
+  'BPFO_order_harmonic_ratio': '外圈阶次谐波能量比',
+  'BPFI_order_harmonic_ratio': '内圈阶次谐波能量比',
+  'BSF_order_harmonic_ratio': '滚动体阶次谐波能量比',
+  'FTF_order_harmonic_ratio': '保持架阶次谐波能量比',
+}
+
 const orderAnalysisFlat = computed(() => {
   const batch = selectedBatch.value
-  if (!batch || !batch.order_analysis) return {}
-  const flat = {}
+  if (!batch || !batch.order_analysis) return []
+  const result = []
   const walk = (obj, prefix = '') => {
     for (const [k, v] of Object.entries(obj)) {
-      const label = prefix ? `${prefix} / ${k}` : k
+      const displayKey = keyLabelMap[k] || k
+      const label = prefix ? `${prefix} / ${displayKey}` : displayKey
+      const rawKey = prefix ? `${prefix} / ${k}` : k
       if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
         walk(v, label)
       } else {
-        flat[label] = v
+        result.push({ key: rawKey, label, value: v })
       }
     }
   }
   walk(batch.order_analysis)
-  return flat
+  return result
 })
 
 function formatAnalysisValue(val) {
