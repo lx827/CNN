@@ -86,7 +86,7 @@
 
             <!-- RUL 预测图 -->
             <el-col :xs="24" :md="9">
-              <div class="chart-title">寿命 RUL 预测</div>
+              <div class="chart-title">剩余使用寿命预测</div>
               <div :ref="el => setChartRef('rul', comp.id, el)" class="chart"></div>
             </el-col>
           </el-row>
@@ -163,8 +163,8 @@
                 </el-descriptions>
                 <el-table v-if="detail.gear.sidebands && detail.gear.sidebands.length > 0" :data="detail.gear.sidebands" size="small" style="margin-top: 8px;" max-height="200">
                   <el-table-column prop="order" label="阶次" width="60" />
-                  <el-table-column prop="freq_low" label="下边频(Hz)" width="110" />
-                  <el-table-column prop="freq_high" label="上边频(Hz)" width="110" />
+                  <el-table-column prop="order_low" label="下边频阶次" width="110" />
+                  <el-table-column prop="order_high" label="上边频阶次" width="110" />
                   <el-table-column prop="amp_low" label="下幅值" width="90" />
                   <el-table-column prop="amp_high" label="上幅值" width="90" />
                   <el-table-column label="显著">
@@ -429,11 +429,11 @@ const initRULChart = (el, rulValue) => {
         fontSize: 12,
         distance: -45,
         formatter: (value) => {
-          if (value === 10000) return '10000h'
-          if (value === 7500) return '7500h'
-          if (value === 5000) return '5000h'
-          if (value === 2500) return '2500h'
-          if (value === 0) return '0h'
+          if (value === 10000) return '10000小时'
+          if (value === 7500) return '7500小时'
+          if (value === 5000) return '5000小时'
+          if (value === 2500) return '2500小时'
+          if (value === 0) return '0小时'
           return ''
         }
       },

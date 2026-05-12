@@ -295,9 +295,9 @@
         >
           <div style="line-height: 1.8;">
             <strong>阈值规则：</strong>预警值 < 严重值，留空表示不启用该指标告警。<br/>
-            <strong>RMS：</strong>均方根，反映振动能量；<strong>Peak：</strong>峰值，反映冲击程度；<br/>
-            <strong>Kurtosis：</strong>峭度，反映冲击性（正常≈3，故障时显著增大）；<br/>
-            <strong>Crest Factor：</strong>峰值因子，反映信号的冲击特征（正常≈3~5）。
+            <strong>均方根：</strong>反映振动能量；<strong>峰值：</strong>反映冲击程度；<br/>
+            <strong>峭度：</strong>反映冲击性（正常≈3，故障时显著增大）；<br/>
+            <strong>峰值因子：</strong>反映信号的冲击特征（正常≈3~5）。
           </div>
         </el-alert>
 
@@ -454,10 +454,10 @@ const thresholdEnabled = ref({
 })
 
 const thresholdItems = {
-  rms: { label: 'RMS 均方根', step: 0.001, precision: 3 },
-  peak: { label: 'Peak 峰值', step: 0.001, precision: 3 },
-  kurtosis: { label: 'Kurtosis 峭度', step: 0.1, precision: 1 },
-  crest_factor: { label: 'Crest Factor 峰值因子', step: 0.1, precision: 1 },
+  rms: { label: '均方根', step: 0.001, precision: 3 },
+  peak: { label: '峰值', step: 0.001, precision: 3 },
+  kurtosis: { label: '峭度', step: 0.1, precision: 1 },
+  crest_factor: { label: '峰值因子', step: 0.1, precision: 1 },
 }
 
 const loadDevices = async () => {
