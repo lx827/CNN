@@ -34,6 +34,8 @@ def get_devices(db: Session = Depends(get_db)):
                 "upload_interval": d.upload_interval,
                 "task_poll_interval": d.task_poll_interval,
                 "alarm_thresholds": d.alarm_thresholds,
+                "gear_teeth": d.gear_teeth,
+                "bearing_params": d.bearing_params,
                 "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
             }
             for d in devices
@@ -85,6 +87,8 @@ def get_device_config(device_id: str, db: Session = Depends(get_db)):
             "window_seconds": device.window_seconds,
             "channel_count": device.channel_count,
             "channel_names": device.channel_names,
+            "gear_teeth": device.gear_teeth,
+            "bearing_params": device.bearing_params,
         }
     }
 
@@ -108,7 +112,8 @@ def update_device_config(device_id: str, payload: dict, db: Session = Depends(ge
     # 更新允许的字段
     allowed_fields = [
         "upload_interval", "task_poll_interval",
-        "sample_rate", "window_seconds", "channel_count", "channel_names"
+        "sample_rate", "window_seconds", "channel_count", "channel_names",
+        "gear_teeth", "bearing_params",
     ]
     updated = {}
     for field in allowed_fields:
@@ -121,6 +126,8 @@ def update_device_config(device_id: str, payload: dict, db: Session = Depends(ge
                 raise HTTPException(status_code=422, detail=f"{field} 必须 >= 1")
             if field == "channel_names" and not isinstance(value, dict):
                 raise HTTPException(status_code=422, detail="channel_names 必须为对象")
+            if field in ("gear_teeth", "bearing_params") and value is not None and not isinstance(value, dict):
+                raise HTTPException(status_code=422, detail=f"{field} 必须为对象或 null")
             setattr(device, field, value)
             updated[field] = value
 

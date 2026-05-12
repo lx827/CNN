@@ -33,6 +33,8 @@ class Device(Base):
     upload_interval = Column(Integer, default=10, comment="自动采集上传间隔(秒)")
     task_poll_interval = Column(Integer, default=5, comment="任务轮询间隔(秒)")
     alarm_thresholds = Column(JSON, default=dict, comment="告警阈值配置，如 {rms:{warning:5,critical:10}}")
+    gear_teeth = Column(JSON, nullable=True, comment="齿轮参数，如 {input:18, output:27}")
+    bearing_params = Column(JSON, nullable=True, comment="轴承参数，如 {n:9, d:7.94, D:39.04, alpha:0}")
     last_seen_at = Column(DateTime, nullable=True, comment="设备最后一次数据上传时间")
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -76,6 +78,8 @@ class Diagnosis(Base):
     health_score = Column(Integer, comment="健康度 0-100")
     fault_probabilities = Column(JSON, comment="各故障类型概率")
     imf_energy = Column(JSON, comment="IMF 能量分布")
+    order_analysis = Column(JSON, nullable=True, comment="阶次/包络/频谱分析明细")
+    rot_freq = Column(Float, nullable=True, comment="估计转频 Hz")
     status = Column(String(20), default="normal", comment="综合状态")
     analyzed_at = Column(DateTime, default=datetime.utcnow, comment="分析时间")
 

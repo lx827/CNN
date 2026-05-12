@@ -77,8 +77,8 @@ async def analysis_worker():
                         for r in records:
                             channels_data[f"ch{r.channel}"] = r.data
 
-                        # 执行分析
-                        result = analyze_device(channels_data, sample_rate)
+                        # 执行分析（传入 device 以获取齿轮/轴承参数）
+                        result = analyze_device(channels_data, sample_rate, device)
 
                         # 写入诊断结果（关联到批次）
                         diag = Diagnosis(
@@ -87,6 +87,8 @@ async def analysis_worker():
                             health_score=result["health_score"],
                             fault_probabilities=result["fault_probabilities"],
                             imf_energy=result["imf_energy"],
+                            order_analysis=result.get("order_analysis"),
+                            rot_freq=result.get("rot_freq"),
                             status=result["status"],
                             analyzed_at=datetime.utcnow(),
                         )
@@ -115,7 +117,8 @@ async def analysis_worker():
                             result["health_score"],
                             result["fault_probabilities"],
                             channel_features,
-                            batch_index=batch_index
+                            batch_index=batch_index,
+                            order_analysis=result.get("order_analysis")
                         )
 
                         # WebSocket 推送

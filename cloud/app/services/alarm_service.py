@@ -133,7 +133,8 @@ def _check_feature_alarms(
 
 
 def _check_diagnosis_alarms(
-    db: Session, device: Device, health_score: int, fault_probabilities: dict, batch_index: int = None
+    db: Session, device: Device, health_score: int, fault_probabilities: dict,
+    batch_index: int = None, order_analysis: dict = None
 ) -> list:
     """
     基于诊断结果生成设备级告警。
@@ -154,6 +155,32 @@ def _check_diagnosis_alarms(
             [f"• {name}：{prob:.1%}" for name, prob in top_faults]
         )
 
+    # 构建阶次分析描述
+    order_desc = ""
+    if order_analysis:
+        rot_info = f"估计转速: {order_analysis.get('rot_rpm', 'N/A')} RPM ({order_analysis.get('rot_freq_hz', 'N/A')} Hz)。"
+        spec = order_analysis.get("spectrum_features", {})
+        env = order_analysis.get("envelope_features", {})
+        order = order_analysis.get("order_features", {})
+
+        # 提取显著异常
+        anomalies = []
+        if spec.get("mesh_freq_ratio", 0) > 0.05:
+            anomalies.append(f"啮合频率能量占比 {spec['mesh_freq_ratio']*100:.1f}%")
+        if spec.get("sideband_count", 0) >= 2:
+            anomalies.append(f"边频带数量 {spec['sideband_count']} 个")
+        for name in ["BPFO", "BPFI", "BSF"]:
+            env_ratio = env.get(f"{name}_env_ratio", 0)
+            order_ratio = order.get(f"{name}_order_ratio", 0)
+            if env_ratio > 0.03 or order_ratio > 0.03:
+                anomalies.append(f"{name} 包络/阶次异常 (env={env_ratio*100:.1f}%, order={order_ratio*100:.1f}%)")
+
+        if anomalies:
+            order_desc = "\n频域/阶次异常证据：\n" + "\n".join([f"• {a}" for a in anomalies[:4]])
+        else:
+            order_desc = "\n频域/阶次分析未检出显著异常。"
+        order_desc = rot_info + order_desc
+
     if health_score < 60:
         if not _has_recent_unresolved_alarm(db, device.device_id, "综合健康度", "critical"):
             alarm = Alarm(
@@ -165,6 +192,7 @@ def _check_diagnosis_alarms(
                 description=(
                     f"系统分析显示设备整体健康度已降至 {health_score} 分（正常≥80，预警≥60）。"
                     f"{fault_desc}\n"
+                    f"{order_desc}\n"
                     f"建议立即停机检查。"
                 ),
                 suggestion="1. 检查齿轮箱润滑状态；2. 检查各轴承温度；3. 联系维修人员现场排查。",
@@ -182,6 +210,7 @@ def _check_diagnosis_alarms(
                 description=(
                     f"设备健康度下降至 {health_score} 分（正常≥80，预警≥60）。"
                     f"{fault_desc}\n"
+                    f"{order_desc}\n"
                     f"存在潜在故障风险。"
                 ),
                 suggestion="1. 加强监测频率；2. 关注振动趋势变化；3. 安排计划性检修。",
@@ -230,6 +259,7 @@ def generate_alarms(
     fault_probabilities: dict,
     channel_features: dict = None,
     batch_index: int = None,
+    order_analysis: dict = None,
 ):
     """
     综合告警生成入口
@@ -258,7 +288,7 @@ def generate_alarms(
             new_alarms.extend(alarms)
 
     # 2. 设备级诊断结果告警
-    diag_alarms = _check_diagnosis_alarms(db, device, health_score, fault_probabilities, batch_index)
+    diag_alarms = _check_diagnosis_alarms(db, device, health_score, fault_probabilities, batch_index, order_analysis)
     new_alarms.extend(diag_alarms)
 
     if new_alarms:

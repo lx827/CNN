@@ -307,6 +307,8 @@ export const getFaultDiagnosisResult = async (deviceId = 'WTG-001') => {
       healthScore: d.health_score || 87,
       faultProbabilities: d.fault_probabilities || {},
       batchIndex: d.batch_index || 0,
+      orderAnalysis: d.order_analysis || null,
+      rotFreq: d.rot_freq || null,
       faults
     }
   }

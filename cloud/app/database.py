@@ -42,5 +42,29 @@ def get_db():
 
 
 def init_db():
-    """初始化数据库：创建所有表（如果表不存在）"""
+    """初始化数据库：创建所有表（如果表不存在），并迁移新增列"""
     Base.metadata.create_all(bind=engine)
+
+    # SQLite 自动迁移：为已存在的表添加新增列
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+
+    # Device 表新增列
+    if "devices" in inspector.get_table_names():
+        device_cols = {c["name"] for c in inspector.get_columns("devices")}
+        with engine.connect() as conn:
+            if "gear_teeth" not in device_cols:
+                conn.execute(text("ALTER TABLE devices ADD COLUMN gear_teeth JSON"))
+            if "bearing_params" not in device_cols:
+                conn.execute(text("ALTER TABLE devices ADD COLUMN bearing_params JSON"))
+            conn.commit()
+
+    # Diagnosis 表新增列
+    if "diagnosis" in inspector.get_table_names():
+        diag_cols = {c["name"] for c in inspector.get_columns("diagnosis")}
+        with engine.connect() as conn:
+            if "order_analysis" not in diag_cols:
+                conn.execute(text("ALTER TABLE diagnosis ADD COLUMN order_analysis JSON"))
+            if "rot_freq" not in diag_cols:
+                conn.execute(text("ALTER TABLE diagnosis ADD COLUMN rot_freq FLOAT"))
+            conn.commit()
