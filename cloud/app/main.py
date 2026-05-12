@@ -3,11 +3,13 @@ FastAPI 应用入口
 启动命令：python -m app.main
 """
 import asyncio
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.memory_log import setup_memory_logging
 
 from app.database import init_db, SessionLocal
 from app.models import Device
@@ -26,6 +28,11 @@ from app.core.websocket import manager
 from app.services.analyzer import analyze_device, compute_channel_features
 from app.services.alarm_service import generate_alarms
 
+
+# ==================== 日志初始化 ====================
+# 启动时即初始化内存日志捕获，确保所有 print/logging 输出都被前端可见
+setup_memory_logging(capacity=2000, level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ==================== 后台分析任务 ====================
 # 信号量：一次只允许一个分析批次在运行，防止多批次并发导致内存爆掉
@@ -51,7 +58,7 @@ async def analysis_worker():
                 ).distinct().all()
 
                 if not devices_with_pending:
-                    print("[分析服务] 没有待检测数据，跳过")
+                    logger.info("[分析服务] 没有待检测数据，跳过")
                     continue
 
                 for (device_id,) in devices_with_pending:
@@ -74,7 +81,7 @@ async def analysis_worker():
                         sample_rate = device.sample_rate if device else SENSOR_SAMPLE_RATE
 
                         if len(records) < expected_channels:
-                            print(f"[分析服务] {device_id} 批次 {batch_index} 通道不完整 ({len(records)}/{expected_channels})，跳过")
+                            logger.warning(f"[分析服务] {device_id} 批次 {batch_index} 通道不完整 ({len(records)}/{expected_channels})，跳过")
                             continue
 
                         # 组装通道数据
@@ -148,17 +155,17 @@ async def analysis_worker():
                             }
                         })
 
-                        print(f"[分析服务] {device_id} 批次 {batch_index} 分析完成，健康度: {result['health_score']}, 状态: {result['status']}")
+                        logger.info(f"[分析服务] {device_id} 批次 {batch_index} 分析完成，健康度: {result['health_score']}, 状态: {result['status']}")
 
             except Exception as e:
-                print(f"[分析服务] 异常: {e}")
+                logger.error(f"[分析服务] 异常: {e}", exc_info=True)
             finally:
                 db.close()
 
         except asyncio.CancelledError:
             break
         except Exception as e:
-            print(f"[分析服务] 严重异常: {e}")
+            logger.error(f"[分析服务] 严重异常: {e}", exc_info=True)
 
 
 # ==================== 生命周期管理 ====================
@@ -168,7 +175,7 @@ async def lifespan(app: FastAPI):
     应用启动和关闭时的生命周期事件
     """
     # 启动时：初始化数据库 + 插入默认设备
-    print("[启动] 初始化数据库...")
+    logger.info("[启动] 初始化数据库...")
     init_db()
 
     db = SessionLocal()
@@ -236,7 +243,7 @@ async def lifespan(app: FastAPI):
                     last_seen_at=datetime.utcnow(),
                 )
                 db.add(device)
-                print(f"[启动] 创建设备: {dev_info['device_id']} (健康度 {dev_info['health_score']}, 状态 {dev_info['status']})")
+                logger.info(f"[启动] 创建设备: {dev_info['device_id']} (健康度 {dev_info['health_score']}, 状态 {dev_info['status']})")
 
         db.commit()
     finally:
@@ -247,18 +254,18 @@ async def lifespan(app: FastAPI):
     cpu_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="cpu_worker")
     loop = asyncio.get_running_loop()
     loop.set_default_executor(cpu_executor)
-    print("[启动] CPU 线程池已限制为 max_workers=2")
+    logger.info("[启动] CPU 线程池已限制为 max_workers=2")
 
     # 启动后台分析任务
     task = asyncio.create_task(analysis_worker())
-    print("[启动] 后台分析任务已启动")
+    logger.info("[启动] 后台分析任务已启动")
 
     yield  # 应用运行期间
 
     # 关闭时
     task.cancel()
     cpu_executor.shutdown(wait=True)
-    print("[关闭] 后台分析任务已停止，CPU 线程池已关闭")
+    logger.info("[关闭] 后台分析任务已停止，CPU 线程池已关闭")
 
 
 # ==================== 创建 FastAPI 应用 ====================

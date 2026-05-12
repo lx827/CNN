@@ -34,11 +34,14 @@ from app.services.diagnosis.utils import (
     _compute_order_spectrum_varying_speed,
 )
 from typing import Optional, Tuple
+import logging
 import numpy as np
 from scipy.fft import rfft, rfftfreq
 from scipy import signal as scipy_signal
 import io
 import asyncio
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/data", tags=["振动数据查看"])
 
@@ -368,8 +371,7 @@ def get_channel_fft(
             }
         }
     except Exception as e:
-        import traceback
-        print(f"[ERROR] FFT 计算失败: {e}\n{traceback.format_exc()}")
+        logger.error(f"FFT 计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"FFT 计算失败: {e}")
 
 
@@ -446,8 +448,7 @@ async def get_channel_stft(
             }
         }
     except Exception as e:
-        import traceback
-        print(f"[ERROR] STFT 计算失败: {e}\n{traceback.format_exc()}")
+        logger.error(f"STFT 计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"STFT 计算失败: {e}")
 
 
@@ -571,8 +572,7 @@ def get_channel_stats(
             }
         }
     except Exception as e:
-        import traceback
-        print(f"[ERROR] 统计指标计算失败: {e}\n{traceback.format_exc()}")
+        logger.error(f"统计指标计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"统计指标计算失败: {e}")
 
 
@@ -660,8 +660,7 @@ async def get_channel_envelope(
             }
         }
     except Exception as e:
-        import traceback
-        print(f"[ERROR] 包络谱计算失败: {e}\n{traceback.format_exc()}")
+        logger.error(f"包络谱计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"包络谱计算失败: {e}")
 
 
@@ -782,8 +781,7 @@ async def get_channel_order(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        import traceback
-        print(f"[ERROR] 阶次谱计算失败: {e}\n{traceback.format_exc()}")
+        logger.error(f"阶次谱计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"阶次谱计算失败: {e}")
 
 
@@ -851,8 +849,7 @@ async def get_channel_cepstrum(
             }
         }
     except Exception as e:
-        import traceback
-        print(f"[ERROR] 倒谱计算失败: {e}\n{traceback.format_exc()}")
+        logger.error(f"倒谱计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"倒谱计算失败: {e}")
 
 
@@ -1086,8 +1083,7 @@ async def get_channel_gear(
             }
         }
     except Exception as e:
-        import traceback
-        print(f"[ERROR] 齿轮诊断失败: {e}\n{traceback.format_exc()}")
+        logger.error(f"齿轮诊断失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"齿轮诊断失败: {e}")
 
 
@@ -1169,8 +1165,7 @@ async def get_channel_analyze(
             }
         }
     except Exception as e:
-        import traceback
-        print(f"[ERROR] 综合分析失败: {e}\n{traceback.format_exc()}")
+        logger.error(f"综合分析失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"综合分析失败: {e}")
 
 
@@ -1246,5 +1241,5 @@ async def get_channel_full_analysis(
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
-        print(f"[ERROR] 全算法分析失败: {e}\n{tb}")
+        logger.error(f"全算法分析失败: {e}\n{tb}")
         raise HTTPException(status_code=500, detail=f"全算法分析失败: {e}\n{tb}")
