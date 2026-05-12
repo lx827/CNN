@@ -412,9 +412,9 @@ export const getChannelEnvelope = async (deviceId, batchIndex, channel, maxFreq 
   return res
 }
 
-export const getChannelGear = async (deviceId, batchIndex, channel, detrend = false, method = 'standard') => {
+export const getChannelGear = async (deviceId, batchIndex, channel, detrend = false, method = 'standard', denoise = 'none') => {
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/gear`, {
-    params: { detrend, method }
+    params: { detrend, method, denoise }
   })
   return res
 }

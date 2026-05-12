@@ -115,6 +115,11 @@
               <el-option label="5000 Hz" :value="5000" />
               <el-option label="8192 Hz" :value="8192" />
             </el-select>
+            <el-select v-model="denoiseMethod" style="width: 130px; margin-left: 8px" size="small" @change="onDenoiseChange">
+              <el-option label="无预处理" value="none" />
+              <el-option label="小波去噪" value="wavelet" />
+              <el-option label="VMD分解" value="vmd" />
+            </el-select>
             <el-tooltip content="消除基频漂移导致的线性趋势" placement="top">
               <el-switch
                 v-model="enableDetrend"
@@ -974,6 +979,17 @@ const onMaxFreqChange = () => {
   if (computedOrder.value) computeOrder()
 }
 
+const onDenoiseChange = () => {
+  // 预处理方法改变时，重新计算所有已展开的分析
+  if (computedFFT.value) computeFFT()
+  if (computedSTFT.value) computeSTFT()
+  if (computedEnvelope.value) computeEnvelope()
+  if (computedOrder.value) computeOrder()
+  if (computedCepstrum.value) computeCepstrum()
+  if (computedStats.value) computeStats()
+  if (computedGear.value) computeGear()
+}
+
 // ========== 时域波形（始终自动加载） ==========
 const loadTimeDomain = async () => {
   try {
@@ -1326,7 +1342,8 @@ const computeGear = async () => {
       selectedBatch.value.batch_index,
       selectedChannel.value,
       enableDetrend.value,
-      gearMethod.value
+      gearMethod.value,
+      denoiseMethod.value
     )
     const d = res.data
     if (!d) return

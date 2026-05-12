@@ -611,12 +611,92 @@ def _extract_order_features(order_axis, spectrum, rot_freq: float, gear_teeth: d
 def analyze_device(channels_data: Dict[str, List[float]], sample_rate: int = 25600, device=None):
     """
     综合分析主函数
-    优先调用神经网络，失败回退简化规则算法
+
+    优先级：
+      1. 神经网络模型（nn_predictor.py）
+      2. 新诊断引擎（DiagnosisEngine，支持 Fast Kurtogram / CPW / MED 等高级算法）
+      3. 简化规则算法（回退方案）
     """
+    # 1. 神经网络优先
     nn_result = nn_predict(channels_data, sample_rate)
     if nn_result is not None:
         print("[分析] 使用神经网络模型预测结果")
         return nn_result
 
-    print("[分析] 神经网络未启用，使用简化规则算法")
+    # 2. 新诊断引擎（默认方案）
+    try:
+        bearing_params = getattr(device, "bearing_params", None) if device else None
+        gear_teeth = getattr(device, "gear_teeth", None) if device else None
+
+        # 从设备配置读取诊断策略（如果有的话）
+        strategy = getattr(device, "diagnosis_strategy", "advanced") if device else "advanced"
+        bearing_method = getattr(device, "bearing_method", "kurtogram") if device else "kurtogram"
+        gear_method = getattr(device, "gear_method", "standard") if device else "standard"
+        denoise = getattr(device, "denoise_method", "none") if device else "none"
+
+        engine = DiagnosisEngine(
+            strategy=strategy,
+            bearing_method=bearing_method,
+            gear_method=gear_method,
+            denoise_method=denoise,
+            bearing_params=bearing_params,
+            gear_teeth=gear_teeth,
+        )
+
+        # 对每个通道分别分析，然后融合
+        channel_results = []
+        for ch_name, signal in channels_data.items():
+            result = engine.analyze_comprehensive(np.array(signal, dtype=np.float64), sample_rate)
+            channel_results.append((ch_name, result))
+
+        # 融合多通道结果：取最差健康度
+        worst_health = min(r["health_score"] for _, r in channel_results)
+        worst_status = max(
+            ([r["status"] for _, r in channel_results]),
+            key=lambda s: {"normal": 0, "warning": 1, "fault": 2}[s]
+        )
+
+        # 合并故障概率（取各通道最大概率）
+        merged_probs = {}
+        for _, r in channel_results:
+            for fault_name, prob in r.get("bearing", {}).get("fault_indicators", {}).items():
+                if prob.get("significant"):
+                    merged_probs.setdefault("轴承" + fault_name, 0)
+                    merged_probs["轴承" + fault_name] = max(merged_probs["轴承" + fault_name], min(1.0, prob.get("snr", 0) / 10))
+            for fault_name, prob in r.get("gear", {}).get("fault_indicators", {}).items():
+                if isinstance(prob, dict) and prob.get("warning"):
+                    merged_probs.setdefault("齿轮" + fault_name, 0)
+                    merged_probs["齿轮" + fault_name] = max(merged_probs["齿轮" + fault_name], 0.3 if prob.get("warning") else 0)
+                    if prob.get("critical"):
+                        merged_probs["齿轮" + fault_name] = max(merged_probs["齿轮" + fault_name], 0.6)
+
+        # 构建兼容旧格式的 fault_probabilities
+        fault_probabilities = {"正常运行": max(0.0, 1.0 - sum(merged_probs.values()))}
+        for k, v in merged_probs.items():
+            fault_probabilities[k] = round(v, 4)
+
+        # 取第一个通道的详细分析作为 order_analysis
+        first_ch, first_result = channel_results[0]
+
+        # 构建兼容旧格式的结果
+        legacy_result = {
+            "health_score": worst_health,
+            "status": worst_status,
+            "fault_probabilities": fault_probabilities,
+            "imf_energy": first_result.get("time_features", {}),
+            "order_analysis": {
+                "engine_result": first_result,
+                "channels": {ch: r for ch, r in channel_results},
+            },
+            "rot_freq": first_result.get("bearing", {}).get("rot_freq_hz"),
+        }
+
+        print(f"[分析] 新诊断引擎完成，健康度={worst_health}，状态={worst_status}")
+        return legacy_result
+
+    except Exception as e:
+        print(f"[分析] 新诊断引擎异常: {e}，回退到规则算法")
+
+    # 3. 回退到简化规则算法
+    print("[分析] 使用简化规则算法")
     return _rule_based_analyze(channels_data, sample_rate, device)

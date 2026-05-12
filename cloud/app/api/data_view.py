@@ -1240,6 +1240,7 @@ def get_channel_gear(
     channel: int,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
     method: str = Query(default="standard", description="齿轮诊断方法: standard/advanced"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd"),
     db: Session = Depends(get_db)
 ):
     """
@@ -1268,10 +1269,13 @@ def get_channel_gear(
             "standard": GearMethod.STANDARD,
             "advanced": GearMethod.ADVANCED,
         }
+        denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET, "vmd": DenoiseMethod.VMD}
         gear_method = method_map.get(method, GearMethod.STANDARD)
+        denoise_method = denoise_map.get(denoise, DenoiseMethod.NONE)
 
         engine = DiagnosisEngine(
             gear_method=gear_method,
+            denoise_method=denoise_method,
             gear_teeth=gear_teeth,
         )
 
@@ -1292,7 +1296,10 @@ def get_channel_gear(
                 "ser": result.get("ser"),
                 "sidebands": result.get("sidebands", []),
                 "fm0": result.get("fm0"),
+                "fm4": result.get("fm4"),
                 "car": result.get("car"),
+                "m6a": result.get("m6a"),
+                "m8a": result.get("m8a"),
                 "fault_indicators": result.get("fault_indicators", {}),
             }
         }

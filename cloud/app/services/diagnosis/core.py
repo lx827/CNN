@@ -21,6 +21,8 @@ from .gear import (
     compute_na4,
     compute_ser,
     compute_car,
+    compute_m6a,
+    compute_m8a,
     analyze_sidebands,
 )
 from .preprocessing import wavelet_denoise
@@ -56,6 +58,7 @@ class DenoiseMethod(str, Enum):
     """预处理方法"""
     NONE = "none"                   # 无预处理
     WAVELET = "wavelet"             # 小波阈值去噪
+    VMD = "vmd"                     # VMD 变分模态分解降噪
 
 
 class DiagnosisEngine:
@@ -87,6 +90,8 @@ class DiagnosisEngine:
         arr = np.array(signal, dtype=np.float64)
         if self.denoise_method == DenoiseMethod.WAVELET:
             return wavelet_denoise(arr, wavelet="db8")
+        elif self.denoise_method == DenoiseMethod.VMD:
+            return vmd_denoise(arr, K=5, alpha=2000)
         return arr
 
     def analyze_bearing(
@@ -203,6 +208,16 @@ class DiagnosisEngine:
             # 实际应使用 TSA，这里用带阻近似
             result["fm0"] = round(compute_fm0(arr, mesh_freq, fs), 4)
             result["car"] = round(compute_car(arr, fs, rot_freq), 4)
+
+            # 差分信号（简化版：用高通滤波近似）
+            from .utils import highpass_filter
+            diff_approx = highpass_filter(arr, fs, mesh_freq * 0.5)
+            result["fm4"] = round(compute_fm4(diff_approx), 4)
+            result["m6a"] = round(compute_m6a(diff_approx), 4)
+            result["m8a"] = round(compute_m8a(diff_approx), 4)
+
+            # 边频带能量比 SER
+            result["ser"] = round(compute_ser(arr, fs, mesh_freq, rot_freq), 4)
 
         # 故障指示器
         indicators = self._evaluate_gear_faults(result)
