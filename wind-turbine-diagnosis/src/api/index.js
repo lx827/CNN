@@ -182,8 +182,7 @@ export const getFaultDiagnosisResult = async (deviceId = 'WTG-001') => {
     '轴承内圈故障': 'inner_race',
     '轴承外圈故障': 'outer_race',
     '轴承滚动体故障': 'ball',
-    '轴不对中': 'misalignment',
-    '基础松动': 'looseness',
+
     '正常运行': 'normal',
     '齿轮断齿': 'broken',
     '齿轮缺齿': 'missing',
@@ -209,8 +208,7 @@ export const getFaultDiagnosisResult = async (deviceId = 'WTG-001') => {
     inner_race: '输入轴轴承',
     outer_race: '输出轴轴承',
     ball: '中间轴轴承',
-    misalignment: '联轴器',
-    looseness: '底座',
+
     normal: '整体'
   }
 

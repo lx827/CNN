@@ -282,15 +282,7 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
             sev["kurtosis"] * 0.15 + sev["peak"] * 0.15 + sev["impulse_factor"] * 0.10 +
             bsf_env_sev * 0.30 + bsf_order_sev * 0.20 + sev["crest_factor"] * 0.10
         ),
-        "轴不对中": (
-            sev["rms"] * 0.30 + sev["skewness"] * 0.25 + sev["peak"] * 0.15 +
-            mesh_sev * 0.10 + sideband_sev * 0.10 + sideband_order_sev * 0.10
-        ),
-        "基础松动": (
-            sev["peak"] * 0.25 + sev["rms"] * 0.15 + sev["crest_factor"] * 0.15 +
-            sev["skewness"] * 0.10 + mesh_sev * 0.10 + sideband_sev * 0.10 +
-            max_bearing_env_sev * 0.15
-        ),
+
     }
 
     # 8. 正常运行概率衰减

@@ -269,10 +269,10 @@ const getComponentInfo = (channelName) => {
     return { name: '风扇系统', relatedFaults: [] }
   }
   if (name.includes('轴')) {
-    return { name: '轴系', relatedFaults: ['misalignment'] }
+    return { name: '轴系', relatedFaults: [] }
   }
   if (name.includes('底座') || name.includes('基础') || name.includes('松动')) {
-    return { name: '底座/基础', relatedFaults: ['looseness'] }
+    return { name: '底座/基础', relatedFaults: [] }
   }
   return { name: '通用部件', relatedFaults: [] }
 }
@@ -287,8 +287,7 @@ const faultNameMap = {
   missing: '齿轮缺齿',
   rootcrack: '齿轮齿根裂纹',
   normal: '正常运行',
-  misalignment: '轴不对中',
-  looseness: '基础松动'
+
 }
 
 // 计算 RUL（简化退化模型）
