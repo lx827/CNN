@@ -104,7 +104,13 @@ def ingest_data(payload: dict, db: Session = Depends(get_db)):
         device_id = payload.get("device_id", "WTG-001")
         sample_rate = payload.get("sample_rate", 25600)
         timestamp_str = payload.get("timestamp")
-        timestamp = datetime.fromisoformat(timestamp_str) if timestamp_str else datetime.utcnow()
+        if timestamp_str:
+            timestamp = datetime.fromisoformat(timestamp_str)
+            # 统一转为 naive UTC，避免与时区无关的 datetime 比较出错
+            if timestamp.tzinfo is not None:
+                timestamp = timestamp.replace(tzinfo=None)
+        else:
+            timestamp = datetime.utcnow()
         is_special = payload.get("is_special", 0)  # 0=普通, 1=特殊
         task_id = payload.get("task_id")  # 关联的采集任务ID（特殊采集时）
 

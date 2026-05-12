@@ -25,6 +25,7 @@ from .gear import (
     analyze_sidebands,
 )
 from .preprocessing import wavelet_denoise
+from .vmd_denoise import vmd_denoise
 from .features import (
     compute_time_features,
     compute_fft_features,
