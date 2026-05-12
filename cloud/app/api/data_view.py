@@ -23,6 +23,7 @@ from app.services.diagnosis import (
     BearingMethod,
     GearMethod,
     DenoiseMethod,
+    DiagnosisStrategy,
 )
 from app.services.diagnosis.utils import (
     estimate_rot_freq_envelope as _estimate_rot_freq_envelope,
@@ -1137,7 +1138,7 @@ async def get_channel_analyze(
             "med": BearingMethod.MED,
         }
         gear_map = {"standard": GearMethod.STANDARD, "advanced": GearMethod.ADVANCED}
-        denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET}
+        denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET, "vmd": DenoiseMethod.VMD}
 
         engine = DiagnosisEngine(
             strategy=strategy_map.get(strategy, "standard"),
@@ -1171,3 +1172,78 @@ async def get_channel_analyze(
         import traceback
         print(f"[ERROR] 综合分析失败: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"综合分析失败: {e}")
+
+
+@router.get("/{device_id}/{batch_index}/{channel}/full-analysis")
+async def get_channel_full_analysis(
+    device_id: str,
+    batch_index: int,
+    channel: int,
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd"),
+    db: Session = Depends(get_db)
+):
+    """
+    全算法对比分析（运行所有轴承方法和所有齿轮方法）
+
+    返回所有诊断方法的详细结果和检出结论对比，便于前端展示：
+    - 各轴承方法（包络 / Kurtogram / CPW / MED）分别检出了什么故障
+    - 各齿轮方法（标准边频带 / 高级指标）的详细参数和阈值判定
+    - 综合结论和建议
+    """
+    record = db.query(SensorData).filter(
+        SensorData.device_id == device_id,
+        SensorData.batch_index == batch_index,
+        SensorData.channel == channel
+    ).first()
+
+    if not record or not record.data:
+        raise HTTPException(status_code=404, detail="数据不存在")
+
+    try:
+        sample_rate = record.sample_rate or 25600
+        signal = prepare_signal(record.data, detrend=detrend)
+
+        # 限制信号长度（最多 5 秒）
+        max_samples = sample_rate * 5
+        if len(signal) > max_samples:
+            signal = signal[:max_samples]
+
+        device = db.query(Device).filter(Device.device_id == device_id).first()
+        bearing_params = {}
+        gear_teeth = {}
+        if device:
+            bearing_params = device.bearing_params or {}
+            gear_teeth = device.gear_teeth or {}
+
+        denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET, "vmd": DenoiseMethod.VMD}
+
+        engine = DiagnosisEngine(
+            strategy=DiagnosisStrategy.EXPERT,
+            bearing_method=BearingMethod.ENVELOPE,
+            gear_method=GearMethod.STANDARD,
+            denoise_method=denoise_map.get(denoise, DenoiseMethod.NONE),
+            bearing_params=bearing_params,
+            gear_teeth=gear_teeth,
+        )
+
+        # CPU 密集型全算法分析放入线程池
+        result = await asyncio.to_thread(engine.analyze_all_methods, signal, sample_rate)
+
+        return {
+            "code": 200,
+            "data": {
+                "device_id": record.device_id,
+                "batch_index": record.batch_index,
+                "channel": record.channel,
+                "channel_name": _get_channel_name(device, record.channel),
+                "sample_rate": sample_rate,
+                "is_special": bool(record.is_special),
+                "denoise": denoise,
+                **result,
+            }
+        }
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] 全算法分析失败: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"全算法分析失败: {e}")

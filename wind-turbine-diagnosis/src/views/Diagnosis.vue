@@ -93,6 +93,102 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- 诊断算法明细（当后台有新引擎详细结果时显示） -->
+    <el-row v-if="channelsDetail && Object.keys(channelsDetail).length > 0" :gutter="20" style="margin-top: 20px;">
+      <el-col :span="24">
+        <el-card>
+          <template #header>
+            <div class="card-header">
+              <span>🔍 诊断算法明细 — 各通道详细检出结果</span>
+              <el-tag type="info" size="small">基于新诊断引擎</el-tag>
+            </div>
+          </template>
+
+          <el-collapse v-model="activeCollapse">
+            <el-collapse-item
+              v-for="(detail, chName) in channelsDetail"
+              :key="chName"
+              :title="`${chName} — 健康度${detail.health_score ?? '-'}% (${statusTextMap[detail.status] || detail.status || '未知'})`"
+              :name="chName"
+            >
+              <div v-if="detail.bearing" style="margin-bottom: 16px;">
+                <el-text type="primary" style="font-weight: 600;">🔧 轴承诊断（{{ detail.bearing.method || '包络' }}）</el-text>
+                <el-descriptions :column="3" size="small" border style="margin-top: 8px;">
+                  <el-descriptions-item label="转频">{{ detail.bearing.rot_freq_hz }} Hz</el-descriptions-item>
+                  <el-descriptions-item label="策略">{{ detail.bearing.strategy }}</el-descriptions-item>
+                </el-descriptions>
+                <el-table v-if="detail.bearing.fault_indicators && Object.keys(detail.bearing.fault_indicators).length > 0" :data="formatBearingIndicators(detail.bearing.fault_indicators)" size="small" border style="margin-top: 8px;">
+                  <el-table-column prop="name" label="故障类型" width="120" />
+                  <el-table-column prop="theory_hz" label="理论频率(Hz)" width="130" />
+                  <el-table-column prop="detected_hz" label="检出频率(Hz)" width="130" />
+                  <el-table-column prop="snr" label="信噪比" width="100">
+                    <template #default="{ row }">
+                      <el-tag :type="row.snr > 5 ? 'danger' : row.snr > 3 ? 'warning' : 'info'" size="small">{{ row.snr }}</el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="结论" width="100">
+                    <template #default="{ row }">
+                      <el-tag :type="row.significant ? 'danger' : 'success'" size="small">{{ row.significant ? '显著' : '未检出' }}</el-tag>
+                    </template>
+                  </el-table-column>
+                </el-table>
+                <div v-else style="margin-top: 8px; color: #999; font-size: 13px;">未配置轴承参数或无故障指示器数据</div>
+              </div>
+
+              <div v-if="detail.gear" style="margin-bottom: 16px;">
+                <el-text type="primary" style="font-weight: 600;">⚙️ 齿轮诊断（{{ detail.gear.method || '标准' }}）</el-text>
+                <el-descriptions :column="4" size="small" border style="margin-top: 8px;">
+                  <el-descriptions-item label="转频">{{ detail.gear.rot_freq_hz }} Hz</el-descriptions-item>
+                  <el-descriptions-item label="啮合频率" v-if="detail.gear.mesh_freq_hz">{{ detail.gear.mesh_freq_hz }} Hz</el-descriptions-item>
+                  <el-descriptions-item label="SER">
+                    <el-tag :type="detail.gear.fault_indicators?.ser?.critical ? 'danger' : detail.gear.fault_indicators?.ser?.warning ? 'warning' : 'success'" size="small">
+                      {{ detail.gear.ser?.toFixed?.(3) ?? detail.gear.ser }}
+                    </el-tag>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="显著边频数">
+                    <el-tag :type="detail.gear.fault_indicators?.sideband_count?.critical ? 'danger' : detail.gear.fault_indicators?.sideband_count?.warning ? 'warning' : 'success'" size="small">
+                      {{ detail.gear.fault_indicators?.sideband_count?.value ?? '-' }}
+                    </el-tag>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="FM0" v-if="detail.gear.fm0 != null">
+                    <span :class="detail.gear.fault_indicators?.fm0?.critical ? 'text-danger' : detail.gear.fault_indicators?.fm0?.warning ? 'text-warning' : ''">{{ detail.gear.fm0 }}</span>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="FM4" v-if="detail.gear.fm4 != null">
+                    <span :class="detail.gear.fault_indicators?.fm4?.critical ? 'text-danger' : detail.gear.fault_indicators?.fm4?.warning ? 'text-warning' : ''">{{ detail.gear.fm4 }}</span>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="CAR" v-if="detail.gear.car != null">
+                    <span :class="detail.gear.fault_indicators?.car?.critical ? 'text-danger' : detail.gear.fault_indicators?.car?.warning ? 'text-warning' : ''">{{ detail.gear.car }}</span>
+                  </el-descriptions-item>
+                </el-descriptions>
+                <el-table v-if="detail.gear.sidebands && detail.gear.sidebands.length > 0" :data="detail.gear.sidebands" size="small" style="margin-top: 8px;" max-height="200">
+                  <el-table-column prop="order" label="阶次" width="60" />
+                  <el-table-column prop="freq_low" label="下边频(Hz)" width="110" />
+                  <el-table-column prop="freq_high" label="上边频(Hz)" width="110" />
+                  <el-table-column prop="amp_low" label="下幅值" width="90" />
+                  <el-table-column prop="amp_high" label="上幅值" width="90" />
+                  <el-table-column label="显著">
+                    <template #default="{ row }">
+                      <el-tag :type="row.significant ? 'warning' : 'info'" size="small">{{ row.significant ? '是' : '否' }}</el-tag>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+
+              <div v-if="detail.time_features">
+                <el-text type="primary" style="font-weight: 600;">📊 时域特征</el-text>
+                <el-descriptions :column="4" size="small" border style="margin-top: 8px;">
+                  <el-descriptions-item label="峰值">{{ detail.time_features.peak?.toFixed?.(4) ?? detail.time_features.peak }}</el-descriptions-item>
+                  <el-descriptions-item label="RMS">{{ detail.time_features.rms?.toFixed?.(4) ?? detail.time_features.rms }}</el-descriptions-item>
+                  <el-descriptions-item label="峭度">{{ detail.time_features.kurtosis?.toFixed?.(4) ?? detail.time_features.kurtosis }}</el-descriptions-item>
+                  <el-descriptions-item label="峰值因子">{{ detail.time_features.crest_factor?.toFixed?.(4) ?? detail.time_features.crest_factor }}</el-descriptions-item>
+                </el-descriptions>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -109,10 +205,30 @@ const batchIndex = ref(0)
 const deviceList = ref([])
 const selectedDeviceId = ref('WTG-001')
 const componentList = ref([])
+const channelsDetail = ref(null)
+const engineResult = ref(null)
 const router = useRouter()
 
 const chartDomRefs = ref({}) // { [compId]: { prob: el, rul: el } }
 const chartInstances = ref({}) // { [compId]: { prob: echarts, rul: echarts } }
+const activeCollapse = ref([])
+
+const statusTextMap = {
+  normal: '正常',
+  warning: '预警',
+  fault: '故障'
+}
+
+const formatBearingIndicators = (indicators) => {
+  if (!indicators) return []
+  return Object.entries(indicators).map(([name, info]) => ({
+    name,
+    theory_hz: info.theory_hz ?? '-',
+    detected_hz: info.detected_hz ?? '-',
+    snr: info.snr ?? '-',
+    significant: info.significant ?? false,
+  }))
+}
 
 const statusMap = {
   normal: { text: '正常运行', type: 'success' },
@@ -350,6 +466,10 @@ const loadDiagnosis = async () => {
 
   // 生成部件列表
   componentList.value = generateComponents(channelNames, d.faultProbabilities)
+
+  // 保存详细诊断数据
+  channelsDetail.value = d.channelsDetail || null
+  engineResult.value = d.engineResult || null
 
   // 清理旧图表
   clearCharts()

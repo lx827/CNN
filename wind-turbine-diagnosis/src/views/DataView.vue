@@ -414,6 +414,167 @@
         </el-col>
       </el-row>
 
+      <!-- 综合故障诊断 -->
+      <el-row :gutter="16" class="spectrum-row">
+        <el-col :span="24">
+          <div class="section-header">
+            <span class="chart-title">综合故障诊断（全算法对比）</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <template v-if="!computedFullAnalysis">
+                <el-select v-model="fullAnalysisDenoise" size="small" style="width: 130px">
+                  <el-option label="无预处理" value="none" />
+                  <el-option label="小波去噪" value="wavelet" />
+                  <el-option label="VMD分解" value="vmd" />
+                </el-select>
+                <el-button
+                  type="primary"
+                  size="small"
+                  :loading="loadingFullAnalysis"
+                  @click="computeFullAnalysis"
+                >
+                  <el-icon><DataAnalysis /></el-icon> 运行全算法诊断
+                </el-button>
+              </template>
+              <el-button v-else type="info" size="small" @click="clearFullAnalysis">
+                <el-icon><Close /></el-icon> 收起
+              </el-button>
+            </div>
+          </div>
+          <div v-if="computedFullAnalysis && fullAnalysisData">
+            <!-- 综合结论 -->
+            <el-alert
+              v-if="fullAnalysisData.status !== 'normal'"
+              :title="fullAnalysisData.status === 'fault' ? '⚠️ 检出故障特征' : '⚡ 检出预警信号'"
+              :type="fullAnalysisData.status === 'fault' ? 'error' : 'warning'"
+              :description="fullAnalysisData.recommendation"
+              show-icon
+              :closable="false"
+              style="margin-bottom: 12px"
+            />
+            <el-alert
+              v-else
+              title="✅ 未检出显著故障特征"
+              type="success"
+              :description="fullAnalysisData.recommendation || '所有诊断方法均未检出显著故障特征，设备运行正常。'"
+              show-icon
+              :closable="false"
+              style="margin-bottom: 12px"
+            />
+
+            <!-- 时域特征 -->
+            <el-card size="small" style="margin-bottom: 12px">
+              <template #header>
+                <span style="font-weight: 600;">📊 时域特征参数</span>
+                <el-text v-if="fullAnalysisData.rot_freq_hz" type="info" size="small" style="margin-left: 12px;">
+                  估计转频: {{ fullAnalysisData.rot_freq_hz }} Hz / {{ (fullAnalysisData.rot_freq_hz * 60).toFixed(0) }} RPM
+                </el-text>
+              </template>
+              <el-descriptions :column="4" size="small" border v-if="fullAnalysisData.time_features">
+                <el-descriptions-item label="峰值">{{ fullAnalysisData.time_features.peak?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="RMS">{{ fullAnalysisData.time_features.rms?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="峭度">{{ fullAnalysisData.time_features.kurtosis?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="偏度">{{ fullAnalysisData.time_features.skewness?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="裕度">{{ fullAnalysisData.time_features.margin?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="峰值因子">{{ fullAnalysisData.time_features.crest_factor?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="波形因子">{{ fullAnalysisData.time_features.shape_factor?.toFixed(4) }}</el-descriptions-item>
+                <el-descriptions-item label="脉冲因子">{{ fullAnalysisData.time_features.impulse_factor?.toFixed(4) }}</el-descriptions-item>
+              </el-descriptions>
+            </el-card>
+
+            <!-- 轴承诊断各方法结果 -->
+            <el-card size="small" style="margin-bottom: 12px">
+              <template #header>
+                <span style="font-weight: 600;">🔧 轴承诊断 — 各方法检出结论</span>
+              </template>
+              <el-table :data="bearingSummaryTable" size="small" border style="width: 100%">
+                <el-table-column prop="method" label="诊断方法" width="160" />
+                <el-table-column prop="faults" label="检出故障">
+                  <template #default="{ row }">
+                    <el-tag v-for="(f, idx) in row.faults" :key="idx" :type="f.snr > 5 ? 'danger' : 'warning'" size="small" style="margin-right: 6px; margin-bottom: 4px;">
+                      {{ f.fault_type }} (SNR={{ f.snr }})
+                    </el-tag>
+                    <el-text v-if="row.faults.length === 0" type="info" size="small">未检出显著故障</el-text>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="params" label="关键参数" min-width="200">
+                  <template #default="{ row }">
+                    <el-text type="info" size="small">{{ row.params }}</el-text>
+                  </template>
+                </el-table-column>
+              </el-table>
+
+              <!-- 各方法详细故障指示器 -->
+              <el-collapse style="margin-top: 12px;">
+                <el-collapse-item title="查看各方法详细指标" name="1">
+                  <div v-for="(bresult, methodKey) in fullAnalysisData.bearing_results" :key="methodKey" style="margin-bottom: 12px;">
+                    <el-text type="primary" size="small" style="font-weight: 600;">{{ bearingMethodLabel(methodKey) }}</el-text>
+                    <el-descriptions :column="3" size="small" border v-if="bresult.fault_indicators">
+                      <el-descriptions-item
+                        v-for="(info, fname) in bresult.fault_indicators"
+                        :key="fname"
+                        :label="fname"
+                      >
+                        <span v-if="info.significant" style="color: #F5222D; font-weight: 600;">
+                          检出 ({{ info.detected_hz }}Hz, SNR={{ info.snr }})
+                        </span>
+                        <span v-else style="color: #999;">
+                          未检出 (理论{{ info.theory_hz }}Hz)
+                        </span>
+                      </el-descriptions-item>
+                    </el-descriptions>
+                  </div>
+                </el-collapse-item>
+              </el-collapse>
+            </el-card>
+
+            <!-- 齿轮诊断各方法结果 -->
+            <el-card size="small" style="margin-bottom: 12px">
+              <template #header>
+                <span style="font-weight: 600;">⚙️ 齿轮诊断 — 各方法详细参数</span>
+              </template>
+              <el-table :data="gearSummaryTable" size="small" border style="width: 100%">
+                <el-table-column prop="method" label="诊断方法" width="140" />
+                <el-table-column prop="ser" label="SER" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="row.ser > 3 ? 'danger' : row.ser > 1.5 ? 'warning' : 'success'" size="small">{{ row.ser?.toFixed(3) ?? '-' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="fm0" label="FM0" width="90">
+                  <template #default="{ row }">
+                    <span :class="row.fm0 > 10 ? 'text-danger' : row.fm0 > 5 ? 'text-warning' : ''">{{ row.fm0?.toFixed(2) ?? '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="fm4" label="FM4" width="90">
+                  <template #default="{ row }">
+                    <span :class="row.fm4 > 10 ? 'text-danger' : row.fm4 > 5 ? 'text-warning' : ''">{{ row.fm4?.toFixed(2) ?? '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="car" label="CAR" width="90">
+                  <template #default="{ row }">
+                    <span :class="row.car > 2 ? 'text-danger' : row.car > 1.2 ? 'text-warning' : ''">{{ row.car?.toFixed(2) ?? '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="sideband_count" label="显著边频数" width="110" />
+                <el-table-column prop="alerts" label="阈值告警">
+                  <template #default="{ row }">
+                    <el-tag v-for="(a, idx) in row.alerts" :key="idx" :type="a.level === 'critical' ? 'danger' : 'warning'" size="small" style="margin-right: 6px; margin-bottom: 4px;">
+                      {{ a.indicator }}
+                    </el-tag>
+                    <el-text v-if="row.alerts.length === 0" type="info" size="small">无告警</el-text>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+          </div>
+          <div v-else-if="loadingFullAnalysis" class="placeholder">
+            <el-skeleton :rows="4" animated />
+          </div>
+          <div v-else class="placeholder">
+            <el-empty description="点击按钮运行全算法故障诊断对比分析" :image-size="80" />
+          </div>
+        </el-col>
+      </el-row>
+
       <!-- 阶次追踪 -->
       <el-row :gutter="16" class="spectrum-row">
         <el-col :span="24">
@@ -641,6 +802,7 @@ import {
   getChannelStats,
   getChannelOrder,
   getChannelCepstrum,
+  getChannelFullAnalysis,
   deleteBatch,
   deleteSpecialBatches,
   exportChannelCSV
@@ -763,6 +925,12 @@ const cepstrumData = ref(null)
 const gearData = ref(null)
 const envelopeData = ref(null)
 
+// 综合故障诊断
+const computedFullAnalysis = ref(false)
+const loadingFullAnalysis = ref(false)
+const fullAnalysisData = ref(null)
+const fullAnalysisDenoise = ref('none')
+
 // 统计指标加窗参数
 const statsWindowSize = ref(1024)
 const statsStep = ref(512)
@@ -778,6 +946,76 @@ const orderSamplesPerRev = ref(1024)
 
 // 倒谱分析参数
 const cepstrumMaxQuefrency = ref(500)
+
+// 综合故障诊断方法标签映射
+const bearingMethodLabel = (key) => {
+  const map = {
+    envelope: '标准包络分析',
+    kurtogram: 'Fast Kurtogram',
+    cpw: 'CPW预白化+包络',
+    med: 'MED最小熵解卷积+包络',
+  }
+  return map[key] || key
+}
+
+// 轴承诊断汇总表计算属性
+const bearingSummaryTable = computed(() => {
+  if (!fullAnalysisData.value?.bearing_results) return []
+  const results = []
+  for (const [methodKey, result] of Object.entries(fullAnalysisData.value.bearing_results)) {
+    if (result.error) continue
+    const faults = []
+    const indicators = result.fault_indicators || {}
+    for (const [fname, info] of Object.entries(indicators)) {
+      if (info.significant) {
+        faults.push({ fault_type: fname, snr: info.snr, detected_hz: info.detected_hz })
+      }
+    }
+    // 关键参数
+    const params = []
+    if (result.optimal_fc != null) params.push(`最优频段 ${result.optimal_fc}Hz`)
+    if (result.max_kurtosis != null) params.push(`峭度 ${result.max_kurtosis.toFixed(2)}`)
+    if (result.kurtosis_after != null) params.push(`MED后峭度 ${result.kurtosis_after.toFixed(2)}`)
+    if (result.kurtosis_before != null) params.push(`MED前峭度 ${result.kurtosis_before.toFixed(2)}`)
+    results.push({
+      method: bearingMethodLabel(methodKey),
+      methodKey,
+      faults,
+      params: params.join(' | ') || '-',
+    })
+  }
+  return results
+})
+
+// 齿轮诊断汇总表计算属性
+const gearSummaryTable = computed(() => {
+  if (!fullAnalysisData.value?.gear_results) return []
+  const results = []
+  for (const [methodKey, result] of Object.entries(fullAnalysisData.value.gear_results)) {
+    if (result.error) continue
+    const alerts = []
+    const indicators = result.fault_indicators || {}
+    for (const [iname, info] of Object.entries(indicators)) {
+      if (typeof info === 'object') {
+        if (info.critical) alerts.push({ indicator: iname, level: 'critical' })
+        else if (info.warning) alerts.push({ indicator: iname, level: 'warning' })
+      }
+    }
+    const sidebands = result.sidebands || []
+    const sigSb = sidebands.filter(sb => sb.significant)
+    results.push({
+      method: methodKey === 'standard' ? '标准边频带' : '高级时域指标',
+      methodKey,
+      ser: result.ser,
+      fm0: result.fm0,
+      fm4: result.fm4,
+      car: result.car,
+      sideband_count: sigSb.length,
+      alerts,
+    })
+  }
+  return results
+})
 
 const statsDisplay = [
   { key: 'peak', label: '峰值', precision: 4 },
@@ -930,10 +1168,12 @@ const resetComputedState = () => {
   computedOrder.value = false
   computedCepstrum.value = false
   computedGear.value = false
+  computedFullAnalysis.value = false
   statsData.value = null
   orderData.value = null
   cepstrumData.value = null
   gearData.value = null
+  fullAnalysisData.value = null
   windowedInstance?.dispose(); windowedInstance = null
   orderInstance?.dispose(); orderInstance = null
   cepstrumInstance?.dispose(); cepstrumInstance = null
@@ -969,6 +1209,7 @@ const onDetrendChange = () => {
   if (computedCepstrum.value) { cepstrumInstance?.dispose(); cepstrumInstance = null; computeCepstrum() }
   if (computedStats.value) { windowedInstance?.dispose(); windowedInstance = null; computeStats() }
   if (computedGear.value) { computeGear() }
+  if (computedFullAnalysis.value) { computeFullAnalysis() }
 }
 
 const onMaxFreqChange = () => {
@@ -988,6 +1229,7 @@ const onDenoiseChange = () => {
   if (computedCepstrum.value) computeCepstrum()
   if (computedStats.value) computeStats()
   if (computedGear.value) computeGear()
+  if (computedFullAnalysis.value) computeFullAnalysis()
 }
 
 // ========== 时域波形（始终自动加载） ==========
@@ -1362,6 +1604,36 @@ const computeGear = async () => {
 const clearGear = () => {
   computedGear.value = false
   gearData.value = null
+}
+
+const computeFullAnalysis = async () => {
+  loadingFullAnalysis.value = true
+  try {
+    const res = await getChannelFullAnalysis(
+      selectedDevice.value.device_id,
+      selectedBatch.value.batch_index,
+      selectedChannel.value,
+      {
+        detrend: enableDetrend.value,
+        denoise: fullAnalysisDenoise.value,
+      }
+    )
+    const d = res.data
+    if (!d) return
+    fullAnalysisData.value = d
+    computedFullAnalysis.value = true
+  } catch (e) {
+    console.error('全算法诊断失败:', e)
+    ElMessage.error('全算法诊断失败: ' + (e.response?.data?.detail || e.message))
+    computedFullAnalysis.value = false
+  } finally {
+    loadingFullAnalysis.value = false
+  }
+}
+
+const clearFullAnalysis = () => {
+  computedFullAnalysis.value = false
+  fullAnalysisData.value = null
 }
 
 // ========== 按需计算：统计指标 ==========
