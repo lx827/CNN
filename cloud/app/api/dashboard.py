@@ -12,6 +12,12 @@ from typing import Dict
 
 router = APIRouter(prefix="/api/dashboard", tags=["设备总览"])
 
+# 有效故障类型白名单（排除已废弃的轴不对中、基础松动）
+VALID_FAULT_TYPES = {
+    "正常运行", "齿轮磨损", "轴承内圈故障", "轴承外圈故障",
+    "滚动体故障", "齿轮断齿", "齿轮缺齿", "齿轮齿根裂纹"
+}
+
 def _get_offline_threshold(device: Device, now: datetime) -> datetime:
     """
     根据设备通信间隔计算离线阈值。
@@ -68,9 +74,11 @@ def get_dashboard(db: Session = Depends(get_db)):
         diag = db.query(Diagnosis).filter(Diagnosis.device_id == d.device_id) \
             .order_by(Diagnosis.analyzed_at.desc()).first()
         if diag:
+            fault_probs = diag.fault_probabilities or {}
+            filtered_probs = {k: v for k, v in fault_probs.items() if k in VALID_FAULT_TYPES}
             latest_diag[d.device_id] = {
                 "health_score": diag.health_score,
-                "fault_probabilities": diag.fault_probabilities or {},
+                "fault_probabilities": filtered_probs,
                 "status": diag.status,
             }
         elif is_offline:
