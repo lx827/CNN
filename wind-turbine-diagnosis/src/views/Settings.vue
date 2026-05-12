@@ -117,12 +117,44 @@
           <el-text type="info" size="small">通道名称将显示在监测和告警页面中</el-text>
         </el-form-item>
 
+        <el-divider />
+
+        <!-- 数据压缩配置（云端控制边端） -->
+        <el-form-item label="数据压缩">
+          <el-switch
+            v-model="form.compression_enabled"
+            active-text="启用"
+            inactive-text="关闭"
+          />
+          <el-text type="info" size="small" style="margin-left: 8px;">
+            关闭后上传原始数据（不压缩），网络占用更高
+          </el-text>
+        </el-form-item>
+
+        <el-form-item label="压缩比">
+          <el-input-number
+            v-model="form.downsample_ratio"
+            :min="1"
+            :max="20"
+            :step="1"
+            controls-position="right"
+            style="width: 140px"
+            :disabled="!form.compression_enabled"
+          />
+          <el-text type="info" size="small" style="margin-left: 8px;">
+            1=不压缩，8=8倍压缩（81920点→10240点）
+          </el-text>
+        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" :loading="saving" @click="onSave">
             <el-icon><Check /></el-icon>
             保存配置
           </el-button>
           <el-button @click="onReset">重置</el-button>
+          <el-checkbox v-model="applyToAll" style="margin-left: 16px;">
+            应用到所有设备
+          </el-checkbox>
         </el-form-item>
       </el-form>
     </el-card>
@@ -353,7 +385,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  getDevices, getDeviceConfig, updateDeviceConfig,
+  getDevices, getDeviceConfig, updateDeviceConfig, updateBatchDeviceConfig,
   getAlarmThresholds, updateAlarmThresholds
 } from '../api'
 
@@ -370,7 +402,11 @@ const form = ref({
   channel_count: 3,
   gear_teeth: { input: null, output: null },
   bearing_params: { n: null, d: null, D: null, alpha: null },
+  compression_enabled: true,
+  downsample_ratio: 8,
 })
+
+const applyToAll = ref(false)
 
 // 通道名称
 const channelNames = ref({ 1: '轴承附近', 2: '驱动端', 3: '风扇端' })
@@ -441,6 +477,8 @@ const loadConfig = async () => {
     form.value.sample_rate = d.sample_rate ?? 25600
     form.value.window_seconds = d.window_seconds ?? 10
     form.value.channel_count = d.channel_count ?? 3
+    form.value.compression_enabled = d.compression_enabled ?? true
+    form.value.downsample_ratio = d.downsample_ratio ?? 8
 
     // 加载齿轮/轴承参数
     const gt = d.gear_teeth || {}
@@ -506,7 +544,7 @@ const onSave = async () => {
     for (let i = 1; i <= form.value.channel_count; i++) {
       names[String(i)] = channelNames.value[i] || `通道${i}`
     }
-    await updateDeviceConfig(form.value.device_id, {
+    const payload = {
       upload_interval: computedSeconds.value,
       task_poll_interval: form.value.task_poll_interval,
       sample_rate: form.value.sample_rate,
@@ -515,7 +553,16 @@ const onSave = async () => {
       channel_names: names,
       gear_teeth: form.value.gear_teeth,
       bearing_params: form.value.bearing_params,
-    })
+      compression_enabled: form.value.compression_enabled,
+      downsample_ratio: form.value.downsample_ratio,
+    }
+    if (applyToAll.value) {
+      await updateBatchDeviceConfig(payload)
+      ElMessage.success('配置已批量应用到所有设备，约 30 秒内同步到边端')
+    } else {
+      await updateDeviceConfig(form.value.device_id, payload)
+      ElMessage.success('配置已保存，约 30 秒内同步到边端')
+    }
     ElMessage.success('配置已保存，约 30 秒内同步到边端')
   } catch (e) {
     console.error('保存配置失败:', e)

@@ -35,6 +35,8 @@ class Device(Base):
     alarm_thresholds = Column(JSON, default=dict, comment="告警阈值配置，如 {rms:{warning:5,critical:10}}")
     gear_teeth = Column(JSON, nullable=True, comment="齿轮参数，如 {input:18, output:27}")
     bearing_params = Column(JSON, nullable=True, comment="轴承参数，如 {n:9, d:7.94, D:39.04, alpha:0}")
+    compression_enabled = Column(Integer, default=1, comment="边端是否启用数据压缩 0/1")
+    downsample_ratio = Column(Integer, default=8, comment="边端降采样压缩比")
     last_seen_at = Column(DateTime, nullable=True, comment="设备最后一次数据上传时间")
     created_at = Column(DateTime, default=datetime.utcnow)
 

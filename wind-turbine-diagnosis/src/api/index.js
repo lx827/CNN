@@ -461,6 +461,11 @@ export const updateDeviceConfig = async (deviceId, config) => {
   return res
 }
 
+export const updateBatchDeviceConfig = async (config) => {
+  const res = await request.put('/api/devices/batch-config', config)
+  return res
+}
+
 export const getAlarmThresholds = async (deviceId) => {
   const res = await request.get(`/api/devices/${deviceId}/alarm-thresholds`)
   return res
