@@ -498,3 +498,10 @@ export const exportChannelCSV = (deviceId, batchIndex, channel, detrend = false)
   const url = `/api/data/${deviceId}/${batchIndex}/${channel}/export?detrend=${detrend}`
   window.open(url, '_blank')
 }
+
+// ==================== 系统日志 ====================
+
+export const getSystemLogs = async (lines = 200) => {
+  const res = await request.get('/api/logs/', { params: { lines } })
+  return res
+}

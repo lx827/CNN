@@ -39,6 +39,10 @@
               <el-icon><Setting /></el-icon>
               <span>边端配置</span>
             </el-menu-item>
+            <el-menu-item index="/logs">
+              <el-icon><Document /></el-icon>
+              <span>系统日志</span>
+            </el-menu-item>
           </el-menu>
 
           <el-button class="logout-btn" type="danger" plain size="small" @click="handleLogout">

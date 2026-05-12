@@ -179,7 +179,7 @@ class DiagnosisEngine:
         if rot_freq is None:
             rot_freq = _estimate_rot_freq_simple(arr, fs)
 
-        z_in = self.gear_teeth.get("input", 0) if self.gear_teeth else 0
+        z_in = (self.gear_teeth.get("input") or 0) if self.gear_teeth else 0
         mesh_freq = rot_freq * z_in if z_in > 0 else None
 
         result = {
@@ -287,10 +287,10 @@ class DiagnosisEngine:
         amp_arr = np.array(env_amp)
 
         # 计算轴承特征频率
-        n_balls = self.bearing_params.get("n", 0)
-        d = self.bearing_params.get("d", 0)
-        D = self.bearing_params.get("D", 0)
-        alpha = np.radians(self.bearing_params.get("alpha", 0))
+        n_balls = self.bearing_params.get("n") or 0
+        d = self.bearing_params.get("d") or 0
+        D = self.bearing_params.get("D") or 0
+        alpha = np.radians(self.bearing_params.get("alpha") or 0)
 
         if n_balls <= 0 or d <= 0 or D <= 0:
             return {}
