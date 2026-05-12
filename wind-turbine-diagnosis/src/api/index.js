@@ -135,6 +135,7 @@ export const getRealtimeVibrationData = async (preferSpecial = false) => {
     params: { prefer_special: preferSpecial }
   })
   const backendList = res.data || []
+  const sensorParams = res.sensor_params || {}
 
   const defaultChannelNames = ['通道1-轴承附近', '通道2-驱动端', '通道3-风扇端']
 
@@ -163,11 +164,7 @@ export const getRealtimeVibrationData = async (preferSpecial = false) => {
     data: {
       timestamp: backendList[0]?.timestamp || new Date().toISOString(),
       channels,
-      sensorParams: {
-        rpm: 1485 + (Math.random() * 10 - 5),
-        temperature: 68 + (Math.random() * 4 - 2),
-        load: 85 + (Math.random() * 10 - 5)
-      }
+      sensorParams
     }
   }
 }
