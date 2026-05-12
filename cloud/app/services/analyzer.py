@@ -23,6 +23,7 @@ from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, D
 from app.services.diagnosis.utils import (
     estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum,
     _compute_order_spectrum_multi_frame,
+    _compute_order_spectrum_varying_speed,
     _order_band_energy,
 )
 
@@ -208,7 +209,15 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
 
     first_channel = list(channels_data.values())[0]
     first_arr = np.array(first_channel, dtype=np.float64)
-    rot_freq = _estimate_rot_freq_spectrum(first_arr, sample_rate)
+
+    # 4. 估计转频（与阶次追踪 /order 端点完全一致）
+    order_axis, spectrum, rot_freq, rot_std = _compute_order_spectrum_multi_frame(
+        first_arr, sample_rate, samples_per_rev=1024, max_order=50
+    )
+    if rot_freq > 0 and (rot_std / rot_freq) > 0.10:
+        order_axis, spectrum, rot_freq, rot_std = _compute_order_spectrum_varying_speed(
+            first_arr, sample_rate, samples_per_rev=1024, max_order=50
+        )
 
     # 5. 频谱/包络/阶次特征提取
     xf, yf = compute_fft(first_channel, sample_rate)
@@ -217,9 +226,6 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
     env_freq, env_amp = compute_envelope_spectrum(first_channel, sample_rate, max_freq=1000)
     env_features = _extract_envelope_features(env_freq, env_amp, rot_freq, bearing_params)
 
-    order_axis, spectrum, _, _ = _compute_order_spectrum_multi_frame(
-        first_arr, sample_rate, rot_freq=rot_freq, samples_per_rev=1024, max_order=50
-    )
     order_features = _extract_order_features(order_axis, spectrum, rot_freq, gear_teeth, bearing_params)
 
     # 6. 频域/阶次严重度（归一化到 0~1）
