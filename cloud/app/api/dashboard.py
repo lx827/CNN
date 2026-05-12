@@ -12,7 +12,15 @@ from typing import Dict
 
 router = APIRouter(prefix="/api/dashboard", tags=["设备总览"])
 
-OFFLINE_THRESHOLD_MINUTES = 5  # 超过5分钟无数据视为离线
+def _get_offline_threshold(device: Device, now: datetime) -> datetime:
+    """
+    根据设备上传间隔计算离线阈值。
+    阈值 = upload_interval * 2 + 60 秒，最少 5 分钟。
+    """
+    base_seconds = 300  # 默认 5 分钟
+    if device.upload_interval and device.upload_interval > 0:
+        base_seconds = max(base_seconds, device.upload_interval * 2 + 60)
+    return now - timedelta(seconds=base_seconds)
 
 
 @router.get("/")
@@ -22,10 +30,10 @@ def get_dashboard(db: Session = Depends(get_db)):
     """
     # 1. 设备列表（含离线判断）
     now = datetime.utcnow()
-    offline_threshold = now - timedelta(minutes=OFFLINE_THRESHOLD_MINUTES)
     devices = db.query(Device).all()
     device_list = []
     for d in devices:
+        offline_threshold = _get_offline_threshold(d, now)
         # 判断离线：last_seen_at 为空 或 超过阈值未上传
         is_offline = d.last_seen_at is None or d.last_seen_at < offline_threshold
         effective_status = "offline" if is_offline else d.status
@@ -45,6 +53,7 @@ def get_dashboard(db: Session = Depends(get_db)):
     # 2. 最新诊断结果（取每个设备最新一条）
     latest_diag = {}
     for d in devices:
+        offline_threshold = _get_offline_threshold(d, now)
         is_offline = d.last_seen_at is None or d.last_seen_at < offline_threshold
         diag = db.query(Diagnosis).filter(Diagnosis.device_id == d.device_id) \
             .order_by(Diagnosis.analyzed_at.desc()).first()
