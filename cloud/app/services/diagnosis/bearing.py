@@ -13,8 +13,7 @@ from scipy.fft import rfft, rfftfreq
 from typing import Dict, Tuple, Optional, List
 
 from .signal_utils import (
-    prepare_signal, bandpass_filter, lowpass_filter, compute_snr,
-    parabolic_interpolation,
+    prepare_signal, bandpass_filter, lowpass_filter,
 )
 from .preprocessing import cepstrum_pre_whitening, minimum_entropy_deconvolution
 
@@ -57,8 +56,10 @@ def envelope_analysis(
     high = min(fs / 2 - 100, fc + bw / 2)
     if low >= high:
         # 频段非法，fallback 到默认频段
-        low = max(100, 3000.0 - 2000.0 / 2)
-        high = min(fs / 2 - 100, 3000.0 + 2000.0 / 2)
+        fc = 3000.0
+        bw = 2000.0
+        low = max(100, fc - bw / 2)
+        high = min(fs / 2 - 100, fc + bw / 2)
     filtered = bandpass_filter(arr, fs, low, high)
 
     # Step 2-3: 希尔伯特变换 → 包络
@@ -121,11 +122,11 @@ def fast_kurtogram(
 
     # 简化版 Fast Kurtogram：用多尺度 STFT 近似
     # 层数 l 对应不同的频率分辨率
+    from scipy.signal import stft
     for level in range(1, max_level + 1):
         nperseg = max(64, N // (2 ** level))
         noverlap = nperseg // 2
 
-        from scipy.signal import stft
         f, t, Zxx = stft(arr, fs=fs, nperseg=nperseg, noverlap=noverlap)
 
         # 每个频带计算峭度
@@ -166,7 +167,9 @@ def fast_kurtogram(
     result["optimal_fc"] = round(best_fc, 2)
     result["optimal_bw"] = round(best_bw, 2)
     result["max_kurtosis"] = round(float(best_kurt), 4)
-    result["kurtogram"] = kurtogram_data[:100]  # 限制返回数量
+    # 限制返回数量，按峭度排序保留前100条
+    kurtogram_data.sort(key=lambda x: x["kurtosis"], reverse=True)
+    result["kurtogram"] = kurtogram_data[:100]
 
     return result
 

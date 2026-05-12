@@ -100,7 +100,7 @@ def cepstrum_pre_whitening(
     # Step 1-3: FFT → 对数幅值 → 倒频谱
     X = np.fft.rfft(arr)
     log_mag = np.log(np.abs(X) + 1e-12)
-    cepstrum = np.fft.irfft(log_mag)
+    cepstrum = np.fft.irfft(log_mag, n=N)
 
     # Step 4: 倒频谱编辑（Comb Lifter）
     if comb_frequencies is not None and len(comb_frequencies) > 0:
@@ -169,8 +169,8 @@ def minimum_entropy_deconvolution(
 
     prev_kurt = 0.0
     for _ in range(max_iter):
-        # 计算输出（same 模式卷积）
-        x_hat = np.convolve(arr, f, mode='same')
+        # 计算输出（full 模式卷积后取前 N 点，与 Toeplitz 矩阵一致）
+        x_hat = np.convolve(arr, f, mode='full')[:N]
         x_hat = x_hat - np.mean(x_hat)
 
         # 计算峭度
@@ -205,5 +205,5 @@ def minimum_entropy_deconvolution(
             break
         f = f_new
 
-    result = np.convolve(arr, f, mode='same')
+    result = np.convolve(arr, f, mode='full')[:N]
     return result, f

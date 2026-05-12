@@ -15,8 +15,8 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'cloud'))
 
 import numpy as np
-from app.services.analyzer import (
-    _compute_bearing_fault_freqs,
+from app.services.diagnosis.features import _compute_bearing_fault_freqs
+from app.services.diagnosis.rule_based import (
     _extract_spectrum_features,
     _extract_order_features,
 )
