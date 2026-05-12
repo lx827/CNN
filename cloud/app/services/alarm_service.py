@@ -38,7 +38,7 @@ def _get_threshold(device: Device, metric: str, level: str) -> float:
             return val
         # 用户配置了该指标但此级别为 null，返回极大值（不触发此级别告警）
         return 99999
-    return DEFAULT_THRESHOLDS.get(metric, {}).get(level, 99999)
+    return ALARM_THRESHOLDS.get(metric, {}).get(level, 99999)
 
 
 def _has_recent_unresolved_alarm(

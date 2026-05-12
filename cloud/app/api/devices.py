@@ -238,7 +238,7 @@ def get_alarm_thresholds(device_id: str, db: Session = Depends(get_db)):
     获取设备的告警阈值配置
     返回用户自定义配置 + 实际生效阈值（含默认值回退）
     """
-    from app.services.alarm_service import DEFAULT_THRESHOLDS
+    from app.core.thresholds import DEVICE_DEFAULT_THRESHOLDS as DEFAULT_THRESHOLDS
     device = db.query(Device).filter(Device.device_id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
@@ -280,6 +280,7 @@ def update_alarm_thresholds(device_id: str, payload: dict, db: Session = Depends
         "kurtosis": {"warning": 4.0, "critical": 6.0},
         "crest_factor": {"warning": 6.0, "critical": 10.0}
     }
+    （默认值来自 DEVICE_DEFAULT_THRESHOLDS）
     """
     device = db.query(Device).filter(Device.device_id == device_id).first()
     if not device:

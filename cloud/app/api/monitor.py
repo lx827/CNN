@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
-from app.services.analyzer import compute_fft
+from app.services.diagnosis.features import compute_fft
 from typing import List
 
 router = APIRouter(prefix="/api/monitor", tags=["实时监测"])

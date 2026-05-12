@@ -110,7 +110,6 @@ def compute_fft_features(
 
     # --- 轴承特征 ---
     if bearing_params and isinstance(bearing_params, dict):
-        from app.services.analyzer import _compute_bearing_fault_freqs
         bfreqs = _compute_bearing_fault_freqs(rot_freq, bearing_params)
         for name, f_hz in bfreqs.items():
             features[f"{name}_hz"] = round(f_hz, 2)
@@ -207,3 +206,129 @@ from .utils import (
     prepare_signal, rms, peak_value, crest_factor, kurtosis, skewness,
     compute_fft_spectrum, bandpass_filter, lowpass_filter,
 )
+
+def remove_dc(signal: List[float]) -> np.ndarray:
+    """去除信号线性趋势与直流分量（基频漂移导致的 y=kx+b 趋势）"""
+    arr = np.array(signal, dtype=np.float64)
+    return detrend(arr, type='linear')
+
+
+def compute_channel_features(signal: List[float]) -> Dict[str, float]:
+    """
+    计算单通道振动信号的统计特征指标
+    用于通道级阈值告警。
+    """
+    arr = remove_dc(signal)
+    if len(arr) == 0:
+        return {}
+
+    # 基本统计量
+    peak = float(np.max(np.abs(arr)))
+    rms = float(np.sqrt(np.mean(arr ** 2)))
+    mean_abs = float(np.mean(np.abs(arr)))
+
+    # 峭度与偏度
+    kurtosis = float(stats.kurtosis(arr, fisher=False))
+    skewness = float(stats.skew(arr))
+
+    # 无量纲指标
+    margin = peak / rms if rms > 1e-12 else 0.0
+    shape_factor = rms / mean_abs if mean_abs > 1e-12 else 0.0
+    impulse_factor = peak / mean_abs if mean_abs > 1e-12 else 0.0
+    crest_factor = peak / rms if rms > 1e-12 else 0.0
+
+    return {
+        "peak": round(peak, 6),
+        "rms": round(rms, 6),
+        "kurtosis": round(kurtosis, 4),
+        "skewness": round(skewness, 4),
+        "margin": round(margin, 4),
+        "crest_factor": round(crest_factor, 4),
+        "shape_factor": round(shape_factor, 4),
+        "impulse_factor": round(impulse_factor, 4),
+    }
+
+
+def compute_fft(signal: List[float], sample_rate: int = 25600):
+    """计算 FFT 频谱"""
+    arr = remove_dc(signal)
+    n = len(arr)
+    yf = np.abs(rfft(arr))
+    xf = rfftfreq(n, 1 / sample_rate)
+    return xf.tolist(), yf.tolist()
+
+
+def compute_imf_energy(signal: List[float], sample_rate: int = 25600) -> Dict[str, float]:
+    """
+    模拟 IMF 能量分布
+    真实场景需要 EMD/VMD 分解，这里用频带能量近似模拟
+    """
+    arr = np.array(signal)
+    xf, yf = compute_fft(arr, sample_rate)
+    yf = np.array(yf)
+    xf = np.array(xf)
+
+    # 把频谱分成 5 个频带，模拟 5 个 IMF 分量的能量
+    max_freq = sample_rate / 2
+    band_width = max_freq / 5
+    bands = [(i * band_width, (i + 1) * band_width) for i in range(5)]
+    energy = {}
+    total = 0.0
+    for i, (low, high) in enumerate(bands, 1):
+        mask = (xf >= low) & (xf < high)
+        e = float(np.sum(yf[mask] ** 2))
+        energy[f"IMF{i}"] = e
+        total += e
+
+    if total > 0:
+        for k in energy:
+            energy[k] = round(energy[k] / total * 100, 2)
+    return energy
+
+
+def _get_channel_params(device, channel_index, field):
+    """
+    从设备配置中按通道索引提取参数。
+    支持两种格式：
+      - 旧格式（设备级共用）: {input:18, output:27}
+      - 新格式（通道级独立）: {"1":{input:18}, "2":{input:27}}
+    """
+    raw = getattr(device, field, None) if device else None
+    if raw is None:
+        return None
+    ch_key = str(channel_index)
+    if ch_key in raw:
+        return raw[ch_key]
+    if "input" in raw or "n" in raw or "output" in raw:
+        return raw
+    return None
+
+
+def _compute_bearing_fault_freqs(rot_freq: float, bearing_params: dict) -> dict:
+    """
+    计算轴承故障特征频率 (Hz)
+    公式针对深沟球轴承 / 圆柱滚子轴承通用形式
+    """
+    n = bearing_params.get("n") or 0
+    d = bearing_params.get("d") or 0
+    D = bearing_params.get("D") or 0
+    alpha = np.radians(bearing_params.get("alpha") or 0)
+
+    if n <= 0 or d <= 0 or D <= 0:
+        return {}
+
+    cos_a = np.cos(alpha)
+    dd = (d / D) * cos_a
+
+    return {
+        "BPFO": (n / 2.0) * rot_freq * (1 - dd),
+        "BPFI": (n / 2.0) * rot_freq * (1 + dd),
+        "BSF":  (D / (2.0 * d)) * rot_freq * (1 - dd ** 2),
+        "FTF":  0.5 * rot_freq * (1 - dd),
+    }
+
+
+def _compute_bearing_fault_orders(rot_freq: float, bearing_params: dict) -> dict:
+    """计算轴承故障特征阶次 (order = freq / rot_freq)"""
+    freqs = _compute_bearing_fault_freqs(rot_freq, bearing_params)
+    return {k: v / rot_freq for k, v in freqs.items()}

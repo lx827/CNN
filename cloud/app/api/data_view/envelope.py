@@ -1,0 +1,101 @@
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models import SensorData, Device
+from app.services.diagnosis.features import compute_envelope_spectrum
+from app.services.diagnosis.utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
+from . import router, prepare_signal
+from datetime import datetime
+import logging
+import numpy as np
+
+logger = logging.getLogger(__name__)
+
+@router.get("/{device_id}/{batch_index}/{channel}/envelope")
+async def get_channel_envelope(
+    device_id: str,
+    batch_index: int,
+    channel: int,
+    max_freq: Optional[int] = 1000,
+    detrend: bool = Query(default=False, description="是否线性去趋势"),
+    method: str = Query(default="envelope", description="包络分析方法: envelope/kurtogram/cpw/med"),
+    db: Session = Depends(get_db)
+):
+    """
+    实时计算某批次某通道的包络谱（Envelope Spectrum）
+    支持多种轴承诊断方法：标准包络 / Fast Kurtogram / CPW / MED
+    请求时计算，不预存。
+    """
+    record = db.query(SensorData).filter(
+        SensorData.device_id == device_id,
+        SensorData.batch_index == batch_index,
+        SensorData.channel == channel
+    ).first()
+
+    if not record or not record.data:
+        raise HTTPException(status_code=404, detail="数据不存在")
+
+    try:
+        sample_rate = record.sample_rate or 25600
+        signal = prepare_signal(record.data, detrend=detrend)
+
+        # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）
+        max_samples = sample_rate * 5
+        if len(signal) > max_samples:
+            signal = signal[:max_samples]
+
+        # 获取设备参数
+        device = db.query(Device).filter(Device.device_id == device_id).first()
+        bearing_params = {}
+        gear_teeth = {}
+        if device:
+            bearing_params = device.bearing_params or {}
+            gear_teeth = device.gear_teeth or {}
+
+        # 方法映射
+        method_map = {
+            "envelope": BearingMethod.ENVELOPE,
+            "kurtogram": BearingMethod.KURTOGRAM,
+            "cpw": BearingMethod.CPW,
+            "med": BearingMethod.MED,
+        }
+        bearing_method = method_map.get(method, BearingMethod.ENVELOPE)
+
+        engine = DiagnosisEngine(
+            bearing_method=bearing_method,
+            bearing_params=bearing_params,
+            gear_teeth=gear_teeth,
+        )
+
+        # CPU 密集型轴承分析放入线程池
+        result = await asyncio.to_thread(engine.analyze_bearing, signal, sample_rate)
+
+        # 兼容原有返回格式
+        return {
+            "code": 200,
+            "data": {
+                "device_id": record.device_id,
+                "batch_index": record.batch_index,
+                "channel": record.channel,
+                "channel_name": _get_channel_name(device, record.channel),
+                "sample_rate": sample_rate,
+                "is_special": bool(record.is_special),
+                "method": result.get("method", method),
+                "envelope_freq": result.get("envelope_freq", []),
+                "envelope_amp": result.get("envelope_amp", []),
+                "optimal_fc": result.get("optimal_fc"),
+                "optimal_bw": result.get("optimal_bw"),
+                "max_kurtosis": result.get("max_kurtosis"),
+                "comb_frequencies": result.get("comb_frequencies"),
+                "med_filter_len": result.get("med_filter_len"),
+                "kurtosis_before": result.get("kurtosis_before"),
+                "kurtosis_after": result.get("kurtosis_after"),
+                "features": result.get("features", {}),
+                "fault_indicators": result.get("fault_indicators", {}),
+            }
+        }
+    except Exception as e:
+        logger.error(f"包络谱计算失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"包络谱计算失败: {e}")
+
+
