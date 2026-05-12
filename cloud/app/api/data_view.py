@@ -1072,6 +1072,7 @@ async def get_channel_gear(
                 "method": result.get("method", method),
                 "rot_freq_hz": result.get("rot_freq_hz"),
                 "mesh_freq_hz": result.get("mesh_freq_hz"),
+                "mesh_order": result.get("mesh_order"),
                 "ser": result.get("ser"),
                 "sidebands": result.get("sidebands", []),
                 "fm0": result.get("fm0"),

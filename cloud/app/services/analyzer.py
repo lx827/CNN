@@ -23,6 +23,7 @@ from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, D
 from app.services.diagnosis.utils import (
     estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum,
     _compute_order_spectrum_multi_frame,
+    _order_band_energy,
 )
 
 
@@ -409,14 +410,7 @@ def _band_energy(freq, amp, center: float, bandwidth: float) -> float:
     return float(np.sum(amp[mask] ** 2))
 
 
-def _order_band_energy(order_axis, spectrum, center_order: float, bandwidth: float) -> float:
-    """计算指定阶次带能量"""
-    order_axis = np.asarray(order_axis)
-    spectrum = np.asarray(spectrum)
-    mask = (order_axis >= center_order - bandwidth) & (order_axis <= center_order + bandwidth)
-    if not np.any(mask):
-        return 0.0
-    return float(np.sum(spectrum[mask] ** 2))
+
 
 
 def _extract_spectrum_features(freq, amp, rot_freq: float, gear_teeth: dict, bearing_params: dict) -> dict:

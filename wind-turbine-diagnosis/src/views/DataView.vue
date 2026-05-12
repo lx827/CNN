@@ -295,7 +295,7 @@
                 style="width: 150px"
               >
                 <el-option label="标准包络" value="envelope" />
-                <el-option label="Fast Kurtogram" value="kurtogram" />
+                <el-option label="快速峭度图" value="kurtogram" />
                 <el-option label="CPW+包络" value="cpw" />
                 <el-option label="MED+包络" value="med" />
               </el-select>
@@ -388,8 +388,8 @@
             </el-descriptions>
             <el-table v-if="gearData.sidebands && gearData.sidebands.length > 0" :data="gearData.sidebands" size="small" style="margin-top: 8px;" max-height="200">
               <el-table-column prop="order" label="阶次" width="60" />
-              <el-table-column prop="freq_low" label="下边频(Hz)" width="110" />
-              <el-table-column prop="freq_high" label="上边频(Hz)" width="110" />
+              <el-table-column prop="order_low" label="下边频阶次" width="110" />
+              <el-table-column prop="order_high" label="上边频阶次" width="110" />
               <el-table-column prop="amp_low" label="下幅值" width="90" />
               <el-table-column prop="amp_high" label="上幅值" width="90" />
               <el-table-column prop="asymmetry" label="不对称度" width="90" />
@@ -649,7 +649,7 @@
       <el-row :gutter="16" class="spectrum-row">
         <el-col :span="24">
           <div class="section-header">
-            <span class="chart-title">倒谱分析（Cepstrum）</span>
+            <span class="chart-title">倒谱分析</span>
             <div style="display: flex; align-items: center; gap: 8px;">
               <template v-if="!computedCepstrum">
                 <el-text type="info" size="small">最大倒频率</el-text>
@@ -882,7 +882,7 @@ const gearMethodLabel = computed(() => {
 const envelopeMethodLabel = computed(() => {
   const labels = {
     envelope: '标准包络',
-    kurtogram: 'Fast Kurtogram',
+    kurtogram: '快速峭度图',
     cpw: 'CPW+包络',
     med: 'MED+包络',
   }
@@ -951,7 +951,7 @@ const cepstrumMaxQuefrency = ref(500)
 const bearingMethodLabel = (key) => {
   const map = {
     envelope: '标准包络分析',
-    kurtogram: 'Fast Kurtogram',
+    kurtogram: '快速峭度图',
     cpw: 'CPW预白化+包络',
     med: 'MED最小熵解卷积+包络',
   }

@@ -18,7 +18,7 @@ from scipy.fft import rfft, rfftfreq
 from scipy.signal import hilbert
 from typing import Dict, List, Optional, Tuple
 
-from .utils import prepare_signal, compute_fft_spectrum, _band_energy
+from .utils import prepare_signal, compute_fft_spectrum, _band_energy, _order_band_energy
 
 
 def compute_fm0(
@@ -360,3 +360,113 @@ def analyze_sidebands(
         "ser": round(total_sb / mesh_amp, 4),
         "mesh_amp": round(mesh_amp, 6),
     }
+
+
+def compute_ser_order(
+    order_axis,
+    spectrum,
+    mesh_order: float,
+    n_sidebands: int = 6,
+    sideband_bw: float = 0.3,
+) -> float:
+    """
+    基于阶次谱计算 SER（边频带能量比）
+
+    SER = sum(A_SB_i^+ + A_SB_i^-) / A(mesh_order)
+
+    与 compute_ser 的区别：基于阶次谱而非 FFT 频谱，
+    确保齿轮诊断结果与阶次谱页面一致。
+    """
+    order_axis = np.asarray(order_axis)
+    spectrum = np.asarray(spectrum)
+
+    mesh_amp = _order_band_energy(order_axis, spectrum, mesh_order, 0.5)
+    if mesh_amp < 1e-12:
+        return 0.0
+
+    total_sideband = 0.0
+    for i in range(1, n_sidebands + 1):
+        sb_low = mesh_order - i
+        sb_high = mesh_order + i
+        total_sideband += _order_band_energy(order_axis, spectrum, sb_low, sideband_bw)
+        total_sideband += _order_band_energy(order_axis, spectrum, sb_high, sideband_bw)
+
+    return float(total_sideband / mesh_amp)
+
+
+def analyze_sidebands_order(
+    order_axis,
+    spectrum,
+    mesh_order: float,
+    n_sidebands: int = 6,
+) -> Dict:
+    """
+    基于阶次谱的边频带分析
+
+    返回边频带的阶次、幅值、显著性、对称性等信息。
+    与 analyze_sidebands 的区别：基于阶次谱而非 FFT 频谱。
+    """
+    order_axis = np.asarray(order_axis)
+    spectrum = np.asarray(spectrum)
+
+    mesh_amp = _order_band_energy(order_axis, spectrum, mesh_order, 0.5)
+    if mesh_amp < 1e-12:
+        return {"sidebands": [], "ser": 0.0, "mesh_amp": 0.0}
+
+    sidebands = []
+    total_sb = 0.0
+
+    for i in range(1, n_sidebands + 1):
+        sb_low = mesh_order - i
+        sb_high = mesh_order + i
+
+        amp_low = _order_band_energy(order_axis, spectrum, sb_low, 0.3)
+        amp_high = _order_band_energy(order_axis, spectrum, sb_high, 0.3)
+
+        total_sb += amp_low + amp_high
+
+        # 显著性：边频幅值超过啮合频率的 5%
+        significant = (amp_low > mesh_amp * 0.05) or (amp_high > mesh_amp * 0.05)
+
+        sidebands.append({
+            "order": i,
+            "order_low": round(sb_low, 2),
+            "order_high": round(sb_high, 2),
+            "amp_low": round(amp_low, 6),
+            "amp_high": round(amp_high, 6),
+            "significant": significant,
+            "asymmetry": round(abs(amp_low - amp_high) / (amp_low + amp_high + 1e-12), 4),
+        })
+
+    return {
+        "sidebands": sidebands,
+        "ser": round(total_sb / mesh_amp, 4),
+        "mesh_amp": round(mesh_amp, 6),
+    }
+
+
+def compute_fm0_order(
+    tsa_signal: np.ndarray,
+    order_axis,
+    spectrum,
+    mesh_order: float,
+    n_harmonics: int = 3,
+) -> float:
+    """
+    基于阶次谱计算 FM0（粗故障检测）
+
+    FM0 = PP / sum(A(mesh_order_harmonics))
+    """
+    arr = np.array(tsa_signal, dtype=np.float64)
+    pp = np.max(arr) - np.min(arr)
+
+    order_axis = np.asarray(order_axis)
+    spectrum = np.asarray(spectrum)
+
+    harmonics_sum = 0.0
+    for i in range(1, n_harmonics + 1):
+        harmonics_sum += _order_band_energy(order_axis, spectrum, mesh_order * i, 0.5)
+
+    if harmonics_sum < 1e-12:
+        return 0.0
+    return float(pp / harmonics_sum)

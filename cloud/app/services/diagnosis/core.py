@@ -7,7 +7,13 @@ import numpy as np
 from enum import Enum
 from typing import Dict, List, Optional, Any
 
-from .utils import prepare_signal, compute_fft_spectrum, estimate_rot_freq_spectrum as _estimate_rot_freq_simple
+from .utils import (
+    prepare_signal,
+    compute_fft_spectrum,
+    estimate_rot_freq_spectrum as _estimate_rot_freq_simple,
+    _compute_order_spectrum_multi_frame,
+    _compute_order_spectrum,
+)
 from .bearing import (
     envelope_analysis,
     fast_kurtogram,
@@ -16,13 +22,16 @@ from .bearing import (
 )
 from .gear import (
     compute_fm0,
+    compute_fm0_order,
     compute_fm4,
     compute_na4,
     compute_ser,
+    compute_ser_order,
     compute_car,
     compute_m6a,
     compute_m8a,
     analyze_sidebands,
+    analyze_sidebands_order,
 )
 from .preprocessing import wavelet_denoise
 from .vmd_denoise import vmd_denoise
@@ -167,6 +176,9 @@ class DiagnosisEngine:
         """
         齿轮诊断分析
 
+        核心修改：所有频域齿轮特征（SER、边频带、FM0）均基于阶次谱计算，
+        确保与阶次谱页面（/order 端点）的结果一致。
+
         Returns:
             {
                 "method": str,
@@ -183,17 +195,40 @@ class DiagnosisEngine:
 
         z_in = (self.gear_teeth.get("input") or 0) if self.gear_teeth else 0
         mesh_freq = rot_freq * z_in if z_in > 0 else None
+        mesh_order = float(z_in) if z_in > 0 else None
 
         result = {
             "method": self.gear_method.value,
             "strategy": self.strategy.value,
             "rot_freq_hz": round(rot_freq, 3),
             "mesh_freq_hz": round(mesh_freq, 2) if mesh_freq else None,
+            "mesh_order": round(mesh_order, 2) if mesh_order else None,
         }
 
-        # 边频带分析
-        if mesh_freq and mesh_freq > 0:
-            sb_result = analyze_sidebands(arr, fs, mesh_freq, rot_freq)
+        # 统一计算阶次谱（与 /order 端点使用相同算法）
+        # 如果传入了 rot_freq，使用单帧阶次跟踪（与 /order 端点指定 rot_freq 时一致）
+        # 否则使用多帧平均估计转频（与 /order 端点默认行为一致）
+        try:
+            if rot_freq is not None:
+                order_axis, order_spectrum = _compute_order_spectrum(arr, fs, rot_freq, samples_per_rev=1024)
+                rot_freq_used = rot_freq
+                rot_std = 0.0
+            else:
+                order_axis, order_spectrum, rot_freq_used, rot_std = _compute_order_spectrum_multi_frame(
+                    arr, fs, samples_per_rev=1024, max_order=50
+                )
+        except Exception:
+            # fallback 到单帧阶次谱
+            order_axis, order_spectrum = _compute_order_spectrum(arr, fs, rot_freq or 20.0, samples_per_rev=1024)
+            rot_freq_used = rot_freq or 20.0
+            rot_std = 0.0
+
+        result["rot_freq_estimated_hz"] = round(rot_freq_used, 3)
+        result["rot_freq_std"] = round(rot_std, 4)
+
+        # 基于阶次谱的边频带分析
+        if mesh_order and mesh_order > 0:
+            sb_result = analyze_sidebands_order(order_axis, order_spectrum, mesh_order)
             result["sidebands"] = sb_result["sidebands"]
             result["ser"] = sb_result["ser"]
             result["mesh_amp"] = sb_result["mesh_amp"]
@@ -201,13 +236,9 @@ class DiagnosisEngine:
             result["sidebands"] = []
             result["ser"] = 0.0
 
-        # 高级齿轮指标
-        if self.gear_method == GearMethod.ADVANCED and mesh_freq and mesh_freq > 0:
-            # 用 FFT 提取啮合谐波来近似 TSA 分量
-            xf, yf = compute_fft_spectrum(arr, fs)
-            # 构造差分信号（简化版：移除啮合频率附近能量）
-            # 实际应使用 TSA，这里用带阻近似
-            result["fm0"] = round(compute_fm0(arr, mesh_freq, fs), 4)
+        # 高级齿轮指标（也基于阶次谱）
+        if self.gear_method == GearMethod.ADVANCED and mesh_order and mesh_order > 0:
+            result["fm0"] = round(compute_fm0_order(arr, order_axis, order_spectrum, mesh_order), 4)
             result["car"] = round(compute_car(arr, fs, rot_freq), 4)
 
             # 差分信号（简化版：用高通滤波近似）
@@ -217,8 +248,8 @@ class DiagnosisEngine:
             result["m6a"] = round(compute_m6a(diff_approx), 4)
             result["m8a"] = round(compute_m8a(diff_approx), 4)
 
-            # 边频带能量比 SER
-            result["ser"] = round(compute_ser(arr, fs, mesh_freq, rot_freq), 4)
+            # 边频带能量比 SER（基于阶次谱）
+            result["ser"] = round(compute_ser_order(order_axis, order_spectrum, mesh_order), 4)
 
         # 故障指示器
         indicators = self._evaluate_gear_faults(result)
