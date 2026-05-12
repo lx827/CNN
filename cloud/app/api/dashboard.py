@@ -14,10 +14,14 @@ router = APIRouter(prefix="/api/dashboard", tags=["设备总览"])
 
 def _get_offline_threshold(device: Device, now: datetime) -> datetime:
     """
-    根据设备上传间隔计算离线阈值。
-    阈值 = upload_interval * 2 + 60 秒，最少 5 分钟。
+    根据设备通信间隔计算离线阈值。
+    以任务轮询间隔（实际心跳）为主，以上传间隔为辅，最少 5 分钟。
     """
     base_seconds = 300  # 默认 5 分钟
+    # 任务轮询是边端和云端的实际通信频率，以此为基准
+    if device.task_poll_interval and device.task_poll_interval > 0:
+        base_seconds = max(base_seconds, device.task_poll_interval * 3 + 60)
+    # 如果上传间隔更大，也要兜底覆盖
     if device.upload_interval and device.upload_interval > 0:
         base_seconds = max(base_seconds, device.upload_interval * 2 + 60)
     return now - timedelta(seconds=base_seconds)
