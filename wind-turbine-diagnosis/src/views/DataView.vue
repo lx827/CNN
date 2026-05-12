@@ -115,13 +115,15 @@
               <el-option label="5000 Hz" :value="5000" />
               <el-option label="8192 Hz" :value="8192" />
             </el-select>
-            <el-switch
-              v-model="enableDetrend"
-              active-text="去趋势"
-              inline-prompt
-              style="margin-left: 12px"
-              @change="onDetrendChange"
-            />
+            <el-tooltip content="消除基频漂移导致的线性趋势" placement="top">
+              <el-switch
+                v-model="enableDetrend"
+                active-text="去趋势"
+                inactive-text="原始"
+                style="margin-left: 12px"
+                @change="onDetrendChange"
+              />
+            </el-tooltip>
             <el-button
               type="primary"
               size="small"
