@@ -51,3 +51,7 @@ NN_MODEL_PATH = os.getenv("NN_MODEL_PATH", "./models/turbine_fault_model.onnx")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 # JWT 签名密钥（生产环境请务必修改为随机长字符串）
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production-please")
+
+# ========== 边端认证 ==========
+# 边端 API Key（云端和边端必须一致，通过 .env 修改）
+EDGE_API_KEY = os.getenv("EDGE_API_KEY", "turbine-edge-secret")

@@ -254,9 +254,10 @@ app.add_middleware(
 )
 
 # 注册路由
-# 认证和边端数据接入不需要登录保护
+# 认证接口不需要登录保护
 app.include_router(auth.router)
-app.include_router(ingest.router)
+# 边端数据接入需要 X-Edge-Key 认证
+app.include_router(ingest.router, dependencies=[Depends(optional_auth)])
 
 # 需要认证的路由（前端 Bearer Token 或边端 X-Edge-Key）
 app.include_router(dashboard.router, dependencies=[Depends(optional_auth)])
