@@ -24,6 +24,10 @@ from app.services.diagnosis import (
     GearMethod,
     DenoiseMethod,
 )
+from app.services.diagnosis.utils import (
+    estimate_rot_freq_envelope as _estimate_rot_freq_envelope,
+    estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum,
+)
 from typing import Optional, Tuple
 import numpy as np
 from scipy.fft import rfft, rfftfreq
@@ -43,157 +47,6 @@ def prepare_signal(signal, detrend=False):
     if detrend:
         return scipy_signal.detrend(arr, type='linear')
     return arr - np.mean(arr)
-
-
-def _parabolic_interpolation(freqs, spectrum, idx):
-    """抛物线插值精确定位谱峰频率"""
-    if idx <= 0 or idx >= len(spectrum) - 1:
-        return freqs[idx]
-    alpha = spectrum[idx - 1]
-    beta = spectrum[idx]
-    gamma = spectrum[idx + 1]
-    if beta <= max(alpha, gamma):
-        return freqs[idx]
-    p = 0.5 * (alpha - gamma) / (alpha - 2 * beta + gamma)
-    return float(freqs[idx] + p * (freqs[1] - freqs[0]))
-
-
-def _estimate_rot_freq_envelope(
-    sig: np.ndarray, fs: float,
-    f_center: float,
-    bw: float = 60.0,
-    freq_range: Tuple[float, float] = (10, 100)
-) -> Optional[float]:
-    """在指定中心频率附近做带通滤波+包络解调，返回包络谱峰值频率"""
-    low = max(10.0, f_center - bw)
-    high = min(fs / 2 - 10.0, f_center + bw)
-    b, a = scipy_signal.butter(4, [low / (fs / 2), high / (fs / 2)], btype='band')
-    bp_sig = scipy_signal.filtfilt(b, a, sig)
-    envelope = np.abs(scipy_signal.hilbert(bp_sig))
-    envelope = envelope - np.mean(envelope)
-    env_spec = np.abs(rfft(envelope))
-    env_freqs = rfftfreq(len(envelope), d=1.0 / fs)
-    mask = (env_freqs >= freq_range[0]) & (env_freqs <= freq_range[1])
-    if not np.any(mask):
-        return None
-    peak_idx = np.argmax(env_spec[mask])
-    return float(env_freqs[mask][peak_idx])
-
-
-def _estimate_rot_freq_spectrum(
-    sig: np.ndarray, fs: float,
-    freq_range: Tuple[float, float] = (10, 100),
-    harmonics_num: int = 5,
-    bandwidth_hz: float = 3.0,
-    smooth_win_hz: float = 1.5
-) -> float:
-    """
-    通过频谱峰值法估计转频（改进版：平滑 + 频带积分 + 插值 + 包络解调辅助）
-    针对齿轮箱等啮合频率强、基频弱的数据，引入包络解调和齿数整数验证启发式。
-    """
-    N = len(sig)
-    spectrum = np.abs(rfft(sig))
-    freqs = rfftfreq(N, d=1.0 / fs)
-    df = freqs[1] - freqs[0]
-
-    # 1. 谱平滑：抑制随机噪声尖峰
-    if smooth_win_hz > 0 and df > 0:
-        kernel_size = max(1, int(round(smooth_win_hz / df)))
-        if kernel_size > 1:
-            kernel = np.ones(kernel_size) / kernel_size
-            spectrum = np.convolve(spectrum, kernel, mode='same')
-
-    # 2. 归一化
-    spectrum_norm = spectrum / (spectrum.max() + 1e-10)
-
-    mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
-    search_freqs = freqs[mask]
-    search_spectrum = spectrum_norm[mask]
-
-    if len(search_freqs) == 0:
-        return freq_range[0]
-
-    bw_bins = max(1, int(round(bandwidth_hz / df / 2)))
-    # 降低阈值，让弱基频也能参与竞争
-    min_base_energy = 0.015 * (2 * bw_bins + 1)
-
-    best_freq_spec = search_freqs[0]
-    best_energy = 0.0
-    best_idx_global = None
-
-    for f in search_freqs:
-        idx_base = np.argmin(np.abs(freqs - f))
-        base_band = spectrum_norm[
-            max(0, idx_base - bw_bins):min(len(spectrum), idx_base + bw_bins + 1)
-        ]
-        base_energy = float(np.sum(base_band))
-        if base_energy < min_base_energy:
-            continue
-
-        energy = 0.0
-        for h in range(1, harmonics_num + 1):
-            harmonic_freq = f * h
-            if harmonic_freq > fs / 2:
-                break
-            idx = np.argmin(np.abs(freqs - harmonic_freq))
-            band = spectrum_norm[
-                max(0, idx - bw_bins):min(len(spectrum), idx + bw_bins + 1)
-            ]
-            weight = 1.0 / h
-            energy += float(np.sum(band)) * weight
-
-        if energy > best_energy:
-            best_energy = energy
-            best_freq_spec = f
-            best_idx_global = idx_base
-
-    if best_energy == 0.0:
-        # fallback：搜索范围内最强峰
-        best_local_idx = int(np.argmax(search_spectrum))
-        best_idx_global = int(np.argmin(np.abs(freqs - search_freqs[best_local_idx])))
-        best_freq_spec = freqs[best_idx_global]
-    else:
-        best_freq_spec = _parabolic_interpolation(freqs, spectrum, best_idx_global)
-
-    # ---------- 包络解调辅助 ----------
-    # 对啮合频率常见区域（200~500Hz）和全局高频峰做包络解调，收集候选
-    candidates = [(best_freq_spec, "spectrum")]
-
-    # 中频带（200~500Hz）：常见啮合频率区域
-    mid_mask = (freqs >= 200) & (freqs <= 500)
-    if np.any(mid_mask):
-        mid_peak = freqs[mid_mask][np.argmax(spectrum[mid_mask])]
-        env_est = _estimate_rot_freq_envelope(sig, fs, mid_peak, freq_range=freq_range)
-        if env_est:
-            candidates.append((env_est, "envelope_mesh"))
-
-    # 全局高频最强峰（100Hz ~ fs/4）
-    high_mask = (freqs >= 100) & (freqs <= fs / 4)
-    if np.any(high_mask):
-        top_idx = np.argmax(spectrum[high_mask])
-        high_peak = freqs[high_mask][top_idx]
-        env_est = _estimate_rot_freq_envelope(sig, fs, high_peak, freq_range=freq_range)
-        if env_est:
-            candidates.append((env_est, "envelope_high"))
-
-    # ---------- 启发式仲裁 ----------
-    # 优先选择通过“齿数整数”验证的包络法候选：
-    # 如果带通中心频率 / 候选转频 ≈ 整数，且齿数在合理范围（8~50），
-    # 说明该候选与啮合频率强相关，可信度最高。
-    for f_est, method in candidates:
-        if method.startswith("envelope"):
-            # 反推对应的带通中心频率
-            if method == "envelope_mesh":
-                f_center = freqs[mid_mask][np.argmax(spectrum[mid_mask])]
-            else:
-                f_center = freqs[high_mask][np.argmax(spectrum[high_mask])]
-            teeth = f_center / f_est
-            teeth_rounded = round(teeth)
-            if abs(teeth - teeth_rounded) < 0.35 and 8 <= teeth_rounded <= 50:
-                return float(f_est)
-
-    # 没有通过齿数验证的包络候选，fallback 到频谱法
-    return float(best_freq_spec)
 
 
 def _order_tracking(

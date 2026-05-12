@@ -207,3 +207,218 @@ def _band_energy(freq, amp, center: float, bandwidth: float) -> float:
     if not np.any(mask):
         return 0.0
     return float(np.sum(amp[mask] ** 2))
+
+
+def estimate_rot_freq_envelope(
+    sig: np.ndarray, fs: float,
+    f_center: float,
+    bw: float = 60.0,
+    freq_range: Tuple[float, float] = (10, 100)
+) -> Optional[float]:
+    """在指定中心频率附近做带通滤波+包络解调，返回包络谱峰值频率"""
+    low = max(10.0, f_center - bw)
+    high = min(fs / 2 - 10.0, f_center + bw)
+    b, a = scipy_signal.butter(4, [low / (fs / 2), high / (fs / 2)], btype='band')
+    bp_sig = scipy_signal.filtfilt(b, a, sig)
+    envelope = np.abs(scipy_signal.hilbert(bp_sig))
+    envelope = envelope - np.mean(envelope)
+    env_spec = np.abs(rfft(envelope))
+    env_freqs = rfftfreq(len(envelope), d=1.0 / fs)
+    mask = (env_freqs >= freq_range[0]) & (env_freqs <= freq_range[1])
+    if not np.any(mask):
+        return None
+    peak_idx = np.argmax(env_spec[mask])
+    return float(env_freqs[mask][peak_idx])
+
+
+def estimate_rot_freq_spectrum(
+    sig: np.ndarray,
+    fs: float,
+    freq_range: Tuple[float, float] = (10, 100),
+    harmonics_num: int = 5,
+    bandwidth_hz: float = 3.0,
+    smooth_win_hz: float = 1.5,
+) -> float:
+    """
+    通过频谱峰值法估计转频（改进版：平滑 + 频带积分 + 插值 + 包络解调辅助）
+    针对齿轮箱等啮合频率强、基频弱的数据，引入包络解调和齿数整数验证启发式。
+    """
+    N = len(sig)
+    spectrum = np.abs(rfft(sig))
+    freqs = rfftfreq(N, d=1.0 / fs)
+    df = freqs[1] - freqs[0]
+
+    # 1. 谱平滑：抑制随机噪声尖峰
+    if smooth_win_hz > 0 and df > 0:
+        kernel_size = max(1, int(round(smooth_win_hz / df)))
+        if kernel_size > 1:
+            kernel = np.ones(kernel_size) / kernel_size
+            spectrum = np.convolve(spectrum, kernel, mode='same')
+
+    # 2. 归一化
+    spectrum_norm = spectrum / (spectrum.max() + 1e-10)
+
+    mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
+    search_freqs = freqs[mask]
+    search_spectrum = spectrum_norm[mask]
+
+    if len(search_freqs) == 0:
+        return freq_range[0]
+
+    bw_bins = max(1, int(round(bandwidth_hz / df / 2)))
+    # 降低阈值，让弱基频也能参与竞争
+    min_base_energy = 0.015 * (2 * bw_bins + 1)
+
+    best_freq_spec = search_freqs[0]
+    best_energy = 0.0
+    best_idx_global = None
+
+    # 预收集子谐波惩罚信息（避免在循环中重复计算）
+    def _sub_harmonic_penalty(f_candidate: float) -> float:
+        """如果 f_candidate 的子谐波（f/2, f/3, f/4, f/5）也有明显能量，说明它可能是谐波而非基频"""
+        penalty = 0.0
+        for div in [2, 3, 4, 5]:
+            sub_f = f_candidate / div
+            if sub_f < freq_range[0]:
+                continue
+            idx_sub = np.argmin(np.abs(freqs - sub_f))
+            band_sub = spectrum_norm[
+                max(0, idx_sub - bw_bins):min(len(spectrum), idx_sub + bw_bins + 1)
+            ]
+            sub_energy = float(np.sum(band_sub))
+            if sub_energy > min_base_energy * 0.6:
+                # 子谐波能量越强，惩罚越大；div 越大惩罚越小
+                penalty += sub_energy * (1.0 / div) * 0.5
+        return penalty
+
+    for f in search_freqs:
+        idx_base = np.argmin(np.abs(freqs - f))
+        base_band = spectrum_norm[
+            max(0, idx_base - bw_bins):min(len(spectrum), idx_base + bw_bins + 1)
+        ]
+        base_energy = float(np.sum(base_band))
+        if base_energy < min_base_energy:
+            continue
+
+        energy = 0.0
+        for h in range(1, harmonics_num + 1):
+            harmonic_freq = f * h
+            if harmonic_freq > fs / 2:
+                break
+            idx = np.argmin(np.abs(freqs - harmonic_freq))
+            band = spectrum_norm[
+                max(0, idx - bw_bins):min(len(spectrum), idx + bw_bins + 1)
+            ]
+            weight = 1.0 / h
+            energy += float(np.sum(band)) * weight
+
+        energy -= _sub_harmonic_penalty(f)
+
+        if energy > best_energy:
+            best_energy = energy
+            best_freq_spec = f
+            best_idx_global = idx_base
+
+    if best_energy == 0.0:
+        # fallback：搜索范围内最强峰
+        best_local_idx = int(np.argmax(search_spectrum))
+        best_idx_global = int(np.argmin(np.abs(freqs - search_freqs[best_local_idx])))
+        best_freq_spec = freqs[best_idx_global]
+    else:
+        best_freq_spec = parabolic_interpolation(freqs, spectrum, best_idx_global)
+
+    # 记录 best_freq 的基频能量（用于子谐波后处理判断）
+    best_base_energy = float(np.sum(spectrum_norm[
+        max(0, best_idx_global - bw_bins):min(len(spectrum), best_idx_global + bw_bins + 1)
+    ])) if best_idx_global is not None else 0.0
+
+    # ---------- 子谐波后处理：防止谐波冒充基频 ----------
+    # 如果 best_freq 是某个较低频率的整数倍谐波，且该较低频率也有明显能量，
+    # 则优先选择较低频率作为真实基频（常见于轴承数据基频弱、谐波强的情况）
+    for div in [5, 4, 3, 2]:
+        candidate_base = best_freq_spec / div
+        if candidate_base < freq_range[0]:
+            continue
+        idx_base = np.argmin(np.abs(freqs - candidate_base))
+        base_band = spectrum_norm[
+            max(0, idx_base - bw_bins):min(len(spectrum), idx_base + bw_bins + 1)
+        ]
+        base_energy = float(np.sum(base_band))
+        # 条件1：候选基频能量不能仅由噪声构成
+        if base_energy < min_base_energy * 0.2:
+            continue
+        # 条件2：候选基频能量应占 best_freq 能量的显著比例，
+        #        防止在纯正弦波等 best_freq 本身极强的情况下误修正
+        if base_energy < best_base_energy * 0.12:
+            continue
+        ratio = best_freq_spec / candidate_base
+        if abs(ratio - round(ratio)) < 0.12:
+            # 验证该候选基频的谐波能量是否也足够可观
+            # 注意：跳过 h=div，因为该谐波就是当前的 best_freq 本身，
+            # 不能让它成为"自我证明"的循环依据
+            base_harmonic_energy = 0.0
+            for h in range(1, harmonics_num + 1):
+                if h == div:
+                    continue
+                hf = candidate_base * h
+                if hf > fs / 2:
+                    break
+                idx_h = np.argmin(np.abs(freqs - hf))
+                band_h = spectrum_norm[
+                    max(0, idx_h - bw_bins):min(len(spectrum), idx_h + bw_bins + 1)
+                ]
+                base_harmonic_energy += float(np.sum(band_h)) * (1.0 / h)
+            if base_harmonic_energy > best_energy * 0.15:
+                best_freq_spec = parabolic_interpolation(freqs, spectrum, idx_base)
+                best_idx_global = idx_base
+                break
+
+    # ---------- 包络解调辅助 ----------
+    # 对啮合频率常见区域（200~500Hz）和全局高频峰做包络解调，收集候选
+    candidates = [(best_freq_spec, "spectrum")]
+
+    # 中频带（200~500Hz）：常见啮合频率区域
+    mid_mask = (freqs >= 200) & (freqs <= 500)
+    if np.any(mid_mask):
+        mid_peak = freqs[mid_mask][np.argmax(spectrum[mid_mask])]
+        env_est = estimate_rot_freq_envelope(sig, fs, mid_peak, freq_range=freq_range)
+        if env_est:
+            candidates.append((env_est, "envelope_mesh"))
+
+    # 全局高频最强峰（100Hz ~ fs/4）
+    high_mask = (freqs >= 100) & (freqs <= fs / 4)
+    if np.any(high_mask):
+        top_idx = np.argmax(spectrum[high_mask])
+        high_peak = freqs[high_mask][top_idx]
+        env_est = estimate_rot_freq_envelope(sig, fs, high_peak, freq_range=freq_range)
+        if env_est:
+            candidates.append((env_est, "envelope_high"))
+
+    # ---------- 启发式仲裁 ----------
+    # 优先选择通过"齿数整数"验证的包络法候选：
+    # 如果带通中心频率 / 候选转频 ≈ 整数，且齿数在合理范围（8~50），
+    # 说明该候选与啮合频率强相关，可信度最高。
+    for f_est, method in candidates:
+        if method.startswith("envelope"):
+            # 0) 频谱基频支持验证：包络候选必须在原始频谱中有足够基频能量，
+            #    防止带通滤波在噪声峰上产生虚假包络峰值
+            idx_env = np.argmin(np.abs(freqs - f_est))
+            env_band = spectrum_norm[
+                max(0, idx_env - bw_bins):min(len(spectrum), idx_env + bw_bins + 1)
+            ]
+            env_base_energy = float(np.sum(env_band))
+            if env_base_energy < min_base_energy * 0.3:
+                continue
+
+            # 1) 齿数整数验证
+            if method == "envelope_mesh":
+                f_center = freqs[mid_mask][np.argmax(spectrum[mid_mask])]
+            else:
+                f_center = freqs[high_mask][np.argmax(spectrum[high_mask])]
+            teeth = f_center / f_est
+            teeth_rounded = round(teeth)
+            if abs(teeth - teeth_rounded) < 0.30 and 10 <= teeth_rounded <= 50:
+                return float(f_est)
+
+    # 没有通过齿数验证的包络候选，fallback 到频谱法
+    return float(best_freq_spec)

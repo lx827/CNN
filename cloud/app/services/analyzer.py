@@ -17,6 +17,7 @@ import random
 
 from app.services.nn_predictor import predict as nn_predict
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod
+from app.services.diagnosis.utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
 
 
 def remove_dc(signal: List[float]) -> np.ndarray:
@@ -410,80 +411,6 @@ def _order_band_energy(order_axis, spectrum, center_order: float, bandwidth: flo
     if not np.any(mask):
         return 0.0
     return float(np.sum(spectrum[mask] ** 2))
-
-
-def _estimate_rot_freq_spectrum(sig: np.ndarray, fs: float,
-                                 freq_range=(10, 100),
-                                 harmonics_num: int = 5,
-                                 bandwidth_hz: float = 3.0,
-                                 smooth_win_hz: float = 1.5) -> float:
-    """
-    通过频谱峰值法估计转频（从 data_view.py 移植，避免循环导入）
-    """
-    from scipy.fft import rfft, rfftfreq
-    N = len(sig)
-    spectrum = np.abs(rfft(sig))
-    freqs = rfftfreq(N, d=1.0 / fs)
-    df = freqs[1] - freqs[0]
-
-    if smooth_win_hz > 0 and df > 0:
-        kernel_size = max(1, int(round(smooth_win_hz / df)))
-        if kernel_size > 1:
-            kernel = np.ones(kernel_size) / kernel_size
-            spectrum = np.convolve(spectrum, kernel, mode='same')
-
-    spectrum_norm = spectrum / (spectrum.max() + 1e-10)
-    mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
-    search_freqs = freqs[mask]
-    search_spectrum = spectrum_norm[mask]
-
-    if len(search_freqs) == 0:
-        return freq_range[0]
-
-    bw_bins = max(1, int(round(bandwidth_hz / df / 2)))
-    min_base_energy = 0.015 * (2 * bw_bins + 1)
-
-    best_freq = search_freqs[0]
-    best_energy = 0.0
-    best_idx_global = None
-
-    for f in search_freqs:
-        idx_base = np.argmin(np.abs(freqs - f))
-        base_band = spectrum_norm[max(0, idx_base - bw_bins):min(len(spectrum), idx_base + bw_bins + 1)]
-        base_energy = float(np.sum(base_band))
-        if base_energy < min_base_energy:
-            continue
-
-        energy = 0.0
-        for h in range(1, harmonics_num + 1):
-            harmonic_freq = f * h
-            if harmonic_freq > fs / 2:
-                break
-            idx = np.argmin(np.abs(freqs - harmonic_freq))
-            band = spectrum_norm[max(0, idx - bw_bins):min(len(spectrum), idx + bw_bins + 1)]
-            weight = 1.0 / h
-            energy += float(np.sum(band)) * weight
-
-        if energy > best_energy:
-            best_energy = energy
-            best_freq = f
-            best_idx_global = idx_base
-
-    if best_energy == 0.0:
-        best_local_idx = int(np.argmax(search_spectrum))
-        best_idx_global = int(np.argmin(np.abs(freqs - search_freqs[best_local_idx])))
-        best_freq = freqs[best_idx_global]
-    else:
-        # 抛物线插值
-        if best_idx_global > 0 and best_idx_global < len(spectrum) - 1:
-            alpha = spectrum[best_idx_global - 1]
-            beta = spectrum[best_idx_global]
-            gamma = spectrum[best_idx_global + 1]
-            if beta > max(alpha, gamma):
-                p = 0.5 * (alpha - gamma) / (alpha - 2 * beta + gamma)
-                best_freq = float(freqs[best_idx_global] + p * (freqs[1] - freqs[0]))
-
-    return float(best_freq)
 
 
 def _extract_spectrum_features(freq, amp, rot_freq: float, gear_teeth: dict, bearing_params: dict) -> dict:

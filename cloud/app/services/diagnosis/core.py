@@ -7,8 +7,7 @@ import numpy as np
 from enum import Enum
 from typing import Dict, List, Optional, Any
 
-from .utils import prepare_signal, compute_fft_spectrum
-from .features import _estimate_rot_freq_simple
+from .utils import prepare_signal, compute_fft_spectrum, estimate_rot_freq_spectrum as _estimate_rot_freq_simple
 from .bearing import (
     envelope_analysis,
     fast_kurtogram,

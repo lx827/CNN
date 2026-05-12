@@ -198,61 +198,8 @@ def compute_envelope_features(
     return features
 
 
-def _estimate_rot_freq_simple(
-    sig: np.ndarray,
-    fs: float,
-    freq_range: Tuple[float, float] = (10, 100),
-    harmonics_num: int = 5,
-    bandwidth_hz: float = 3.0,
-) -> float:
-    """
-    通过频谱峰值法估计转频（简化版）
-    """
-    N = len(sig)
-    spectrum = np.abs(rfft(sig))
-    freqs = rfftfreq(N, d=1.0 / fs)
-    df = freqs[1] - freqs[0]
-
-    spectrum_norm = spectrum / (spectrum.max() + 1e-10)
-    mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
-    search_freqs = freqs[mask]
-    search_spectrum = spectrum_norm[mask]
-
-    if len(search_freqs) == 0:
-        return freq_range[0]
-
-    bw_bins = max(1, int(round(bandwidth_hz / df / 2)))
-    min_base_energy = 0.015 * (2 * bw_bins + 1)
-
-    best_freq = search_freqs[0]
-    best_energy = 0.0
-
-    for f in search_freqs:
-        idx_base = np.argmin(np.abs(freqs - f))
-        base_band = spectrum_norm[max(0, idx_base - bw_bins):min(len(spectrum), idx_base + bw_bins + 1)]
-        base_energy = float(np.sum(base_band))
-        if base_energy < min_base_energy:
-            continue
-
-        energy = 0.0
-        for h in range(1, harmonics_num + 1):
-            harmonic_freq = f * h
-            if harmonic_freq > fs / 2:
-                break
-            idx = np.argmin(np.abs(freqs - harmonic_freq))
-            band = spectrum_norm[max(0, idx - bw_bins):min(len(spectrum), idx + bw_bins + 1)]
-            weight = 1.0 / h
-            energy += float(np.sum(band)) * weight
-
-        if energy > best_energy:
-            best_energy = energy
-            best_freq = f
-
-    if best_energy == 0.0:
-        best_local_idx = int(np.argmax(search_spectrum))
-        best_freq = search_freqs[best_local_idx]
-
-    return float(best_freq)
+# 统一使用 utils.py 中的高精度转频估计（含包络解调辅助 + 齿数验证）
+from .utils import estimate_rot_freq_spectrum as _estimate_rot_freq_simple
 
 
 # 向后兼容：轴承特征频率计算
