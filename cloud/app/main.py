@@ -21,11 +21,13 @@ from app.core.config import (
     SENSOR_WINDOW_SECONDS,
 )
 from datetime import datetime
-from app.api import ingest, dashboard, monitor, diagnosis, alarms, devices, data_view, collect, auth, system
+from app.api import ingest, dashboard, monitor, diagnosis, alarms, devices, collect, auth, system
+from app.api.data_view import router as data_view_router
 from app.api.auth import get_current_user, optional_auth
 from fastapi import Depends
 from app.core.websocket import manager
-from app.services.analyzer import analyze_device, compute_channel_features
+from app.services.analyzer import analyze_device
+from app.services.diagnosis.features import compute_channel_features
 from app.services.alarm_service import generate_alarms
 
 
@@ -297,7 +299,7 @@ app.include_router(monitor.router, dependencies=[Depends(optional_auth)])
 app.include_router(diagnosis.router, dependencies=[Depends(optional_auth)])
 app.include_router(alarms.router, dependencies=[Depends(optional_auth)])
 app.include_router(devices.router, dependencies=[Depends(optional_auth)])
-app.include_router(data_view.router, dependencies=[Depends(optional_auth)])
+app.include_router(data_view_router, dependencies=[Depends(optional_auth)])
 app.include_router(collect.router, dependencies=[Depends(optional_auth)])
 app.include_router(system.router, dependencies=[Depends(optional_auth)])
 
