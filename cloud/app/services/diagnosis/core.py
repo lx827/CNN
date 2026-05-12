@@ -12,6 +12,7 @@ from .utils import (
     compute_fft_spectrum,
     estimate_rot_freq_spectrum as _estimate_rot_freq_simple,
     _compute_order_spectrum_multi_frame,
+    _compute_order_spectrum_varying_speed,
     _compute_order_spectrum,
 )
 from .bearing import (
@@ -103,6 +104,23 @@ class DiagnosisEngine:
             return vmd_denoise(arr, K=5, alpha=2000)
         return arr
 
+    def _estimate_rot_freq(self, signal: np.ndarray, fs: float) -> float:
+        """
+        使用与阶次追踪（/order 端点）相同的算法估计转频。
+        优先多帧平均；若转速波动剧烈（CV > 10%），自动降级到变速跟踪。
+        """
+        try:
+            _, _, rot_freq, rot_std = _compute_order_spectrum_multi_frame(
+                signal, fs, samples_per_rev=1024, max_order=50
+            )
+            if rot_freq > 0 and (rot_std / rot_freq) > 0.10:
+                _, _, rot_freq, rot_std = _compute_order_spectrum_varying_speed(
+                    signal, fs, samples_per_rev=1024, max_order=50
+                )
+            return float(rot_freq)
+        except Exception:
+            return float(_estimate_rot_freq_simple(signal, fs))
+
     def analyze_bearing(
         self,
         signal: np.ndarray,
@@ -124,7 +142,7 @@ class DiagnosisEngine:
         arr = self.preprocess(signal)
 
         if rot_freq is None:
-            rot_freq = _estimate_rot_freq_simple(arr, fs)
+            rot_freq = self._estimate_rot_freq(arr, fs)
 
         # 选择轴承诊断方法
         if self.bearing_method == BearingMethod.KURTOGRAM:
@@ -177,7 +195,8 @@ class DiagnosisEngine:
         齿轮诊断分析
 
         核心修改：所有频域齿轮特征（SER、边频带、FM0）均基于阶次谱计算，
-        确保与阶次谱页面（/order 端点）的结果一致。
+        且转频估计与阶次追踪（/order 端点）完全一致，确保诊断明细中的
+        rot_freq_hz 与阶次谱页面显示值相同。
 
         Returns:
             {
@@ -190,8 +209,28 @@ class DiagnosisEngine:
         """
         arr = self.preprocess(signal)
 
-        if rot_freq is None:
-            rot_freq = _estimate_rot_freq_simple(arr, fs)
+        order_axis = None
+        order_spectrum = None
+        rot_freq_used = rot_freq
+        rot_std = 0.0
+
+        if rot_freq_used is None:
+            try:
+                order_axis, order_spectrum, rot_freq_used, rot_std = _compute_order_spectrum_multi_frame(
+                    arr, fs, samples_per_rev=1024, max_order=50
+                )
+                if rot_freq_used > 0 and (rot_std / rot_freq_used) > 0.10:
+                    order_axis, order_spectrum, rot_freq_used, rot_std = _compute_order_spectrum_varying_speed(
+                        arr, fs, samples_per_rev=1024, max_order=50
+                    )
+            except Exception:
+                rot_freq_used = _estimate_rot_freq_simple(arr, fs)
+                order_axis, order_spectrum = _compute_order_spectrum(arr, fs, rot_freq_used, samples_per_rev=1024)
+                rot_std = 0.0
+        else:
+            order_axis, order_spectrum = _compute_order_spectrum(arr, fs, rot_freq_used, samples_per_rev=1024)
+
+        rot_freq = float(rot_freq_used)
 
         z_in = (self.gear_teeth.get("input") or 0) if self.gear_teeth else 0
         mesh_freq = rot_freq * z_in if z_in > 0 else None
@@ -203,28 +242,9 @@ class DiagnosisEngine:
             "rot_freq_hz": round(rot_freq, 3),
             "mesh_freq_hz": round(mesh_freq, 2) if mesh_freq else None,
             "mesh_order": round(mesh_order, 2) if mesh_order else None,
+            "rot_freq_estimated_hz": round(rot_freq, 3),
+            "rot_freq_std": round(rot_std, 4),
         }
-
-        # 统一计算阶次谱（与 /order 端点使用相同算法）
-        # 如果传入了 rot_freq，使用单帧阶次跟踪（与 /order 端点指定 rot_freq 时一致）
-        # 否则使用多帧平均估计转频（与 /order 端点默认行为一致）
-        try:
-            if rot_freq is not None:
-                order_axis, order_spectrum = _compute_order_spectrum(arr, fs, rot_freq, samples_per_rev=1024)
-                rot_freq_used = rot_freq
-                rot_std = 0.0
-            else:
-                order_axis, order_spectrum, rot_freq_used, rot_std = _compute_order_spectrum_multi_frame(
-                    arr, fs, samples_per_rev=1024, max_order=50
-                )
-        except Exception:
-            # fallback 到单帧阶次谱
-            order_axis, order_spectrum = _compute_order_spectrum(arr, fs, rot_freq or 20.0, samples_per_rev=1024)
-            rot_freq_used = rot_freq or 20.0
-            rot_std = 0.0
-
-        result["rot_freq_estimated_hz"] = round(rot_freq_used, 3)
-        result["rot_freq_std"] = round(rot_std, 4)
 
         # 基于阶次谱的边频带分析
         if mesh_order and mesh_order > 0:
@@ -279,7 +299,7 @@ class DiagnosisEngine:
         arr = self.preprocess(signal)
 
         if rot_freq is None:
-            rot_freq = _estimate_rot_freq_simple(arr, fs)
+            rot_freq = self._estimate_rot_freq(arr, fs)
 
         # 时域特征
         time_features = compute_time_features(arr)
@@ -330,7 +350,7 @@ class DiagnosisEngine:
             arr = self.preprocess(arr)
 
         if rot_freq is None:
-            rot_freq = _estimate_rot_freq_simple(arr, fs)
+            rot_freq = self._estimate_rot_freq(arr, fs)
 
         # 保存原始方法配置
         original_bearing = self.bearing_method

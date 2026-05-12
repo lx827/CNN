@@ -115,21 +115,21 @@
               <div v-if="detail.bearing" style="margin-bottom: 16px;">
                 <el-text type="primary" style="font-weight: 600;">🔧 轴承诊断（{{ detail.bearing.method || '包络' }}）</el-text>
                 <el-descriptions :column="3" size="small" border style="margin-top: 8px;">
-                  <el-descriptions-item label="转频">{{ detail.bearing.rot_freq_hz }} Hz</el-descriptions-item>
-                  <el-descriptions-item label="策略">{{ detail.bearing.strategy }}</el-descriptions-item>
+                  <el-descriptions-item label="Rot Freq">{{ detail.bearing.rot_freq_hz }} Hz</el-descriptions-item>
+                  <el-descriptions-item label="Strategy">{{ detail.bearing.strategy }}</el-descriptions-item>
                 </el-descriptions>
                 <el-table v-if="detail.bearing.fault_indicators && Object.keys(detail.bearing.fault_indicators).length > 0" :data="formatBearingIndicators(detail.bearing.fault_indicators)" size="small" border style="margin-top: 8px;">
-                  <el-table-column prop="name" label="故障类型" width="120" />
-                  <el-table-column prop="theory_hz" label="理论频率(Hz)" width="130" />
-                  <el-table-column prop="detected_hz" label="检出频率(Hz)" width="130" />
-                  <el-table-column prop="snr" label="信噪比" width="100">
+                  <el-table-column prop="name" label="Fault Type" width="120" />
+                  <el-table-column prop="theory_hz" label="Theory Freq (Hz)" width="130" />
+                  <el-table-column prop="detected_hz" label="Detected Freq (Hz)" width="130" />
+                  <el-table-column prop="snr" label="SNR" width="100">
                     <template #default="{ row }">
                       <el-tag :type="row.snr > 5 ? 'danger' : row.snr > 3 ? 'warning' : 'info'" size="small">{{ row.snr }}</el-tag>
                     </template>
                   </el-table-column>
-                  <el-table-column label="结论" width="100">
+                  <el-table-column label="Result" width="100">
                     <template #default="{ row }">
-                      <el-tag :type="row.significant ? 'danger' : 'success'" size="small">{{ row.significant ? '显著' : '未检出' }}</el-tag>
+                      <el-tag :type="row.significant ? 'danger' : 'success'" size="small">{{ row.significant ? 'Significant' : 'Not Detected' }}</el-tag>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -139,14 +139,14 @@
               <div v-if="detail.gear" style="margin-bottom: 16px;">
                 <el-text type="primary" style="font-weight: 600;">⚙️ 齿轮诊断（{{ detail.gear.method || '标准' }}）</el-text>
                 <el-descriptions :column="4" size="small" border style="margin-top: 8px;">
-                  <el-descriptions-item label="转频">{{ detail.gear.rot_freq_hz }} Hz</el-descriptions-item>
-                  <el-descriptions-item label="啮合频率" v-if="detail.gear.mesh_freq_hz">{{ detail.gear.mesh_freq_hz }} Hz</el-descriptions-item>
+                  <el-descriptions-item label="Rot Freq">{{ detail.gear.rot_freq_hz }} Hz</el-descriptions-item>
+                  <el-descriptions-item label="Mesh Freq" v-if="detail.gear.mesh_freq_hz">{{ detail.gear.mesh_freq_hz }} Hz</el-descriptions-item>
                   <el-descriptions-item label="SER">
                     <el-tag :type="detail.gear.fault_indicators?.ser?.critical ? 'danger' : detail.gear.fault_indicators?.ser?.warning ? 'warning' : 'success'" size="small">
                       {{ detail.gear.ser?.toFixed?.(3) ?? detail.gear.ser }}
                     </el-tag>
                   </el-descriptions-item>
-                  <el-descriptions-item label="显著边频数">
+                  <el-descriptions-item label="Sig SB Count">
                     <el-tag :type="detail.gear.fault_indicators?.sideband_count?.critical ? 'danger' : detail.gear.fault_indicators?.sideband_count?.warning ? 'warning' : 'success'" size="small">
                       {{ detail.gear.fault_indicators?.sideband_count?.value ?? '-' }}
                     </el-tag>
@@ -162,26 +162,26 @@
                   </el-descriptions-item>
                 </el-descriptions>
                 <el-table v-if="detail.gear.sidebands && detail.gear.sidebands.length > 0" :data="detail.gear.sidebands" size="small" style="margin-top: 8px;" max-height="200">
-                  <el-table-column prop="order" label="阶次" width="60" />
-                  <el-table-column prop="order_low" label="下边频阶次" width="110" />
-                  <el-table-column prop="order_high" label="上边频阶次" width="110" />
-                  <el-table-column prop="amp_low" label="下幅值" width="90" />
-                  <el-table-column prop="amp_high" label="上幅值" width="90" />
-                  <el-table-column label="显著">
+                  <el-table-column prop="order" label="Order" width="60" />
+                  <el-table-column prop="order_low" label="Lower SB Order" width="110" />
+                  <el-table-column prop="order_high" label="Upper SB Order" width="110" />
+                  <el-table-column prop="amp_low" label="Lower Amp" width="90" />
+                  <el-table-column prop="amp_high" label="Upper Amp" width="90" />
+                  <el-table-column label="Significant">
                     <template #default="{ row }">
-                      <el-tag :type="row.significant ? 'warning' : 'info'" size="small">{{ row.significant ? '是' : '否' }}</el-tag>
+                      <el-tag :type="row.significant ? 'warning' : 'info'" size="small">{{ row.significant ? 'Yes' : 'No' }}</el-tag>
                     </template>
                   </el-table-column>
                 </el-table>
               </div>
 
               <div v-if="detail.time_features">
-                <el-text type="primary" style="font-weight: 600;">📊 时域特征</el-text>
+                <el-text type="primary" style="font-weight: 600;">📊 Time Features</el-text>
                 <el-descriptions :column="4" size="small" border style="margin-top: 8px;">
-                  <el-descriptions-item label="峰值">{{ detail.time_features.peak?.toFixed?.(4) ?? detail.time_features.peak }}</el-descriptions-item>
+                  <el-descriptions-item label="Peak">{{ detail.time_features.peak?.toFixed?.(4) ?? detail.time_features.peak }}</el-descriptions-item>
                   <el-descriptions-item label="RMS">{{ detail.time_features.rms?.toFixed?.(4) ?? detail.time_features.rms }}</el-descriptions-item>
-                  <el-descriptions-item label="峭度">{{ detail.time_features.kurtosis?.toFixed?.(4) ?? detail.time_features.kurtosis }}</el-descriptions-item>
-                  <el-descriptions-item label="峰值因子">{{ detail.time_features.crest_factor?.toFixed?.(4) ?? detail.time_features.crest_factor }}</el-descriptions-item>
+                  <el-descriptions-item label="Kurtosis">{{ detail.time_features.kurtosis?.toFixed?.(4) ?? detail.time_features.kurtosis }}</el-descriptions-item>
+                  <el-descriptions-item label="Crest Factor">{{ detail.time_features.crest_factor?.toFixed?.(4) ?? detail.time_features.crest_factor }}</el-descriptions-item>
                 </el-descriptions>
               </div>
             </el-collapse-item>
