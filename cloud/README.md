@@ -84,10 +84,13 @@ pip install -r requirements.txt
 如需切换为 **MySQL**：
 
 1. 安装并启动 MySQL，创建数据库：
+
    ```sql
    CREATE DATABASE turbine_db CHARACTER SET utf8mb4;
    ```
+
 2. 在项目根目录创建 `.env` 文件：
+
    ```ini
    USE_SQLITE=false
    DB_HOST=localhost
@@ -154,6 +157,7 @@ pip install -r requirements.txt
 | `is_special` | 是否手动触发采集（特殊数据） |
 
 **存储策略**：
+
 - **普通数据**（`is_special=0`）：每个设备最多保留 16 个批次（`1~16`），新数据循环覆盖最旧批次。
 - **特殊数据**（`is_special=1`）：手动触发采集，批次号从 `101` 起自增，永不覆盖。
 
@@ -216,6 +220,7 @@ pip install -r requirements.txt
 ### 7.5 WebSocket 实时推送（`core/websocket.py`）
 
 前端连接 `ws://<host>/ws/monitor`，可实时接收：
+
 - 诊断更新（`diagnosis_update`）
 - 告警通知
 - 心跳应答（`pong`）
@@ -244,6 +249,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
 启动成功后访问：
+
 - API 文档（Swagger UI）：`http://localhost:8000/docs`
 - 根接口：`http://localhost:8000/`
 
