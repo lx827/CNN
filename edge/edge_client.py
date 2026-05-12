@@ -215,13 +215,11 @@ def upload_data(device_id, signals, sample_rate, is_special=False, task_id=None,
         cloud_comp = config.get("compression_enabled")
         if cloud_comp is not None:
             comp_enabled = bool(cloud_comp)
-        cloud_ratio = config.get("downsample_ratio")
-        if cloud_ratio is not None:
-            ratio = int(cloud_ratio)
-
-    # 真实数据模式下：若云端未指定压缩比，默认不压缩（ratio=1）
-    if USE_REAL_DATA and config and config.get("downsample_ratio") is None:
-        ratio = 1
+        # 真实数据模式下：优先尊重 .env 中的 DOWNSAMPLE_RATIO，不被云端配置覆盖
+        if not USE_REAL_DATA:
+            cloud_ratio = config.get("downsample_ratio")
+            if cloud_ratio is not None:
+                ratio = int(cloud_ratio)
 
     if comp_enabled:
         compressed_info = compress_payload(
