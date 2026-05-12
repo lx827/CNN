@@ -53,7 +53,13 @@ def envelope_analysis(
         fc = 3000.0
     if bw is None:
         bw = 2000.0
-    filtered = bandpass_filter(arr, fs, max(100, fc - bw / 2), min(fs / 2 - 100, fc + bw / 2))
+    low = max(100, fc - bw / 2)
+    high = min(fs / 2 - 100, fc + bw / 2)
+    if low >= high:
+        # 频段非法，fallback 到默认频段
+        low = max(100, 3000.0 - 2000.0 / 2)
+        high = min(fs / 2 - 100, 3000.0 + 2000.0 / 2)
+    filtered = bandpass_filter(arr, fs, low, high)
 
     # Step 2-3: 希尔伯特变换 → 包络
     analytic = hilbert(filtered)

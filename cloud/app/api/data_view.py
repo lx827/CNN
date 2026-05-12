@@ -181,6 +181,106 @@ def _compute_order_spectrum_multi_frame(
     return common_orders, avg_spectrum, median_rf, std_rf
 
 
+def _compute_order_spectrum_varying_speed(
+    sig: np.ndarray,
+    fs: float,
+    freq_range: Tuple[float, float] = (10, 100),
+    samples_per_rev: int = 1024,
+    max_order: int = 50,
+    nperseg: int = 512,
+    noverlap: int = 384,
+) -> Tuple[np.ndarray, np.ndarray, float, float]:
+    """
+    变速工况阶次跟踪（基于 STFT 瞬时频率积分 + 等角度重采样）
+
+    适用于转速剧烈变化（如启停机、扫频）的信号。
+    核心思想：
+      1. STFT 时频谱峰值追踪得到瞬时频率 f_inst(t)
+      2. 对 f_inst 做 Savitzky-Golay 平滑去噪
+      3. 数值积分得到瞬时相位 phi(t) = 2*pi * cumsum(f_inst) * dt
+      4. 在等相位点（等角度）重采样 → 角域信号
+      5. FFT 得到阶次谱
+
+    Args:
+        sig: 时域信号
+        fs: 采样率
+        freq_range: 转频搜索范围
+        samples_per_rev: 每转采样点数（角域分辨率）
+        max_order: 返回最大阶次
+        nperseg: STFT 窗口长度
+        noverlap: STFT 重叠长度
+
+    Returns:
+        (orders, spectrum, median_rot_freq, rot_freq_std)
+    """
+    import numpy as np
+    from scipy import signal as scipy_signal
+    from scipy.fft import rfft
+
+    arr = np.array(sig, dtype=np.float64)
+
+    # 1. STFT 时频分析
+    f, t, Zxx = scipy_signal.stft(arr, fs=fs, nperseg=nperseg, noverlap=noverlap)
+    magnitude = np.abs(Zxx)
+
+    # 2. 在 freq_range 内追踪每个时间片的峰值频率（瞬时频率）
+    freq_mask = (f >= freq_range[0]) & (f <= freq_range[1])
+    search_f = f[freq_mask]
+    search_mag = magnitude[freq_mask, :]
+
+    if search_f.size == 0 or search_mag.shape[1] == 0:
+        # fallback 到单帧
+        rot_freq = _estimate_rot_freq_spectrum(arr, fs, freq_range)
+        order_axis, spectrum = _compute_order_spectrum(arr, fs, rot_freq, samples_per_rev)
+        mask = order_axis <= max_order
+        return order_axis[mask], spectrum[mask], float(rot_freq), 0.0
+
+    inst_freq = np.array([
+        float(search_f[np.argmax(search_mag[:, i])])
+        for i in range(search_mag.shape[1])
+    ])
+
+    # 3. 平滑瞬时频率（Savitzky-Golay，抑制 STFT 峰值噪声）
+    sg_win = min(11, len(inst_freq) // 2 * 2 + 1)
+    if sg_win >= 5:
+        inst_freq = scipy_signal.savgol_filter(inst_freq, sg_win, 3)
+
+    # 4. 插值到每个采样点
+    times_stft = t
+    times_sig = np.arange(len(arr)) / fs
+    inst_freq_per_sample = np.interp(
+        times_sig, times_stft, inst_freq,
+        left=inst_freq[0], right=inst_freq[-1]
+    )
+
+    # 5. 数值积分得到瞬时相位
+    dt = 1.0 / fs
+    inst_phase = 2.0 * np.pi * np.cumsum(inst_freq_per_sample) * dt
+
+    # 6. 等相位（等角度）重采样
+    total_revs = inst_phase[-1] / (2.0 * np.pi)
+    n_points = max(10, int(total_revs * samples_per_rev))
+    target_phase = np.linspace(0, inst_phase[-1], n_points, endpoint=False)
+    sig_order = np.interp(target_phase, inst_phase, arr, left=arr[0], right=arr[-1])
+    sig_order = sig_order - np.mean(sig_order)
+
+    # 7. FFT 阶次谱
+    N = len(sig_order)
+    window = np.hanning(N)
+    sig_windowed = sig_order * window
+    amplitude_scale = np.sqrt(N / np.sum(window ** 2))
+    spectrum = np.abs(rfft(sig_windowed)) * amplitude_scale
+
+    # 阶次轴：每阶对应一个转频倍数
+    orders = np.arange(len(spectrum)) / total_revs
+    mask = orders <= max_order
+
+    median_rf = float(np.median(inst_freq))
+    std_rf = float(np.std(inst_freq))
+
+    return orders[mask], spectrum[mask], median_rf, std_rf
+
+
 def _compute_cepstrum(
     sig: np.ndarray, fs: float,
     max_quefrency_ms: float = 500.0
@@ -492,6 +592,8 @@ def get_channel_fft(
             }
         }
     except Exception as e:
+        import traceback
+        print(f"[ERROR] FFT 计算失败: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"FFT 计算失败: {e}")
 
 
@@ -565,6 +667,8 @@ def get_channel_stft(
             }
         }
     except Exception as e:
+        import traceback
+        print(f"[ERROR] STFT 计算失败: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"STFT 计算失败: {e}")
 
 
@@ -683,6 +787,8 @@ def get_channel_stats(
             }
         }
     except Exception as e:
+        import traceback
+        print(f"[ERROR] 统计指标计算失败: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"统计指标计算失败: {e}")
 
 
@@ -764,6 +870,8 @@ def get_channel_envelope(
             }
         }
     except Exception as e:
+        import traceback
+        print(f"[ERROR] 包络谱计算失败: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"包络谱计算失败: {e}")
 
 
@@ -831,8 +939,9 @@ def get_channel_order(
             spectrum = spectrum[mask]
             rot_freq_val = float(rot_freq)
             rot_freq_std = 0.0
+            tracking_method = "single_frame"
         else:
-            # 多帧自适应阶次跟踪
+            # 先用多帧法估计转速及变化程度
             order_axis, spectrum, rot_freq_val, rot_freq_std = _compute_order_spectrum_multi_frame(
                 sig, sample_rate,
                 freq_range=(freq_min, freq_max),
@@ -841,6 +950,17 @@ def get_channel_order(
                 frame_duration=1.0,
                 overlap=0.5,
             )
+            tracking_method = "multi_frame"
+
+            # 若转速变化剧烈（变异系数 > 10%），启用变速阶次跟踪
+            if rot_freq_val > 0 and (rot_freq_std / rot_freq_val) > 0.10:
+                order_axis, spectrum, rot_freq_val, rot_freq_std = _compute_order_spectrum_varying_speed(
+                    sig, sample_rate,
+                    freq_range=(freq_min, freq_max),
+                    samples_per_rev=samples_per_rev,
+                    max_order=max_order,
+                )
+                tracking_method = "varying_speed"
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
 
@@ -856,6 +976,7 @@ def get_channel_order(
                 "rot_freq": round(rot_freq_val, 3),
                 "rot_rpm": round(rot_freq_val * 60.0, 1),
                 "rot_freq_std": round(rot_freq_std, 3),
+                "tracking_method": tracking_method,
                 "samples_per_rev": samples_per_rev,
                 "orders": [round(float(o), 3) for o in order_axis.tolist()],
                 "spectrum": [round(float(a), 4) for a in spectrum.tolist()],
@@ -864,6 +985,8 @@ def get_channel_order(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        import traceback
+        print(f"[ERROR] 阶次谱计算失败: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"阶次谱计算失败: {e}")
 
 
@@ -925,6 +1048,8 @@ def get_channel_cepstrum(
             }
         }
     except Exception as e:
+        import traceback
+        print(f"[ERROR] 倒谱计算失败: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"倒谱计算失败: {e}")
 
 
@@ -1157,6 +1282,8 @@ def get_channel_gear(
             }
         }
     except Exception as e:
+        import traceback
+        print(f"[ERROR] 齿轮诊断失败: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"齿轮诊断失败: {e}")
 
 
@@ -1237,4 +1364,6 @@ def get_channel_analyze(
             }
         }
     except Exception as e:
+        import traceback
+        print(f"[ERROR] 综合分析失败: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"综合分析失败: {e}")
