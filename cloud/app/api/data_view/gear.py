@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod, DiagnosisStrategy
-from app.services.diagnosis.utils import (
-    estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum,
+from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
+from app.services.diagnosis.order_tracking import (
     _compute_order_spectrum_multi_frame,
     _compute_order_spectrum_varying_speed,
 )

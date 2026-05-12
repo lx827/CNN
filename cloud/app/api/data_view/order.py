@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device
-from app.services.diagnosis.utils import (
-    estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum,
+from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
+from app.services.diagnosis.order_tracking import (
     _compute_order_spectrum,
     _compute_order_spectrum_multi_frame,
     _compute_order_spectrum_varying_speed,
@@ -13,6 +13,7 @@ from . import router, prepare_signal
 from datetime import datetime
 import logging
 import numpy as np
+import asyncio
 
 logger = logging.getLogger(__name__)
 
