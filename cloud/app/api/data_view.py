@@ -438,6 +438,12 @@ def get_all_device_data(
         batches = []
         for batch_index, created_at, is_special, ch_count, sr in batch_records:
             diag = diag_map.get(batch_index)
+            # 提取概率最高的故障类型
+            top_fault = None
+            if diag and diag.fault_probabilities:
+                top = max(diag.fault_probabilities.items(), key=lambda x: x[1])
+                if top[1] > 0.3:
+                    top_fault = f"{top[0]} ({top[1]*100:.0f}%)"
             batches.append({
                 "batch_index": batch_index,
                 "created_at": created_at.isoformat() if created_at else None,
@@ -445,6 +451,9 @@ def get_all_device_data(
                 "channel_count": ch_count,
                 "sample_rate": sr or 25600,
                 "diagnosis_status": diag.status if diag else None,
+                "health_score": diag.health_score if diag else None,
+                "top_fault": top_fault,
+                "analyzed_at": diag.analyzed_at.isoformat() if diag and diag.analyzed_at else None,
             })
 
         result.append({
@@ -487,6 +496,15 @@ def get_device_batches(
         desc(func.max(SensorData.created_at))
     ).limit(50).all()
 
+    # 预加载该设备的所有诊断结果
+    diag_records = db.query(Diagnosis).filter(
+        Diagnosis.device_id == device_id
+    ).all()
+    diag_map = {}
+    for d in diag_records:
+        if d.batch_index not in diag_map or (d.analyzed_at and d.analyzed_at > diag_map[d.batch_index].analyzed_at):
+            diag_map[d.batch_index] = d
+
     items = []
     for batch_index, created_at, ch_count, is_special, sr in batch_records:
         # 检查该批次是否已分析
@@ -496,6 +514,13 @@ def get_device_batches(
             SensorData.is_analyzed == 1
         ).first()
 
+        diag = diag_map.get(batch_index)
+        top_fault = None
+        if diag and diag.fault_probabilities:
+            top = max(diag.fault_probabilities.items(), key=lambda x: x[1])
+            if top[1] > 0.3:
+                top_fault = f"{top[0]} ({top[1]*100:.0f}%)"
+
         items.append({
             "batch_index": batch_index,
             "channel_count": ch_count,
@@ -503,6 +528,10 @@ def get_device_batches(
             "is_special": bool(is_special),
             "sample_rate": sr or 25600,
             "created_at": created_at.isoformat() if created_at else None,
+            "diagnosis_status": diag.status if diag else None,
+            "health_score": diag.health_score if diag else None,
+            "top_fault": top_fault,
+            "analyzed_at": diag.analyzed_at.isoformat() if diag and diag.analyzed_at else None,
         })
 
     return {"code": 200, "data": items}

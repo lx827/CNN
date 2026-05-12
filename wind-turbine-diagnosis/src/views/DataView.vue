@@ -29,19 +29,31 @@
         <el-table-column label="历史数据批次" min-width="400">
           <template #default="{ row }">
             <div class="batch-tags">
-              <el-tag
+              <el-tooltip
                 v-for="batch in row.batches"
                 :key="batch.batch_index"
-                :type="getBatchTagType(batch)"
-                class="batch-tag"
-                :class="{ active: isSelected(row.device_id, batch.batch_index) }"
-                @click="selectBatch(row, batch)"
-                size="small"
-                effect="light"
+                placement="top"
               >
-                #{{ batch.batch_index }} {{ formatTime(batch.created_at) }}
-                <el-icon v-if="batch.is_special" class="special-icon"><Star-Filled /></el-icon>
-              </el-tag>
+                <template #content>
+                  <div style="max-width: 200px">
+                    <div>状态: <b>{{ batch.diagnosis_status === 'fault' ? '故障' : batch.diagnosis_status === 'warning' ? '预警' : '正常' }}</b></div>
+                    <div v-if="batch.health_score != null">健康度: {{ batch.health_score }} 分</div>
+                    <div v-if="batch.top_fault">主要异常: {{ batch.top_fault }}</div>
+                    <div v-else-if="batch.diagnosis_status">暂无明细故障</div>
+                  </div>
+                </template>
+                <el-tag
+                  :type="getBatchTagType(batch)"
+                  class="batch-tag"
+                  :class="{ active: isSelected(row.device_id, batch.batch_index) }"
+                  @click="selectBatch(row, batch)"
+                  size="small"
+                  effect="light"
+                >
+                  #{{ batch.batch_index }} {{ formatTime(batch.created_at) }}
+                  <el-icon v-if="batch.is_special" class="special-icon"><Star-Filled /></el-icon>
+                </el-tag>
+              </el-tooltip>
               <el-text v-if="row.batches.length === 0" type="info" size="small">暂无数据</el-text>
             </div>
           </template>
@@ -77,6 +89,15 @@
             数据详情 — <b>{{ selectedDevice.device_name }}</b>
             批次 <b>{{ selectedBatch.batch_index }}</b>
             <el-tag v-if="selectedBatch.is_special" type="danger" size="small" effect="dark">特殊数据</el-tag>
+            <el-tag
+              v-if="selectedBatch.diagnosis_status"
+              :type="selectedBatch.diagnosis_status === 'fault' ? 'danger' : selectedBatch.diagnosis_status === 'warning' ? 'warning' : 'success'"
+              size="small"
+              effect="dark"
+            >
+              {{ selectedBatch.diagnosis_status === 'fault' ? '故障' : selectedBatch.diagnosis_status === 'warning' ? '预警' : '正常' }}
+              <span v-if="selectedBatch.health_score != null">({{ selectedBatch.health_score }}分)</span>
+            </el-tag>
             <el-tag type="info" size="small">采样率 {{ selectedBatch.sample_rate || 25600 }} Hz</el-tag>
           </span>
           <div class="detail-actions">
@@ -113,6 +134,20 @@
           </div>
         </div>
       </template>
+
+      <!-- 诊断提示（异常时显示） -->
+      <el-row v-if="selectedBatch.diagnosis_status === 'fault' || selectedBatch.diagnosis_status === 'warning'" :gutter="16">
+        <el-col :span="24">
+          <el-alert
+            :title="selectedBatch.diagnosis_status === 'fault' ? '⚠️ 该批次被诊断为故障状态' : '⚡ 该批次被诊断为预警状态'"
+            :type="selectedBatch.diagnosis_status === 'fault' ? 'error' : 'warning'"
+            :description="diagnosisDesc"
+            show-icon
+            :closable="false"
+            style="margin-bottom: 16px"
+          />
+        </el-col>
+      </el-row>
 
       <!-- 时域波形：始终自动加载 -->
       <el-row :gutter="16">
@@ -454,7 +489,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import * as echarts from 'echarts'
 import {
@@ -616,6 +651,23 @@ const getBatchTagType = (batch) => {
   if (batch.diagnosis_status === 'warning') return 'warning'
   return 'info'
 }
+
+const diagnosisDesc = computed(() => {
+  if (!selectedBatch.value) return ''
+  const batch = selectedBatch.value
+  const parts = []
+  if (batch.health_score != null) {
+    parts.push(`健康度评分: ${batch.health_score} 分`)
+  }
+  if (batch.top_fault) {
+    parts.push(`主要异常: ${batch.top_fault}`)
+  } else if (batch.diagnosis_status === 'fault') {
+    parts.push('检测到故障特征，建议进一步分析频谱和阶次跟踪')
+  } else if (batch.diagnosis_status === 'warning') {
+    parts.push('检测到预警信号，建议关注设备运行状态')
+  }
+  return parts.join('；')
+})
 
 // ========== 加载设备表格 ==========
 const loadAllDevices = async () => {
