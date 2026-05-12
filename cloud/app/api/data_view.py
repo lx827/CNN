@@ -11,7 +11,7 @@
 
 所有频谱都是请求时实时计算，不预存。
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from starlette.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
@@ -34,6 +34,7 @@ from app.services.diagnosis.utils import (
     _compute_order_spectrum_varying_speed,
 )
 from typing import Optional, Tuple
+from datetime import datetime
 import logging
 import numpy as np
 from scipy.fft import rfft, rfftfreq
@@ -1244,3 +1245,47 @@ async def get_channel_full_analysis(
         tb = traceback.format_exc()
         logger.error(f"全算法分析失败: {e}\n{tb}")
         raise HTTPException(status_code=500, detail=f"全算法分析失败: {e}\n{tb}")
+
+
+
+@router.put("/{device_id}/{batch_index}/diagnosis")
+async def update_batch_diagnosis(
+    device_id: str,
+    batch_index: int,
+    order_analysis: Optional[dict] = Body(default=None),
+    rot_freq: Optional[float] = Body(default=None),
+    db: Session = Depends(get_db)
+):
+    """
+    更新批次诊断结果（order_analysis / rot_freq）。
+    用于阶次追踪重新计算后，把新的转频写回数据库覆盖原始数据。
+    """
+    diag = db.query(Diagnosis).filter(
+        Diagnosis.device_id == device_id,
+        Diagnosis.batch_index == batch_index
+    ).first()
+
+    if diag:
+        if order_analysis is not None:
+            existing = diag.order_analysis or {}
+            existing.update(order_analysis)
+            diag.order_analysis = existing
+        if rot_freq is not None:
+            diag.rot_freq = rot_freq
+        diag.analyzed_at = datetime.utcnow()
+    else:
+        diag = Diagnosis(
+            device_id=device_id,
+            batch_index=batch_index,
+            health_score=100,
+            fault_probabilities={"正常运行": 1.0},
+            imf_energy={},
+            order_analysis=order_analysis or {},
+            rot_freq=rot_freq,
+            status="normal",
+            analyzed_at=datetime.utcnow(),
+        )
+        db.add(diag)
+
+    db.commit()
+    return {"code": 200, "message": "诊断数据已更新"}
