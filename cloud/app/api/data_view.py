@@ -1245,5 +1245,6 @@ async def get_channel_full_analysis(
         }
     except Exception as e:
         import traceback
-        print(f"[ERROR] 全算法分析失败: {e}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"全算法分析失败: {e}")
+        tb = traceback.format_exc()
+        print(f"[ERROR] 全算法分析失败: {e}\n{tb}")
+        raise HTTPException(status_code=500, detail=f"全算法分析失败: {e}\n{tb}")
