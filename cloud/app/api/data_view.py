@@ -33,36 +33,63 @@ def remove_dc(signal):
     return arr - np.mean(arr)
 
 
+def _parabolic_interpolation(freqs, spectrum, idx):
+    """抛物线插值精确定位谱峰频率"""
+    if idx <= 0 or idx >= len(spectrum) - 1:
+        return freqs[idx]
+    alpha = spectrum[idx - 1]
+    beta = spectrum[idx]
+    gamma = spectrum[idx + 1]
+    if beta <= max(alpha, gamma):
+        return freqs[idx]
+    p = 0.5 * (alpha - gamma) / (alpha - 2 * beta + gamma)
+    return float(freqs[idx] + p * (freqs[1] - freqs[0]))
+
+
 def _estimate_rot_freq_spectrum(
     sig: np.ndarray, fs: float,
     freq_range: Tuple[float, float] = (10, 100),
-    harmonics_num: int = 5
+    harmonics_num: int = 5,
+    bandwidth_hz: float = 3.0,
+    smooth_win_hz: float = 1.5
 ) -> float:
-    """通过频谱峰值估计转频
-
-    改进：增加基频能量约束，避免将啮合频率的约数误判为转频
-    （如齿轮磨损信号中 180Hz 的 1/2=90Hz 会被旧算法误判）。
-    """
+    """通过频谱峰值法估计转频（改进版：平滑 + 频带积分 + 插值）"""
     N = len(sig)
     spectrum = np.abs(rfft(sig))
     freqs = rfftfreq(N, d=1.0 / fs)
+    df = freqs[1] - freqs[0]
 
-    spectrum = spectrum / (spectrum.max() + 1e-10)
+    # 1. 谱平滑：抑制随机噪声尖峰
+    if smooth_win_hz > 0 and df > 0:
+        kernel_size = max(1, int(round(smooth_win_hz / df)))
+        if kernel_size > 1:
+            kernel = np.ones(kernel_size) / kernel_size
+            spectrum = np.convolve(spectrum, kernel, mode='same')
+
+    # 2. 归一化
+    spectrum_norm = spectrum / (spectrum.max() + 1e-10)
+
     mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
     search_freqs = freqs[mask]
-    search_spectrum = spectrum[mask]
+    search_spectrum = spectrum_norm[mask]
 
     if len(search_freqs) == 0:
         return freq_range[0]
 
+    bw_bins = max(1, int(round(bandwidth_hz / df / 2)))
+    energy_threshold = 0.08 * (2 * bw_bins + 1)
+
     best_freq = search_freqs[0]
     best_energy = 0.0
+    best_idx_global = None
 
     for f in search_freqs:
-        # 基频本身必须有显著能量（≥ 最大值的 10%），
-        # 防止将啮合频率的约数（本身无能量）误判为转频
         idx_base = np.argmin(np.abs(freqs - f))
-        if spectrum[idx_base] < 0.1:
+        base_band = spectrum_norm[
+            max(0, idx_base - bw_bins):min(len(spectrum), idx_base + bw_bins + 1)
+        ]
+        base_energy = float(np.sum(base_band))
+        if base_energy < energy_threshold:
             continue
 
         energy = 0.0
@@ -71,16 +98,22 @@ def _estimate_rot_freq_spectrum(
             if harmonic_freq > fs / 2:
                 break
             idx = np.argmin(np.abs(freqs - harmonic_freq))
+            band = spectrum_norm[
+                max(0, idx - bw_bins):min(len(spectrum), idx + bw_bins + 1)
+            ]
             weight = 1.0 / h
-            energy += spectrum[idx] * weight
+            energy += float(np.sum(band)) * weight
+
         if energy > best_energy:
             best_energy = energy
             best_freq = f
+            best_idx_global = idx_base
 
-    # 如果所有候选基频都太弱，fallback 到搜索范围内最强峰值
     if best_energy == 0.0:
-        best_idx = np.argmax(search_spectrum)
-        best_freq = search_freqs[best_idx]
+        best_local_idx = int(np.argmax(search_spectrum))
+        best_idx_global = int(np.argmin(np.abs(freqs - search_freqs[best_local_idx])))
+    else:
+        best_freq = _parabolic_interpolation(freqs, spectrum, best_idx_global)
 
     return float(best_freq)
 
@@ -124,34 +157,132 @@ def _compute_order_spectrum(
     return order_axis, spectrum
 
 
+def _compute_order_spectrum_multi_frame(
+    sig: np.ndarray, fs: float,
+    freq_range: Tuple[float, float] = (10, 100),
+    samples_per_rev: int = 1024,
+    max_order: int = 50,
+    frame_duration: float = 1.0,
+    overlap: float = 0.5,
+) -> Tuple[np.ndarray, np.ndarray, float, float]:
+    """
+    短时/分帧阶次跟踪（自适应多帧平均）
+    适用于转速缓慢变化的工况。
+    """
+    frame_len = int(frame_duration * fs)
+    hop = int(frame_len * (1 - overlap))
+
+    # 如果信号比一帧还短，直接 fallback 到单帧
+    if frame_len >= len(sig):
+        rot_freq = _estimate_rot_freq_spectrum(sig, fs, freq_range)
+        order_axis, spectrum = _compute_order_spectrum(sig, fs, rot_freq, samples_per_rev)
+        mask = order_axis <= max_order
+        return order_axis[mask], spectrum[mask], float(rot_freq), 0.0
+
+    frames = []
+    rot_freqs = []
+
+    start = 0
+    while start + frame_len <= len(sig):
+        frame = sig[start:start + frame_len]
+        rot_freq = _estimate_rot_freq_spectrum(frame, fs, freq_range)
+        rot_freqs.append(rot_freq)
+        frames.append(frame)
+        start += hop
+
+    rot_freqs_arr = np.array(rot_freqs)
+    median_rf = float(np.median(rot_freqs_arr))
+    mad = float(np.median(np.abs(rot_freqs_arr - median_rf)))
+    if mad < 1e-6:
+        mad = 1e-6
+
+    # MAD 离群值剔除：偏离中位数超过 2.5 个 MAD 的帧扔掉
+    valid_mask = np.abs(rot_freqs_arr - median_rf) <= 2.5 * mad
+    valid_indices = np.where(valid_mask)[0]
+
+    if len(valid_indices) == 0:
+        valid_indices = np.arange(len(rot_freqs_arr))
+
+    # 公共阶次轴
+    common_orders = np.linspace(0, max_order, samples_per_rev)
+
+    spectra_list = []
+    for idx in valid_indices:
+        frame = frames[idx]
+        rf = rot_freqs_arr[idx]
+
+        sig_order, _ = _order_tracking(frame, fs, rf, samples_per_rev)
+        sig_order = sig_order - sig_order.mean()
+        N = len(sig_order)
+        if N < 10:
+            continue
+
+        window = np.hanning(N)
+        sig_windowed = sig_order * window
+        amplitude_scale = np.sqrt(N / np.sum(window ** 2))
+        spectrum = np.abs(rfft(sig_windowed)) * amplitude_scale
+
+        # 该帧阶次轴
+        duration = len(frame) / fs
+        num_revs = duration * rf
+        orders_frame = np.arange(len(spectrum)) / num_revs
+
+        # 插值到公共阶次轴
+        spectrum_interp = np.interp(
+            common_orders,
+            orders_frame,
+            spectrum,
+            left=0.0,
+            right=0.0
+        )
+        spectra_list.append(spectrum_interp)
+
+    if not spectra_list:
+        # fallback
+        rot_freq = _estimate_rot_freq_spectrum(sig, fs, freq_range)
+        order_axis, spectrum = _compute_order_spectrum(sig, fs, rot_freq, samples_per_rev)
+        mask = order_axis <= max_order
+        return order_axis[mask], spectrum[mask], float(rot_freq), 0.0
+
+    avg_spectrum = np.mean(spectra_list, axis=0)
+    std_rf = float(np.std(rot_freqs_arr[valid_indices]))
+
+    return common_orders, avg_spectrum, median_rf, std_rf
+
+
 def _compute_cepstrum(
     sig: np.ndarray, fs: float,
     max_quefrency_ms: float = 500.0
 ) -> Tuple[np.ndarray, np.ndarray, list]:
     """
     计算功率倒谱（Power Cepstrum）
-
-    流程：FFT → log(|FFT|) → IFFT → 倒谱
-    倒谱峰值位置对应频谱中的周期性结构。
+    改进：加窗 + 对数谱去均值，消除 quefrency=0 处的虚假长竖线
     """
     N = len(sig)
-    # 1. FFT
-    spectrum = np.fft.fft(sig)
-    # 2. 对数幅度谱（加极小值避免 log(0)）
+    # 加窗减少频谱泄漏
+    window = np.hanning(N)
+    sig_windowed = sig * window
+
+    spectrum = np.fft.fft(sig_windowed)
+    # 对数幅度谱（加极小值避免 log(0)）
     log_spectrum = np.log(np.abs(spectrum) + 1e-10)
-    # 3. IFFT 得到倒谱
+    # 消除对数谱直流分量，避免倒谱零频处出现长竖线
+    log_spectrum = log_spectrum - np.mean(log_spectrum)
+
+    # IFFT 得到倒谱
     cepstrum = np.real(np.fft.ifft(log_spectrum))
-    # 4. 倒频率轴（秒）→ 毫秒
+
     quefrency = np.arange(N) / fs
     half = N // 2
     quef_ms = quefrency[:half] * 1000.0
     cep = cepstrum[:half]
-    # 5. 按最大倒频率截断
+
+    # 按最大倒频率截断
     mask = quef_ms <= max_quefrency_ms
     quef_ms = quef_ms[mask]
     cep = cep[mask]
-    # 6. 峰值检测：自适应找倒谱中显著的多峰值
-    # 策略：按幅值排序，当前峰值 < 最高峰值50%时自动截断，数量自适应
+
+    # 峰值检测：自适应找倒谱中显著的多峰值
     peaks = []
     if len(cep) > 10:
         # 排除近零区域和超高倒频率噪声，关注 3ms ~ 200ms
@@ -644,11 +775,13 @@ def get_channel_order(
 ):
     """
     实时计算阶次谱（Order Tracking / 阶次跟踪）
+    改进：采用短时多帧平均，自适应处理缓慢转速变化。
 
     流程：
-      1. 通过频谱峰值法估计转频（rot_freq）
-      2. 时域信号 → 角域重采样（等角度间隔）
-      3. 角域 FFT → 阶次谱
+      1. 将信号分帧（默认 1 秒/帧，50% 重叠）
+      2. 每帧估计转频，并用 MAD 剔除异常帧
+      3. 各帧独立阶次跟踪后，插值到公共阶次轴并平均
+      4. 返回平均阶次谱 + 转速变化信息
 
     参数：
       freq_min/freq_max: 转频搜索范围，默认 10~100 Hz
@@ -656,10 +789,11 @@ def get_channel_order(
       max_order:         返回的最大阶次，默认 50
 
     返回：
-      rot_freq: 估计转频 (Hz)
-      rot_rpm:  估计转速 (RPM)
-      orders:   阶次轴
-      spectrum: 阶次谱幅值
+      rot_freq:      中位数转频 (Hz)
+      rot_rpm:       中位数转速 (RPM)
+      rot_freq_std:  转频标准差 (Hz)，反映转速波动程度
+      orders:        阶次轴
+      spectrum:      阶次谱幅值
     """
     record = db.query(SensorData).filter(
         SensorData.device_id == device_id,
@@ -678,21 +812,15 @@ def get_channel_order(
         if freq_min >= freq_max:
             raise ValueError("freq_min 必须小于 freq_max")
 
-        # 1. 估计转频
-        rot_freq = _estimate_rot_freq_spectrum(
+        # 多帧自适应阶次跟踪
+        order_axis, spectrum, rot_freq, rot_freq_std = _compute_order_spectrum_multi_frame(
             sig, sample_rate,
-            freq_range=(freq_min, freq_max)
+            freq_range=(freq_min, freq_max),
+            samples_per_rev=samples_per_rev,
+            max_order=max_order,
+            frame_duration=1.0,
+            overlap=0.5,
         )
-
-        # 2. 阶次跟踪 + 阶次谱
-        order_axis, spectrum = _compute_order_spectrum(
-            sig, sample_rate, rot_freq, samples_per_rev
-        )
-
-        # 3. 限制最大阶次
-        mask = order_axis <= max_order
-        order_axis = order_axis[mask]
-        spectrum = spectrum[mask]
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
 
@@ -707,6 +835,7 @@ def get_channel_order(
                 "is_special": bool(record.is_special),
                 "rot_freq": round(rot_freq, 3),
                 "rot_rpm": round(rot_freq * 60.0, 1),
+                "rot_freq_std": round(rot_freq_std, 3),
                 "samples_per_rev": samples_per_rev,
                 "orders": [round(float(o), 3) for o in order_axis.tolist()],
                 "spectrum": [round(float(a), 4) for a in spectrum.tolist()],
