@@ -11,4 +11,3 @@ apscheduler==3.10.4
 python-dotenv==1.0.1
 msgpack==1.0.8
 python-jose[cryptography]>=3.3.0
-vmdpy>=0.1.0
