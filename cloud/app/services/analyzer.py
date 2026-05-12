@@ -28,6 +28,24 @@ from app.services.diagnosis.utils import (
 )
 
 
+def _get_channel_params(device, channel_index, field):
+    """
+    从设备配置中按通道索引提取参数。
+    支持两种格式：
+      - 旧格式（设备级共用）: {input:18, output:27}
+      - 新格式（通道级独立）: {"1":{input:18}, "2":{input:27}}
+    """
+    raw = getattr(device, field, None) if device else None
+    if raw is None:
+        return None
+    ch_key = str(channel_index)
+    if ch_key in raw:
+        return raw[ch_key]
+    if "input" in raw or "n" in raw or "output" in raw:
+        return raw
+    return None
+
+
 def remove_dc(signal: List[float]) -> np.ndarray:
     """去除信号线性趋势与直流分量（基频漂移导致的 y=kx+b 趋势）"""
     arr = np.array(signal, dtype=np.float64)
@@ -203,9 +221,9 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
         "impulse_factor": _feature_severity(avg_features["impulse_factor"], "impulse_factor"),
     }
 
-    # 4. 获取设备参数 & 估计转频
-    gear_teeth = getattr(device, "gear_teeth", None) if device else None
-    bearing_params = getattr(device, "bearing_params", None) if device else None
+    # 4. 获取设备参数（通道级兼容）& 估计转频
+    ch_gear_teeth = _get_channel_params(device, 1, "gear_teeth")
+    ch_bearing_params = _get_channel_params(device, 1, "bearing_params")
 
     first_channel = list(channels_data.values())[0]
     first_arr = np.array(first_channel, dtype=np.float64)
@@ -221,12 +239,12 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
 
     # 5. 频谱/包络/阶次特征提取
     xf, yf = compute_fft(first_channel, sample_rate)
-    spec_features = _extract_spectrum_features(xf, yf, rot_freq, gear_teeth, bearing_params)
+    spec_features = _extract_spectrum_features(xf, yf, rot_freq, ch_gear_teeth, ch_bearing_params)
 
     env_freq, env_amp = compute_envelope_spectrum(first_channel, sample_rate, max_freq=1000)
-    env_features = _extract_envelope_features(env_freq, env_amp, rot_freq, bearing_params)
+    env_features = _extract_envelope_features(env_freq, env_amp, rot_freq, ch_bearing_params)
 
-    order_features = _extract_order_features(order_axis, spectrum, rot_freq, gear_teeth, bearing_params)
+    order_features = _extract_order_features(order_axis, spectrum, rot_freq, ch_gear_teeth, ch_bearing_params)
 
     # 6. 频域/阶次严重度（归一化到 0~1）
     mesh_sev = min(1.0, spec_features.get("mesh_freq_ratio", 0) * 20)
@@ -558,27 +576,26 @@ def analyze_device(channels_data: Dict[str, List[float]], sample_rate: int = 256
 
     # 2. 新诊断引擎（默认方案）
     try:
-        bearing_params = getattr(device, "bearing_params", None) if device else None
-        gear_teeth = getattr(device, "gear_teeth", None) if device else None
-
         # 从设备配置读取诊断策略（如果有的话）
         strategy = getattr(device, "diagnosis_strategy", "advanced") if device else "advanced"
         bearing_method = getattr(device, "bearing_method", "kurtogram") if device else "kurtogram"
         gear_method = getattr(device, "gear_method", "standard") if device else "standard"
         denoise = getattr(device, "denoise_method", "none") if device else "none"
 
-        engine = DiagnosisEngine(
-            strategy=strategy,
-            bearing_method=bearing_method,
-            gear_method=gear_method,
-            denoise_method=denoise,
-            bearing_params=bearing_params,
-            gear_teeth=gear_teeth,
-        )
-
-        # 对每个通道分别分析，然后融合
+        # 对每个通道分别分析（支持通道级独立参数），然后融合
         channel_results = []
-        for ch_name, signal in channels_data.items():
+        for ch_idx, (ch_name, signal) in enumerate(channels_data.items(), start=1):
+            ch_bearing_params = _get_channel_params(device, ch_idx, "bearing_params")
+            ch_gear_teeth = _get_channel_params(device, ch_idx, "gear_teeth")
+
+            engine = DiagnosisEngine(
+                strategy=strategy,
+                bearing_method=bearing_method,
+                gear_method=gear_method,
+                denoise_method=denoise,
+                bearing_params=ch_bearing_params,
+                gear_teeth=ch_gear_teeth,
+            )
             result = engine.analyze_comprehensive(np.array(signal, dtype=np.float64), sample_rate)
             channel_results.append((ch_name, result))
 

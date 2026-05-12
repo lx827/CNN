@@ -168,7 +168,7 @@
         </div>
       </template>
 
-      <el-form :model="form" label-width="160px" style="max-width: 600px">
+      <el-form label-width="160px" style="max-width: 700px">
         <el-alert
           type="info"
           :closable="false"
@@ -177,102 +177,116 @@
           配置齿轮齿数和轴承几何参数后，系统可在频谱/包络/阶次分析中自动标定故障特征频率。
         </el-alert>
 
-        <el-divider content-position="left">齿轮参数</el-divider>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="输入轴齿数">
-              <el-input-number
-                v-model="form.gear_teeth.input"
-                :min="1"
-                :max="200"
-                :step="1"
-                controls-position="right"
-                style="width: 140px"
-                placeholder="未配置"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="输出轴齿数">
-              <el-input-number
-                v-model="form.gear_teeth.output"
-                :min="1"
-                :max="200"
-                :step="1"
-                controls-position="right"
-                style="width: 140px"
-                placeholder="未配置"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <el-tabs v-model="activeMechanicalChannel">
+          <el-tab-pane
+            v-for="i in form.channel_count"
+            :key="i"
+            :label="channelNames[i] || `通道${i}`"
+            :name="String(i)"
+          >
+            <el-divider content-position="left">齿轮参数</el-divider>
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item label="输入轴齿数">
+                  <el-input-number
+                    v-model="form.gear_teeth[String(i)].input"
+                    :min="1"
+                    :max="200"
+                    :step="1"
+                    controls-position="right"
+                    style="width: 140px"
+                    placeholder="未配置"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="输出轴齿数">
+                  <el-input-number
+                    v-model="form.gear_teeth[String(i)].output"
+                    :min="1"
+                    :max="200"
+                    :step="1"
+                    controls-position="right"
+                    style="width: 140px"
+                    placeholder="未配置"
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
 
-        <el-divider content-position="left">轴承参数</el-divider>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="滚子数 n">
-              <el-input-number
-                v-model="form.bearing_params.n"
-                :min="1"
-                :max="50"
-                :step="1"
-                controls-position="right"
-                style="width: 140px"
-                placeholder="未配置"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="滚子直径 d (mm)">
-              <el-input-number
-                v-model="form.bearing_params.d"
-                :min="0.1"
-                :max="100"
-                :step="0.01"
-                :precision="2"
-                controls-position="right"
-                style="width: 140px"
-                placeholder="未配置"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="节径 D (mm)">
-              <el-input-number
-                v-model="form.bearing_params.D"
-                :min="1"
-                :max="500"
-                :step="0.01"
-                :precision="2"
-                controls-position="right"
-                style="width: 140px"
-                placeholder="未配置"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="接触角 α (°)">
-              <el-input-number
-                v-model="form.bearing_params.alpha"
-                :min="0"
-                :max="45"
-                :step="1"
-                controls-position="right"
-                style="width: 140px"
-                placeholder="未配置"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
+            <el-divider content-position="left">轴承参数</el-divider>
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item label="滚子数 n">
+                  <el-input-number
+                    v-model="form.bearing_params[String(i)].n"
+                    :min="1"
+                    :max="50"
+                    :step="1"
+                    controls-position="right"
+                    style="width: 140px"
+                    placeholder="未配置"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="滚子直径 d (mm)">
+                  <el-input-number
+                    v-model="form.bearing_params[String(i)].d"
+                    :min="0.1"
+                    :max="100"
+                    :step="0.01"
+                    :precision="2"
+                    controls-position="right"
+                    style="width: 140px"
+                    placeholder="未配置"
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item label="节径 D (mm)">
+                  <el-input-number
+                    v-model="form.bearing_params[String(i)].D"
+                    :min="1"
+                    :max="500"
+                    :step="0.01"
+                    :precision="2"
+                    controls-position="right"
+                    style="width: 140px"
+                    placeholder="未配置"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="接触角 α (°)">
+                  <el-input-number
+                    v-model="form.bearing_params[String(i)].alpha"
+                    :min="0"
+                    :max="45"
+                    :step="1"
+                    controls-position="right"
+                    style="width: 140px"
+                    placeholder="未配置"
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-tab-pane>
+        </el-tabs>
 
+        <el-divider />
         <el-form-item>
           <el-button type="primary" :loading="saving" @click="onSave">
             <el-icon><Check /></el-icon>
             保存配置
           </el-button>
           <el-button @click="onReset">重置</el-button>
+          <el-button type="warning" @click="onSyncMechanical">
+            <el-icon><CopyDocument /></el-icon>
+            一键同步到所有通道
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -400,11 +414,17 @@ const form = ref({
   sample_rate: 25600,
   window_seconds: 10,
   channel_count: 3,
-  gear_teeth: { input: null, output: null },
-  bearing_params: { n: null, d: null, D: null, alpha: null },
+  gear_teeth: {},
+  bearing_params: {},
   compression_enabled: true,
   downsample_ratio: 8,
 })
+
+// 当前正在编辑的机械参数通道
+const activeMechanicalChannel = ref('1')
+
+// 一键同步目标通道
+const syncTargetChannels = ref([])
 
 const applyToAll = ref(false)
 
@@ -480,18 +500,29 @@ const loadConfig = async () => {
     form.value.compression_enabled = d.compression_enabled ?? true
     form.value.downsample_ratio = d.downsample_ratio ?? 8
 
-    // 加载齿轮/轴承参数
+    // 加载齿轮/轴承参数（兼容旧格式设备级与新格式通道级）
+    const chCount = form.value.channel_count || 3
     const gt = d.gear_teeth || {}
-    form.value.gear_teeth = {
-      input: gt.input ?? null,
-      output: gt.output ?? null,
-    }
     const bp = d.bearing_params || {}
-    form.value.bearing_params = {
-      n: bp.n ?? null,
-      d: bp.d ?? null,
-      D: bp.D ?? null,
-      alpha: bp.alpha ?? null,
+
+    // 判断是否为旧格式（顶层含业务字段）
+    const isOldGear = 'input' in gt || 'output' in gt
+    const isOldBearing = 'n' in bp || 'd' in bp || 'D' in bp || 'alpha' in bp
+
+    for (let i = 1; i <= chCount; i++) {
+      const ch = String(i)
+      if (isOldGear) {
+        form.value.gear_teeth[ch] = { input: gt.input ?? null, output: gt.output ?? null }
+      } else {
+        const chGt = gt[ch] || {}
+        form.value.gear_teeth[ch] = { input: chGt.input ?? null, output: chGt.output ?? null }
+      }
+      if (isOldBearing) {
+        form.value.bearing_params[ch] = { n: bp.n ?? null, d: bp.d ?? null, D: bp.D ?? null, alpha: bp.alpha ?? null }
+      } else {
+        const chBp = bp[ch] || {}
+        form.value.bearing_params[ch] = { n: chBp.n ?? null, d: chBp.d ?? null, D: chBp.D ?? null, alpha: chBp.alpha ?? null }
+      }
     }
 
     // 加载通道名称
@@ -574,6 +605,19 @@ const onSave = async () => {
 
 const onReset = () => {
   loadConfig()
+}
+
+const onSyncMechanical = () => {
+  const src = activeMechanicalChannel.value
+  const srcGear = form.value.gear_teeth[src]
+  const srcBearing = form.value.bearing_params[src]
+  for (let i = 1; i <= form.value.channel_count; i++) {
+    const ch = String(i)
+    if (ch === src) continue
+    form.value.gear_teeth[ch] = { ...srcGear }
+    form.value.bearing_params[ch] = { ...srcBearing }
+  }
+  ElMessage.success(`已将 ${channelNames.value[src] || '通道' + src} 的机械参数同步到所有通道`)
 }
 
 const onSaveThresholds = async () => {
