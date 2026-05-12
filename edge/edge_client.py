@@ -96,24 +96,31 @@ def scan_data_groups(data_dir):
     return valid_groups
 
 
-def load_group_data(groups, prefix):
+def load_group_data(groups, prefix, target_duration=None):
     """
     读取指定工况前缀的 3 个通道数据
+    target_duration: 云端配置的窗口秒数，覆盖 REAL_DURATION
     Returns: {"ch1": [float, ...], "ch2": [...], "ch3": [...]}
     """
     if prefix not in groups:
         raise ValueError(f"[错误] 工况 {prefix} 不存在")
 
+    duration = target_duration if target_duration is not None else REAL_DURATION
+    expected_len = REAL_SAMPLE_RATE * duration
+
     channels = {}
     for ch_num, fpath in sorted(groups[prefix].items()):
         data = np.load(fpath)
-        expected_len = REAL_SAMPLE_RATE * REAL_DURATION
         if len(data) != expected_len:
             if len(data) > expected_len:
                 data = data[:expected_len]
             else:
-                pad = np.full(expected_len - len(data), data[-1] if len(data) > 0 else 0.0)
-                data = np.concatenate([data, pad])
+                # 数据不足时循环填充或零填充
+                if len(data) > 0:
+                    repeats = int(np.ceil(expected_len / len(data)))
+                    data = np.tile(data, repeats)[:expected_len]
+                else:
+                    data = np.zeros(expected_len)
         key = f"ch{ch_num}"
         channels[key] = data.tolist()
     return channels
@@ -168,7 +175,9 @@ def generate_device_signals(device_id, sample_rate, duration):
         # 从该前缀组中随机选一个具体工况（如 H 组下随机选 H-A/H-B/H-C/H-D）
         candidates = [p for p in data_groups.keys() if p.startswith(char)]
         prefix = random.choice(candidates)
-        return load_group_data(data_groups, prefix), REAL_SAMPLE_RATE, REAL_DURATION
+        # 使用传入的 duration（云端配置的 window_seconds），而非固定 REAL_DURATION
+        data = load_group_data(data_groups, prefix, target_duration=duration)
+        return data, REAL_SAMPLE_RATE, duration
     else:
         signals = generate_signals(
             mode="auto",
@@ -181,12 +190,28 @@ def generate_device_signals(device_id, sample_rate, duration):
 
 # ==================== 上传 ====================
 
-def upload_data(device_id, signals, sample_rate, is_special=False, task_id=None):
+def upload_data(device_id, signals, sample_rate, is_special=False, task_id=None, config=None):
     """
     上传一批数据到云端
+    config: 云端下发的配置字典，控制压缩行为
     """
-    if COMPRESSION_ENABLED:
-        ratio = DOWNSAMPLE_RATIO if not USE_REAL_DATA else 8
+    # 压缩参数优先使用云端配置，fallback 到 .env
+    comp_enabled = COMPRESSION_ENABLED
+    ratio = DOWNSAMPLE_RATIO
+    if config:
+        # 云端 compression_enabled 可能是 bool 或 int
+        cloud_comp = config.get("compression_enabled")
+        if cloud_comp is not None:
+            comp_enabled = bool(cloud_comp)
+        cloud_ratio = config.get("downsample_ratio")
+        if cloud_ratio is not None:
+            ratio = int(cloud_ratio)
+
+    # 真实数据模式下：若云端未指定压缩比，默认不压缩（ratio=1）
+    if USE_REAL_DATA and config and config.get("downsample_ratio") is None:
+        ratio = 1
+
+    if comp_enabled:
         compressed_info = compress_payload(
             signals,
             sample_rate=sample_rate,
@@ -351,7 +376,8 @@ def main():
                             signals=signals,
                             sample_rate=sr,
                             is_special=True,
-                            task_id=task_id
+                            task_id=task_id,
+                            config=state.get("config")
                         )
                         if success:
                             print(f"[{datetime.now().strftime('%H:%M:%S')}] [任务完成] [{dev_id}] 特殊采集数据已上传")
@@ -379,7 +405,8 @@ def main():
                         device_id=dev_id,
                         signals=signals,
                         sample_rate=sr,
-                        is_special=False
+                        is_special=False,
+                        config=state.get("config")
                     )
                 except Exception as e:
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] [{dev_id}] 信号生成/读取异常: {e}")
