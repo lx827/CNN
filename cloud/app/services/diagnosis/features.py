@@ -125,87 +125,77 @@ def compute_fft_features(
 
 
 def compute_envelope_features(
-    signal: np.ndarray,
-    fs: float,
+    envelope_freq: list,
+    envelope_amp: list,
     bearing_params: Optional[Dict] = None,
     rot_freq: Optional[float] = None,
-    max_freq: float = 1000.0,
 ) -> Dict[str, float]:
     """
-    从包络谱提取轴承故障特征
+    从已计算好的包络谱提取轴承故障特征能量比
 
     Args:
-        signal: 输入信号
-        fs: 采样率
-        bearing_params: 轴承参数
-        rot_freq: 轴转频 (Hz)
-        max_freq: 包络谱最大频率
+        envelope_freq: 包络谱频率轴 (Hz)，由外部轴承方法（envelope_analysis/kurtogram等）提供
+        envelope_amp:  包络谱幅值
+        bearing_params: 轴承几何参数 {n, d, D, alpha}
+        rot_freq:       轴转频 (Hz)
 
     Returns:
-        特征字典
+        特征字典，含 BPFO/BPFI/BSF/FTF 在各特征频率处的能量比
     """
-    arr = prepare_signal(signal)
+    if envelope_freq is None or envelope_amp is None or len(envelope_freq) == 0:
+        return {"total_env_energy": 0.0}
 
-    # Step 1: 带通滤波（选取 2~20 kHz 共振频带，根据采样率自适应）
-    if fs >= 10000:
-        bp_low = max(100, fs * 0.05)
-        bp_high = min(fs / 2 - 100, fs * 0.25)
-        if bp_low < bp_high:
-            arr = bandpass_filter(arr, fs, bp_low, bp_high)
-
-    # Step 2-3: 希尔伯特变换 → 包络
-    analytic = hilbert(arr)
-    envelope = np.abs(analytic)
-
-    # Step 4: 低通滤波（截止频率 500~2000 Hz）
-    lp_cutoff = min(2000.0, fs * 0.08)
-    if lp_cutoff > 100:
-        envelope = lowpass_filter(envelope, fs, lp_cutoff)
-    envelope = envelope - np.mean(envelope)
-
-    # Step 5: FFT 包络谱
-    n = len(envelope)
-    yf = np.abs(rfft(envelope))
-    xf = rfftfreq(n, 1.0 / fs)
-
-    # 限制频率范围
-    mask = xf <= max_freq
-    xf = xf[mask]
-    yf = yf[mask]
+    xf = np.array(envelope_freq, dtype=np.float64)
+    yf = np.array(envelope_amp, dtype=np.float64)
     total_energy = float(np.sum(yf ** 2)) + 1e-10
-
-    features = {"total_env_energy": round(total_energy, 6)}
+    features = {"total_env_energy": round(float(total_energy), 6)}
 
     if not bearing_params or not isinstance(bearing_params, dict):
         return features
 
-    if rot_freq is None:
-        rot_freq = _estimate_rot_freq_simple(arr, fs)
+    # 提取轴承特征频率
+    n_val = bearing_params.get("n")
+    d_val = bearing_params.get("d")
+    D_val = bearing_params.get("D")
+    alpha_val = bearing_params.get("alpha")
 
-    # 计算轴承特征频率
-    n_balls = bearing_params.get("n") or 0
-    d = bearing_params.get("d") or 0
-    D = bearing_params.get("D") or 0
-    alpha = np.radians(bearing_params.get("alpha") or 0)
+    try:
+        n_balls = int(float(n_val)) if n_val is not None else 0
+        d = float(d_val) if d_val is not None else 0.0
+        D = float(D_val) if D_val is not None else 0.0
+        alpha = np.radians(float(alpha_val)) if alpha_val is not None else 0.0
+    except (TypeError, ValueError):
+        return features
 
-    if n_balls > 0 and d > 0 and D > 0:
-        cos_a = np.cos(alpha)
-        dd = (d / D) * cos_a
+    if n_balls <= 0 or d <= 1e-9 or D <= 1e-9:
+        return features
 
-        freqs = {
-            "BPFO": (n_balls / 2.0) * rot_freq * (1 - dd),
-            "BPFI": (n_balls / 2.0) * rot_freq * (1 + dd),
-            "BSF": (D / (2.0 * d)) * rot_freq * (1 - dd ** 2),
-            "FTF": 0.5 * rot_freq * (1 - dd),
-        }
+    if rot_freq is None or rot_freq <= 0:
+        return features
 
-        for name, f_hz in freqs.items():
-            env_amp = _band_energy(xf, yf, f_hz, 2.0)
-            features[f"{name}_env_ratio"] = round(env_amp / total_energy, 6)
-            harmonic_total = 0.0
-            for h in range(2, 5):
-                harmonic_total += _band_energy(xf, yf, f_hz * h, 2.0)
-            features[f"{name}_env_harmonic_ratio"] = round(harmonic_total / total_energy, 6)
+    cos_a = np.cos(alpha)
+    dd = (d / D) * cos_a
+
+    freqs = {
+        "BPFO": (n_balls / 2.0) * rot_freq * (1 - dd),
+        "BPFI": (n_balls / 2.0) * rot_freq * (1 + dd),
+        "BSF":  (D / (2.0 * d)) * rot_freq * (1 - dd ** 2),
+        "FTF":  0.5 * rot_freq * (1 - dd),
+    }
+
+    for name, f_hz in freqs.items():
+        if f_hz <= 0 or f_hz > envelope_freq[-1]:
+            continue
+        # 能量窗口：±2% 理论频率
+        bw = max(1.0, f_hz * 0.02)
+        env_amp_val = _band_energy(xf, yf, f_hz, bw)
+        features[f"{name}_env_ratio"] = round(env_amp_val / total_energy, 6)
+        harmonic_total = 0.0
+        for h in range(2, 5):
+            h_freq = f_hz * h
+            if h_freq <= envelope_freq[-1]:
+                harmonic_total += _band_energy(xf, yf, h_freq, bw)
+        features[f"{name}_env_harmonic_ratio"] = round(harmonic_total / total_energy, 6)
 
     return features
 

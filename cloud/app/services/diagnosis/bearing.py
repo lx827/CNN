@@ -47,26 +47,32 @@ def envelope_analysis(
     """
     arr = prepare_signal(signal)
 
-    # Step 1: 带通滤波
+    # Step 1: 带通滤波 — 根据采样率自适应选择共振频段
     if fc is None:
-        fc = 3000.0
+        # 低采样率场景（<10kHz）：取 Nyquist 的 25%~75% 作为共振带
+        if fs < 10000:
+            fc = fs * 0.45  # e.g. 8192*0.45 ≈ 3686 Hz
+            bw = fs * 0.35  # e.g. 8192*0.35 ≈ 2867 Hz
+        else:
+            fc = 3000.0
+            bw = 2000.0
     if bw is None:
-        bw = 2000.0
+        bw = min(2000.0, fs * 0.3)
     low = max(100, fc - bw / 2)
     high = min(fs / 2 - 100, fc + bw / 2)
     if low >= high:
-        # 频段非法，fallback 到默认频段
-        fc = 3000.0
-        bw = 2000.0
-        low = max(100, fc - bw / 2)
-        high = min(fs / 2 - 100, fc + bw / 2)
+        # 频段非法，fallback
+        low = max(100, fs * 0.15)
+        high = min(fs / 2 - 100, fs * 0.85)
     filtered = bandpass_filter(arr, fs, low, high)
 
     # Step 2-3: 希尔伯特变换 → 包络
     analytic = hilbert(filtered)
     envelope = np.abs(analytic)
 
-    # Step 4: 低通滤波
+    # Step 4: 低通滤波（截止频率自适应采样率）
+    if f_low_pass > fs * 0.3:
+        f_low_pass = fs * 0.3  # 8k→2.4k, 25.6k→7.68k, capped
     envelope = lowpass_filter(envelope, fs, f_low_pass)
     envelope = envelope - np.mean(envelope)
 
@@ -157,10 +163,14 @@ def fast_kurtogram(
                 best_fc = fc_approx
                 best_bw = bw_approx
 
-    # 如果峭度都很低（无明显冲击），fallback 到默认频段
+    # 如果峭度都很低（无明显冲击），fallback 到自适应默认频段
     if best_kurt < 0.5:
-        best_fc = 3000.0
-        best_bw = 2000.0
+        if fs < 10000:
+            best_fc = fs * 0.45
+            best_bw = fs * 0.35
+        else:
+            best_fc = 3000.0
+            best_bw = 2000.0
 
     # 对最优频带执行包络分析
     result = envelope_analysis(arr, fs, fc=best_fc, bw=best_bw, max_freq=1000.0)
