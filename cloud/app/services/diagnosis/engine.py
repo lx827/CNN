@@ -170,9 +170,10 @@ class DiagnosisEngine:
         else:  # ENVELOPE
             result = envelope_analysis(arr, fs)
 
-        # 提取包络域特征
+        # 提取包络域特征（基于轴承方法已计算好的包络谱，不再独立重算）
         env_features = compute_envelope_features(
-            arr, fs,
+            result.get("envelope_freq", []),
+            result.get("envelope_amp", []),
             bearing_params=self.bearing_params,
             rot_freq=rot_freq,
         )
@@ -512,25 +513,27 @@ def _evaluate_bearing_faults(
     env_amp: List[float],
     rot_freq: float,
 ) -> Dict[str, Any]:
-    """评估轴承故障指示器"""
-    if not env_freq or not env_amp:
+    """评估轴承故障指示器 — 带谐波族验证"""
+    if not env_freq or not env_amp or rot_freq <= 0:
         return {}
 
-    freq_arr = np.array(env_freq)
-    amp_arr = np.array(env_amp)
+    freq_arr = np.array(env_freq, dtype=np.float64)
+    amp_arr = np.array(env_amp, dtype=np.float64)
 
     # 无物理参数时回退到统计诊断
-    has_params = bearing_params and any(v for v in bearing_params.values() if v is not None)
+    has_params = bearing_params and any(v is not None for v in bearing_params.values())
     if not has_params:
         return _evaluate_bearing_faults_statistical(freq_arr, amp_arr, rot_freq)
 
-    # 计算轴承特征频率
-    n_balls = int(float(bearing_params.get("n") or 0))
-    d = float(bearing_params.get("d") or 0)
-    D = float(bearing_params.get("D") or 0)
-    alpha = np.radians(float(bearing_params.get("alpha") or 0))
+    try:
+        n_balls = int(float(bearing_params.get("n") or 0))
+        d = float(bearing_params.get("d") or 0)
+        D = float(bearing_params.get("D") or 0)
+        alpha = np.radians(float(bearing_params.get("alpha") or 0))
+    except (TypeError, ValueError):
+        return _evaluate_bearing_faults_statistical(freq_arr, amp_arr, rot_freq)
 
-    if n_balls <= 0 or d <= 0 or D <= 0:
+    if n_balls <= 0 or d <= 1e-9 or D <= 1e-9:
         return _evaluate_bearing_faults_statistical(freq_arr, amp_arr, rot_freq)
 
     cos_a = np.cos(alpha)
@@ -539,28 +542,54 @@ def _evaluate_bearing_faults(
     freqs = {
         "BPFO": (n_balls / 2.0) * rot_freq * (1 - dd),
         "BPFI": (n_balls / 2.0) * rot_freq * (1 + dd),
-        "BSF": (D / (2.0 * d)) * rot_freq * (1 - dd ** 2),
-        "FTF": 0.5 * rot_freq * (1 - dd),
+        "BSF":  (D / (2.0 * d)) * rot_freq * (1 - dd ** 2),
+        "FTF":  0.5 * rot_freq * (1 - dd),
     }
+
+    df = freq_arr[1] - freq_arr[0] if len(freq_arr) > 1 else 1.0
+    background = float(np.median(amp_arr))
 
     indicators = {}
     for name, f_hz in freqs.items():
-        # 容差带 ±3%
-        tol = f_hz * 0.03
-        mask = np.abs(freq_arr - f_hz) <= tol
+        if f_hz <= 0 or f_hz > freq_arr[-1]:
+            indicators[name] = {"theory_hz": round(f_hz, 2), "detected_hz": None,
+                               "peak_amp": 0.0, "snr": 0.0, "significant": False}
+            continue
+
+        # 频域容差：±3% 或至少 2 个频率点，放宽到 ±5% 作为 fallback
+        tol_rel = max(f_hz * 0.05, df * 2)
+        mask = np.abs(freq_arr - f_hz) <= tol_rel
+
+        # 检测谐波族（2~4 倍）
+        harmonic_snrs = []
+        for h in range(2, 5):
+            h_freq = f_hz * h
+            if h_freq > freq_arr[-1]:
+                break
+            h_tol = max(h_freq * 0.05, df * 2)
+            h_mask = np.abs(freq_arr - h_freq) <= h_tol
+            if np.any(h_mask):
+                h_peak = float(np.max(amp_arr[h_mask]))
+                h_snr = h_peak / background if background > 0 else 0.0
+                harmonic_snrs.append(h_snr)
+
         if np.any(mask):
-            peak_idx = np.argmax(amp_arr[mask])
-            actual_idx = np.where(mask)[0][peak_idx]
+            peak_idx = int(np.argmax(amp_arr[mask]))
+            actual_idx = int(np.where(mask)[0][peak_idx])
             peak_amp = float(amp_arr[actual_idx])
-            background = np.median(amp_arr)
             snr = peak_amp / background if background > 0 else 0.0
+
+            # 谐波族增强：至少 1 个谐波超过 SNR>2 则增强显著度
+            harmonic_boost = sum(1 for s in harmonic_snrs if s > 2.0) >= 1
+            significant = snr > 3.0 or (snr > 2.0 and harmonic_boost)
 
             indicators[name] = {
                 "theory_hz": round(f_hz, 2),
                 "detected_hz": round(float(freq_arr[actual_idx]), 2),
                 "peak_amp": round(peak_amp, 6),
                 "snr": round(snr, 2),
-                "significant": snr > 3.0,
+                "significant": significant,
+                "harmonic_snrs": [round(s, 2) for s in harmonic_snrs],
             }
         else:
             indicators[name] = {
