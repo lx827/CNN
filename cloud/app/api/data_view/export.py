@@ -3,7 +3,7 @@ from starlette.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device
-from . import router
+from . import router, prepare_signal
 from datetime import datetime
 import io
 import logging
