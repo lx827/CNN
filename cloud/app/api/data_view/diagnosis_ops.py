@@ -96,10 +96,9 @@ def get_channel_diagnosis(
         ).order_by(Diagnosis.analyzed_at.desc()).first()
 
         if diag and (diag.engine_result or diag.full_analysis):
-            return {
-                "code": 200,
-                "data": diag.engine_result or diag.full_analysis,
-            }
+            result = dict(diag.engine_result or diag.full_analysis)
+            result["rot_freq"] = diag.rot_freq
+            return {"code": 200, "data": result}
 
     # 2. 查该通道的最新诊断结果（不限去噪方法）
     diag = db.query(Diagnosis).filter(
@@ -109,10 +108,9 @@ def get_channel_diagnosis(
     ).order_by(Diagnosis.analyzed_at.desc()).first()
 
     if diag and (diag.engine_result or diag.full_analysis):
-        return {
-            "code": 200,
-            "data": diag.engine_result or diag.full_analysis,
-        }
+        result = dict(diag.engine_result or diag.full_analysis)
+        result["rot_freq"] = diag.rot_freq
+        return {"code": 200, "data": result}
 
     # 3. 再查批次级诊断记录（兼容旧数据）
     diag_batch = db.query(Diagnosis).filter(
