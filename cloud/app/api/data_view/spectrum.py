@@ -8,6 +8,7 @@ from . import router, prepare_signal, _get_channel_name
 from datetime import datetime
 import logging
 import numpy as np
+import asyncio
 from scipy.fft import rfft, rfftfreq
 from scipy import signal as scipy_signal
 
@@ -184,7 +185,8 @@ def get_channel_stats(
         skewness = float(stats.skew(signal))
 
         # 无量纲指标
-        margin = peak / rms if rms > 1e-12 else 0.0
+        mean_sqrt = float(np.mean(np.sqrt(np.abs(signal) + 1e-12)))
+        margin = peak / (mean_sqrt ** 2) if mean_sqrt > 1e-12 else 0.0
         shape_factor = rms / mean_abs if mean_abs > 1e-12 else 0.0
         impulse_factor = peak / mean_abs if mean_abs > 1e-12 else 0.0
         crest_factor = peak / rms if rms > 1e-12 else 0.0
@@ -216,7 +218,8 @@ def get_channel_stats(
                 windowed_series["skewness"].append(float(stats.skew(seg)))
                 windowed_series["rms"].append(seg_rms)
                 windowed_series["peak"].append(seg_peak)
-                windowed_series["margin"].append(round(seg_peak / seg_rms, 4) if seg_rms > 1e-12 else 0.0)
+                seg_mean_sqrt = float(np.mean(np.sqrt(np.abs(seg) + 1e-12)))
+                windowed_series["margin"].append(round(seg_peak / (seg_mean_sqrt ** 2), 4) if seg_mean_sqrt > 1e-12 else 0.0)
                 windowed_series["crest_factor"].append(round(seg_peak / seg_rms, 4) if seg_rms > 1e-12 else 0.0)
                 windowed_series["shape_factor"].append(round(seg_rms / seg_mean_abs, 4) if seg_mean_abs > 1e-12 else 0.0)
                 windowed_series["impulse_factor"].append(round(seg_peak / seg_mean_abs, 4) if seg_mean_abs > 1e-12 else 0.0)
