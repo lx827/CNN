@@ -406,9 +406,42 @@ cloud/app/services/analyzer.py
 |------|------|
 | `devices` | 设备信息、健康度、配置参数 |
 | `sensor_data` | 传感器原始数据（普通 batch 1~16 循环覆盖，特殊 batch ≥101 永久保留） |
-| `diagnosis` | 诊断结果（关联 batch_index） |
+| `diagnosis` | 诊断结果（关联 batch_index），支持按通道和去噪方法分版本缓存 |
 | `alarms` | 告警记录（通道级 + 设备级） |
 | `collection_tasks` | 手动采集任务 |
+
+### 10.1 诊断结果表（`diagnosis`）字段详情
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `device_id` | `VARCHAR(50)` | 设备编号 |
+| `batch_index` | `INTEGER` | 关联的 sensor_data 批次号 |
+| `channel` | `INTEGER` | 通道号（1/2/3...），默认 0 表示批次级 |
+| `health_score` | `INTEGER` | 综合健康度 0-100 |
+| `fault_probabilities` | `JSON` | 各故障类型概率分布 |
+| `imf_energy` | `JSON` | IMF 能量分布 |
+| `order_analysis` | `JSON` | 阶次/包络/频谱分析明细 |
+| `rot_freq` | `FLOAT` | 估计转频 Hz |
+| `status` | `VARCHAR(20)` | 综合状态：normal/warning/critical |
+| `engine_result` | `JSON` | `/analyze` 综合分析完整结果（通道级） |
+| `full_analysis` | `JSON` | `/full-analysis` 全算法分析完整结果（通道级） |
+| `denoise_method` | `VARCHAR(20)` | 去噪方法：none/wavelet/vmd/med |
+| `analyzed_at` | `DATETIME` | 分析时间 |
+
+### 10.2 诊断缓存策略
+
+DataView 实时计算端点（`/analyze`、`/full-analysis`）执行完成后会自动将结果写入 `diagnosis` 表。缓存键为 `(device_id, batch_index, channel, denoise_method)`：
+
+- **同一设备、同一批次、同一通道、同一去噪方法**的结果会被覆盖更新
+- **不同去噪方法**的结果独立保存，互不覆盖
+- 前端 `GET /api/data/{device_id}/{batch_index}/{channel}/diagnosis?denoise_method=xxx` 优先返回精确匹配的缓存
+- 若未指定 `denoise_method`，或精确匹配无结果，则回退到该通道最新诊断记录
+- 旧数据（无 `denoise_method` 字段）仍可通过批次级回退查询兼容读取
+
+**查询优先级：**
+1. 精确匹配 `device + batch + channel + denoise_method`
+2. 该通道最新结果（不限去噪方法）
+3. 批次级诊断记录（兼容旧数据）
 
 ---
 

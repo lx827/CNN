@@ -73,6 +73,8 @@ def init_db():
                 conn.execute(text("ALTER TABLE diagnosis ADD COLUMN engine_result JSON"))
             if "full_analysis" not in diag_cols:
                 conn.execute(text("ALTER TABLE diagnosis ADD COLUMN full_analysis JSON"))
+            if "denoise_method" not in diag_cols:
+                conn.execute(text("ALTER TABLE diagnosis ADD COLUMN denoise_method VARCHAR(20) DEFAULT 'none'"))
             conn.commit()
 
     # Device 表继续新增列（压缩配置）
