@@ -49,33 +49,45 @@
           <template #header>
             <div class="card-header">
               <span>运行参数</span>
+              <el-select v-model="selectedMonitorDevice" placeholder="选择设备" style="width: 160px" size="small" @change="onMonitorDeviceChange">
+                <el-option
+                  v-for="d in collectDevices"
+                  :key="d.device_id"
+                  :label="d.name"
+                  :value="d.device_id"
+                />
+              </el-select>
             </div>
           </template>
           <div class="params">
-            <template v-if="Object.keys(params).length === 0">
-              <div class="param-item empty">
-                <div class="param-label">运行参数</div>
-                <div class="param-value" style="font-size: 14px; color: #999;">暂无数据</div>
+            <div class="param-item">
+              <div class="param-label">转速</div>
+              <div class="param-value">
+                {{ params.rpm != null ? params.rpm.toFixed(1) : '-' }}
+                <span v-if="params.rpm != null" class="unit">RPM</span>
               </div>
-            </template>
-            <template v-else>
-              <div class="param-item" v-if="params.rpm != null">
-                <div class="param-label">转速</div>
-                <div class="param-value">{{ params.rpm.toFixed(1) }} <span class="unit">RPM</span></div>
+            </div>
+            <div class="param-item">
+              <div class="param-label">转速 <el-tag type="warning" size="small" effect="plain">估计</el-tag></div>
+              <div class="param-value">
+                {{ params.estimated_rpm != null ? params.estimated_rpm.toFixed(1) : '-' }}
+                <span v-if="params.estimated_rpm != null" class="unit">RPM</span>
               </div>
-              <div class="param-item" v-if="params.estimated_rpm != null">
-                <div class="param-label">转速 <el-tag type="warning" size="small" effect="plain">估计</el-tag></div>
-                <div class="param-value">{{ params.estimated_rpm.toFixed(1) }} <span class="unit">RPM</span></div>
+            </div>
+            <div class="param-item">
+              <div class="param-label">温度</div>
+              <div class="param-value">
+                {{ params.temperature != null ? params.temperature.toFixed(1) : '-' }}
+                <span v-if="params.temperature != null" class="unit">°C</span>
               </div>
-              <div class="param-item" v-if="params.temperature != null">
-                <div class="param-label">温度</div>
-                <div class="param-value">{{ params.temperature.toFixed(1) }} <span class="unit">°C</span></div>
+            </div>
+            <div class="param-item">
+              <div class="param-label">负载</div>
+              <div class="param-value">
+                {{ params.load != null ? params.load.toFixed(1) : '-' }}
+                <span v-if="params.load != null" class="unit">%</span>
               </div>
-              <div class="param-item" v-if="params.load != null">
-                <div class="param-label">负载</div>
-                <div class="param-value">{{ params.load.toFixed(1) }} <span class="unit">%</span></div>
-              </div>
-            </template>
+            </div>
           </div>
         </el-card>
       </el-col>
@@ -165,6 +177,9 @@ const lastDataSource = ref('normal') // 'normal' | 'special'
 const collectDevices = ref([])
 const selectedCollectDevice = ref('')
 
+// 设备选择（监测显示用）
+const selectedMonitorDevice = ref('')
+
 const sensors = ref([])
 
 // 根据通道数据动态构建传感器状态列表（只显示实际收到的振动通道）
@@ -187,8 +202,13 @@ const loadCollectDevices = async () => {
   try {
     const res = await getDevices()
     collectDevices.value = res.data || []
-    if (collectDevices.value.length > 0 && !selectedCollectDevice.value) {
-      selectedCollectDevice.value = collectDevices.value[0].device_id
+    if (collectDevices.value.length > 0) {
+      if (!selectedCollectDevice.value) {
+        selectedCollectDevice.value = collectDevices.value[0].device_id
+      }
+      if (!selectedMonitorDevice.value) {
+        selectedMonitorDevice.value = collectDevices.value[0].device_id
+      }
     }
   } catch (e) {
     console.error('加载设备列表失败:', e)
@@ -293,7 +313,8 @@ const startPolling = (taskId) => {
 // ============ 加载最新数据 ============
 const loadLatestData = async (preferSpecial = false) => {
   try {
-    const res = await getRealtimeVibrationData(preferSpecial)
+    const deviceId = selectedMonitorDevice.value || 'WTG-001'
+    const res = await getRealtimeVibrationData(deviceId, preferSpecial)
     const data = res.data
     channels.value = data.channels
     params.value = data.sensorParams
@@ -305,6 +326,11 @@ const loadLatestData = async (preferSpecial = false) => {
   } catch (e) {
     console.error('加载数据失败:', e)
   }
+}
+
+// 切换监测设备时刷新数据
+const onMonitorDeviceChange = () => {
+  loadLatestData()
 }
 
 // WebSocket 实时推送
