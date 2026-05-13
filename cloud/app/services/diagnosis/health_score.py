@@ -27,15 +27,15 @@ def _compute_health_score(
     crest = _sf(time_features.get("crest_factor"), 5.0)
     rms = _sf(time_features.get("rms"), 0.0)
 
-    # 峭度：冲击信号的核心指标，权重加大
+    # 峭度：冲击信号的核心指标
     if kurt > 20:
-        deductions.append(("kurtosis_extreme", 35))
+        deductions.append(("kurtosis_extreme", 40))
     elif kurt > 12:
-        deductions.append(("kurtosis_high", 25))
+        deductions.append(("kurtosis_high", 30))
     elif kurt > 8:
-        deductions.append(("kurtosis_moderate", 18))
+        deductions.append(("kurtosis_moderate", 22))
     elif kurt > 5:
-        deductions.append(("kurtosis_mild", 10))
+        deductions.append(("kurtosis_mild", 15))
 
     # 峰值因子：单大冲击 vs 持续振动
     if crest > 15:

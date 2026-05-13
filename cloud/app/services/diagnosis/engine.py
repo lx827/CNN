@@ -327,48 +327,47 @@ class DiagnosisEngine:
         signal: np.ndarray,
         fs: float,
         rot_freq: Optional[float] = None,
+        skip_bearing: bool = False,
+        skip_gear: bool = False,
     ) -> Dict[str, Any]:
         """
-        综合分析（轴承 + 齿轮 + 时域特征）
+        综合分析
 
-        Returns:
-            {
-                "health_score": int,
-                "status": str,
-                "bearing": Dict,
-                "gear": Dict,
-                "time_features": Dict,
-                "recommendation": str,
-            }
+        Args:
+            skip_bearing: True=跳过轴承分析（无轴承参数时自动设置）
+            skip_gear:    True=跳过齿轮分析（无齿轮参数时自动设置）
         """
         arr = self.preprocess(signal)
 
-        if rot_freq is None:
+        if rot_freq is None and not skip_gear:
             rot_freq, cached_oa, cached_os, _ = self._estimate_rot_freq(arr, fs)
+        elif rot_freq is None:
+            # 无齿轮分析且无转频 → 用简化估计
+            try:
+                rot_freq, _, _, _ = self._estimate_rot_freq(arr, fs)
+            except Exception:
+                rot_freq = 20.0
+            cached_oa = cached_os = None
         else:
             cached_oa = cached_os = None
 
-        # 时域特征
         time_features = compute_time_features(arr)
 
-        # 轴承分析（避免重复预处理）
-        bearing_result = self.analyze_bearing(arr, fs, rot_freq, preprocess=False)
+        # 轴承分析
+        bearing_result = self.analyze_bearing(arr, fs, rot_freq, preprocess=False) if not skip_bearing else {}
 
-        # 齿轮分析（若已有阶次谱则传入，避免重复多帧计算）
+        # 齿轮分析
         gear_result = self.analyze_gear(arr, fs, rot_freq, preprocess=False,
-                                        _cached_oa=cached_oa, _cached_os=cached_os)
+                                        _cached_oa=cached_oa, _cached_os=cached_os) if not skip_gear else {}
 
-        # 综合健康度评分
         health_score, status = _compute_health_score(
             self.gear_teeth,
             time_features, bearing_result, gear_result
         )
 
         return {
-            "health_score": health_score,
-            "status": status,
-            "bearing": bearing_result,
-            "gear": gear_result,
+            "health_score": health_score, "status": status,
+            "bearing": bearing_result, "gear": gear_result,
             "time_features": time_features,
             "recommendation": _generate_recommendation(bearing_result, gear_result, status),
         }
@@ -378,6 +377,8 @@ class DiagnosisEngine:
         signal: np.ndarray,
         fs: float,
         rot_freq: Optional[float] = None,
+        skip_bearing: bool = False,
+        skip_gear: bool = False,
     ) -> Dict[str, Any]:
         """
         全算法对比分析（运行所有轴承方法和所有齿轮方法）
@@ -401,29 +402,26 @@ class DiagnosisEngine:
         if rot_freq is None:
             rot_freq = self._estimate_rot_freq(arr, fs)
 
-        # 保存原始方法配置
         original_bearing = self.bearing_method
         original_gear = self.gear_method
 
-        # 运行所有轴承诊断方法
         bearing_results = {}
-        for method in BearingMethod:
-            self.bearing_method = method
-            try:
-                result = self.analyze_bearing(arr, fs, rot_freq)
-                bearing_results[method.value] = result
-            except Exception as e:
-                bearing_results[method.value] = {"error": str(e)}
+        if not skip_bearing:
+            for method in BearingMethod:
+                self.bearing_method = method
+                try:
+                    bearing_results[method.value] = self.analyze_bearing(arr, fs, rot_freq)
+                except Exception as e:
+                    bearing_results[method.value] = {"error": str(e)}
 
-        # 运行所有齿轮诊断方法
         gear_results = {}
-        for method in GearMethod:
-            self.gear_method = method
-            try:
-                result = self.analyze_gear(arr, fs, rot_freq)
-                gear_results[method.value] = result
-            except Exception as e:
-                gear_results[method.value] = {"error": str(e)}
+        if not skip_gear:
+            for method in GearMethod:
+                self.gear_method = method
+                try:
+                    gear_results[method.value] = self.analyze_gear(arr, fs, rot_freq)
+                except Exception as e:
+                    gear_results[method.value] = {"error": str(e)}
 
         # 恢复原始配置
         self.bearing_method = original_bearing

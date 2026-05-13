@@ -18,6 +18,26 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
+
+def _has_valid_bearing(bp):
+    """判断轴承参数是否有效"""
+    if not bp or not isinstance(bp, dict):
+        return False
+    try:
+        return all(v is not None for v in [bp.get("n"), bp.get("d"), bp.get("D")]) and float(bp.get("n", 0)) > 0 and float(bp.get("d", 0)) > 0 and float(bp.get("D", 0)) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _has_valid_gear(gt):
+    """判断齿轮参数是否有效"""
+    if not gt or not isinstance(gt, dict):
+        return False
+    try:
+        return gt.get("input") is not None and float(gt.get("input", 0)) > 0
+    except (TypeError, ValueError):
+        return False
+
 @router.get("/{device_id}/{batch_index}/{channel}/gear")
 async def get_channel_gear(
     device_id: str,
@@ -153,8 +173,15 @@ async def get_channel_analyze(
             gear_teeth=gear_teeth,
         )
 
+        # 根据通道参数决定跳过哪些分析
+        has_bp = _has_valid_bearing(bearing_params)
+        has_gt = _has_valid_gear(gear_teeth)
+
         # CPU 密集型综合分析放入线程池
-        result = await asyncio.to_thread(engine.analyze_comprehensive, signal, sample_rate)
+        result = await asyncio.to_thread(
+            engine.analyze_comprehensive, signal, sample_rate,
+            skip_bearing=not has_bp, skip_gear=not has_gt
+        )
 
         response_data = {
             "device_id": record.device_id,
@@ -265,7 +292,12 @@ async def get_channel_full_analysis(
         )
 
         # CPU 密集型全算法分析放入线程池
-        result = await asyncio.to_thread(engine.analyze_all_methods, signal, sample_rate)
+        has_bearing = _has_valid_bearing(bearing_params)
+        has_gear = _has_valid_gear(gear_teeth)
+        result = await asyncio.to_thread(
+            engine.analyze_all_methods, signal, sample_rate,
+            skip_bearing=not has_bearing, skip_gear=not has_gear
+        )
 
         response_data = {
             "device_id": record.device_id,
