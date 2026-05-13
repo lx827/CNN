@@ -182,6 +182,10 @@ async def reanalyze_batch(
         logger.error(f"[重新诊断] 分析失败: {e}\n{_tb.format_exc()}")
         raise HTTPException(status_code=500, detail=f"分析引擎异常: {e}")
 
+    # 4b. 检查分析结果是否有内部错误标记
+    if result.get("_error"):
+        logger.warning(f"[重新诊断] 分析引擎报告内部错误: {result['_error']}")
+
     # 5. 写入数据库
     try:
         safe_fault_probs = _sanitize_for_json(result["fault_probabilities"])

@@ -28,6 +28,16 @@ from app.services.diagnosis.rule_based import _rule_based_analyze
 from app.services.diagnosis.features import _get_channel_params
 
 
+def _safe_result(msg="分析失败", health=100):
+    """崩溃安全默认结果"""
+    return {
+        "health_score": health, "status": "normal",
+        "fault_probabilities": {"正常运行": 1.0},
+        "imf_energy": {}, "order_analysis": None, "rot_freq": None,
+        "_error": msg,
+    }
+
+
 def analyze_device(
     channels_data: Dict[str, List[float]],
     sample_rate: int = 25600,
@@ -36,116 +46,112 @@ def analyze_device(
     denoise_method: str = "none",
 ):
     """
-    综合分析主函数
-
-    Args:
-        channels_data: 通道数据字典 {ch_name: [samples...]}
-        sample_rate: 采样率 Hz
-        device: 设备配置对象（含齿轮/轴承参数等），可为 None
-        rot_freq: 指定转频 Hz，传入则跳过自动估计
-        denoise_method: 去噪方法 "none"/"wavelet"/"vmd"，默认 none
+    综合分析主函数 — 崩溃安全版本
     """
+    import traceback as _tb
+
     if not channels_data:
-        return {
-            "health_score": 100, "status": "normal",
-            "fault_probabilities": {"正常运行": 1.0},
-            "imf_energy": {}, "order_analysis": None, "rot_freq": None,
-        }
+        return _safe_result("空通道数据")
 
-    nn_result = nn_predict(channels_data, sample_rate)
-    if nn_result is not None:
-        logger.info("[分析] 使用神经网络模型预测结果")
-        return nn_result
+    # === 神经网络（预留）===
+    try:
+        nn_result = nn_predict(channels_data, sample_rate)
+        if nn_result is not None:
+            return nn_result
+    except Exception:
+        pass
 
+    # === 新诊断引擎 ===
     try:
         strategy = getattr(device, "diagnosis_strategy", "advanced") if device else "advanced"
         bearing_method = getattr(device, "bearing_method", "kurtogram") if device else "kurtogram"
         gear_method = getattr(device, "gear_method", "standard") if device else "standard"
-        # 优先使用传入的 denoise_method，其次取设备配置
         denoise = denoise_method if denoise_method != "none" else (
             getattr(device, "denoise_method", "none") if device else "none"
         )
 
         channel_results = []
         for ch_idx, (ch_name, signal) in enumerate(channels_data.items(), start=1):
-            # 防御：确保 signal 是有效的数值数组
             try:
                 sig_arr = np.array(signal, dtype=np.float64)
             except (TypeError, ValueError):
                 logger.warning(f"[分析] 通道 {ch_name} 数据格式异常，跳过")
                 continue
 
-            ch_bearing_params = _get_channel_params(device, ch_idx, "bearing_params")
-            ch_gear_teeth = _get_channel_params(device, ch_idx, "gear_teeth")
+            ch_bp = _get_channel_params(device, ch_idx, "bearing_params")
+            ch_gt = _get_channel_params(device, ch_idx, "gear_teeth")
 
             engine = DiagnosisEngine(
-                strategy=strategy,
-                bearing_method=bearing_method,
-                gear_method=gear_method,
-                denoise_method=denoise,
-                bearing_params=ch_bearing_params,
-                gear_teeth=ch_gear_teeth,
+                strategy=strategy, bearing_method=bearing_method,
+                gear_method=gear_method, denoise_method=denoise,
+                bearing_params=ch_bp, gear_teeth=ch_gt,
             )
             result = engine.analyze_comprehensive(sig_arr, sample_rate, rot_freq=rot_freq)
             channel_results.append((ch_name, result))
 
         if not channel_results:
-            logger.warning("[分析] 所有通道数据格式异常，返回默认结果")
-            return {
-                "health_score": 100, "status": "normal",
-                "fault_probabilities": {"正常运行": 1.0},
-                "imf_energy": {}, "order_analysis": None, "rot_freq": None,
-            }
+            return _safe_result("所有通道数据格式异常", 90)
 
-        worst_health = min(r["health_score"] for _, r in channel_results)
+        # 最差健康度
+        worst_health = int(min(r["health_score"] for _, r in channel_results))
         worst_status = max(
             ([r["status"] for _, r in channel_results]),
-            key=lambda s: {"normal": 0, "warning": 1, "fault": 2}[s]
+            key=lambda s: {"normal": 0, "warning": 1, "fault": 2}.get(s, 0)
         )
 
-        merged_probs = {}
+        # 合并故障概率
+        merged = {}
         for _, r in channel_results:
-            for fault_name, prob in r.get("bearing", {}).get("fault_indicators", {}).items():
-                if prob.get("significant"):
-                    merged_probs.setdefault("轴承" + fault_name, 0)
-                    merged_probs["轴承" + fault_name] = max(merged_probs["轴承" + fault_name], min(1.0, prob.get("snr", 0) / 10))
-            for fault_name, prob in r.get("gear", {}).get("fault_indicators", {}).items():
+            for fname, prob in r.get("bearing", {}).get("fault_indicators", {}).items():
+                if isinstance(prob, dict) and prob.get("significant"):
+                    snr_val = float(prob.get("snr", 0))
+                    key = "轴承" + fname
+                    merged[key] = max(merged.get(key, 0), min(1.0, snr_val / 10))
+            for fname, prob in r.get("gear", {}).get("fault_indicators", {}).items():
                 if isinstance(prob, dict):
-                    merged_probs.setdefault("齿轮" + fault_name, 0)
-                    if prob.get("warning"):
-                        merged_probs["齿轮" + fault_name] = max(merged_probs["齿轮" + fault_name], 0.3)
+                    key = "齿轮" + fname
                     if prob.get("critical"):
-                        merged_probs["齿轮" + fault_name] = max(merged_probs["齿轮" + fault_name], 0.6)
+                        merged[key] = max(merged.get(key, 0), 0.6)
+                    elif prob.get("warning"):
+                        merged[key] = max(merged.get(key, 0), 0.3)
 
-        fault_probabilities = {"正常运行": max(0.0, 1.0 - sum(merged_probs.values()))}
-        for k, v in merged_probs.items():
-            fault_probabilities[k] = round(v, 4)
+        fault_probs = {"正常运行": round(float(max(0.0, 1.0 - sum(merged.values()))), 4)}
+        for k, v in merged.items():
+            fault_probs[k] = round(float(v), 4)
 
-        first_ch, first_result = channel_results[0]
+        # 转频
+        first_result = channel_results[0][1]
+        rf = first_result.get("bearing", {}).get("rot_freq_hz")
+        if rf is not None:
+            rf = round(float(rf), 3)
 
-        # 计算 IMF 能量分布（兼容旧接口）
-        from app.services.diagnosis.features import compute_imf_energy
-        first_signal = list(channels_data.values())[0]
-        imf_energy = compute_imf_energy(first_signal, sample_rate)
+        # IMF 能量
+        try:
+            from app.services.diagnosis.features import compute_imf_energy
+            imf_energy = compute_imf_energy(list(channels_data.values())[0], sample_rate)
+        except Exception:
+            imf_energy = {}
 
-        legacy_result = {
+        return {
             "health_score": worst_health,
             "status": worst_status,
-            "fault_probabilities": fault_probabilities,
+            "fault_probabilities": fault_probs,
             "imf_energy": imf_energy,
             "order_analysis": {
                 "engine_result": first_result,
                 "channels": {ch: r for ch, r in channel_results},
             },
-            "rot_freq": first_result.get("bearing", {}).get("rot_freq_hz"),
+            "rot_freq": rf,
         }
 
-        logger.info(f"[分析] 新诊断引擎完成，健康度={worst_health}，状态={worst_status}")
-        return legacy_result
-
     except Exception as e:
-        logger.error(f"[分析] 新诊断引擎异常: {e}，回退到规则算法")
+        logger.error(f"[分析] 新诊断引擎异常: {e}\n{_tb.format_exc()}")
 
-    # 3. 回退到简化规则算法
-    logger.info("[分析] 使用简化规则算法")
-    return _rule_based_analyze(channels_data, sample_rate, device)
+    # === 回退：规则算法 ===
+    try:
+        logger.info("[分析] 回退到规则算法")
+        return _rule_based_analyze(channels_data, sample_rate, device)
+    except Exception as e2:
+        logger.error(f"[分析] 规则算法也失败: {e2}\n{_tb.format_exc()}")
+
+    return _safe_result(f"所有诊断算法均失败: {e}", 85)
