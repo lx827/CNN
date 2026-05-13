@@ -126,9 +126,9 @@ export const getDeviceInfo = async () => {
 
 // ==================== Monitor ====================
 
-export const getRealtimeVibrationData = async (preferSpecial = false) => {
+export const getRealtimeVibrationData = async (deviceId = 'WTG-001', preferSpecial = false) => {
   const res = await request.get('/api/monitor/latest', {
-    params: { prefer_special: preferSpecial }
+    params: { device_id: deviceId, prefer_special: preferSpecial }
   })
   const backendList = res.data || []
   const sensorParams = res.sensor_params || {}
