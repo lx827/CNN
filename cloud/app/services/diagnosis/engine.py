@@ -102,8 +102,9 @@ class DiagnosisEngine:
         self.gear_teeth = gear_teeth or {}
 
     def preprocess(self, signal: np.ndarray) -> np.ndarray:
-        """根据配置执行预处理"""
+        """去直流 + 可选去噪，与 /order 端点的 prepare_signal 行为一致"""
         arr = np.array(signal, dtype=np.float64)
+        arr = arr - np.mean(arr)  # 统一去直流（零均值化）
         if self.denoise_method == DenoiseMethod.WAVELET:
             return wavelet_denoise(arr, wavelet="db8")
         elif self.denoise_method == DenoiseMethod.VMD:
