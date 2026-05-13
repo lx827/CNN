@@ -111,22 +111,26 @@ class DiagnosisEngine:
             return vmd_denoise(arr, K=5, alpha=2000)
         return arr
 
-    def _estimate_rot_freq(self, signal: np.ndarray, fs: float) -> float:
+    def _estimate_rot_freq(self, signal: np.ndarray, fs: float):
         """
         使用与阶次追踪（/order 端点）相同的算法估计转频。
-        优先多帧平均；若转速波动剧烈（CV > 10%），自动降级到变速跟踪。
+        返回 (rot_freq, order_axis, order_spectrum, tracking_method_str)，供 gear 诊断复用。
         """
         try:
-            _, _, rot_freq, rot_std = _compute_order_spectrum_multi_frame(
+            oa, os_, rf, rsd = _compute_order_spectrum_multi_frame(
                 signal, fs, samples_per_rev=1024, max_order=50
             )
-            if rot_freq > 0 and (rot_std / rot_freq) > 0.10:
-                _, _, rot_freq, rot_std = _compute_order_spectrum_varying_speed(
+            method = "multi_frame"
+            if rf > 0 and (rsd / rf) > 0.10:
+                oa, os_, rf, rsd = _compute_order_spectrum_varying_speed(
                     signal, fs, samples_per_rev=1024, max_order=50
                 )
-            return float(rot_freq)
+                method = "varying_speed"
+            return float(rf), oa, os_, method
         except Exception:
-            return float(_estimate_rot_freq_simple(signal, fs))
+            rf = float(_estimate_rot_freq_simple(signal, fs))
+            oa, os_ = _compute_order_spectrum(signal, fs, rf, samples_per_rev=1024)
+            return rf, oa, os_, "single_frame"
 
     def analyze_bearing(
         self,
@@ -201,6 +205,8 @@ class DiagnosisEngine:
         fs: float,
         rot_freq: Optional[float] = None,
         preprocess: bool = True,
+        _cached_oa: Optional[np.ndarray] = None,
+        _cached_os: Optional[np.ndarray] = None,
     ) -> Dict[str, Any]:
         """
         齿轮诊断分析
@@ -220,12 +226,26 @@ class DiagnosisEngine:
         """
         arr = self.preprocess(signal)
 
-        order_axis = None
-        order_spectrum = None
+        order_axis = _cached_oa
+        order_spectrum = _cached_os
         rot_freq_used = rot_freq
         rot_std = 0.0
 
-        if rot_freq_used is None:
+        # 若已有缓存的阶次谱（来自 _estimate_rot_freq 的多帧计算结果），直接复用
+        if order_axis is not None and order_spectrum is not None:
+            pass  # 复用缓存
+        elif rot_freq_used is not None and rot_freq_used > 0:
+            # 有已知转频，用窄范围多帧平均（与 /order 端点行为一致）
+            freq_min = max(1.0, rot_freq_used * 0.7)
+            freq_max = rot_freq_used * 1.3
+            try:
+                order_axis, order_spectrum, rot_freq_used, rot_std = _compute_order_spectrum_multi_frame(
+                    arr, fs, freq_range=(freq_min, freq_max), samples_per_rev=1024, max_order=50
+                )
+            except Exception:
+                order_axis, order_spectrum = _compute_order_spectrum(arr, fs, rot_freq_used, samples_per_rev=1024)
+        else:
+            # 无已知转频，多帧平均同时估计转频+计算阶次谱
             try:
                 order_axis, order_spectrum, rot_freq_used, rot_std = _compute_order_spectrum_multi_frame(
                     arr, fs, samples_per_rev=1024, max_order=50
@@ -237,9 +257,6 @@ class DiagnosisEngine:
             except Exception:
                 rot_freq_used = _estimate_rot_freq_simple(arr, fs)
                 order_axis, order_spectrum = _compute_order_spectrum(arr, fs, rot_freq_used, samples_per_rev=1024)
-                rot_std = 0.0
-        else:
-            order_axis, order_spectrum = _compute_order_spectrum(arr, fs, rot_freq_used, samples_per_rev=1024)
 
         rot_freq = float(rot_freq_used)
 
@@ -327,7 +344,9 @@ class DiagnosisEngine:
         arr = self.preprocess(signal)
 
         if rot_freq is None:
-            rot_freq = self._estimate_rot_freq(arr, fs)
+            rot_freq, cached_oa, cached_os, _ = self._estimate_rot_freq(arr, fs)
+        else:
+            cached_oa = cached_os = None
 
         # 时域特征
         time_features = compute_time_features(arr)
@@ -335,8 +354,9 @@ class DiagnosisEngine:
         # 轴承分析（避免重复预处理）
         bearing_result = self.analyze_bearing(arr, fs, rot_freq, preprocess=False)
 
-        # 齿轮分析（避免重复预处理）
-        gear_result = self.analyze_gear(arr, fs, rot_freq, preprocess=False)
+        # 齿轮分析（若已有阶次谱则传入，避免重复多帧计算）
+        gear_result = self.analyze_gear(arr, fs, rot_freq, preprocess=False,
+                                        _cached_oa=cached_oa, _cached_os=cached_os)
 
         # 综合健康度评分
         health_score, status = _compute_health_score(
