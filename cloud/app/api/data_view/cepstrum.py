@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device
-from . import router, prepare_signal, _compute_cepstrum
+from . import router, prepare_signal, _get_channel_name, _compute_cepstrum
 from datetime import datetime
 import logging
 import numpy as np

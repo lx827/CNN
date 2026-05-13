@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device
 from app.services.diagnosis.features import compute_fft
-from . import router, prepare_signal
+from . import router, prepare_signal, _get_channel_name
 from datetime import datetime
 import logging
 import numpy as np
