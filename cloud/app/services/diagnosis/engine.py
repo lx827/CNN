@@ -154,7 +154,7 @@ class DiagnosisEngine:
         arr = self.preprocess(signal) if preprocess else np.array(signal, dtype=np.float64) if preprocess else np.array(signal, dtype=np.float64)
 
         if rot_freq is None:
-            rot_freq = self._estimate_rot_freq(arr, fs)
+            rot_freq, _, _, _ = self._estimate_rot_freq(arr, fs)
 
         # 选择轴承诊断方法
         if self.bearing_method == BearingMethod.KURTOGRAM:
@@ -400,7 +400,7 @@ class DiagnosisEngine:
             arr = self.preprocess(arr)
 
         if rot_freq is None:
-            rot_freq = self._estimate_rot_freq(arr, fs)
+            rot_freq, _, _, _ = self._estimate_rot_freq(arr, fs)
 
         original_bearing = self.bearing_method
         original_gear = self.gear_method
