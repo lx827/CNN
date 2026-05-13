@@ -171,7 +171,29 @@ pip install -r requirements.txt
 
 ### 6.3 诊断结果表（`diagnosis`）
 
-记录每次分析的健康度、故障概率、IMF 能量、阶次分析等。
+记录每次分析的健康度、故障概率、IMF 能量、阶次分析等。支持按通道和去噪方法分版本缓存。
+
+| 字段 | 说明 |
+|------|------|
+| `device_id` | 设备编号 |
+| `batch_index` | 关联的 sensor_data 批次号 |
+| `channel` | 通道号（1/2/3...），默认 0 表示批次级 |
+| `health_score` | 综合健康度 0-100 |
+| `fault_probabilities` | 各故障类型概率 JSON |
+| `imf_energy` | IMF 能量分布 JSON |
+| `order_analysis` | 阶次/包络/频谱分析明细 JSON |
+| `rot_freq` | 估计转频 Hz |
+| `status` | 综合状态：normal/warning/critical |
+| `engine_result` | `/analyze` 综合分析完整结果（通道级） |
+| `full_analysis` | `/full-analysis` 全算法分析完整结果（通道级） |
+| `denoise_method` | 去噪方法：none/wavelet/vmd/med（默认 none） |
+| `analyzed_at` | 分析时间 |
+
+**缓存策略：**
+- `/analyze` 和 `/full-analysis` 实时计算完成后自动写入数据库
+- 缓存键为 `(device_id, batch_index, channel, denoise_method)`
+- 不同去噪方法的结果独立保存，互不覆盖
+- 前端查询时优先精确匹配 `denoise_method`，无匹配则回退到该通道最新记录
 
 ### 6.4 告警表（`alarms`）
 
