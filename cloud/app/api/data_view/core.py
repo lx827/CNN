@@ -17,57 +17,73 @@ def get_all_device_data(
     """
     获取所有设备的批次列表（表格展示用）
     返回每个设备的所有批次，含时间和特殊标记
+
+    性能优化：
+    - 使用 IN 查询一次性拉取所有设备的批次和诊断，避免 N+1
+    - 设备列表不返回 order_analysis 大字段，减少传输
     """
     devices = db.query(Device).all()
+    if not devices:
+        return {"code": 200, "data": []}
+
+    device_ids = [d.device_id for d in devices]
+
+    # 1. 一次性查询所有批次（所有设备）
+    batch_records = db.query(
+        SensorData.device_id,
+        SensorData.batch_index,
+        func.max(SensorData.created_at).label("created_at"),
+        func.max(SensorData.is_special).label("is_special"),
+        func.count(SensorData.channel).label("channel_count"),
+        func.max(SensorData.sample_rate).label("sample_rate"),
+    ).filter(
+        SensorData.device_id.in_(device_ids)
+    ).group_by(
+        SensorData.device_id,
+        SensorData.batch_index
+    ).order_by(
+        desc(func.max(SensorData.created_at))
+    ).all()
+
+    # 按 device_id 分组
+    batch_map = {did: [] for did in device_ids}
+    for r in batch_records:
+        batch_map[r.device_id].append(r)
+
+    # 2. 一次性查询所有诊断结果（所有设备）
+    # 同一 batch 可能有多条，在 Python 中保留最新的
+    diag_records = db.query(Diagnosis).filter(
+        Diagnosis.device_id.in_(device_ids)
+    ).all()
+
+    diag_map = {}
+    for d in diag_records:
+        key = (d.device_id, d.batch_index)
+        if key not in diag_map or (d.analyzed_at and diag_map[key].analyzed_at and d.analyzed_at > diag_map[key].analyzed_at):
+            diag_map[key] = d
+
+    # 3. 组装结果
     result = []
-
     for dev in devices:
-        # 查询该设备的所有批次
-        batch_records = db.query(
-            SensorData.batch_index,
-            func.max(SensorData.created_at).label("created_at"),
-            func.max(SensorData.is_special).label("is_special"),
-            func.count(SensorData.channel).label("channel_count"),
-            func.max(SensorData.sample_rate).label("sample_rate"),
-        ).filter(
-            SensorData.device_id == dev.device_id
-        ).group_by(
-            SensorData.batch_index
-        ).order_by(
-            desc(func.max(SensorData.created_at))
-        ).all()
-
-        # 预加载该设备的所有诊断结果（按 batch_index）
-        diag_records = db.query(Diagnosis).filter(
-            Diagnosis.device_id == dev.device_id
-        ).all()
-        diag_map = {}
-        for d in diag_records:
-            # 同一 batch 可能有多次诊断，保留最新的
-            if d.batch_index not in diag_map or (d.analyzed_at and d.analyzed_at > diag_map[d.batch_index].analyzed_at):
-                diag_map[d.batch_index] = d
-
         batches = []
-        for batch_index, created_at, is_special, ch_count, sr in batch_records:
-            diag = diag_map.get(batch_index)
-            # 提取概率最高的故障类型
+        for r in batch_map.get(dev.device_id, []):
+            diag = diag_map.get((dev.device_id, r.batch_index))
             top_fault = None
             if diag and diag.fault_probabilities:
                 top = max(diag.fault_probabilities.items(), key=lambda x: x[1])
                 if top[1] > 0.3:
                     top_fault = f"{top[0]} ({top[1]*100:.0f}%)"
+
             batches.append({
-                "batch_index": batch_index,
-                "created_at": created_at.isoformat() if created_at else None,
-                "is_special": bool(is_special),
-                "channel_count": ch_count,
-                "sample_rate": sr or 25600,
+                "batch_index": r.batch_index,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "is_special": bool(r.is_special),
+                "channel_count": r.channel_count,
+                "sample_rate": r.sample_rate or 25600,
                 "diagnosis_status": diag.status if diag else None,
                 "health_score": diag.health_score if diag else None,
                 "top_fault": top_fault,
                 "analyzed_at": diag.analyzed_at.isoformat() if diag and diag.analyzed_at else None,
-                "order_analysis": diag.order_analysis if diag else None,
-                "rot_freq": diag.rot_freq if diag else None,
             })
 
         result.append({
