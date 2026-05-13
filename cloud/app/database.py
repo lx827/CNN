@@ -67,6 +67,12 @@ def init_db():
                 conn.execute(text("ALTER TABLE diagnosis ADD COLUMN order_analysis JSON"))
             if "rot_freq" not in diag_cols:
                 conn.execute(text("ALTER TABLE diagnosis ADD COLUMN rot_freq FLOAT"))
+            if "channel" not in diag_cols:
+                conn.execute(text("ALTER TABLE diagnosis ADD COLUMN channel INTEGER DEFAULT 0"))
+            if "engine_result" not in diag_cols:
+                conn.execute(text("ALTER TABLE diagnosis ADD COLUMN engine_result JSON"))
+            if "full_analysis" not in diag_cols:
+                conn.execute(text("ALTER TABLE diagnosis ADD COLUMN full_analysis JSON"))
             conn.commit()
 
     # Device 表继续新增列（压缩配置）

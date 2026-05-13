@@ -77,12 +77,16 @@ class Diagnosis(Base):
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(String(50), index=True)
     batch_index = Column(Integer, comment="关联的 sensor_data 批次号")
+    channel = Column(Integer, nullable=True, default=0, comment="通道号 1/2/3/...")
     health_score = Column(Integer, comment="健康度 0-100")
     fault_probabilities = Column(JSON, comment="各故障类型概率")
     imf_energy = Column(JSON, comment="IMF 能量分布")
     order_analysis = Column(JSON, nullable=True, comment="阶次/包络/频谱分析明细")
     rot_freq = Column(Float, nullable=True, comment="估计转频 Hz")
     status = Column(String(20), default="normal", comment="综合状态")
+    engine_result = Column(JSON, nullable=True, comment="analyze_comprehensive 完整结果（通道级）")
+    full_analysis = Column(JSON, nullable=True, comment="analyze_all_methods 完整结果（通道级）")
+    denoise_method = Column(String(20), nullable=True, default="none", comment="去噪方法 none/wavelet/vmd/med")
     analyzed_at = Column(DateTime, default=datetime.utcnow, comment="分析时间")
 
 

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import SensorData, Device
+from app.models import SensorData, Device, Diagnosis
+from datetime import datetime
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod, DiagnosisStrategy
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
 from app.services.diagnosis.order_tracking import (
@@ -154,21 +155,52 @@ async def get_channel_analyze(
         # CPU 密集型综合分析放入线程池
         result = await asyncio.to_thread(engine.analyze_comprehensive, signal, sample_rate)
 
+        response_data = {
+            "device_id": record.device_id,
+            "batch_index": record.batch_index,
+            "channel": record.channel,
+            "channel_name": _get_channel_name(device, record.channel),
+            "sample_rate": sample_rate,
+            "is_special": bool(record.is_special),
+            "strategy": strategy,
+            "bearing_method": bearing_method,
+            "gear_method": gear_method,
+            "denoise": denoise,
+            **result,
+        }
+
+        # 写入/更新数据库（实时计算覆盖数据库）
+        try:
+            diag = db.query(Diagnosis).filter(
+                Diagnosis.device_id == device_id,
+                Diagnosis.batch_index == batch_index,
+                Diagnosis.channel == channel,
+                Diagnosis.denoise_method == denoise,
+            ).first()
+            if diag:
+                diag.health_score = result.get("health_score", 100)
+                diag.status = result.get("status", "normal")
+                diag.engine_result = response_data
+                diag.analyzed_at = datetime.utcnow()
+            else:
+                db.add(Diagnosis(
+                    device_id=device_id,
+                    batch_index=batch_index,
+                    channel=channel,
+                    health_score=result.get("health_score", 100),
+                    status=result.get("status", "normal"),
+                    engine_result=response_data,
+                    denoise_method=denoise,
+                    analyzed_at=datetime.utcnow(),
+                ))
+            db.commit()
+        except Exception as db_err:
+            logger.warning(f"诊断结果写入数据库失败: {db_err}")
+            db.rollback()
+
         return {
             "code": 200,
-            "data": {
-                "device_id": record.device_id,
-                "batch_index": record.batch_index,
-                "channel": record.channel,
-                "channel_name": _get_channel_name(device, record.channel),
-                "sample_rate": sample_rate,
-                "is_special": bool(record.is_special),
-                "strategy": strategy,
-                "bearing_method": bearing_method,
-                "gear_method": gear_method,
-                "denoise": denoise,
-                **result,
-            }
+            "data": response_data,
         }
     except Exception as e:
         logger.error(f"综合分析失败: {e}", exc_info=True)
@@ -233,18 +265,49 @@ async def get_channel_full_analysis(
         # CPU 密集型全算法分析放入线程池
         result = await asyncio.to_thread(engine.analyze_all_methods, signal, sample_rate)
 
+        response_data = {
+            "device_id": record.device_id,
+            "batch_index": record.batch_index,
+            "channel": record.channel,
+            "channel_name": _get_channel_name(device, record.channel),
+            "sample_rate": sample_rate,
+            "is_special": bool(record.is_special),
+            "denoise": denoise,
+            **result,
+        }
+
+        # 写入/更新数据库（实时计算覆盖数据库）
+        try:
+            diag = db.query(Diagnosis).filter(
+                Diagnosis.device_id == device_id,
+                Diagnosis.batch_index == batch_index,
+                Diagnosis.channel == channel,
+                Diagnosis.denoise_method == denoise,
+            ).first()
+            if diag:
+                diag.health_score = result.get("health_score", 100)
+                diag.status = result.get("status", "normal")
+                diag.full_analysis = response_data
+                diag.analyzed_at = datetime.utcnow()
+            else:
+                db.add(Diagnosis(
+                    device_id=device_id,
+                    batch_index=batch_index,
+                    channel=channel,
+                    health_score=result.get("health_score", 100),
+                    status=result.get("status", "normal"),
+                    full_analysis=response_data,
+                    denoise_method=denoise,
+                    analyzed_at=datetime.utcnow(),
+                ))
+            db.commit()
+        except Exception as db_err:
+            logger.warning(f"全算法分析结果写入数据库失败: {db_err}")
+            db.rollback()
+
         return {
             "code": 200,
-            "data": {
-                "device_id": record.device_id,
-                "batch_index": record.batch_index,
-                "channel": record.channel,
-                "channel_name": _get_channel_name(device, record.channel),
-                "sample_rate": sample_rate,
-                "is_special": bool(record.is_special),
-                "denoise": denoise,
-                **result,
-            }
+            "data": response_data,
         }
     except Exception as e:
         import traceback
