@@ -140,74 +140,59 @@ async def reanalyze_batch(
     batch_index: int,
     db: Session = Depends(get_db)
 ):
-    """
-    重新分析指定批次的所有通道数据，并更新/覆盖诊断结果。
-    """
-    # 1. 获取设备
+    """重新分析指定批次的所有通道数据"""
+    import traceback as _tb
+
+    # 1. 获取设备和数据
     device = db.query(Device).filter(Device.device_id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
 
-    # 2. 获取该批次所有通道数据
     records = db.query(SensorData).filter(
         SensorData.device_id == device_id,
         SensorData.batch_index == batch_index
     ).all()
-
     if not records:
         raise HTTPException(status_code=404, detail="批次数据不存在")
 
-    # 3. 组装通道数据
+    # 2. 组装通道数据
     channels_data = {}
     for r in records:
         channels_data[f"ch{r.channel}"] = r.data
+    sample_rate = records[0].sample_rate or device.sample_rate or 25600
 
-    # 4. 优先使用数据库中阶次追踪已保存的转频（权威值），不再重复估计
+    # 3. 优先使用数据库已存的转频（阶次追踪权威值）
     saved_rot_freq = None
     try:
         diag_existing = db.query(Diagnosis).filter(
-            Diagnosis.device_id == device_id,
-            Diagnosis.batch_index == batch_index
+            Diagnosis.device_id == device_id, Diagnosis.batch_index == batch_index
         ).first()
-        if diag_existing and diag_existing.rot_freq is not None and diag_existing.rot_freq > 0:
+        if diag_existing and diag_existing.rot_freq and diag_existing.rot_freq > 0:
             saved_rot_freq = float(diag_existing.rot_freq)
-            logger.info(f"[重新诊断] 使用数据库中已保存的转频: {saved_rot_freq:.3f} Hz")
     except Exception:
         pass
 
-    sample_rate = records[0].sample_rate or device.sample_rate or 25600
-
-    # 使用 proxy 对象传入 analyze_device，避免修改 SQLAlchemy device 对象
-    class _DeviceProxy:
-        __slots__ = ("_device",)
-        def __init__(self, device):
-            self._device = device
-        def __getattr__(self, name):
-            if name == "denoise_method":
-                return "none"
-            return getattr(self._device, name)
-
-    proxy = _DeviceProxy(device)
+    # 4. 执行分析
     try:
-        result = await asyncio.to_thread(analyze_device, channels_data, sample_rate, proxy, saved_rot_freq)
+        result = await asyncio.to_thread(
+            analyze_device, channels_data, sample_rate, device,
+            rot_freq=saved_rot_freq, denoise_method="none"
+        )
     except Exception as e:
-        logger.error(f"重新诊断失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"重新诊断失败: {e}")
+        logger.error(f"[重新诊断] 分析失败: {e}\n{_tb.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"分析引擎异常: {e}")
 
-    # 5. 更新或创建诊断记录（含 JSON 安全转换）
+    # 5. 写入数据库
     try:
-        logger.info(f"[重新诊断] 步骤5: 查询/创建诊断记录, device={device_id}, batch={batch_index}")
-        diag = db.query(Diagnosis).filter(
-            Diagnosis.device_id == device_id,
-            Diagnosis.batch_index == batch_index
-        ).first()
-
         safe_fault_probs = _sanitize_for_json(result["fault_probabilities"])
         safe_imf = _sanitize_for_json(result["imf_energy"])
         safe_order = _sanitize_for_json(result.get("order_analysis"))
 
+        diag = db.query(Diagnosis).filter(
+            Diagnosis.device_id == device_id, Diagnosis.batch_index == batch_index
+        ).first()
+
         if diag:
-            logger.info(f"[重新诊断] 更新已有诊断记录, id={diag.id}")
             diag.health_score = result["health_score"]
             diag.fault_probabilities = safe_fault_probs
             diag.imf_energy = safe_imf
@@ -216,10 +201,8 @@ async def reanalyze_batch(
             diag.status = result["status"]
             diag.analyzed_at = datetime.utcnow()
         else:
-            logger.info(f"[重新诊断] 创建新诊断记录")
-            diag = Diagnosis(
-                device_id=device_id,
-                batch_index=batch_index,
+            db.add(Diagnosis(
+                device_id=device_id, batch_index=batch_index,
                 health_score=result["health_score"],
                 fault_probabilities=safe_fault_probs,
                 imf_energy=safe_imf,
@@ -227,36 +210,27 @@ async def reanalyze_batch(
                 rot_freq=result.get("rot_freq"),
                 status=result["status"],
                 analyzed_at=datetime.utcnow(),
-            )
-            db.add(diag)
+            ))
 
-        # 6. 标记批次为已分析
-        logger.info(f"[重新诊断] 步骤6: 标记批次为已分析, 记录数={len(records)}")
         for r in records:
             r.is_analyzed = 1
             r.analyzed_at = datetime.utcnow()
 
-        # 7. 更新设备健康度
-        logger.info(f"[重新诊断] 步骤7: 更新设备健康度, health_score={result['health_score']}, status={result['status']}")
         device.health_score = result["health_score"]
         device.status = result["status"]
-
-        logger.info(f"[重新诊断] 步骤8: 提交数据库事务")
         db.commit()
-        logger.info(f"[重新诊断] 步骤9: 事务提交成功")
-    except Exception as db_err:
-        logger.error(f"[重新诊断] 数据库写入失败: {db_err}", exc_info=True)
+    except Exception as e:
+        logger.error(f"[重新诊断] 数据库写入失败: {e}\n{_tb.format_exc()}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"诊断结果保存失败: {db_err}")
+        raise HTTPException(status_code=500, detail=f"诊断结果保存失败: {e}")
 
     return {
-        "code": 200,
-        "message": "重新诊断完成",
+        "code": 200, "message": "重新诊断完成",
         "data": {
             "health_score": result["health_score"],
             "status": result["status"],
             "fault_probabilities": result["fault_probabilities"],
             "rot_freq": result.get("rot_freq"),
             "order_analysis": result.get("order_analysis"),
-        }
+        },
     }

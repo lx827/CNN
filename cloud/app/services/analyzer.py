@@ -28,47 +28,53 @@ from app.services.diagnosis.rule_based import _rule_based_analyze
 from app.services.diagnosis.features import _get_channel_params
 
 
-def analyze_device(channels_data: Dict[str, List[float]], sample_rate: int = 25600, device=None, rot_freq: Optional[float] = None):
+def analyze_device(
+    channels_data: Dict[str, List[float]],
+    sample_rate: int = 25600,
+    device=None,
+    rot_freq: Optional[float] = None,
+    denoise_method: str = "none",
+):
     """
     综合分析主函数
 
     Args:
         channels_data: 通道数据字典 {ch_name: [samples...]}
         sample_rate: 采样率 Hz
-        device: 设备配置对象（含齿轮/轴承参数等）
-        rot_freq: 指定转频 Hz，传入则跳过自动估计。空时由诊断引擎自动估计。
-
-    优先级：
-      1. 神经网络模型（nn_predictor.py）
-      2. 新诊断引擎（DiagnosisEngine，支持 Fast Kurtogram / CPW / MED 等高级算法）
-      3. 简化规则算法（回退方案）
+        device: 设备配置对象（含齿轮/轴承参数等），可为 None
+        rot_freq: 指定转频 Hz，传入则跳过自动估计
+        denoise_method: 去噪方法 "none"/"wavelet"/"vmd"，默认 none
     """
-    # 防御：空数据
     if not channels_data:
         return {
-            "health_score": 100,
-            "status": "normal",
+            "health_score": 100, "status": "normal",
             "fault_probabilities": {"正常运行": 1.0},
-            "imf_energy": {},
-            "order_analysis": None,
-            "rot_freq": None,
+            "imf_energy": {}, "order_analysis": None, "rot_freq": None,
         }
 
-    # 1. 神经网络优先
     nn_result = nn_predict(channels_data, sample_rate)
     if nn_result is not None:
         logger.info("[分析] 使用神经网络模型预测结果")
         return nn_result
 
-    # 2. 新诊断引擎（默认方案）
     try:
         strategy = getattr(device, "diagnosis_strategy", "advanced") if device else "advanced"
         bearing_method = getattr(device, "bearing_method", "kurtogram") if device else "kurtogram"
         gear_method = getattr(device, "gear_method", "standard") if device else "standard"
-        denoise = getattr(device, "denoise_method", "none") if device else "none"
+        # 优先使用传入的 denoise_method，其次取设备配置
+        denoise = denoise_method if denoise_method != "none" else (
+            getattr(device, "denoise_method", "none") if device else "none"
+        )
 
         channel_results = []
         for ch_idx, (ch_name, signal) in enumerate(channels_data.items(), start=1):
+            # 防御：确保 signal 是有效的数值数组
+            try:
+                sig_arr = np.array(signal, dtype=np.float64)
+            except (TypeError, ValueError):
+                logger.warning(f"[分析] 通道 {ch_name} 数据格式异常，跳过")
+                continue
+
             ch_bearing_params = _get_channel_params(device, ch_idx, "bearing_params")
             ch_gear_teeth = _get_channel_params(device, ch_idx, "gear_teeth")
 
@@ -80,8 +86,16 @@ def analyze_device(channels_data: Dict[str, List[float]], sample_rate: int = 256
                 bearing_params=ch_bearing_params,
                 gear_teeth=ch_gear_teeth,
             )
-            result = engine.analyze_comprehensive(np.array(signal, dtype=np.float64), sample_rate, rot_freq=rot_freq)
+            result = engine.analyze_comprehensive(sig_arr, sample_rate, rot_freq=rot_freq)
             channel_results.append((ch_name, result))
+
+        if not channel_results:
+            logger.warning("[分析] 所有通道数据格式异常，返回默认结果")
+            return {
+                "health_score": 100, "status": "normal",
+                "fault_probabilities": {"正常运行": 1.0},
+                "imf_energy": {}, "order_analysis": None, "rot_freq": None,
+            }
 
         worst_health = min(r["health_score"] for _, r in channel_results)
         worst_status = max(
