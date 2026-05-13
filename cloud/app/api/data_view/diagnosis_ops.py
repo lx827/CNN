@@ -8,8 +8,26 @@ from . import router
 from datetime import datetime
 import logging
 import asyncio
+import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_for_json(obj):
+    """递归将 numpy 类型转换为 Python 原生类型，确保 JSON 可序列化"""
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    if isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_for_json(v) for v in obj]
+    return obj
 
 @router.put("/{device_id}/{batch_index}/diagnosis")
 async def update_batch_diagnosis(
@@ -30,8 +48,8 @@ async def update_batch_diagnosis(
 
     if diag:
         if order_analysis is not None:
-            existing = diag.order_analysis or {}
-            existing.update(order_analysis)
+            existing = _sanitize_for_json(diag.order_analysis or {})
+            existing.update(_sanitize_for_json(order_analysis))
             diag.order_analysis = existing
         if rot_freq is not None:
             diag.rot_freq = rot_freq
@@ -166,51 +184,60 @@ async def reanalyze_batch(
         logger.error(f"重新诊断失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"重新诊断失败: {e}")
 
-    # 5. 更新或创建诊断记录
-    logger.info(f"[重新诊断] 步骤5: 查询/创建诊断记录, device={device_id}, batch={batch_index}")
-    diag = db.query(Diagnosis).filter(
-        Diagnosis.device_id == device_id,
-        Diagnosis.batch_index == batch_index
-    ).first()
+    # 5. 更新或创建诊断记录（含 JSON 安全转换）
+    try:
+        logger.info(f"[重新诊断] 步骤5: 查询/创建诊断记录, device={device_id}, batch={batch_index}")
+        diag = db.query(Diagnosis).filter(
+            Diagnosis.device_id == device_id,
+            Diagnosis.batch_index == batch_index
+        ).first()
 
-    if diag:
-        logger.info(f"[重新诊断] 更新已有诊断记录, id={diag.id}")
-        diag.health_score = result["health_score"]
-        diag.fault_probabilities = result["fault_probabilities"]
-        diag.imf_energy = result["imf_energy"]
-        diag.order_analysis = result.get("order_analysis")
-        diag.rot_freq = result.get("rot_freq")
-        diag.status = result["status"]
-        diag.analyzed_at = datetime.utcnow()
-    else:
-        logger.info(f"[重新诊断] 创建新诊断记录")
-        diag = Diagnosis(
-            device_id=device_id,
-            batch_index=batch_index,
-            health_score=result["health_score"],
-            fault_probabilities=result["fault_probabilities"],
-            imf_energy=result["imf_energy"],
-            order_analysis=result.get("order_analysis"),
-            rot_freq=result.get("rot_freq"),
-            status=result["status"],
-            analyzed_at=datetime.utcnow(),
-        )
-        db.add(diag)
+        safe_fault_probs = _sanitize_for_json(result["fault_probabilities"])
+        safe_imf = _sanitize_for_json(result["imf_energy"])
+        safe_order = _sanitize_for_json(result.get("order_analysis"))
 
-    # 6. 标记批次为已分析
-    logger.info(f"[重新诊断] 步骤6: 标记批次为已分析, 记录数={len(records)}")
-    for r in records:
-        r.is_analyzed = 1
-        r.analyzed_at = datetime.utcnow()
+        if diag:
+            logger.info(f"[重新诊断] 更新已有诊断记录, id={diag.id}")
+            diag.health_score = result["health_score"]
+            diag.fault_probabilities = safe_fault_probs
+            diag.imf_energy = safe_imf
+            diag.order_analysis = safe_order
+            diag.rot_freq = result.get("rot_freq")
+            diag.status = result["status"]
+            diag.analyzed_at = datetime.utcnow()
+        else:
+            logger.info(f"[重新诊断] 创建新诊断记录")
+            diag = Diagnosis(
+                device_id=device_id,
+                batch_index=batch_index,
+                health_score=result["health_score"],
+                fault_probabilities=safe_fault_probs,
+                imf_energy=safe_imf,
+                order_analysis=safe_order,
+                rot_freq=result.get("rot_freq"),
+                status=result["status"],
+                analyzed_at=datetime.utcnow(),
+            )
+            db.add(diag)
 
-    # 7. 更新设备健康度
-    logger.info(f"[重新诊断] 步骤7: 更新设备健康度, health_score={result['health_score']}, status={result['status']}")
-    device.health_score = result["health_score"]
-    device.status = result["status"]
+        # 6. 标记批次为已分析
+        logger.info(f"[重新诊断] 步骤6: 标记批次为已分析, 记录数={len(records)}")
+        for r in records:
+            r.is_analyzed = 1
+            r.analyzed_at = datetime.utcnow()
 
-    logger.info(f"[重新诊断] 步骤8: 提交数据库事务")
-    db.commit()
-    logger.info(f"[重新诊断] 步骤9: 事务提交成功")
+        # 7. 更新设备健康度
+        logger.info(f"[重新诊断] 步骤7: 更新设备健康度, health_score={result['health_score']}, status={result['status']}")
+        device.health_score = result["health_score"]
+        device.status = result["status"]
+
+        logger.info(f"[重新诊断] 步骤8: 提交数据库事务")
+        db.commit()
+        logger.info(f"[重新诊断] 步骤9: 事务提交成功")
+    except Exception as db_err:
+        logger.error(f"[重新诊断] 数据库写入失败: {db_err}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"诊断结果保存失败: {db_err}")
 
     return {
         "code": 200,
