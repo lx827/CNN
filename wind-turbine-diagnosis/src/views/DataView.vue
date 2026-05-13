@@ -1190,7 +1190,33 @@ const selectBatch = (device, batch) => {
 
   nextTick(() => {
     loadTimeDomain()
+    // 自动加载数据库中已保存的转频（阶次追踪权威值）
+    loadSavedRotFreq()
   })
+}
+
+/** 自动从诊断表中加载已存转频，避免每次都要手动点击计算阶次谱 */
+const loadSavedRotFreq = async () => {
+  try {
+    const res = await getChannelDiagnosis(
+      selectedDevice.value.device_id,
+      selectedBatch.value.batch_index,
+      1  // 查通道1，若没有则回退到批次级诊断记录
+    )
+    const d = res.data
+    if (d) {
+      // rot_freq 优先取顶层字段，其次取 order_analysis 中的
+      const savedRf = d.rot_freq ?? d.order_analysis?.rot_freq_hz
+      if (savedRf != null && savedRf > 0) {
+        selectedBatch.value.rot_freq = savedRf
+        if (d.order_analysis) {
+          selectedBatch.value.order_analysis = d.order_analysis
+        }
+      }
+    }
+  } catch (e) {
+    // 无缓存数据时不报错
+  }
 }
 
 const resetComputedState = () => {
