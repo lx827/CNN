@@ -2,7 +2,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import SensorData, Device
+from app.models import SensorData, Device, Diagnosis
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
 from app.services.diagnosis.order_tracking import (
     _compute_order_spectrum,
@@ -113,6 +113,39 @@ async def get_channel_order(
                 tracking_method = "varying_speed"
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
+
+        # 自动将阶次追踪得到的转频写入诊断表，作为后续诊断的权威转频
+        try:
+            diag = db.query(Diagnosis).filter(
+                Diagnosis.device_id == device_id,
+                Diagnosis.batch_index == batch_index,
+            ).first()
+            if diag:
+                existing_order = diag.order_analysis or {}
+                existing_order["rot_freq_hz"] = round(rot_freq_val, 3)
+                existing_order["rot_rpm"] = round(rot_freq_val * 60.0, 1)
+                diag.order_analysis = existing_order
+                diag.rot_freq = round(rot_freq_val, 3)
+                diag.analyzed_at = datetime.utcnow()
+            else:
+                db.add(Diagnosis(
+                    device_id=device_id,
+                    batch_index=batch_index,
+                    health_score=100,
+                    fault_probabilities={"正常运行": 1.0},
+                    imf_energy={},
+                    order_analysis={
+                        "rot_freq_hz": round(rot_freq_val, 3),
+                        "rot_rpm": round(rot_freq_val * 60.0, 1),
+                    },
+                    rot_freq=round(rot_freq_val, 3),
+                    status="normal",
+                    analyzed_at=datetime.utcnow(),
+                ))
+            db.commit()
+        except Exception as db_err:
+            logger.warning(f"阶次追踪转频写入数据库失败: {db_err}")
+            db.rollback()
 
         return {
             "code": 200,

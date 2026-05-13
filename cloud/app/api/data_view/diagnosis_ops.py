@@ -164,7 +164,19 @@ async def reanalyze_batch(
     for r in records:
         channels_data[f"ch{r.channel}"] = r.data
 
-    # 4. 执行分析（重新诊断跳过耗时去噪，避免 VMD 超时/内存不足）
+    # 4. 优先使用数据库中阶次追踪已保存的转频（权威值），不再重复估计
+    saved_rot_freq = None
+    try:
+        diag_existing = db.query(Diagnosis).filter(
+            Diagnosis.device_id == device_id,
+            Diagnosis.batch_index == batch_index
+        ).first()
+        if diag_existing and diag_existing.rot_freq is not None and diag_existing.rot_freq > 0:
+            saved_rot_freq = float(diag_existing.rot_freq)
+            logger.info(f"[重新诊断] 使用数据库中已保存的转频: {saved_rot_freq:.3f} Hz")
+    except Exception:
+        pass
+
     sample_rate = records[0].sample_rate or device.sample_rate or 25600
 
     # 使用 proxy 对象传入 analyze_device，避免修改 SQLAlchemy device 对象
@@ -179,7 +191,7 @@ async def reanalyze_batch(
 
     proxy = _DeviceProxy(device)
     try:
-        result = await asyncio.to_thread(analyze_device, channels_data, sample_rate, proxy)
+        result = await asyncio.to_thread(analyze_device, channels_data, sample_rate, proxy, saved_rot_freq)
     except Exception as e:
         logger.error(f"重新诊断失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"重新诊断失败: {e}")

@@ -10,7 +10,7 @@
 """
 import logging
 import numpy as np
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +28,15 @@ from app.services.diagnosis.rule_based import _rule_based_analyze
 from app.services.diagnosis.features import _get_channel_params
 
 
-def analyze_device(channels_data: Dict[str, List[float]], sample_rate: int = 25600, device=None):
+def analyze_device(channels_data: Dict[str, List[float]], sample_rate: int = 25600, device=None, rot_freq: Optional[float] = None):
     """
     综合分析主函数
+
+    Args:
+        channels_data: 通道数据字典 {ch_name: [samples...]}
+        sample_rate: 采样率 Hz
+        device: 设备配置对象（含齿轮/轴承参数等）
+        rot_freq: 指定转频 Hz，传入则跳过自动估计。空时由诊断引擎自动估计。
 
     优先级：
       1. 神经网络模型（nn_predictor.py）
@@ -74,7 +80,7 @@ def analyze_device(channels_data: Dict[str, List[float]], sample_rate: int = 256
                 bearing_params=ch_bearing_params,
                 gear_teeth=ch_gear_teeth,
             )
-            result = engine.analyze_comprehensive(np.array(signal, dtype=np.float64), sample_rate)
+            result = engine.analyze_comprehensive(np.array(signal, dtype=np.float64), sample_rate, rot_freq=rot_freq)
             channel_results.append((ch_name, result))
 
         worst_health = min(r["health_score"] for _, r in channel_results)
