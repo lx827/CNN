@@ -10,6 +10,7 @@ from app.services.diagnosis.order_tracking import (
     _compute_order_spectrum_varying_speed,
 )
 from . import router, prepare_signal, _get_channel_name
+from .diagnosis_ops import _sanitize_for_json
 from datetime import datetime
 import logging
 import numpy as np
@@ -171,6 +172,7 @@ async def get_channel_analyze(
 
         # 写入/更新数据库（实时计算覆盖数据库）
         try:
+            safe_data = _sanitize_for_json(response_data)
             diag = db.query(Diagnosis).filter(
                 Diagnosis.device_id == device_id,
                 Diagnosis.batch_index == batch_index,
@@ -180,7 +182,7 @@ async def get_channel_analyze(
             if diag:
                 diag.health_score = result.get("health_score", 100)
                 diag.status = result.get("status", "normal")
-                diag.engine_result = response_data
+                diag.engine_result = safe_data
                 diag.analyzed_at = datetime.utcnow()
             else:
                 db.add(Diagnosis(
@@ -189,7 +191,7 @@ async def get_channel_analyze(
                     channel=channel,
                     health_score=result.get("health_score", 100),
                     status=result.get("status", "normal"),
-                    engine_result=response_data,
+                    engine_result=safe_data,
                     denoise_method=denoise,
                     analyzed_at=datetime.utcnow(),
                 ))
@@ -278,6 +280,7 @@ async def get_channel_full_analysis(
 
         # 写入/更新数据库（实时计算覆盖数据库）
         try:
+            safe_data = _sanitize_for_json(response_data)
             diag = db.query(Diagnosis).filter(
                 Diagnosis.device_id == device_id,
                 Diagnosis.batch_index == batch_index,
@@ -287,7 +290,7 @@ async def get_channel_full_analysis(
             if diag:
                 diag.health_score = result.get("health_score", 100)
                 diag.status = result.get("status", "normal")
-                diag.full_analysis = response_data
+                diag.full_analysis = safe_data
                 diag.analyzed_at = datetime.utcnow()
             else:
                 db.add(Diagnosis(
@@ -296,7 +299,7 @@ async def get_channel_full_analysis(
                     channel=channel,
                     health_score=result.get("health_score", 100),
                     status=result.get("status", "normal"),
-                    full_analysis=response_data,
+                    full_analysis=safe_data,
                     denoise_method=denoise,
                     analyzed_at=datetime.utcnow(),
                 ))
