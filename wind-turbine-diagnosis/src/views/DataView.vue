@@ -1676,7 +1676,7 @@ const clearGear = () => {
 const computeFullAnalysis = async () => {
   loadingFullAnalysis.value = true
   try {
-    // 1. 先尝试查缓存（按当前去噪方法）
+    // 1. 先尝试查缓存（需确认是 full_analysis 结果，不是普通 engine_result）
     try {
       const cached = await getChannelDiagnosis(
         selectedDevice.value.device_id,
@@ -1685,13 +1685,13 @@ const computeFullAnalysis = async () => {
         fullAnalysisDenoise.value
       )
       const d = cached.data
-      if (d) {
+      // 全算法结果必须有 bearing_results 和 gear_results，否则是普通诊断缓存
+      if (d && d.bearing_results && d.gear_results) {
         fullAnalysisData.value = d
         computedFullAnalysis.value = true
         return
       }
     } catch (e) {
-      // 404 = 该去噪方法无缓存，继续实时计算
       if (e.response?.status !== 404) {
         console.error('查询缓存诊断失败:', e)
       }
