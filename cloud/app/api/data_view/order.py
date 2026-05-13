@@ -10,7 +10,7 @@ from app.services.diagnosis.order_tracking import (
     _compute_order_spectrum_varying_speed,
     _order_tracking,
 )
-from . import router, prepare_signal
+from . import router, prepare_signal, _get_channel_name
 from datetime import datetime
 import logging
 import numpy as np
