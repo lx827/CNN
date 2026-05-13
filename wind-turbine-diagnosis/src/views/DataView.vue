@@ -267,7 +267,7 @@
           </div>
           <div v-if="computedStats && statsData?.window_series" style="margin-top: 16px;">
             <div class="chart-title">加窗统计量时序图</div>
-            <div ref="windowedChart" class="chart" style="height: 280px"></div>
+            <VibrationChart :option="windowedOption" height="280px" />
           </div>
           <div v-else-if="loadingStats" class="placeholder">
             <el-skeleton :rows="2" animated />
