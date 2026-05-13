@@ -9,6 +9,21 @@ from app.models import Diagnosis
 
 router = APIRouter(prefix="/api/diagnosis", tags=["故障诊断"])
 
+_BEARING_MAP = {
+    "轴承BPFO": "轴承外圈故障",
+    "轴承BPFI": "轴承内圈故障",
+    "轴承BSF": "滚动体故障",
+}
+
+def _map_fault_probs(raw: dict) -> dict:
+    if not raw:
+        return {}
+    mapped = {}
+    for k, v in raw.items():
+        km = _BEARING_MAP.get(k, k)
+        mapped[km] = max(mapped.get(km, 0), v)
+    return mapped
+
 
 @router.get("/")
 def get_diagnosis(
@@ -41,7 +56,7 @@ def get_diagnosis(
                 "device_id": diag.device_id,
                 "batch_index": diag.batch_index,
                 "health_score": diag.health_score,
-                "fault_probabilities": diag.fault_probabilities or {},
+                "fault_probabilities": _map_fault_probs(diag.fault_probabilities or {}),
                 "imf_energy": diag.imf_energy or {},
                 "order_analysis": order_analysis,
                 "engine_result": engine_result,

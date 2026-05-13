@@ -12,10 +12,20 @@ from typing import Dict
 
 router = APIRouter(prefix="/api/dashboard", tags=["设备总览"])
 
-# 有效故障类型白名单（排除已废弃的轴不对中、基础松动）
+# 有效故障类型白名单
 VALID_FAULT_TYPES = {
     "正常运行", "齿轮磨损", "轴承内圈故障", "轴承外圈故障",
-    "滚动体故障", "齿轮断齿", "齿轮缺齿", "齿轮齿根裂纹"
+    "滚动体故障", "齿轮断齿", "齿轮缺齿", "齿轮齿根裂纹",
+    "轴承BPFO", "轴承BPFI", "轴承BSF", "轴承异常",
+    "齿轮ser", "齿轮fm0", "齿轮car", "齿轮sideband_count",
+    "齿轮order_kurtosis", "齿轮order_peak_concentration",
+}
+
+# 轴承频率指示器 → 中文故障名映射
+BEARING_FAULT_MAP = {
+    "轴承BPFO": "轴承外圈故障",
+    "轴承BPFI": "轴承内圈故障",
+    "轴承BSF": "滚动体故障",
 }
 
 def _get_offline_threshold(device: Device, now: datetime) -> datetime:
@@ -75,10 +85,18 @@ def get_dashboard(db: Session = Depends(get_db)):
             .order_by(Diagnosis.analyzed_at.desc()).first()
         if diag:
             fault_probs = diag.fault_probabilities or {}
-            filtered_probs = {k: v for k, v in fault_probs.items() if k in VALID_FAULT_TYPES}
+            # 将频率指示器（BPFO/BPFI/BSF）映射为标准中文故障名，合并同名概率
+            mapped = {}
+            for k, v in fault_probs.items():
+                k_mapped = BEARING_FAULT_MAP.get(k, k)  # BPFO→外圈, BPFI→内圈, BSF→滚动体
+                if k_mapped in VALID_FAULT_TYPES:
+                    mapped[k_mapped] = max(mapped.get(k_mapped, 0), v)
+            # 加上故障类型外的通用项
+            if "正常运行" in fault_probs and "正常运行" not in mapped:
+                mapped["正常运行"] = fault_probs["正常运行"]
             latest_diag[d.device_id] = {
                 "health_score": diag.health_score,
-                "fault_probabilities": filtered_probs,
+                "fault_probabilities": mapped,
                 "status": diag.status,
             }
         elif is_offline:
