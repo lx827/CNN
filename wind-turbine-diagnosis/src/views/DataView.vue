@@ -173,11 +173,38 @@
       </el-row>
 
       <!-- 阶次/包络诊断明细 -->
-      <DiagnosisDetail
-        :order-analysis="selectedBatch.order_analysis"
-        :rot-freq="orderData?.rot_freq ?? selectedBatch.rot_freq"
-        :rot-rpm="orderData?.rot_rpm ?? (selectedBatch.rot_freq ? selectedBatch.rot_freq * 60 : null)"
-      />
+      <el-row :gutter="16" class="spectrum-row">
+        <el-col :span="24">
+          <div class="section-header">
+            <span class="chart-title">🔍 频域/阶次诊断明细</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <template v-if="!showDiagnosisDetail">
+                <el-button
+                  type="primary"
+                  size="small"
+                  :loading="loadingDiagnosisDetail"
+                  @click="loadDiagnosisDetail"
+                >
+                  <el-icon><DataAnalysis /></el-icon> 加载诊断明细
+                </el-button>
+              </template>
+              <el-button v-else type="info" size="small" @click="showDiagnosisDetail = false">
+                <el-icon><Close /></el-icon> 收起
+              </el-button>
+            </div>
+          </div>
+          <div v-if="showDiagnosisDetail">
+            <DiagnosisDetail
+              :order-analysis="selectedBatch.order_analysis"
+              :rot-freq="orderData?.rot_freq ?? selectedBatch.rot_freq"
+              :rot-rpm="orderData?.rot_rpm ?? (selectedBatch.rot_freq ? selectedBatch.rot_freq * 60 : null)"
+            />
+          </div>
+          <div v-else class="placeholder">
+            <el-empty description="点击按钮加载诊断明细" :image-size="80" />
+          </div>
+        </el-col>
+      </el-row>
 
       <!-- 时域波形：始终自动加载 -->
       <el-row :gutter="16">
@@ -924,6 +951,10 @@ const loadingFullAnalysis = ref(false)
 const fullAnalysisData = ref(null)
 const fullAnalysisDenoise = ref('none')
 
+// 频域/阶次诊断明细（手动加载）
+const showDiagnosisDetail = ref(false)
+const loadingDiagnosisDetail = ref(false)
+
 // 统计指标加窗参数
 const statsWindowSize = ref(1024)
 const statsStep = ref(512)
@@ -1092,8 +1123,38 @@ const loadAllDevices = async () => {
   }
 }
 
-// ========== 选择批次 ==========
-// ========== 自动查询数据库诊断结果 ==========
+// ========== 加载诊断明细（手动触发） ==========
+const loadDiagnosisDetail = async () => {
+  loadingDiagnosisDetail.value = true
+  try {
+    // 先尝试加载通道级缓存诊断
+    try {
+      const res = await getChannelDiagnosis(
+        selectedDevice.value.device_id,
+        selectedBatch.value.batch_index,
+        selectedChannel.value,
+        fullAnalysisDenoise.value
+      )
+      const d = res.data
+      if (d && d.order_analysis) {
+        selectedBatch.value.order_analysis = d.order_analysis
+      }
+      if (d && d.rot_freq) {
+        selectedBatch.value.rot_freq = d.rot_freq
+      }
+    } catch (e) {
+      // 404 表示无缓存，不做处理
+    }
+    showDiagnosisDetail.value = true
+  } catch (e) {
+    console.error('加载诊断明细失败:', e)
+    ElMessage.error('加载诊断明细失败')
+  } finally {
+    loadingDiagnosisDetail.value = false
+  }
+}
+
+// ========== 自动查询数据库诊断结果（全分析用） ==========
 const loadCachedDiagnosis = async () => {
   if (!selectedDevice.value || !selectedBatch.value || !selectedChannel.value) return
   try {
@@ -1129,7 +1190,6 @@ const selectBatch = (device, batch) => {
 
   nextTick(() => {
     loadTimeDomain()
-    loadCachedDiagnosis()
   })
 }
 
@@ -1142,6 +1202,7 @@ const resetComputedState = () => {
   computedCepstrum.value = false
   computedGear.value = false
   computedFullAnalysis.value = false
+  showDiagnosisDetail.value = false
   statsData.value = null
   orderData.value = null
   cepstrumData.value = null
@@ -1164,7 +1225,6 @@ const onChannelChange = () => {
   gearData.value = null
   nextTick(() => {
     loadTimeDomain()
-    loadCachedDiagnosis()
   })
 }
 
