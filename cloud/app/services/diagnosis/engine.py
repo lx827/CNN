@@ -486,23 +486,23 @@ def _evaluate_bearing_faults_statistical(
     peak_amp = float(np.max(amp_arr))
     snr = peak_amp / background if background > 0 else 0.0
 
-    # 1. 包络谱峰值显著性
+    # 1. 包络谱峰值显著性（单峰异常——单一最强峰 vs 背景）
     indicators["envelope_peak_snr"] = {
         "value": float(round(snr, 2)),
         "snr": float(round(snr, 2)),
-        "significant": bool(snr > 8.0),
+        "significant": bool(snr > 12.0),  # 仅单一超强峰才报警，排除轴频谐波导致的较高 SNR
     }
 
-    # 2. 包络谱峭度（频域峭度）
+    # 2. 包络谱峭度（频域峭度——区分"少量超强峰"vs"多个中等峰"）
     amp_norm = amp_arr / (np.mean(amp_arr) + 1e-12)
     kurt = float(np.mean(amp_norm ** 4) / (np.mean(amp_norm ** 2) ** 2 + 1e-12) - 2)
     indicators["envelope_kurtosis"] = {
         "value": float(round(kurt, 2)),
         "snr": float(round(max(0, kurt), 2)),
-        "significant": bool(kurt > 5.0),
+        "significant": bool(kurt > 8.0),  # 极高峭度才认为异常，健康轴承的轴频谐波峭度通常在 3-6
     }
 
-    # 3. 高频能量比（>500Hz 或 >0.5*rot_freq  whichever is higher）
+    # 3. 高频能量比 — 轴承故障冲击能量通常在高频段
     freq_arr = np.array(freq_arr)
     hf_threshold = max(500.0, rot_freq * 2)
     total_energy = float(np.sum(amp_arr ** 2)) + 1e-12
@@ -511,17 +511,17 @@ def _evaluate_bearing_faults_statistical(
     indicators["high_freq_ratio"] = {
         "value": float(round(hf_ratio, 4)),
         "snr": float(round(hf_ratio * 10, 2)),
-        "significant": bool(hf_ratio > 0.5),
+        "significant": bool(hf_ratio > 0.65),  # 包络谱能量主要集中在高频（而非低频轴频谐波）
     }
 
-    # 4. 谱峰集中度：前5个峰值能量 / 总能量
+    # 4. 谱峰集中度 — 前5峰能量占比（故障时少数峰支配，健康时分布均匀）
     sorted_amps = np.sort(amp_arr)[::-1]
     top5_energy = float(np.sum(sorted_amps[:5] ** 2))
     peak_conc = float(top5_energy / total_energy)
     indicators["peak_concentration"] = {
         "value": float(round(peak_conc, 4)),
         "snr": float(round(peak_conc * 10, 2)),
-        "significant": bool(peak_conc > 0.3),
+        "significant": bool(peak_conc > 0.5),  # 前5峰能量超过总能量50%才异常
     }
 
     return indicators
@@ -533,112 +533,121 @@ def _evaluate_bearing_faults(
     env_amp: List[float],
     rot_freq: float,
 ) -> Dict[str, Any]:
-    """评估轴承故障指示器 — 带谐波族验证"""
+    """
+    评估轴承故障指示器 — 双路并行：
+      1) 物理参数路径：精确匹配 BPFO/BPFI/BSF（需要轴承几何参数）
+      2) 统计路径：包络谱全局统计特征（无参数时兜底；有参数时作为辅助佐证）
+    两路结果独立并存，不互相替代。
+    """
     if not env_freq or not env_amp or rot_freq <= 0:
         return {}
 
     freq_arr = np.array(env_freq, dtype=np.float64)
     amp_arr = np.array(env_amp, dtype=np.float64)
-
-    # 无物理参数时回退到统计诊断
-    has_params = bearing_params and any(v is not None for v in bearing_params.values())
-    if not has_params:
-        return _evaluate_bearing_faults_statistical(freq_arr, amp_arr, rot_freq)
-
-    try:
-        n_balls = int(float(bearing_params.get("n") or 0))
-        d = float(bearing_params.get("d") or 0)
-        D = float(bearing_params.get("D") or 0)
-        alpha = np.radians(float(bearing_params.get("alpha") or 0))
-    except (TypeError, ValueError):
-        return _evaluate_bearing_faults_statistical(freq_arr, amp_arr, rot_freq)
-
-    if n_balls <= 0 or d <= 1e-9 or D <= 1e-9:
-        return _evaluate_bearing_faults_statistical(freq_arr, amp_arr, rot_freq)
-
-    cos_a = np.cos(alpha)
-    dd = (d / D) * cos_a
-
-    freqs = {
-        "BPFO": (n_balls / 2.0) * rot_freq * (1 - dd),
-        "BPFI": (n_balls / 2.0) * rot_freq * (1 + dd),
-        "BSF":  (D / (2.0 * d)) * rot_freq * (1 - dd ** 2),
-    }  # FTF 是保持架频率，非滚动体故障，不作为故障指示器
-
     df = freq_arr[1] - freq_arr[0] if len(freq_arr) > 1 else 1.0
     background = float(np.median(amp_arr))
 
-    indicators = {}
-    for name, f_hz in freqs.items():
-        if f_hz <= 0 or f_hz > freq_arr[-1]:
-            indicators[name] = {"theory_hz": round(f_hz, 2), "detected_hz": None,
-                               "peak_amp": 0.0, "snr": 0.0, "significant": False}
-            continue
+    # ========== 统计路径：始终计算，作为兜底 + 佐证 ==========
+    stat_indicators = _evaluate_bearing_faults_statistical(freq_arr, amp_arr, rot_freq)
 
-        # 频域容差：±5% 或至少 2 个频率分bin，取大者
-        tol_rel = max(f_hz * 0.05, df * 2)
-        mask = np.abs(freq_arr - f_hz) <= tol_rel
+    # 统计路径检出异常？
+    stat_abnormal = any(
+        v.get("significant") for v in stat_indicators.values() if isinstance(v, dict)
+    )
 
-        # 检测谐波族（2~4 倍），谐波验证是区分真故障和随机波动的关键
-        harmonic_snrs = []
-        for h in range(2, 5):
-            h_freq = f_hz * h
-            if h_freq > freq_arr[-1]:
-                break
-            h_tol = max(h_freq * 0.05, df * 2)
-            h_mask = np.abs(freq_arr - h_freq) <= h_tol
-            if np.any(h_mask):
-                h_peak = float(np.max(amp_arr[h_mask]))
-                h_snr = h_peak / background if background > 0 else 0.0
-                harmonic_snrs.append(h_snr)
+    # ========== 物理参数路径 ==========
+    has_params = bearing_params and any(v is not None for v in bearing_params.values())
 
-        if np.any(mask):
-            peak_idx = int(np.argmax(amp_arr[mask]))
-            actual_idx = int(np.where(mask)[0][peak_idx])
-            peak_amp = float(amp_arr[actual_idx])
-            snr = peak_amp / background if background > 0 else 0.0
+    # 先获取物理参数
+    n_balls = d_val = D_val = alpha = 0.0
+    if has_params:
+        try:
+            n_balls = int(float(bearing_params.get("n") or 0))
+            d_val = float(bearing_params.get("d") or 0)
+            D_val = float(bearing_params.get("D") or 0)
+            alpha = np.radians(float(bearing_params.get("alpha") or 0))
+        except (TypeError, ValueError):
+            has_params = False
 
-            # 故障判定（严格）：
-            # 必须同时满足 (a) 基频 SNR>6 或 (b) 基频 SNR>4 且有 ≥2 个谐波 SNR>4
-            strong_harmonics = sum(1 for hs in harmonic_snrs if hs > 4.0)
-            significant = snr > 6.0 or (snr > 4.0 and strong_harmonics >= 2)
+    if n_balls <= 0 or d_val <= 1e-9 or D_val <= 1e-9:
+        has_params = False
 
-            # 内圈专项：检查转频边带 (BPFI ± fr)
-            # 内圈故障关键特征：边带能量显著且≥2个边带
-            sideband_snrs = []
-            if name == "BPFI":
-                for side_offset in [rot_freq, -rot_freq]:
-                    sb_freq = f_hz + side_offset
-                    if sb_freq <= 0 or sb_freq > freq_arr[-1]:
-                        continue
-                    sb_tol = max(sb_freq * 0.05, df * 2)
-                    sb_mask = np.abs(freq_arr - sb_freq) <= sb_tol
-                    if np.any(sb_mask):
-                        sb_peak = float(np.max(amp_arr[sb_mask]))
-                        sb_snr = sb_peak / background if background > 0 else 0.0
-                        sideband_snrs.append(sb_snr)
-            # 边带增强：至少 2 个边带 SNR>3.5 才认为内圈故障可信
-            strong_sidebands = sum(1 for ss in sideband_snrs if ss > 3.5)
-            sideband_boost = strong_sidebands >= 2
-            if name == "BPFI" and sideband_boost and not significant and snr > 4.0:
-                significant = True
+    if has_params:
+        cos_a = np.cos(alpha)
+        dd = (d_val / D_val) * cos_a
+        freqs = {
+            "BPFO": (n_balls / 2.0) * rot_freq * (1 - dd),
+            "BPFI": (n_balls / 2.0) * rot_freq * (1 + dd),
+            "BSF":  (D_val / (2.0 * d_val)) * rot_freq * (1 - dd ** 2),
+        }
 
-            indicators[name] = {
-                "theory_hz": round(f_hz, 2),
-                "detected_hz": round(float(freq_arr[actual_idx]), 2),
-                "peak_amp": round(peak_amp, 6),
-                "snr": round(snr, 2),
-                "significant": significant,
-                "harmonic_snrs": [round(s, 2) for s in harmonic_snrs],
-                "sideband_snrs": [round(s, 2) for s in sideband_snrs] if name == "BPFI" else None,
-            }
-        else:
-            indicators[name] = {
-                "theory_hz": round(f_hz, 2),
-                "detected_hz": None,
-                "peak_amp": 0.0,
-                "snr": 0.0,
-                "significant": False,
-            }
+        param_indicators = {}
+        for name, f_hz in freqs.items():
+            if f_hz <= 0 or f_hz > freq_arr[-1]:
+                param_indicators[name] = {"theory_hz": round(f_hz, 2), "detected_hz": None,
+                                          "peak_amp": 0.0, "snr": 0.0, "significant": False}
+                continue
 
-    return indicators
+            tol = max(f_hz * 0.05, df * 2)
+            mask = np.abs(freq_arr - f_hz) <= tol
+
+            # 谐波 SNR
+            harmonic_snrs = []
+            for h in range(2, 5):
+                h_freq = f_hz * h
+                if h_freq > freq_arr[-1]:
+                    break
+                h_tol = max(h_freq * 0.05, df * 2)
+                h_mask = np.abs(freq_arr - h_freq) <= h_tol
+                if np.any(h_mask):
+                    h_peak = float(np.max(amp_arr[h_mask]))
+                    h_snr = h_peak / background if background > 0 else 0.0
+                    harmonic_snrs.append(h_snr)
+
+            if np.any(mask):
+                peak_idx = int(np.argmax(amp_arr[mask]))
+                actual_idx = int(np.where(mask)[0][peak_idx])
+                peak_amp = float(amp_arr[actual_idx])
+                snr = peak_amp / background if background > 0 else 0.0
+
+                # 频率路径判定：仅用于故障类型标注，不用于"是否故障"判断
+                # 健康轴承也有低 SNR 的频率峰值（随机波动），所以阈值不能太低
+                significant = snr > 4.5
+
+                # BPFI 内圈专项：边频带验证（至少 2 个边带 SNR>3）
+                sideband_snrs = []
+                if name == "BPFI":
+                    for offset in [rot_freq, -rot_freq]:
+                        sb_f = f_hz + offset
+                        if sb_f <= 0 or sb_f > freq_arr[-1]:
+                            continue
+                        sb_tol = max(sb_f * 0.05, df * 2)
+                        sb_mask = np.abs(freq_arr - sb_f) <= sb_tol
+                        if np.any(sb_mask):
+                            sb_peak = float(np.max(amp_arr[sb_mask]))
+                            sb_snr = sb_peak / background if background > 0 else 0.0
+                            sideband_snrs.append(sb_snr)
+                    strong_sb = sum(1 for s in sideband_snrs if s > 3.0)
+                    if strong_sb >= 2 and snr > 4.0 and not significant:
+                        significant = True
+
+                param_indicators[name] = {
+                    "theory_hz": round(f_hz, 2),
+                    "detected_hz": round(float(freq_arr[actual_idx]), 2),
+                    "peak_amp": round(peak_amp, 6),
+                    "snr": round(snr, 2),
+                    "significant": significant,
+                    "harmonic_snrs": [round(s, 2) for s in harmonic_snrs],
+                    "sideband_snrs": [round(s, 2) for s in sideband_snrs] if name == "BPFI" else None,
+                }
+            else:
+                param_indicators[name] = {
+                    "theory_hz": round(f_hz, 2), "detected_hz": None,
+                    "peak_amp": 0.0, "snr": 0.0, "significant": False,
+                }
+
+        # 合并：物理参数路径 + 统计路径（以 _stat 后缀区分）
+        return {**param_indicators, **{f"{k}_stat": v for k, v in stat_indicators.items()}}
+
+    # 无物理参数时，纯粹统计诊断
+    return stat_indicators

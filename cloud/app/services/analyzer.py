@@ -103,6 +103,8 @@ def analyze_device(
         merged = {}
         for _, r in channel_results:
             for fname, prob in r.get("bearing", {}).get("fault_indicators", {}).items():
+                if fname.endswith("_stat"):
+                    continue
                 if isinstance(prob, dict) and prob.get("significant"):
                     snr_val = float(prob.get("snr", 0))
                     key = "轴承" + fname
