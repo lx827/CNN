@@ -490,7 +490,7 @@ def _evaluate_bearing_faults_statistical(
     indicators["envelope_peak_snr"] = {
         "value": float(round(snr, 2)),
         "snr": float(round(snr, 2)),
-        "significant": bool(snr > 5.0),
+        "significant": bool(snr > 8.0),
     }
 
     # 2. 包络谱峭度（频域峭度）
@@ -499,7 +499,7 @@ def _evaluate_bearing_faults_statistical(
     indicators["envelope_kurtosis"] = {
         "value": float(round(kurt, 2)),
         "snr": float(round(max(0, kurt), 2)),
-        "significant": bool(kurt > 3.0),
+        "significant": bool(kurt > 5.0),
     }
 
     # 3. 高频能量比（>500Hz 或 >0.5*rot_freq  whichever is higher）
@@ -563,8 +563,7 @@ def _evaluate_bearing_faults(
         "BPFO": (n_balls / 2.0) * rot_freq * (1 - dd),
         "BPFI": (n_balls / 2.0) * rot_freq * (1 + dd),
         "BSF":  (D / (2.0 * d)) * rot_freq * (1 - dd ** 2),
-        "FTF":  0.5 * rot_freq * (1 - dd),
-    }
+    }  # FTF 是保持架频率，非滚动体故障，不作为故障指示器
 
     df = freq_arr[1] - freq_arr[0] if len(freq_arr) > 1 else 1.0
     background = float(np.median(amp_arr))
@@ -576,11 +575,11 @@ def _evaluate_bearing_faults(
                                "peak_amp": 0.0, "snr": 0.0, "significant": False}
             continue
 
-        # 频域容差：±3% 或至少 2 个频率点，放宽到 ±5% 作为 fallback
+        # 频域容差：±5% 或至少 2 个频率分bin，取大者
         tol_rel = max(f_hz * 0.05, df * 2)
         mask = np.abs(freq_arr - f_hz) <= tol_rel
 
-        # 检测谐波族（2~4 倍）
+        # 检测谐波族（2~4 倍），谐波验证是区分真故障和随机波动的关键
         harmonic_snrs = []
         for h in range(2, 5):
             h_freq = f_hz * h
@@ -599,9 +598,28 @@ def _evaluate_bearing_faults(
             peak_amp = float(amp_arr[actual_idx])
             snr = peak_amp / background if background > 0 else 0.0
 
-            # 谐波族增强：至少 1 个谐波超过 SNR>2 则增强显著度
-            harmonic_boost = sum(1 for s in harmonic_snrs if s > 2.0) >= 1
-            significant = snr > 3.0 or (snr > 2.0 and harmonic_boost)
+            # 故障判定（严格）：
+            # 必须同时满足 (a) 基频 SNR>6 或 (b) 基频 SNR>4 且有 ≥2 个谐波 SNR>4
+            strong_harmonics = sum(1 for hs in harmonic_snrs if hs > 4.0)
+            significant = snr > 6.0 or (snr > 4.0 and strong_harmonics >= 2)
+
+            # 内圈专项：检查转频边带 (BPFI ± fr)
+            sideband_snrs = []
+            if name == "BPFI":
+                for side_offset in [rot_freq, -rot_freq]:
+                    sb_freq = f_hz + side_offset
+                    if sb_freq <= 0 or sb_freq > freq_arr[-1]:
+                        continue
+                    sb_tol = max(sb_freq * 0.05, df * 2)
+                    sb_mask = np.abs(freq_arr - sb_freq) <= sb_tol
+                    if np.any(sb_mask):
+                        sb_peak = float(np.max(amp_arr[sb_mask]))
+                        sb_snr = sb_peak / background if background > 0 else 0.0
+                        sideband_snrs.append(sb_snr)
+            # 边带增强：若至少一个边带 SNR>2，则提升内圈故障显著度
+            sideband_boost = any(ss > 2.0 for ss in sideband_snrs)
+            if name == "BPFI" and sideband_boost and not significant and snr > 2.5:
+                significant = True
 
             indicators[name] = {
                 "theory_hz": round(f_hz, 2),
@@ -610,6 +628,7 @@ def _evaluate_bearing_faults(
                 "snr": round(snr, 2),
                 "significant": significant,
                 "harmonic_snrs": [round(s, 2) for s in harmonic_snrs],
+                "sideband_snrs": [round(s, 2) for s in sideband_snrs] if name == "BPFI" else None,
             }
         else:
             indicators[name] = {

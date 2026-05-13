@@ -180,8 +180,7 @@ def compute_envelope_features(
         "BPFO": (n_balls / 2.0) * rot_freq * (1 - dd),
         "BPFI": (n_balls / 2.0) * rot_freq * (1 + dd),
         "BSF":  (D / (2.0 * d)) * rot_freq * (1 - dd ** 2),
-        "FTF":  0.5 * rot_freq * (1 - dd),
-    }
+    }  # FTF 是保持架频率，不作为故障指示器
 
     for name, f_hz in freqs.items():
         if f_hz <= 0 or f_hz > envelope_freq[-1]:
