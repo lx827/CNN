@@ -604,6 +604,7 @@ def _evaluate_bearing_faults(
             significant = snr > 6.0 or (snr > 4.0 and strong_harmonics >= 2)
 
             # 内圈专项：检查转频边带 (BPFI ± fr)
+            # 内圈故障关键特征：边带能量显著且≥2个边带
             sideband_snrs = []
             if name == "BPFI":
                 for side_offset in [rot_freq, -rot_freq]:
@@ -616,9 +617,10 @@ def _evaluate_bearing_faults(
                         sb_peak = float(np.max(amp_arr[sb_mask]))
                         sb_snr = sb_peak / background if background > 0 else 0.0
                         sideband_snrs.append(sb_snr)
-            # 边带增强：若至少一个边带 SNR>2，则提升内圈故障显著度
-            sideband_boost = any(ss > 2.0 for ss in sideband_snrs)
-            if name == "BPFI" and sideband_boost and not significant and snr > 2.5:
+            # 边带增强：至少 2 个边带 SNR>3.5 才认为内圈故障可信
+            strong_sidebands = sum(1 for ss in sideband_snrs if ss > 3.5)
+            sideband_boost = strong_sidebands >= 2
+            if name == "BPFI" and sideband_boost and not significant and snr > 4.0:
                 significant = True
 
             indicators[name] = {

@@ -140,11 +140,20 @@ def _compute_health_score(
     # 状态判定：结合分数 + 关键指标
     has_critical = any("critical" in d[0] for d in deductions)
     has_warning = any("warning" in d[0] for d in deductions)
+    # 计数真正检出故障的轴承指示器（significant=true）
+    bearing_faults = sum(1 for info in bearing_ind.values()
+                         if isinstance(info, dict) and info.get("significant"))
+    gear_faults_warning = sum(1 for info in gear_ind.values()
+                               if isinstance(info, dict) and (info.get("warning") or info.get("critical")))
 
     if health_score >= 85:
         status = "normal"
     elif health_score >= 60:
-        status = "warning" if (has_warning or has_critical) else "normal"
+        # 只有当轴承/齿轮确实检出显著故障，或关键指标报警时才算 warning
+        if has_critical or has_warning or bearing_faults >= 1 or gear_faults_warning >= 2:
+            status = "warning"
+        else:
+            status = "normal"
     else:
         status = "fault" if has_critical else "warning"
 
