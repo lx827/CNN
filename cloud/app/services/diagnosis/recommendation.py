@@ -21,7 +21,7 @@ def _generate_recommendation(
     if bearing_faults:
         parts.append(f"检测到轴承故障特征（{'/'.join(bearing_faults)}），建议检查润滑状态并安排精密诊断。")
 
-    # 齿轮建议
+    # 齿轮建议（有参数模式）
     gear_ind = gear_result.get("fault_indicators", {})
     if gear_ind.get("ser", {}).get("critical"):
         parts.append("齿轮边频带能量严重超标，建议立即停机检查啮合状态。")
@@ -42,6 +42,17 @@ def _generate_recommendation(
         parts.append("齿轮倒频谱幅值比(CAR)严重超标，建议立即检查。")
     elif gear_ind.get("car", {}).get("warning"):
         parts.append("齿轮倒频谱幅值比(CAR)异常，建议关注。")
+
+    # 无参数齿轮统计建议
+    if gear_ind.get("order_kurtosis", {}).get("warning") or gear_ind.get("order_peak_concentration", {}).get("warning"):
+        parts.append("检测到转速相关周期成分异常，建议配置齿轮参数后重新诊断以定位具体故障类型。")
+
+    # 无参数轴承统计建议
+    bearing_ind = bearing_result.get("fault_indicators", {})
+    has_bearing_params = bool(bearing_result.get("features", {}).get("BPFO_env_ratio") is not None)
+    if not has_bearing_params and status != "normal":
+        if bearing_ind.get("envelope_peak_snr", {}).get("warning") or bearing_ind.get("envelope_kurtosis", {}).get("warning"):
+            parts.append("检测到轴承相关频带存在异常冲击特征，建议配置轴承参数后重新诊断以定位具体故障类型。")
 
     if not parts:
         parts.append("检测到异常信号特征，建议结合工况进一步分析。")
