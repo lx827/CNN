@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
@@ -53,6 +53,69 @@ async def update_batch_diagnosis(
     db.commit()
     return {"code": 200, "message": "诊断数据已更新"}
 
+
+
+@router.get("/{device_id}/{batch_index}/{channel}/diagnosis")
+def get_channel_diagnosis(
+    device_id: str,
+    batch_index: int,
+    channel: int,
+    denoise_method: Optional[str] = Query(default=None, description="去噪方法过滤: none/wavelet/vmd/med"),
+    db: Session = Depends(get_db)
+):
+    """
+    查询指定批次通道的诊断结果。
+    优先返回通道级 engine_result，如果没有则返回批次级诊断记录。
+    若指定 denoise_method，优先匹配该去噪方法的结果。
+    """
+    # 1. 若指定了去噪方法，先精确匹配
+    if denoise_method:
+        diag = db.query(Diagnosis).filter(
+            Diagnosis.device_id == device_id,
+            Diagnosis.batch_index == batch_index,
+            Diagnosis.channel == channel,
+            Diagnosis.denoise_method == denoise_method,
+        ).order_by(Diagnosis.analyzed_at.desc()).first()
+
+        if diag and (diag.engine_result or diag.full_analysis):
+            return {
+                "code": 200,
+                "data": diag.engine_result or diag.full_analysis,
+            }
+
+    # 2. 查该通道的最新诊断结果（不限去噪方法）
+    diag = db.query(Diagnosis).filter(
+        Diagnosis.device_id == device_id,
+        Diagnosis.batch_index == batch_index,
+        Diagnosis.channel == channel,
+    ).order_by(Diagnosis.analyzed_at.desc()).first()
+
+    if diag and (diag.engine_result or diag.full_analysis):
+        return {
+            "code": 200,
+            "data": diag.engine_result or diag.full_analysis,
+        }
+
+    # 3. 再查批次级诊断记录（兼容旧数据）
+    diag_batch = db.query(Diagnosis).filter(
+        Diagnosis.device_id == device_id,
+        Diagnosis.batch_index == batch_index,
+    ).order_by(Diagnosis.analyzed_at.desc()).first()
+
+    if diag_batch:
+        return {
+            "code": 200,
+            "data": {
+                "health_score": diag_batch.health_score,
+                "status": diag_batch.status,
+                "fault_probabilities": diag_batch.fault_probabilities,
+                "imf_energy": diag_batch.imf_energy,
+                "order_analysis": diag_batch.order_analysis,
+                "rot_freq": diag_batch.rot_freq,
+            }
+        }
+
+    raise HTTPException(status_code=404, detail="诊断数据不存在")
 
 
 @router.post("/{device_id}/{batch_index}/reanalyze")

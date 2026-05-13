@@ -798,6 +798,7 @@ import {
   getChannelOrder,
   getChannelCepstrum,
   getChannelFullAnalysis,
+  getChannelDiagnosis,
   deleteBatch,
   deleteSpecialBatches,
   exportChannelCSV,
@@ -1092,6 +1093,29 @@ const loadAllDevices = async () => {
 }
 
 // ========== 选择批次 ==========
+// ========== 自动查询数据库诊断结果 ==========
+const loadCachedDiagnosis = async () => {
+  if (!selectedDevice.value || !selectedBatch.value || !selectedChannel.value) return
+  try {
+    const res = await getChannelDiagnosis(
+      selectedDevice.value.device_id,
+      selectedBatch.value.batch_index,
+      selectedChannel.value,
+      fullAnalysisDenoise.value
+    )
+    const d = res.data
+    if (d) {
+      fullAnalysisData.value = d
+      computedFullAnalysis.value = true
+    }
+  } catch (e) {
+    // 404 表示数据库中没有诊断结果，不做任何操作
+    if (e.response?.status !== 404) {
+      console.error('查询缓存诊断失败:', e)
+    }
+  }
+}
+
 const selectBatch = (device, batch) => {
   // 重置按需计算状态
   resetComputedState()
@@ -1105,6 +1129,7 @@ const selectBatch = (device, batch) => {
 
   nextTick(() => {
     loadTimeDomain()
+    loadCachedDiagnosis()
   })
 }
 
@@ -1139,6 +1164,7 @@ const onChannelChange = () => {
   gearData.value = null
   nextTick(() => {
     loadTimeDomain()
+    loadCachedDiagnosis()
   })
 }
 
@@ -1564,6 +1590,28 @@ const clearGear = () => {
 const computeFullAnalysis = async () => {
   loadingFullAnalysis.value = true
   try {
+    // 1. 先尝试查缓存（按当前去噪方法）
+    try {
+      const cached = await getChannelDiagnosis(
+        selectedDevice.value.device_id,
+        selectedBatch.value.batch_index,
+        selectedChannel.value,
+        fullAnalysisDenoise.value
+      )
+      const d = cached.data
+      if (d) {
+        fullAnalysisData.value = d
+        computedFullAnalysis.value = true
+        return
+      }
+    } catch (e) {
+      // 404 = 该去噪方法无缓存，继续实时计算
+      if (e.response?.status !== 404) {
+        console.error('查询缓存诊断失败:', e)
+      }
+    }
+
+    // 2. 无缓存，执行实时计算
     const res = await getChannelFullAnalysis(
       selectedDevice.value.device_id,
       selectedBatch.value.batch_index,

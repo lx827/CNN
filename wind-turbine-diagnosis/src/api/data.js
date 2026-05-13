@@ -40,6 +40,13 @@ export const getChannelGear = async (deviceId, batchIndex, channel, detrend = fa
   return res
 }
 
+export const getChannelDiagnosis = async (deviceId, batchIndex, channel, denoiseMethod = null) => {
+  const params = {}
+  if (denoiseMethod) params.denoise_method = denoiseMethod
+  const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/diagnosis`, { params })
+  return res
+}
+
 export const getChannelAnalyze = async (deviceId, batchIndex, channel, config = {}) => {
   const params = {
     detrend: config.detrend ?? false,
