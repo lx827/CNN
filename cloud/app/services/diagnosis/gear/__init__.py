@@ -315,4 +315,21 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
         "critical": significant_count >= 4,
     }
 
+    # 无齿轮参数时的阶次谱统计指示器
+    order_peak_conc = gear_result.get("order_peak_concentration")
+    if order_peak_conc is not None:
+        indicators["order_peak_concentration"] = {
+            "value": round(order_peak_conc, 4),
+            "warning": order_peak_conc > 0.3,
+            "critical": order_peak_conc > 0.5,
+        }
+
+    order_kurt = gear_result.get("order_kurtosis")
+    if order_kurt is not None:
+        indicators["order_kurtosis"] = {
+            "value": round(order_kurt, 2),
+            "warning": order_kurt > 3.0,
+            "critical": order_kurt > 5.0,
+        }
+
     return indicators

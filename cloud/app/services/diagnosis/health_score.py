@@ -65,7 +65,28 @@ def _compute_health_score(
     if bearing_mild >= 2:
         deductions.append(("bearing_mild_warning", 3))
 
-    # ===== 齿轮故障扣分（仅在存在齿轮参数时）=====
+    # 无物理参数时的轴承统计扣分（包络谱统计特征）
+    if bearing_significant == 0:
+        env_peak_snr = _safe_float(
+            bearing_ind.get("envelope_peak_snr", {}).get("value") if isinstance(bearing_ind.get("envelope_peak_snr"), dict) else None,
+            0.0
+        )
+        env_kurt = _safe_float(
+            bearing_ind.get("envelope_kurtosis", {}).get("value") if isinstance(bearing_ind.get("envelope_kurtosis"), dict) else None,
+            0.0
+        )
+        hf_ratio = _safe_float(
+            bearing_ind.get("high_freq_ratio", {}).get("value") if isinstance(bearing_ind.get("high_freq_ratio"), dict) else None,
+            0.0
+        )
+        if env_peak_snr > 5.0:
+            deductions.append(("bearing_stat_peak_warning", 8))
+        if env_kurt > 5.0:
+            deductions.append(("bearing_stat_kurt_warning", 6))
+        if hf_ratio > 0.5:
+            deductions.append(("bearing_stat_hf_warning", 4))
+
+    # ===== 齿轮故障扣分 =====
     gear_ind = gear_result.get("fault_indicators", {})
     has_gear_params = gear_teeth and (gear_teeth.get("input") or 0) > 0
 
@@ -87,6 +108,26 @@ def _compute_health_score(
             deductions.append(("gear_fm0_critical", 8))
         elif fm0_info.get("warning"):
             deductions.append(("gear_fm0_warning", 4))
+
+    # 无齿轮参数时的齿轮统计扣分（阶次谱统计特征）
+    if not has_gear_params:
+        car_info = gear_ind.get("car", {}) if isinstance(gear_ind.get("car"), dict) else {}
+        if car_info.get("critical"):
+            deductions.append(("gear_stat_car_critical", 8))
+        elif car_info.get("warning"):
+            deductions.append(("gear_stat_car_warning", 4))
+
+        order_kurt_info = gear_ind.get("order_kurtosis", {}) if isinstance(gear_ind.get("order_kurtosis"), dict) else {}
+        if order_kurt_info.get("critical"):
+            deductions.append(("gear_stat_kurt_critical", 6))
+        elif order_kurt_info.get("warning"):
+            deductions.append(("gear_stat_kurt_warning", 3))
+
+        order_peak_info = gear_ind.get("order_peak_concentration", {}) if isinstance(gear_ind.get("order_peak_concentration"), dict) else {}
+        if order_peak_info.get("critical"):
+            deductions.append(("gear_stat_peak_critical", 6))
+        elif order_peak_info.get("warning"):
+            deductions.append(("gear_stat_peak_warning", 3))
 
     # ===== 计算总分（累加扣分，但封顶）=====
     total_deduction = sum(d[1] for d in deductions)

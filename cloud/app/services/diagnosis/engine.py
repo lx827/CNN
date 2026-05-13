@@ -255,7 +255,7 @@ class DiagnosisEngine:
             "rot_freq_std": round(rot_std, 4),
         }
 
-        # 基于阶次谱的边频带分析
+        # 基于阶次谱的边频带分析（需要齿轮参数）
         if mesh_order and mesh_order > 0:
             sb_result = analyze_sidebands_order(order_axis, order_spectrum, mesh_order)
             result["sidebands"] = sb_result["sidebands"]
@@ -265,10 +265,28 @@ class DiagnosisEngine:
             result["sidebands"] = []
             result["ser"] = 0.0
 
-        # 高级齿轮指标（也基于阶次谱）
+        # 无齿轮参数时的阶次谱统计特征（始终计算，不依赖 mesh_order）
+        if order_spectrum is not None and len(order_spectrum) > 0:
+            ospec = np.array(order_spectrum)
+            total_energy = float(np.sum(ospec ** 2)) + 1e-12
+            # 能量集中度：前 5 阶 / 总能量
+            sorted_amps = np.sort(ospec)[::-1]
+            top5_energy = float(np.sum(sorted_amps[:5] ** 2))
+            result["order_peak_concentration"] = round(top5_energy / total_energy, 4)
+            # 阶次谱峭度
+            ospec_norm = ospec / (np.mean(ospec) + 1e-12)
+            kurt = float(np.mean(ospec_norm ** 4) / (np.mean(ospec_norm ** 2) ** 2 + 1e-12) - 2)
+            result["order_kurtosis"] = round(kurt, 2)
+
+        # CAR 不需要齿轮参数，始终计算
+        try:
+            result["car"] = round(compute_car(arr, fs, rot_freq), 4)
+        except Exception:
+            result["car"] = 0.0
+
+        # 高级齿轮指标（也基于阶次谱，需要齿轮参数）
         if self.gear_method == GearMethod.ADVANCED and mesh_order and mesh_order > 0:
             result["fm0"] = round(compute_fm0_order(arr, order_axis, order_spectrum, mesh_order), 4)
-            result["car"] = round(compute_car(arr, fs, rot_freq), 4)
 
             # 差分信号（简化版：用高通滤波近似）
             diff_approx = highpass_filter(arr, fs, mesh_freq * 0.5)
@@ -429,6 +447,64 @@ class DiagnosisEngine:
         }
 
 
+def _evaluate_bearing_faults_statistical(
+    freq_arr: np.ndarray,
+    amp_arr: np.ndarray,
+    rot_freq: float,
+) -> Dict[str, Any]:
+    """
+    无物理参数时的轴承统计诊断。
+    基于包络谱统计特征评估是否存在异常冲击。
+    """
+    indicators = {}
+    if len(amp_arr) == 0:
+        return indicators
+
+    background = np.median(amp_arr)
+    peak_amp = float(np.max(amp_arr))
+    snr = peak_amp / background if background > 0 else 0.0
+
+    # 1. 包络谱峰值显著性
+    indicators["envelope_peak_snr"] = {
+        "value": float(round(snr, 2)),
+        "snr": float(round(snr, 2)),
+        "significant": bool(snr > 5.0),
+    }
+
+    # 2. 包络谱峭度（频域峭度）
+    amp_norm = amp_arr / (np.mean(amp_arr) + 1e-12)
+    kurt = float(np.mean(amp_norm ** 4) / (np.mean(amp_norm ** 2) ** 2 + 1e-12) - 2)
+    indicators["envelope_kurtosis"] = {
+        "value": float(round(kurt, 2)),
+        "snr": float(round(max(0, kurt), 2)),
+        "significant": bool(kurt > 3.0),
+    }
+
+    # 3. 高频能量比（>500Hz 或 >0.5*rot_freq  whichever is higher）
+    freq_arr = np.array(freq_arr)
+    hf_threshold = max(500.0, rot_freq * 2)
+    total_energy = float(np.sum(amp_arr ** 2)) + 1e-12
+    hf_mask = freq_arr >= hf_threshold
+    hf_ratio = float(np.sum(amp_arr[hf_mask] ** 2)) / total_energy if np.any(hf_mask) else 0.0
+    indicators["high_freq_ratio"] = {
+        "value": float(round(hf_ratio, 4)),
+        "snr": float(round(hf_ratio * 10, 2)),
+        "significant": bool(hf_ratio > 0.5),
+    }
+
+    # 4. 谱峰集中度：前5个峰值能量 / 总能量
+    sorted_amps = np.sort(amp_arr)[::-1]
+    top5_energy = float(np.sum(sorted_amps[:5] ** 2))
+    peak_conc = float(top5_energy / total_energy)
+    indicators["peak_concentration"] = {
+        "value": float(round(peak_conc, 4)),
+        "snr": float(round(peak_conc * 10, 2)),
+        "significant": bool(peak_conc > 0.3),
+    }
+
+    return indicators
+
+
 def _evaluate_bearing_faults(
     bearing_params: Optional[Dict],
     env_freq: List[float],
@@ -436,11 +512,16 @@ def _evaluate_bearing_faults(
     rot_freq: float,
 ) -> Dict[str, Any]:
     """评估轴承故障指示器"""
-    if not bearing_params or not env_freq or not env_amp:
+    if not env_freq or not env_amp:
         return {}
 
     freq_arr = np.array(env_freq)
     amp_arr = np.array(env_amp)
+
+    # 无物理参数时回退到统计诊断
+    has_params = bearing_params and any(v for v in bearing_params.values() if v is not None)
+    if not has_params:
+        return _evaluate_bearing_faults_statistical(freq_arr, amp_arr, rot_freq)
 
     # 计算轴承特征频率
     n_balls = int(float(bearing_params.get("n") or 0))
@@ -449,7 +530,7 @@ def _evaluate_bearing_faults(
     alpha = np.radians(float(bearing_params.get("alpha") or 0))
 
     if n_balls <= 0 or d <= 0 or D <= 0:
-        return {}
+        return _evaluate_bearing_faults_statistical(freq_arr, amp_arr, rot_freq)
 
     cos_a = np.cos(alpha)
     dd = (d / D) * cos_a
