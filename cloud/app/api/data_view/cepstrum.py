@@ -4,6 +4,7 @@ from app.database import get_db
 from app.models import SensorData, Device
 from . import router, prepare_signal, _get_channel_name, _compute_cepstrum
 from datetime import datetime
+import asyncio
 import logging
 import numpy as np
 
