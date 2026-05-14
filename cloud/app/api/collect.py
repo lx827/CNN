@@ -87,10 +87,11 @@ def get_pending_tasks(
     边端轮询接口：查询该设备的待采集任务
     边端应每隔几秒调用一次
     """
-    # 刷新设备最后在线时间（轮询也是有效的通信）
+    # 刷新设备最后在线时间并标记为在线（轮询也是有效的通信）
     device = db.query(Device).filter(Device.device_id == device_id).first()
     if device:
         device.last_seen_at = datetime.utcnow()
+        device.is_online = 1
         db.commit()
 
     # 获取最早的 pending 任务

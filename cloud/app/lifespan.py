@@ -20,7 +20,7 @@ from app.core.websocket import manager
 from app.services.analyzer import analyze_device
 from app.services.diagnosis.features import compute_channel_features
 from app.services.alarms import generate_alarms
-from app.services.offline_guard import is_device_offline
+from app.services.offline_monitor import offline_monitor_worker
 from app.startup import init_database, create_initial_devices
 
 logger = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ async def analysis_worker():
                 for (device_id,) in devices_with_pending:
                     # 获取设备配置，离线设备直接跳过，防止旧数据触发异常监测
                     device = db.query(Device).filter(Device.device_id == device_id).first()
-                    if is_device_offline(device):
+                    if not device or not device.is_online:
                         logger.info(f"[分析服务] {device_id} 当前离线，跳过未分析批次")
                         continue
 
@@ -185,12 +185,17 @@ async def lifespan(app: FastAPI):
     logger.info("[启动] CPU 线程池已限制为 max_workers=2")
 
     # 启动后台分析任务
-    task = asyncio.create_task(analysis_worker())
+    analysis_task = asyncio.create_task(analysis_worker())
     logger.info("[启动] 后台分析任务已启动")
+
+    # 启动离线监测任务（独立协程，与 analysis_worker 并列）
+    offline_task = asyncio.create_task(offline_monitor_worker())
+    logger.info("[启动] 离线监测任务已启动")
 
     yield  # 应用运行期间
 
     # 关闭时
-    task.cancel()
+    analysis_task.cancel()
+    offline_task.cancel()
     cpu_executor.shutdown(wait=True)
-    logger.info("[关闭] 后台分析任务已停止，CPU 线程池已关闭")
+    logger.info("[关闭] 后台任务已停止，CPU 线程池已关闭")

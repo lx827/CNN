@@ -37,6 +37,7 @@ def get_devices(db: Session = Depends(get_db)):
                 "bearing_params": d.bearing_params,
                 "compression_enabled": d.compression_enabled,
                 "downsample_ratio": d.downsample_ratio,
+                "is_online": bool(d.is_online),
                 "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
             }
             for d in devices

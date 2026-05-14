@@ -117,8 +117,9 @@ def ingest_data(payload: dict, db: Session = Depends(get_db)):
         # 获取设备信息（用于通道名称映射）
         device = db.query(Device).filter(Device.device_id == device_id).first()
         if device:
-            # 更新设备最后在线时间
+            # 更新设备最后在线时间并标记为在线
             device.last_seen_at = timestamp
+            device.is_online = 1
             # 根据边端实际上传的通道数更新 channel_count
             actual_channel_count = len(channels_data)
             if actual_channel_count > 0 and device.channel_count != actual_channel_count:

@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
 from app.services.analyzer import analyze_device
-from app.services.offline_guard import is_device_offline
 from . import router
 from datetime import datetime
 import logging
@@ -148,7 +147,7 @@ async def reanalyze_batch(
     device = db.query(Device).filter(Device.device_id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
-    if is_device_offline(device):
+    if not device.is_online:
         raise HTTPException(status_code=400, detail="设备当前离线，无法重新诊断")
 
     records = db.query(SensorData).filter(
