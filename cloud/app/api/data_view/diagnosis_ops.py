@@ -240,3 +240,117 @@ async def reanalyze_batch(
             "order_analysis": result.get("order_analysis"),
         },
     }
+
+
+@router.post("/{device_id}/reanalyze-all")
+async def reanalyze_all_batches(
+    device_id: str,
+    db: Session = Depends(get_db)
+):
+    """重新分析指定设备的所有批次数据，逐批次串行执行以避免 OOM"""
+    import traceback as _tb
+
+    device = db.query(Device).filter(Device.device_id == device_id).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="设备不存在")
+    if not device.is_online:
+        raise HTTPException(status_code=400, detail="设备当前离线，无法重新诊断")
+
+    # 查出所有批次号
+    batch_indices = [
+        row[0] for row in db.query(SensorData.batch_index)
+        .filter(SensorData.device_id == device_id)
+        .distinct().all()
+    ]
+    if not batch_indices:
+        return {"code": 200, "message": "无数据可分析", "data": {"total": 0, "updated": 0}}
+
+    results = []
+    errors = []
+    for bi in sorted(batch_indices):
+        records = db.query(SensorData).filter(
+            SensorData.device_id == device_id,
+            SensorData.batch_index == bi
+        ).all()
+        if not records:
+            continue
+
+        channels_data = {}
+        for r in records:
+            channels_data[f"ch{r.channel}"] = r.data
+        sample_rate = records[0].sample_rate or device.sample_rate or 25600
+
+        # 优先使用已存转频
+        saved_rot_freq = None
+        try:
+            diag_ex = db.query(Diagnosis).filter(
+                Diagnosis.device_id == device_id, Diagnosis.batch_index == bi
+            ).first()
+            if diag_ex and diag_ex.rot_freq and diag_ex.rot_freq > 0:
+                saved_rot_freq = float(diag_ex.rot_freq)
+        except Exception:
+            pass
+
+        try:
+            result = await asyncio.to_thread(
+                analyze_device, channels_data, sample_rate, device,
+                rot_freq=saved_rot_freq, denoise_method="none"
+            )
+            if result.get("_error"):
+                logger.warning(f"[全部重新诊断] batch {bi} 内部错误: {result['_error']}")
+
+            safe_fp = _sanitize_for_json(result["fault_probabilities"])
+            safe_imf = _sanitize_for_json(result["imf_energy"])
+            safe_oa = _sanitize_for_json(result.get("order_analysis"))
+
+            diag = db.query(Diagnosis).filter(
+                Diagnosis.device_id == device_id, Diagnosis.batch_index == bi
+            ).first()
+            if diag:
+                diag.health_score = result["health_score"]
+                diag.fault_probabilities = safe_fp
+                diag.imf_energy = safe_imf
+                diag.order_analysis = safe_oa
+                diag.rot_freq = result.get("rot_freq")
+                diag.status = result["status"]
+                diag.analyzed_at = datetime.utcnow()
+            else:
+                db.add(Diagnosis(
+                    device_id=device_id, batch_index=bi,
+                    health_score=result["health_score"],
+                    fault_probabilities=safe_fp,
+                    imf_energy=safe_imf,
+                    order_analysis=safe_oa,
+                    rot_freq=result.get("rot_freq"),
+                    status=result["status"],
+                    analyzed_at=datetime.utcnow(),
+                ))
+
+            for r in records:
+                r.is_analyzed = 1
+                r.analyzed_at = datetime.utcnow()
+
+            db.commit()
+            results.append({"batch_index": bi, "health_score": result["health_score"], "status": result["status"]})
+        except Exception as e:
+            db.rollback()
+            logger.error(f"[全部重新诊断] batch {bi} 失败: {e}\n{_tb.format_exc()}")
+            errors.append({"batch_index": bi, "error": str(e)})
+
+    # 用最后一个成功批次的结果更新设备状态
+    if results:
+        last = results[-1]
+        device.health_score = last["health_score"]
+        device.status = last["status"]
+        db.commit()
+
+    return {
+        "code": 200,
+        "message": f"全部重新诊断完成，成功 {len(results)}/{len(batch_indices)}",
+        "data": {
+            "total": len(batch_indices),
+            "updated": len(results),
+            "errors": errors,
+            "results": results,
+        },
+    }
