@@ -38,8 +38,10 @@
           v-model:denoiseMethod="denoiseMethod"
           v-model:enableDetrend="enableDetrend"
           :reanalyzing="reanalyzing"
+          :reanalyzingAll="reanalyzingAll"
           @export-csv="onExportCSV"
           @reanalyze="onReanalyze"
+          @reanalyze-all="onReanalyzeAll"
           @delete-batch="onDeleteBatch(selectedDevice.device_id, selectedBatch.batch_index)"
         />
       </template>
@@ -690,7 +692,8 @@ import {
   deleteSpecialBatches,
   exportChannelCSV,
   updateBatchDiagnosis,
-  reanalyzeBatch
+  reanalyzeBatch,
+  reanalyzeAllDevice
 } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import DiagnosisDetail from '../components/DiagnosisDetail.vue'
@@ -699,6 +702,7 @@ const route = useRoute()
 const loading = ref(false)
 const deleteLoading = ref(false)
 const reanalyzing = ref(false)
+const reanalyzingAll = ref(false)
 const deviceTableData = ref([])
 
 // 批量删除事件处理（由 DeviceTable 子组件触发）
@@ -1677,6 +1681,34 @@ const onReanalyze = async () => {
     ElMessage.error('重新诊断失败: ' + (e.response?.data?.detail || e.message))
   } finally {
     reanalyzing.value = false
+  }
+}
+
+// ========== 全部重新诊断 ==========
+const onReanalyzeAll = async () => {
+  if (!selectedDevice.value) return
+  try {
+    await ElMessageBox.confirm(
+      `确定对设备 ${selectedDevice.value.device_id} 的所有批次重新诊断吗？这可能需要较长时间。`,
+      '全部重新诊断',
+      { confirmButtonText: '开始', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    reanalyzingAll.value = true
+    ElMessage.info('开始全部重新诊断，请耐心等待...')
+    const res = await reanalyzeAllDevice(selectedDevice.value.device_id)
+    const d = res.data || {}
+    ElMessage.success(`全部重新诊断完成，成功 ${d.updated}/${d.total} 个批次`)
+    // 刷新设备列表和当前选中批次数据
+    await loadAllDevices()
+  } catch (e) {
+    console.error('全部重新诊断失败:', e)
+    ElMessage.error('全部重新诊断失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    reanalyzingAll.value = false
   }
 }
 

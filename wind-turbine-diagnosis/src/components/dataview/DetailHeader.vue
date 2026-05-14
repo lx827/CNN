@@ -65,6 +65,9 @@
       <el-button type="warning" size="small" style="margin-left: 8px" :loading="reanalyzing" @click="$emit('reanalyze')">
         <el-icon><Refresh /></el-icon> 重新诊断
       </el-button>
+      <el-button type="warning" size="small" style="margin-left: 8px" :loading="reanalyzingAll" @click="$emit('reanalyze-all')">
+        <el-icon><Refresh /></el-icon> 全部重新诊断
+      </el-button>
       <el-button type="danger" size="small" style="margin-left: 8px" @click="$emit('delete-batch')">
         <el-icon><Delete /></el-icon> 删除此批次
       </el-button>
@@ -84,6 +87,7 @@ const props = defineProps({
   denoiseMethod: { type: String, default: 'none' },
   enableDetrend: { type: Boolean, default: false },
   reanalyzing: { type: Boolean, default: false },
+  reanalyzingAll: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
@@ -93,6 +97,7 @@ const emit = defineEmits([
   'update:enableDetrend',
   'export-csv',
   'reanalyze',
+  'reanalyze-all',
   'delete-batch',
 ])
 
