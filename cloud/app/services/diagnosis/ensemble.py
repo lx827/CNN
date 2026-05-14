@@ -4,6 +4,11 @@ The module keeps the heavy, research-style algorithms callable without making
 the real-time pages depend on a single fragile threshold. It uses weak voting:
 each algorithm contributes evidence, but a channel is not marked faulty unless
 several independent indicators agree.
+
+Health score and status are now computed via `_compute_health_score()` from
+`health_score.py`, ensuring consistency with the single-method diagnosis path.
+The ensemble voting results are preserved for detailed display but no longer
+override the authoritative health score.
 """
 from __future__ import annotations
 
@@ -13,6 +18,7 @@ import numpy as np
 
 from .engine import BearingMethod, DenoiseMethod, DiagnosisEngine, DiagnosisStrategy, GearMethod
 from .features import compute_time_features
+from .health_score import _compute_health_score, CREST_EVIDENCE_THRESHOLD
 from .recommendation import _generate_recommendation
 
 
@@ -113,7 +119,10 @@ def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
     crest = _as_float(time_features.get("crest_factor"), 5.0)
     rms_mad_z = _as_float(time_features.get("rms_mad_z"), 0.0)
     cusum = _as_float(time_features.get("cusum_score"), 0.0)
-    impulse_context = kurt > 5.0 or crest > 7.0 or rms_mad_z > 6.0 or cusum > 8.0
+    # 与 health_score.py 保持一致的时域证据标准：
+    # 峰值因子 7~9 在工业振动中属正常范围，真正的冲击需要 crest>10 或 kurt>5
+    # 动态基线指标(kurt_mad_z, cusum)单独不算冲击证据，只表示趋势漂移
+    impulse_context = kurt > 5.0 or crest > CREST_EVIDENCE_THRESHOLD
 
     # 低频优势度：仅用于弱证据（stat_hits=1）场景的辅助判断
     low_freq_dominance = False
@@ -201,8 +210,6 @@ def _gear_confidence(result: Dict, has_gear_params: bool) -> Dict[str, Any]:
 def _time_confidence(time_features: Dict) -> float:
     kurt = _as_float(time_features.get("kurtosis"), 3.0)
     crest = _as_float(time_features.get("crest_factor"), 5.0)
-    rms_mad_z = _as_float(time_features.get("rms_mad_z"), 0.0)
-    cusum = _as_float(time_features.get("cusum_score"), 0.0)
 
     score = 0.0
     if kurt > 20:
@@ -214,13 +221,13 @@ def _time_confidence(time_features: Dict) -> float:
     elif kurt > 5:
         score = max(score, 0.35)
 
+    # 峰值因子证据阈值与 health_score.py 一致 (CREST_EVIDENCE_THRESHOLD=10)
     if crest > 15:
         score = max(score, 0.65)
-    elif crest > 10:
+    elif crest > CREST_EVIDENCE_THRESHOLD:
         score = max(score, 0.45)
 
-    if rms_mad_z > 6 or cusum > 10:
-        score = max(score, 0.45)
+    # 动态基线不作为冲击证据——变速工况下基线指标天然偏高
     return round(float(score), 4)
 
 
@@ -357,17 +364,18 @@ def run_research_ensemble(
     gear_score = max(gear_conf or [0.0]) * 0.65 + gear_vote_fraction * 0.35
     likelihood = max(time_score * 0.6, bearing_score, gear_score)
 
-    if likelihood >= 0.72 or (bearing_vote_fraction >= 0.5 and max(bearing_conf or [0]) >= 0.65):
-        status = "fault"
-    elif likelihood >= 0.45 or bearing_vote_fraction >= 0.35 or gear_vote_fraction >= 0.5:
-        status = "warning"
-    else:
-        status = "normal"
-
-    health_score = int(max(0, min(100, round(100 - likelihood * 72))))
     best_bearing = bearing_results.get(best_bearing_key, {}) if best_bearing_key else {}
     best_gear = gear_results.get(best_gear_key, {}) if best_gear_key else {}
     fault_label = _fault_label(best_bearing, best_gear, bearing_score, gear_score)
+
+    # 使用 health_score.py 的权威评分逻辑计算健康度和状态
+    # 确保与单方法诊断路径（analyze_comprehensive）的结果一致
+    health_score, status = _compute_health_score(
+        gear_teeth,
+        time_features,
+        best_bearing,
+        best_gear,
+    )
 
     return {
         "health_score": health_score,
