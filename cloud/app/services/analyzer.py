@@ -149,15 +149,24 @@ def analyze_device(
                     continue
                 if prob.get("significant"):
                     snr_val = float(prob.get("snr", 0))
-                    merged["轴承" + fname] = max(merged.get("轴承" + fname, 0), min(1.0, snr_val / 10))
+                    # 将轴承参数级指标映射为标准中文故障类型名
+                    # BPFO → 轴承外圈故障, BPFI → 轴承内圈故障, BSF → 滚动体故障
+                    # 其他轴承指标统一归入"轴承异常"
+                    fault_key = "轴承异常"
+                    if "BPFO" in fname or "bpfo" in fname:
+                        fault_key = "轴承外圈故障"
+                    elif "BPFI" in fname or "bpfi" in fname:
+                        fault_key = "轴承内圈故障"
+                    elif "BSF" in fname or "bsf" in fname:
+                        fault_key = "滚动体故障"
+                    merged[fault_key] = max(merged.get(fault_key, 0), min(1.0, snr_val / 10))
             for fname, prob in r.get("gear", {}).get("fault_indicators", {}).items():
                 if not isinstance(prob, dict):
                     continue
-                key = "齿轮" + fname
-                if prob.get("critical"):
-                    merged[key] = max(merged.get(key, 0), 0.6)
-                elif prob.get("warning"):
-                    merged[key] = max(merged.get(key, 0), 0.3)
+                # 齿轮指标统一归入"齿轮磨损"
+                severity = 0.6 if prob.get("critical") else 0.3 if prob.get("warning") else 0
+                if severity > 0:
+                    merged["齿轮磨损"] = max(merged.get("齿轮磨损", 0), severity)
 
         fault_probs = {"正常运行": round(float(max(0.0, 1.0 - sum(merged.values()))), 4)}
         for k, v in merged.items():
