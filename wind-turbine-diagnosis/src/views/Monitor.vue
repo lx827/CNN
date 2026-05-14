@@ -482,20 +482,21 @@ onMounted(async () => {
   initCharts()
   setupWebSocket()
 
-  window.addEventListener('resize', () => {
+  const handleResize = () => {
     timeInstance?.resize()
     freqInstance?.resize()
-  })
-})
-
-onUnmounted(() => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
   }
-  wsClient?.close()
-  timeInstance?.dispose()
-  freqInstance?.dispose()
-  window.removeEventListener('resize', () => {})
+  window.addEventListener('resize', handleResize)
+
+  onUnmounted(() => {
+    if (pollTimer) {
+      clearInterval(pollTimer)
+    }
+    wsClient?.close()
+    timeInstance?.dispose()
+    freqInstance?.dispose()
+    window.removeEventListener('resize', handleResize)
+  })
 })
 </script>
 

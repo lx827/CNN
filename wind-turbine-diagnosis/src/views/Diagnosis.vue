@@ -506,24 +506,28 @@ onMounted(async () => {
 
   await loadDiagnosis()
 
-  window.addEventListener('resize', () => {
+  const handleResize = () => {
     Object.values(chartInstances.value).forEach(({ prob, rul }) => {
       prob?.resize()
       rul?.resize()
     })
+  }
+  window.addEventListener('resize', handleResize)
+
+  onUnmounted(() => {
+    clearCharts()
+    window.removeEventListener('resize', handleResize)
   })
 })
 
 const goToDataView = () => {
   router.push({
-    path: '/data-view',
+    path: '/data',
     query: { device_id: selectedDeviceId.value, batch_index: batchIndex.value }
   })
 }
 
-onUnmounted(() => {
-  clearCharts()
-})
+
 </script>
 
 <style scoped>

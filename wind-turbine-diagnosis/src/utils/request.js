@@ -23,7 +23,14 @@ request.interceptors.request.use(
 // 响应拦截器
 request.interceptors.response.use(
   response => {
-    return response.data
+    const data = response.data
+    // 校验后端业务码：如果返回了 code 字段且不为 200，当作错误处理
+    if (data && typeof data.code === 'number' && data.code !== 200) {
+      const msg = data.message || data.detail || '请求失败'
+      ElMessage.error(msg)
+      return Promise.reject(new Error(msg))
+    }
+    return data
   },
   error => {
     if (error.response?.status === 401) {
