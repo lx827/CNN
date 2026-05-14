@@ -10,8 +10,6 @@ from sqlalchemy.orm import Session
 from app.models import Alarm, Device
 from app.core.websocket import manager
 from app.core.thresholds import ALARM_THRESHOLDS
-from app.services.offline_guard import is_device_offline
-
 logger = logging.getLogger(__name__)
 
 DEFAULT_THRESHOLDS = ALARM_THRESHOLDS
@@ -80,7 +78,7 @@ def generate_alarms(
         return []
 
     # 离线设备禁止产生新的监测告警，避免旧数据触发异常告警
-    if is_device_offline(device):
+    if not device.is_online:
         return []
 
     new_alarms = []

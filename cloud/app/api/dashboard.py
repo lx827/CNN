@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
 from app.models import Device, Diagnosis, Alarm
-from app.services.offline_guard import is_device_offline
 from datetime import datetime
 from typing import Dict
 
@@ -40,7 +39,7 @@ def get_dashboard(db: Session = Depends(get_db)):
     devices = db.query(Device).all()
     device_list = []
     for d in devices:
-        is_offline = is_device_offline(d, now)
+        is_offline = not d.is_online
         effective_status = "offline" if is_offline else d.status
         device_list.append({
             "device_id": d.device_id,
@@ -58,7 +57,7 @@ def get_dashboard(db: Session = Depends(get_db)):
     # 2. 最新诊断结果（取每个设备最新一条）
     latest_diag = {}
     for d in devices:
-        is_offline = is_device_offline(d, now)
+        is_offline = not d.is_online
         diag = db.query(Diagnosis).filter(Diagnosis.device_id == d.device_id) \
             .order_by(Diagnosis.analyzed_at.desc()).first()
         if diag:

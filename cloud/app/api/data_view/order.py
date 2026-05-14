@@ -113,6 +113,8 @@ async def get_channel_order(
                 tracking_method = "varying_speed"
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
+        if device and not device.is_online:
+            raise HTTPException(status_code=400, detail="设备当前离线，无法执行阶次跟踪")
 
         # 自动将阶次追踪得到的转频写入诊断表，作为后续诊断的权威转频
         try:
