@@ -16,6 +16,7 @@
 - 公网 IP：`8.137.96.104`
 - systemd 服务名：`CNN.service`
 - 部署路径：`/opt/CNN`
+- 一键部署: `bash /opt/CNN/deploy.sh`
 - **内存限制：2GB** — 多线程必须严格控制（见第7节）
 
 ---
@@ -44,7 +45,7 @@ CNN/
 │   │   │   │   ├── cepstrum.py     # 倒谱
 │   │   │   │   ├── gear.py         # 齿轮诊断 + 全分析
 │   │   │   │   ├── export.py       # CSV 导出
-│   │   │   │   └── diagnosis_ops.py # 诊断更新 + 重新诊断
+│   │   │   │   └── diagnosis_ops.py # 诊断更新 + 单批重新诊断 + 全部重新诊断
 │   │   │   ├── ingest.py           # 边端数据接入
 │   │   │   ├── dashboard.py        # 设备总览 + 离线检测
 │   │   │   ├── diagnosis.py        # 诊断结果查询
@@ -334,7 +335,10 @@ cloud/app/services/diagnosis/health_score.py
 cloud/app/services/diagnosis/recommendation.py
 ```
 
-- `_compute_health_score()`: 综合健康度评分 (0-100)
+- `_compute_health_score()`: 综合健康度评分 (0-100)，ensemble.py 也统一使用此函数
+- `CREST_EVIDENCE_THRESHOLD = 10.0`: 峰值因子证据门控阈值（工业振动 7-9 属正常范围）
+- 时域证据门控：所有非时域扣分路径必须满足 `kurt>5 或 crest>10` 且 `not rotation_dominant`
+- 动态基线扣分（kurt_mad_z, rms_mad_z）同样需要时域证据门控
 - `_generate_recommendation()`: 根据故障指示器生成维护建议
 
 ### 8.3 阶次跟踪算法
@@ -369,7 +373,19 @@ cloud/app/services/diagnosis/gear/metrics.py
 - `compute_car()`: 倒频谱幅值比
 - `compute_ser_order()`: 边频带能量比
 
-### 8.6 后台分析入口
+### 8.6 多算法集成诊断引擎
+
+```
+cloud/app/services/diagnosis/ensemble.py
+```
+
+- `run_research_ensemble()`: 多去噪+多轴承方法集成诊断，弱投票融合
+- 健康度和状态统一使用 `health_score.py` 的 `_compute_health_score()` 计算
+- `_bearing_confidence()`: 轴承投票置信度（impulse_context 门控：kurt>5 或 crest>10）
+- `_gear_confidence()`: 齿轮投票置信度
+- `_time_confidence()`: 时域冲击证据
+
+### 8.7 后台分析入口
 
 ```
 cloud/app/services/analyzer.py
@@ -513,6 +529,18 @@ DataView 实时计算端点（`/analyze`、`/full-analysis`）执行完成后会
 1. 精确匹配 `device + batch + channel + denoise_method`
 2. 该通道最新结果（不限去噪方法）
 3. 批次级诊断记录（兼容旧数据）
+
+### 10.3 重新诊断 API
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/data/{device_id}/{batch_index}/reanalyze` | POST | 单批次重新诊断，覆盖更新数据库中的 Diagnosis 记录 |
+| `/api/data/{device_id}/reanalyze-all` | POST | 全部批次重新诊断，逐批次串行执行以避免 OOM，返回成功/失败汇总 |
+
+- 两个端点都调用 `analyze_device()` → `run_research_ensemble()` 使用最新算法重新计算
+- 单批次端点要求设备在线；全部批次端点同样要求设备在线
+- 全部重新诊断逐批次串行执行，每个批次成功后立即 commit，失败不影响后续批次
+- 完成后返回 `{total, updated, errors, results}` 汇总信息
 
 ---
 
