@@ -78,7 +78,8 @@ def generate_alarms(
         return []
 
     # 离线设备禁止产生新的监测告警，避免旧数据触发异常告警
-    if not device.is_online:
+    # is_online 为 NULL（旧数据）时视为在线，与 models.py 的 default=1 保持一致
+    if device.is_online is not None and not device.is_online:
         return []
 
     new_alarms = []

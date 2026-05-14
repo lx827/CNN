@@ -53,6 +53,19 @@ async def get_channel_envelope(
         if device:
             bearing_params = device.bearing_params or {}
             gear_teeth = device.gear_teeth or {}
+        # 兼容前端通道级格式 {"1":{n:9,d:7.94}} → 设备级 {n:9,d:7.94}
+        def _extract_device_param(params, device_keys):
+            if not params or not isinstance(params, dict):
+                return params
+            if any(k in params for k in device_keys):
+                return params
+            for key in sorted(params.keys()):
+                ch = params.get(key)
+                if ch and isinstance(ch, dict) and any(k in ch for k in device_keys):
+                    return ch
+            return params
+        bearing_params = _extract_device_param(bearing_params, ("n", "d", "D", "alpha"))
+        gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
 
         # 方法映射
         method_map = {

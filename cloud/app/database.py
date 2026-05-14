@@ -77,7 +77,7 @@ def init_db():
                 conn.execute(text("ALTER TABLE diagnosis ADD COLUMN denoise_method VARCHAR(20) DEFAULT 'none'"))
             conn.commit()
 
-    # Device 表继续新增列（压缩配置）
+    # Device 表继续新增列（压缩配置 + 在线状态）
     if "devices" in inspector.get_table_names():
         device_cols = {c["name"] for c in inspector.get_columns("devices")}
         with engine.connect() as conn:
@@ -85,4 +85,6 @@ def init_db():
                 conn.execute(text("ALTER TABLE devices ADD COLUMN compression_enabled INTEGER DEFAULT 1"))
             if "downsample_ratio" not in device_cols:
                 conn.execute(text("ALTER TABLE devices ADD COLUMN downsample_ratio INTEGER DEFAULT 8"))
+            if "is_online" not in device_cols:
+                conn.execute(text("ALTER TABLE devices ADD COLUMN is_online INTEGER DEFAULT 1"))
             conn.commit()
