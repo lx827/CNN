@@ -46,40 +46,6 @@
 
       <DiagnosisAlert :status="selectedBatch.diagnosis_status" :description="diagnosisDesc" />
 
-      <!-- 阶次/包络诊断明细 -->
-      <el-row :gutter="16" class="spectrum-row">
-        <el-col :span="24">
-          <div class="section-header">
-            <span class="chart-title">🔍 频域/阶次诊断明细</span>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <template v-if="!showDiagnosisDetail">
-                <el-button
-                  type="primary"
-                  size="small"
-                  :loading="loadingDiagnosisDetail"
-                  @click="loadDiagnosisDetail"
-                >
-                  <el-icon><DataAnalysis /></el-icon> 加载诊断明细
-                </el-button>
-              </template>
-              <el-button v-else type="info" size="small" @click="showDiagnosisDetail = false">
-                <el-icon><Close /></el-icon> 收起
-              </el-button>
-            </div>
-          </div>
-          <div v-if="showDiagnosisDetail">
-            <DiagnosisDetail
-              :order-analysis="selectedBatch.order_analysis"
-              :rot-freq="orderData?.rot_freq ?? selectedBatch.rot_freq"
-              :rot-rpm="orderData?.rot_rpm ?? (selectedBatch.rot_freq ? selectedBatch.rot_freq * 60 : null)"
-            />
-          </div>
-          <div v-else class="placeholder">
-            <el-empty description="点击按钮加载诊断明细" :image-size="80" />
-          </div>
-        </el-col>
-      </el-row>
-
       <!-- 时域波形：始终自动加载 -->
       <TimeDomainPanel :chart-option="timeOption" />
 
@@ -656,6 +622,40 @@
           </div>
           <div v-else class="placeholder">
             <el-empty description="设置窗口参数后计算 STFT 时频谱" :image-size="80" />
+          </div>
+        </el-col>
+      </el-row>
+
+      <!-- 阶次/包络诊断明细 -->
+      <el-row :gutter="16" class="spectrum-row">
+        <el-col :span="24">
+          <div class="section-header">
+            <span class="chart-title">🔍 频域/阶次诊断明细</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <template v-if="!showDiagnosisDetail">
+                <el-button
+                  type="primary"
+                  size="small"
+                  :loading="loadingDiagnosisDetail"
+                  @click="loadDiagnosisDetail"
+                >
+                  <el-icon><DataAnalysis /></el-icon> 加载诊断明细
+                </el-button>
+              </template>
+              <el-button v-else type="info" size="small" @click="showDiagnosisDetail = false">
+                <el-icon><Close /></el-icon> 收起
+              </el-button>
+            </div>
+          </div>
+          <div v-if="showDiagnosisDetail">
+            <DiagnosisDetail
+              :order-analysis="selectedBatch.order_analysis"
+              :rot-freq="orderData?.rot_freq ?? selectedBatch.rot_freq"
+              :rot-rpm="orderData?.rot_rpm ?? (selectedBatch.rot_freq ? selectedBatch.rot_freq * 60 : null)"
+            />
+          </div>
+          <div v-else class="placeholder">
+            <el-empty description="点击按钮加载诊断明细" :image-size="80" />
           </div>
         </el-col>
       </el-row>
