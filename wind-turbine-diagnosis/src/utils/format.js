@@ -11,6 +11,15 @@ export function formatDateTime(dt) {
   }).replace(/\//g, '-')
 }
 
+export function formatTime(dt) {
+  if (!dt) return ''
+  const d = new Date(dt)
+  return d.toLocaleString('zh-CN', {
+    month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
+  }).replace(/\//g, '-')
+}
+
 export function formatNumber(value, digits = 2) {
   if (value === null || value === undefined || isNaN(value)) return '-'
   return Number(value).toFixed(digits)

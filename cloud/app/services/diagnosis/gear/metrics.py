@@ -20,6 +20,59 @@ from ..signal_utils import (
 )
 
 
+def compute_tsa_residual_order(
+    signal: np.ndarray,
+    fs: float,
+    rot_freq: float,
+    samples_per_rev: int = 1024,
+    min_revolutions: int = 4,
+) -> Dict:
+    """
+    角域时域同步平均（TSA）与残差信号。
+
+    没有编码器时使用估计转频进行等角度重采样，再按转周期做鲁棒平均。
+    返回的 residual/differential 用于 FM4/M6A/M8A，避免直接用高通近似。
+    """
+    arr = prepare_signal(signal)
+    if rot_freq <= 0 or len(arr) < samples_per_rev:
+        return {"valid": False, "reason": "invalid_rot_freq"}
+
+    duration = len(arr) / fs
+    total_revs = duration * rot_freq
+    n_revs = int(np.floor(total_revs))
+    if n_revs < min_revolutions:
+        return {"valid": False, "reason": "too_few_revolutions"}
+
+    n_points = n_revs * samples_per_rev
+    times = np.arange(len(arr)) / fs
+    target_times = np.linspace(0, n_revs / rot_freq, n_points, endpoint=False)
+    order_signal = np.interp(target_times, times, arr)
+    cycles = order_signal.reshape(n_revs, samples_per_rev)
+
+    tsa_cycle = np.median(cycles, axis=0)
+    tsa_signal = np.tile(tsa_cycle, n_revs)
+    residual = order_signal - tsa_signal
+
+    # 差分信号：从 TSA 周期中移除低阶平滑啮合形态，保留局部齿损伤尖峰。
+    win = max(5, samples_per_rev // 32)
+    if win % 2 == 0:
+        win += 1
+    kernel = np.ones(win, dtype=np.float64) / win
+    regular = np.convolve(tsa_cycle, kernel, mode="same")
+    differential_cycle = tsa_cycle - regular
+    differential = np.tile(differential_cycle, n_revs)
+
+    return {
+        "valid": True,
+        "revolutions": n_revs,
+        "order_signal": order_signal,
+        "tsa_signal": tsa_signal,
+        "tsa_cycle": tsa_cycle,
+        "residual": residual,
+        "differential": differential,
+    }
+
+
 def _order_band_amplitude(order_axis, spectrum, center_order: float, bandwidth: float) -> float:
     """计算指定阶次带幅值和（非能量和）"""
     order_axis = np.asarray(order_axis)

@@ -22,6 +22,7 @@ from ..signal_utils import prepare_signal, compute_fft_spectrum, _band_energy
 from .metrics import (
     analyze_sidebands_order,
     compute_fm0_order,
+    compute_tsa_residual_order,
     compute_car,
     compute_fm4,
     compute_m6a,
@@ -32,6 +33,7 @@ from .metrics import (
 __all__ = [
     "compute_fm0",
     "compute_fm0_order",
+    "compute_tsa_residual_order",
     "compute_fm4",
     "compute_na4",
     "compute_ser",

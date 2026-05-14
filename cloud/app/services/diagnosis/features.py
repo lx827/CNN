@@ -42,7 +42,7 @@ def compute_time_features(signal: np.ndarray) -> Dict[str, float]:
     impulse_factor = peak / mean_abs if mean_abs > 1e-12 else 0.0
     crest = crest_factor(arr)
 
-    return {
+    features = {
         "peak": round(peak, 6),
         "rms": round(rms_val, 6),
         "mean_abs": round(mean_abs, 6),
@@ -52,6 +52,79 @@ def compute_time_features(signal: np.ndarray) -> Dict[str, float]:
         "shape_factor": round(shape_factor, 4),
         "impulse_factor": round(impulse_factor, 4),
         "crest_factor": round(crest, 4),
+    }
+    features.update(_compute_dynamic_baseline_features(arr))
+    return features
+
+
+def _compute_dynamic_baseline_features(signal: np.ndarray) -> Dict[str, float]:
+    """
+    基于当前批次内滑动窗口的鲁棒基线/趋势指标。
+
+    没有长期历史时，使用窗口中位数 + MAD、EWMA、CUSUM 评估本批次是否出现
+    持续偏移或突发冲击，避免完全依赖固定阈值。
+    """
+    arr = np.asarray(signal, dtype=np.float64)
+    if len(arr) < 512:
+        return {
+            "rms_mad_z": 0.0,
+            "kurtosis_mad_z": 0.0,
+            "ewma_drift": 0.0,
+            "cusum_score": 0.0,
+        }
+
+    n_windows = min(32, max(8, len(arr) // 1024))
+    win = max(128, len(arr) // n_windows)
+    rms_series = []
+    kurt_series = []
+    for start in range(0, len(arr) - win + 1, win):
+        chunk = arr[start:start + win]
+        if len(chunk) < 128:
+            continue
+        rms_series.append(float(np.sqrt(np.mean(chunk ** 2))))
+        try:
+            kurt_series.append(float(stats.kurtosis(chunk, fisher=False)))
+        except Exception:
+            kurt_series.append(3.0)
+
+    if len(rms_series) < 4:
+        return {
+            "rms_mad_z": 0.0,
+            "kurtosis_mad_z": 0.0,
+            "ewma_drift": 0.0,
+            "cusum_score": 0.0,
+        }
+
+    def robust_z(series):
+        x = np.asarray(series, dtype=np.float64)
+        med = float(np.median(x))
+        mad = float(np.median(np.abs(x - med)))
+        sigma = max(1.4826 * mad, 1e-12)
+        return np.abs((x - med) / sigma), med, sigma
+
+    rms_z, _, _ = robust_z(rms_series)
+    kurt_z, _, _ = robust_z(kurt_series)
+
+    # EWMA/CUSUM 使用 RMS 序列，捕捉缓慢上升趋势。
+    rms_z_signed = np.asarray(rms_series, dtype=np.float64)
+    median_rms = float(np.median(rms_z_signed))
+    mad_rms = max(1.4826 * float(np.median(np.abs(rms_z_signed - median_rms))), 1e-12)
+    z = (rms_z_signed - median_rms) / mad_rms
+    ewma = 0.0
+    for val in z:
+        ewma = 0.2 * float(val) + 0.8 * ewma
+
+    c_pos = 0.0
+    c_neg = 0.0
+    for val in z:
+        c_pos = max(0.0, c_pos + float(val) - 0.5)
+        c_neg = max(0.0, c_neg - float(val) - 0.5)
+
+    return {
+        "rms_mad_z": round(float(np.max(rms_z)), 4),
+        "kurtosis_mad_z": round(float(np.max(kurt_z)), 4),
+        "ewma_drift": round(float(abs(ewma)), 4),
+        "cusum_score": round(float(max(c_pos, c_neg)), 4),
     }
 
 
