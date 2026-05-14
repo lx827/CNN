@@ -147,12 +147,12 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" :loading="saving" @click="onSave">
+          <el-button type="primary" :loading="savingEdge" @click="onSaveEdgeConfig">
             <el-icon><Check /></el-icon>
-            保存配置
+            保存采集配置
           </el-button>
           <el-button @click="onReset">重置</el-button>
-          <el-checkbox v-model="applyToAll" style="margin-left: 16px;">
+          <el-checkbox v-model="applyEdgeToAll" style="margin-left: 16px;">
             应用到所有设备
           </el-checkbox>
         </el-form-item>
@@ -278,9 +278,9 @@
 
         <el-divider />
         <el-form-item>
-          <el-button type="primary" :loading="saving" @click="onSave">
+          <el-button type="primary" :loading="savingMechanical" @click="onSaveMechanical">
             <el-icon><Check /></el-icon>
-            保存配置
+            保存机械参数
           </el-button>
           <el-button @click="onReset">重置</el-button>
           <el-button type="warning" @click="onSyncMechanical">
@@ -404,7 +404,8 @@ import {
 } from '../api'
 
 const deviceList = ref([])
-const saving = ref(false)
+const savingEdge = ref(false)
+const savingMechanical = ref(false)
 const savingThresholds = ref(false)
 
 const form = ref({
@@ -426,7 +427,7 @@ const activeMechanicalChannel = ref('1')
 // 一键同步目标通道
 const syncTargetChannels = ref([])
 
-const applyToAll = ref(false)
+const applyEdgeToAll = ref(false)
 
 // 通道名称
 const channelNames = ref({ 1: '轴承附近', 2: '驱动端', 3: '风扇端' })
@@ -567,10 +568,9 @@ const onDeviceChange = () => {
   loadThresholds()
 }
 
-const onSave = async () => {
-  saving.value = true
+const onSaveEdgeConfig = async () => {
+  savingEdge.value = true
   try {
-    // 构建通道名称对象
     const names = {}
     for (let i = 1; i <= form.value.channel_count; i++) {
       names[String(i)] = channelNames.value[i] || `通道${i}`
@@ -582,24 +582,38 @@ const onSave = async () => {
       window_seconds: form.value.window_seconds,
       channel_count: form.value.channel_count,
       channel_names: names,
-      gear_teeth: form.value.gear_teeth,
-      bearing_params: form.value.bearing_params,
       compression_enabled: form.value.compression_enabled,
       downsample_ratio: form.value.downsample_ratio,
     }
-    if (applyToAll.value) {
+    if (applyEdgeToAll.value) {
       await updateBatchDeviceConfig(payload)
-      ElMessage.success('配置已批量应用到所有设备，约 30 秒内同步到边端')
+      ElMessage.success('采集配置已批量应用到所有设备，约 30 秒内同步到边端')
     } else {
       await updateDeviceConfig(form.value.device_id, payload)
-      ElMessage.success('配置已保存，约 30 秒内同步到边端')
+      ElMessage.success('采集配置已保存，约 30 秒内同步到边端')
     }
-    ElMessage.success('配置已保存，约 30 秒内同步到边端')
   } catch (e) {
-    console.error('保存配置失败:', e)
-    ElMessage.error('保存配置失败')
+    console.error('保存采集配置失败:', e)
+    ElMessage.error('保存采集配置失败')
   } finally {
-    saving.value = false
+    savingEdge.value = false
+  }
+}
+
+const onSaveMechanical = async () => {
+  savingMechanical.value = true
+  try {
+    const payload = {
+      gear_teeth: form.value.gear_teeth,
+      bearing_params: form.value.bearing_params,
+    }
+    await updateDeviceConfig(form.value.device_id, payload)
+    ElMessage.success('机械参数已保存')
+  } catch (e) {
+    console.error('保存机械参数失败:', e)
+    ElMessage.error('保存机械参数失败')
+  } finally {
+    savingMechanical.value = false
   }
 }
 
