@@ -9,27 +9,8 @@ import request from '../utils/request'
 // ==================== 认证 ====================
 export const login = (data) => request.post('/api/auth/login', data)
 
-// ==================== 工具函数 ====================
-
-function calcRms(arr) {
-  if (!arr || arr.length === 0) return 0
-  const sum = arr.reduce((s, v) => s + v * v, 0)
-  return Math.sqrt(sum / arr.length)
-}
-
-function calcPeak(arr) {
-  if (!arr || arr.length === 0) return 0
-  return Math.max(...arr.map(Math.abs))
-}
-
-function formatDateTime(dt) {
-  if (!dt) return ''
-  const d = new Date(dt)
-  return d.toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  }).replace(/\//g, '-')
-}
+import { formatDateTime } from '../utils/format'
+import { calcRms, calcPeak } from '../utils/math'
 
 // ==================== Dashboard ====================
 

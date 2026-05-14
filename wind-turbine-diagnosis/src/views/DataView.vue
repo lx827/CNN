@@ -16,161 +16,35 @@
     </el-card>
 
     <!-- 设备批次表格 -->
-    <el-card class="table-card">
-      <el-table
-        :data="deviceTableData"
-        style="width: 100%"
-        v-loading="loading"
-        row-key="device_id"
-        border
-      >
-        <el-table-column prop="device_id" label="设备ID" width="140" />
-        <el-table-column prop="device_name" label="设备名称" width="160" />
-        <el-table-column label="历史数据批次" min-width="400">
-          <template #default="{ row }">
-            <div class="batch-tags">
-              <el-tooltip
-                v-for="batch in row.batches"
-                :key="batch.batch_index"
-                placement="top"
-              >
-                <template #content>
-                  <div style="max-width: 200px">
-                    <div>状态: <b>{{ batch.diagnosis_status === 'fault' ? '故障' : batch.diagnosis_status === 'warning' ? '预警' : '正常' }}</b></div>
-                    <div v-if="batch.health_score != null">健康度: {{ batch.health_score }} 分</div>
-                    <div v-if="batch.top_fault">主要异常: {{ batch.top_fault }}</div>
-                    <div v-else-if="batch.diagnosis_status">暂无明细故障</div>
-                  </div>
-                </template>
-                <el-tag
-                  :type="getBatchTagType(batch)"
-                  class="batch-tag"
-                  :class="{ active: isSelected(row.device_id, batch.batch_index) }"
-                  @click="selectBatch(row, batch)"
-                  size="small"
-                  effect="light"
-                >
-                  #{{ batch.batch_index }} {{ formatTime(batch.created_at) }}
-                  <el-icon v-if="batch.is_special" class="special-icon"><Star-Filled /></el-icon>
-                </el-tag>
-              </el-tooltip>
-              <el-text v-if="row.batches.length === 0" type="info" size="small">暂无数据</el-text>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              size="small"
-              @click="openBatchDeleteDialog(row)"
-            >
-              批量删除
-            </el-button>
-            <el-button
-              link
-              type="danger"
-              size="small"
-              @click="onDeleteDeviceSpecial(row.device_id)"
-            >
-              删除特殊数据
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+    <DeviceTable
+      :data="deviceTableData"
+      :loading="loading"
+      :selected-device-id="selectedDevice?.device_id"
+      :selected-batch-index="selectedBatch?.batch_index"
+      @select-batch="selectBatch"
+      @refresh="loadAllDevices"
+      @batch-deleted="onBatchDeleted"
+    />
 
     <!-- 选中批次详情 -->
     <el-card v-if="selectedDevice && selectedBatch" class="detail-card">
       <template #header>
-        <div class="detail-header">
-          <span>
-            数据详情 — <b>{{ selectedDevice.device_name }}</b>
-            批次 <b>{{ selectedBatch.batch_index }}</b>
-            <el-tag v-if="selectedBatch.is_special" type="danger" size="small" effect="dark">特殊数据</el-tag>
-            <el-tag
-              v-if="selectedBatch.diagnosis_status"
-              :type="selectedBatch.diagnosis_status === 'fault' ? 'danger' : selectedBatch.diagnosis_status === 'warning' ? 'warning' : 'success'"
-              size="small"
-              effect="dark"
-            >
-              {{ selectedBatch.diagnosis_status === 'fault' ? '故障' : selectedBatch.diagnosis_status === 'warning' ? '预警' : '正常' }}
-              <span v-if="selectedBatch.health_score != null">({{ selectedBatch.health_score }}分)</span>
-            </el-tag>
-            <el-tag type="info" size="small">采样率 {{ selectedBatch.sample_rate || 25600 }} Hz</el-tag>
-          </span>
-          <div class="detail-actions">
-            <el-select v-model="selectedChannel" style="width: 180px" size="small" @change="onChannelChange">
-              <el-option
-                v-for="i in channelOptions"
-                :key="i"
-                :label="getChannelName(i)"
-                :value="i"
-              />
-            </el-select>
-            <el-select v-model="maxFreq" style="width: 120px; margin-left: 8px" size="small" @change="onMaxFreqChange">
-              <el-option label="1000 Hz" :value="1000" />
-              <el-option label="2500 Hz" :value="2500" />
-              <el-option label="5000 Hz" :value="5000" />
-              <el-option label="8192 Hz" :value="8192" />
-            </el-select>
-            <el-select v-model="denoiseMethod" style="width: 130px; margin-left: 8px" size="small" @change="onDenoiseChange">
-              <el-option label="无预处理" value="none" />
-              <el-option label="小波去噪" value="wavelet" />
-              <el-option label="VMD分解" value="vmd" />
-            </el-select>
-            <el-tooltip content="消除基频漂移导致的线性趋势" placement="top">
-              <el-switch
-                v-model="enableDetrend"
-                active-text="去趋势"
-                inactive-text="原始"
-                style="margin-left: 12px"
-                @change="onDetrendChange"
-              />
-            </el-tooltip>
-            <el-button
-              type="primary"
-              size="small"
-              style="margin-left: 8px"
-              @click="onExportCSV"
-            >
-              <el-icon><Download /></el-icon> 导出 CSV
-            </el-button>
-            <el-button
-              type="warning"
-              size="small"
-              style="margin-left: 8px"
-              :loading="reanalyzing"
-              @click="onReanalyze"
-            >
-              <el-icon><Refresh /></el-icon> 重新诊断
-            </el-button>
-            <el-button
-              type="danger"
-              size="small"
-              style="margin-left: 8px"
-              @click="onDeleteBatch(selectedDevice.device_id, selectedBatch.batch_index)"
-            >
-              <el-icon><Delete /></el-icon> 删除此批次
-            </el-button>
-          </div>
-        </div>
+        <DetailHeader
+          :device="selectedDevice"
+          :batch="selectedBatch"
+          v-model:channel="selectedChannel"
+          :channel-options="channelOptions"
+          v-model:maxFreq="maxFreq"
+          v-model:denoiseMethod="denoiseMethod"
+          v-model:enableDetrend="enableDetrend"
+          :reanalyzing="reanalyzing"
+          @export-csv="onExportCSV"
+          @reanalyze="onReanalyze"
+          @delete-batch="onDeleteBatch(selectedDevice.device_id, selectedBatch.batch_index)"
+        />
       </template>
 
-      <!-- 诊断提示（异常时显示） -->
-      <el-row v-if="selectedBatch.diagnosis_status === 'fault' || selectedBatch.diagnosis_status === 'warning'" :gutter="16">
-        <el-col :span="24">
-          <el-alert
-            :title="selectedBatch.diagnosis_status === 'fault' ? '⚠️ 该批次被诊断为故障状态' : '⚡ 该批次被诊断为预警状态'"
-            :type="selectedBatch.diagnosis_status === 'fault' ? 'error' : 'warning'"
-            :description="diagnosisDesc"
-            show-icon
-            :closable="false"
-            style="margin-bottom: 16px"
-          />
-        </el-col>
-      </el-row>
+      <DiagnosisAlert :status="selectedBatch.diagnosis_status" :description="diagnosisDesc" />
 
       <!-- 阶次/包络诊断明细 -->
       <el-row :gutter="16" class="spectrum-row">
@@ -207,12 +81,7 @@
       </el-row>
 
       <!-- 时域波形：始终自动加载 -->
-      <el-row :gutter="16">
-        <el-col :span="24">
-          <div class="chart-title">时域波形</div>
-          <VibrationChart :option="timeOption" />
-        </el-col>
-      </el-row>
+      <TimeDomainPanel :chart-option="timeOption" />
 
       <!-- 统计指标 -->
       <el-row :gutter="16" class="spectrum-row">
@@ -786,37 +655,7 @@
 
     <el-empty v-else description="点击上方表格中的批次时间，查看详细数据" />
 
-    <!-- 批量删除对话框 -->
-    <el-dialog
-      v-model="batchDeleteDialogVisible"
-      title="批量删除批次"
-      width="400px"
-    >
-      <div v-if="batchDeleteTargetDevice">
-        <p style="margin-bottom: 12px;">设备：<b>{{ batchDeleteTargetDevice.device_name }}</b></p>
-        <p style="margin-bottom: 12px; color: #666; font-size: 13px;">请选择要删除的普通数据批次：</p>
-        <el-checkbox-group v-model="batchDeleteSelected">
-          <el-checkbox
-            v-for="batch in batchDeleteTargetDevice.batches.filter(b => !b.is_special)"
-            :key="batch.batch_index"
-            :label="batch.batch_index"
-          >
-            批次 #{{ batch.batch_index }} {{ formatTime(batch.created_at) }}
-          </el-checkbox>
-        </el-checkbox-group>
-        <p v-if="batchDeleteTargetDevice.batches.filter(b => !b.is_special).length === 0" style="color: #999;">该设备没有普通数据批次</p>
-      </div>
-      <template #footer>
-        <el-button @click="batchDeleteDialogVisible = false">取消</el-button>
-        <el-button
-          type="danger"
-          :disabled="batchDeleteSelected.length === 0"
-          @click="confirmBatchDelete"
-        >
-          删除选中的 {{ batchDeleteSelected.length }} 个批次
-        </el-button>
-      </template>
-    </el-dialog>
+
   </div>
 </template>
 
@@ -824,6 +663,10 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import VibrationChart from '../components/charts/VibrationChart.vue'
+import DeviceTable from '../components/dataview/DeviceTable.vue'
+import DetailHeader from '../components/dataview/DetailHeader.vue'
+import DiagnosisAlert from '../components/dataview/DiagnosisAlert.vue'
+import TimeDomainPanel from '../components/dataview/TimeDomainPanel.vue'
 import {
   getAllDeviceData,
   getChannelData,
@@ -836,7 +679,6 @@ import {
   getChannelCepstrum,
   getChannelFullAnalysis,
   getChannelDiagnosis,
-  deleteBatch,
   deleteSpecialBatches,
   exportChannelCSV,
   updateBatchDiagnosis,
@@ -851,49 +693,15 @@ const deleteLoading = ref(false)
 const reanalyzing = ref(false)
 const deviceTableData = ref([])
 
-// 批量删除
-const batchDeleteDialogVisible = ref(false)
-const batchDeleteTargetDevice = ref(null)
-const batchDeleteSelected = ref([])
-
-const openBatchDeleteDialog = (device) => {
-  batchDeleteTargetDevice.value = device
-  batchDeleteSelected.value = []
-  batchDeleteDialogVisible.value = true
-}
-
-const confirmBatchDelete = async () => {
-  if (batchDeleteSelected.value.length === 0) return
-  try {
-    await ElMessageBox.confirm(
-      `确定删除选中的 ${batchDeleteSelected.value.length} 个批次吗？此操作不可恢复。`,
-      '确认批量删除',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
-    )
-    deleteLoading.value = true
-    const deviceId = batchDeleteTargetDevice.value.device_id
-    for (const batchIndex of batchDeleteSelected.value) {
-      await deleteBatch(deviceId, batchIndex)
+// 批量删除事件处理（由 DeviceTable 子组件触发）
+const onBatchDeleted = ({ deviceId, batchIndexes }) => {
+  if (selectedDevice.value?.device_id === deviceId) {
+    if (batchIndexes.includes(selectedBatch.value?.batch_index)) {
+      selectedDevice.value = null
+      selectedBatch.value = null
     }
-    ElMessage.success(`已删除 ${batchDeleteSelected.value.length} 个批次`)
-    batchDeleteDialogVisible.value = false
-    // 如果当前选中的批次被删除了，清空详情
-    if (selectedDevice.value?.device_id === deviceId) {
-      const deleted = batchDeleteSelected.value.includes(selectedBatch.value?.batch_index)
-      if (deleted) {
-        selectedDevice.value = null
-        selectedBatch.value = null
-      }
-    }
-    await loadAllDevices()
-  } catch (e) {
-    if (e !== 'cancel') {
-      console.error('批量删除失败:', e)
-      ElMessage.error('批量删除失败')
-    }
-  } finally {
-    deleteLoading.value = false
   }
+  loadAllDevices()
 }
 
 const selectedDevice = ref(null)
@@ -1063,34 +871,7 @@ const statsDisplay = [
   { key: 'impulse_factor', label: '脉冲因子', precision: 4 },
 ]
 
-const formatTime = (iso) => {
-  if (!iso) return ''
-  const isoStr = /[Z+-]\d{2}:?\d{2}$/.test(iso) ? iso : iso + 'Z'
-  const d = new Date(isoStr)
-  return d.toLocaleString('zh-CN', {
-    month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  }).replace(/\//g, '-')
-}
 
-const getChannelName = (chNum) => {
-  const names = selectedDevice.value?.channel_names
-  if (names && names[String(chNum)]) {
-    return names[String(chNum)]
-  }
-  const defaults = { 1: '通道1-轴承附近', 2: '通道2-驱动端', 3: '通道3-风扇端' }
-  return defaults[chNum] || `通道${chNum}`
-}
-
-const isSelected = (deviceId, batchIndex) => {
-  return selectedDevice.value?.device_id === deviceId && selectedBatch.value?.batch_index === batchIndex
-}
-
-const getBatchTagType = (batch) => {
-  if (batch.diagnosis_status === 'fault') return 'danger'
-  if (batch.diagnosis_status === 'warning') return 'warning'
-  return 'info'
-}
 
 const diagnosisDesc = computed(() => {
   if (!selectedBatch.value) return ''
@@ -1913,30 +1694,7 @@ const onDeleteBatch = async (deviceId, batchIndex) => {
   }
 }
 
-const onDeleteDeviceSpecial = async (deviceId) => {
-  try {
-    await ElMessageBox.confirm(
-      `确定删除设备 ${deviceId} 的所有特殊数据吗？此操作不可恢复。`,
-      '确认删除',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
-    )
-    deleteLoading.value = true
-    await deleteSpecialBatches(deviceId)
-    ElMessage.success('特殊数据已删除')
-    if (selectedDevice.value?.device_id === deviceId && selectedBatch.value?.is_special) {
-      selectedDevice.value = null
-      selectedBatch.value = null
-    }
-    await loadAllDevices()
-  } catch (e) {
-    if (e !== 'cancel') {
-      console.error('删除失败:', e)
-      ElMessage.error('删除失败')
-    }
-  } finally {
-    deleteLoading.value = false
-  }
-}
+
 
 const onDeleteAllSpecial = async () => {
   try {
@@ -2012,50 +1770,8 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.table-card {
-  margin-bottom: 16px;
-}
-
-.batch-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.batch-tag {
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.batch-tag:hover {
-  transform: scale(1.05);
-}
-
-.batch-tag.active {
-  box-shadow: 0 0 0 2px #165DFF;
-}
-
-.special-icon {
-  margin-left: 2px;
-  font-size: 10px;
-}
-
 .detail-card {
   margin-bottom: 20px;
-}
-
-.detail-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.detail-actions {
-  display: flex;
-  align-items: center;
 }
 
 .chart-title {
