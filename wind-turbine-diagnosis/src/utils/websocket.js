@@ -3,7 +3,14 @@
  * 使用指数退避策略，最大重试间隔 30 秒
  */
 
-const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/monitor`
+import { getWebSocketURL } from './backend'
+
+const buildWebSocketURL = () => {
+  const token = localStorage.getItem('access_token')
+  const url = new URL(getWebSocketURL(), window.location.href)
+  if (token) url.searchParams.set('token', token)
+  return url.toString()
+}
 
 class WebSocketClient {
   constructor() {
@@ -23,7 +30,7 @@ class WebSocketClient {
     this.isManualClose = false
 
     try {
-      this.ws = new WebSocket(WS_URL)
+      this.ws = new WebSocket(buildWebSocketURL())
 
       this.ws.onopen = () => {
         console.log('[WebSocket] 已连接')

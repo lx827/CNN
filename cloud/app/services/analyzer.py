@@ -74,7 +74,7 @@ def analyze_device(
       - 仅有轴承参数 → 只跑轴承分析，跳过齿轮
       - 仅有齿轮参数 → 只跑齿轮分析，跳过轴承
       - 两者都有     → 综合（轴承+齿轮）
-      - 两者都无     → 采用默认诊断逻辑（用默认机械参数做全套诊断）
+      - 两者都无     → 不注入默认机械参数，改用统计指标尽量判断是否异常
     """
     import traceback as _tb
 
@@ -110,35 +110,37 @@ def analyze_device(
             has_bearing = _params_valid(ch_bp, "bearing")
             has_gear = _params_valid(ch_gt, "gear")
 
-            # 【默认诊断逻辑】如果该通道既没配轴承参数也没配齿轮参数，
-            # 不跳过诊断，而是使用内置默认参数执行全套诊断，确保 Dashboard 始终有数据。
-            # 详见 DIAGNOSIS_LOGIC.md §2.2
-            if not has_bearing and not has_gear:
-                ch_bp = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}   # 6205-2RS 默认
-                ch_gt = {"input": 18, "output": 27}                     # 常见齿轮箱默认
-                has_bearing = True
-                has_gear = True
-
             engine = DiagnosisEngine(
                 strategy=strategy, bearing_method=bearing_method,
                 gear_method=gear_method, denoise_method=denoise,
                 bearing_params=ch_bp, gear_teeth=ch_gt,
             )
-            result = engine.analyze_comprehensive(
+            result = engine.analyze_research_ensemble(
                 sig_arr, sample_rate, rot_freq=rot_freq,
-                skip_bearing=not has_bearing,
-                skip_gear=not has_gear,
+                profile="runtime",
             )
             channel_results.append((ch_name, result))
 
         if not channel_results:
             return _safe_result("所有通道数据格式异常", 90)
 
-        worst_health = int(min(r["health_score"] for _, r in channel_results))
+        health_values = [int(r["health_score"]) for _, r in channel_results]
+        worst_health = min(health_values)
+        avg_health = sum(health_values) / len(health_values)
+        # 通道可弱融合，但不假设远距离传感器一定强相关。
+        device_health = int(round(0.35 * worst_health + 0.65 * avg_health))
         worst_status = max(
             ([r["status"] for _, r in channel_results]),
             key=lambda s: {"normal": 0, "warning": 1, "fault": 2}.get(s, 0)
         )
+        if worst_status == "fault" and avg_health >= 75:
+            device_status = "warning"
+        elif device_health >= 85:
+            device_status = "normal"
+        elif device_health >= 60:
+            device_status = "warning"
+        else:
+            device_status = "fault"
 
         merged = {}
         for _, r in channel_results:
@@ -173,9 +175,18 @@ def analyze_device(
             imf_energy = {}
 
         return {
-            "health_score": worst_health, "status": worst_status,
+            "health_score": device_health, "status": device_status,
             "fault_probabilities": fault_probs, "imf_energy": imf_energy,
-            "order_analysis": {"engine_result": first_result, "channels": {ch: r for ch, r in channel_results}},
+            "order_analysis": {
+                "engine_result": first_result,
+                "channels": {ch: r for ch, r in channel_results},
+                "aggregation": {
+                    "method": "weak_channel_fusion",
+                    "worst_health": worst_health,
+                    "average_health": round(avg_health, 2),
+                    "worst_status": worst_status,
+                },
+            },
             "rot_freq": rf,
         }
 

@@ -15,6 +15,8 @@ from .bearing import (
     fast_kurtogram,
     cpw_envelope_analysis,
     med_envelope_analysis,
+    teager_envelope_analysis,
+    spectral_kurtosis_envelope_analysis,
 )
 from .gear import (
     compute_fm0,
@@ -33,6 +35,7 @@ from .features import (
     compute_fft_features,
     compute_envelope_features,
 )
+from .ensemble import run_research_ensemble
 
 __all__ = [
     "DiagnosisEngine",
@@ -41,6 +44,8 @@ __all__ = [
     "fast_kurtogram",
     "cpw_envelope_analysis",
     "med_envelope_analysis",
+    "teager_envelope_analysis",
+    "spectral_kurtosis_envelope_analysis",
     "compute_fm0",
     "compute_fm4",
     "compute_na4",
@@ -52,4 +57,5 @@ __all__ = [
     "compute_time_features",
     "compute_fft_features",
     "compute_envelope_features",
+    "run_research_ensemble",
 ]

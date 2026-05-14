@@ -79,19 +79,20 @@ npm run preview
 
 ## 📦 离线分发（发给别人直接打开）
 
-项目已配置 `vite-plugin-singlefile`，构建时会将所有 JS/CSS 内联到单个 HTML 文件中，**无需服务器环境，双击即可打开**。
+项目已配置 `vite-plugin-singlefile`，构建时会将所有 JS/CSS 内联到单个 HTML 文件中，**无需前端服务器，双击即可打开**。
 
 ```bash
 # 构建单文件版本
 npm run build
 ```
 
-构建完成后，将 `dist/index.html` 单独复制出来发给对方即可。对方无需安装 Node.js，直接用浏览器打开该文件即可使用全部功能。
+构建完成后，将 `dist/index.html` 单独复制出来发给对方即可。对方无需安装 Node.js，直接用浏览器打开该文件即可使用；API 默认连接 `http://8.137.96.104:8000`，也可在控制台执行 `localStorage.setItem('backend_base_url', 'http://你的后端地址:8000')` 指定后端。
 
 > **原理说明：**
 >
 > - 路由使用 `createWebHashHistory`（`#` 哈希路由），兼容 `file://` 协议
-> - `vite-plugin-singlefile` 将所有资源内联，避免 `file://` 下的 CORS 限制
+> - `vite-plugin-singlefile` 将所有资源内联，避免 `file://` 下的静态资源限制
+> - `file://` 与 `vite preview` 场景没有 Vite 代理，前端会自动使用后端基地址配置
 
 ## 📄 功能页面
 
@@ -174,7 +175,7 @@ proxy: {
 }
 ```
 
-生产环境由 Nginx 反向代理。
+生产环境由 Nginx 反向代理。`file://` 或 `vite preview` 无法使用开发代理，会自动连接后端基地址；可通过 `window.__BACKEND_BASE_URL__`、`VITE_BACKEND_BASE_URL` 或 `localStorage.backend_base_url` 覆盖。
 
 ## 🎨 界面风格
 

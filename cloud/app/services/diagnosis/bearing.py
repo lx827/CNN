@@ -8,7 +8,7 @@
 - MED + 包络分析
 """
 import numpy as np
-from scipy.signal import hilbert
+from scipy.signal import hilbert, stft
 from scipy.fft import rfft, rfftfreq
 from typing import Dict, Tuple, Optional, List
 
@@ -263,4 +263,109 @@ def med_envelope_analysis(
     result["kurtosis_after"] = round(kurt_after, 4)
     result["method"] = "MED + Envelope"
 
+    return result
+
+
+def teager_envelope_analysis(
+    signal: np.ndarray,
+    fs: float,
+    max_freq: float = 1000.0,
+) -> Dict:
+    """
+    Teager Energy Operator (TEO) envelope analysis.
+
+    The TEO emphasizes transient impact energy before Hilbert envelope
+    extraction. It is useful for weak bearing faults under strong broadband
+    noise, while still returning the same envelope spectrum shape used by the
+    rest of the diagnosis engine.
+    """
+    arr = prepare_signal(signal)
+    if len(arr) < 3:
+        return envelope_analysis(arr, fs, max_freq=max_freq)
+
+    teo = arr[1:-1] ** 2 - arr[:-2] * arr[2:]
+    teo = np.pad(teo, (1, 1), mode="edge")
+    teo = prepare_signal(np.maximum(teo, 0.0))
+    result = fast_kurtogram(teo, fs, max_level=5)
+    result["method"] = "TEO + Fast Kurtogram Envelope"
+    result["teager_rms"] = round(float(np.sqrt(np.mean(teo ** 2))), 6)
+    return result
+
+
+def spectral_kurtosis_envelope_analysis(
+    signal: np.ndarray,
+    fs: float,
+    max_level: int = 6,
+    f_low: float = 100.0,
+    max_freq: float = 1000.0,
+) -> Dict:
+    """
+    Adaptive reweighted spectral-kurtosis envelope analysis.
+
+    This is an engineering approximation of reweighted kurtogram ideas:
+    candidate bands are scored by spectral kurtosis, impulsiveness and local
+    SNR, then the best band is used for envelope spectrum extraction.
+    """
+    arr = prepare_signal(signal)
+    n = len(arr)
+    if n < 128:
+        return envelope_analysis(arr, fs, max_freq=max_freq)
+
+    candidates = []
+    best_score = -1.0
+    best_fc = None
+    best_bw = None
+
+    for level in range(2, max_level + 1):
+        nperseg = min(max(128, n // (2 ** level)), 4096)
+        noverlap = nperseg // 2
+        freqs, _, zxx = stft(arr, fs=fs, nperseg=nperseg, noverlap=noverlap)
+        mag = np.abs(zxx)
+        if mag.size == 0:
+            continue
+
+        bin_bw = fs / nperseg
+        group_bins = max(1, int(2 ** max(0, level - 2)))
+        for start in range(0, len(freqs), group_bins):
+            stop = min(start + group_bins, len(freqs))
+            fc = float(np.mean(freqs[start:stop]))
+            if fc < f_low or fc >= fs / 2 - 10:
+                continue
+
+            band_mag = mag[start:stop, :].reshape(-1)
+            if band_mag.size < 8:
+                continue
+
+            power = band_mag ** 2
+            mean_power = float(np.mean(power)) + 1e-12
+            sk = float(np.mean((power - mean_power) ** 4) / (np.var(power) ** 2 + 1e-12))
+            impulsiveness = float(np.max(band_mag) / (np.median(band_mag) + 1e-12))
+            snr = float(np.percentile(band_mag, 95) / (np.median(band_mag) + 1e-12))
+            score = max(0.0, sk - 3.0) * np.log1p(impulsiveness) * np.log1p(snr)
+            bw = max(bin_bw * group_bins, fs / 512)
+
+            candidates.append({
+                "level": level,
+                "fc": round(fc, 2),
+                "bw": round(float(bw), 2),
+                "spectral_kurtosis": round(sk, 4),
+                "impulsiveness": round(impulsiveness, 4),
+                "snr": round(snr, 4),
+                "score": round(float(score), 4),
+            })
+            if score > best_score:
+                best_score = score
+                best_fc = fc
+                best_bw = bw
+
+    if best_fc is None or best_score <= 0:
+        return fast_kurtogram(arr, fs, max_level=max_level, f_low=f_low)
+
+    result = envelope_analysis(arr, fs, fc=best_fc, bw=best_bw, max_freq=max_freq)
+    candidates.sort(key=lambda x: x["score"], reverse=True)
+    result["method"] = "Adaptive Reweighted Spectral Kurtosis Envelope"
+    result["optimal_fc"] = round(float(best_fc), 2)
+    result["optimal_bw"] = round(float(best_bw), 2)
+    result["reweighted_score"] = round(float(best_score), 4)
+    result["spectral_kurtosis_bands"] = candidates[:100]
     return result

@@ -4,12 +4,12 @@ FastAPI 应用入口
 """
 import logging
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, WebSocket, Query, status
 from app.core.memory_log import setup_memory_logging
 
 from app.api import ingest, dashboard, monitor, diagnosis, alarms, devices, collect, auth, system
 from app.api.data_view import router as data_view_router
-from app.api.auth import optional_auth
+from app.api.auth import optional_auth, verify_token_string
 from app.lifespan import lifespan
 from app.middleware import setup_cors, setup_static_files
 from app.core.websocket import manager
@@ -49,7 +49,12 @@ app.include_router(system.router, dependencies=[Depends(optional_auth)])
 
 # WebSocket 实时推送端点
 @app.websocket("/ws/monitor")
-async def websocket_endpoint(websocket):
+async def websocket_endpoint(websocket: WebSocket, token: str = Query(default="")):
+    try:
+        verify_token_string(token)
+    except Exception:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
     await manager.connect(websocket)
     try:
         while True:

@@ -13,13 +13,15 @@ import sys
 import os
 import glob
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')  # 无图形界面后端
-import matplotlib.pyplot as plt
-
-# 设置中文字体支持
-plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'KaiTi', 'Arial Unicode MS']
-plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+try:
+    import matplotlib
+    matplotlib.use('Agg')  # 无图形界面后端
+    import matplotlib.pyplot as plt
+    # 设置中文字体支持
+    plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'KaiTi', 'Arial Unicode MS']
+    plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+except ModuleNotFoundError:
+    plt = None
 
 # 把 cloud 目录加入路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'cloud'))
@@ -37,7 +39,7 @@ from app.services.diagnosis import (
     compute_time_features,
 )
 
-DATA_DIR = r"D:\code\wavelet_study\dataset\HUSTbear\down8192"
+DATA_DIR = r"E:\A-codehub\CNN\HUSTbear\down8192"
 FS = 8192
 
 
@@ -45,6 +47,8 @@ def load_data(condition: str, channel: str = "X"):
     """加载指定工况和通道的数据"""
     pattern = os.path.join(DATA_DIR, f"{condition}-{channel}.npy")
     files = glob.glob(pattern)
+    if not files and "Hz" in condition:
+        files = glob.glob(os.path.join(DATA_DIR, f"{condition.replace('Hz', 'hz')}-{channel}.npy"))
     if not files:
         raise FileNotFoundError(f"未找到数据: {pattern}")
     return np.load(files[0])
@@ -185,6 +189,9 @@ def test_comprehensive_diagnosis():
 
 def plot_comparison():
     """生成算法对比图（保存到 tests/output）"""
+    if plt is None:
+        print("\n=== 跳过对比图：未安装 matplotlib ===")
+        return
     print("\n=== 生成对比图 ===")
     output_dir = os.path.join(os.path.dirname(__file__), "output")
     os.makedirs(output_dir, exist_ok=True)
