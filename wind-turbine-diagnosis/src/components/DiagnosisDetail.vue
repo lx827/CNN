@@ -1,23 +1,87 @@
 <template>
-  <el-row v-if="orderAnalysis" :gutter="16">
-    <el-col :span="24">
-      <el-card size="small" style="margin-bottom: 16px">
-        <template #header>
-          <span style="font-weight: 600;">🔍 频域/阶次诊断明细</span>
-          <el-text v-if="displayRotFreq != null" type="info" size="small" style="margin-left: 12px;">
-            估计转频: {{ displayRotFreq.toFixed(2) }} Hz / {{ (displayRotFreq * 60).toFixed(0) }} RPM
-          </el-text>
-        </template>
-        <el-descriptions :column="2" size="small" border>
-          <template v-for="item in flatItems" :key="item.key">
-            <el-descriptions-item :label="item.label" v-if="item.value !== null && item.value !== undefined">
-              <span :class="{ 'text-danger': isAnomalyKey(item.key, item.value) }">{{ formatValue(item.value) }}</span>
-            </el-descriptions-item>
-          </template>
-        </el-descriptions>
-      </el-card>
-    </el-col>
-  </el-row>
+  <div v-if="data" class="diagnosis-detail">
+    <!-- 综合结论 -->
+    <div class="detail-group">
+      <div class="group-title">📋 综合结论</div>
+      <el-descriptions :column="2" size="small" border>
+        <el-descriptions-item label="健康度">
+          <span :class="scoreClass(data.health_score)">{{ data.health_score }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="状态">
+          <el-tag :type="statusTagType(data.status)" size="small" effect="dark">{{ statusText(data.status) }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="故障概率">
+          {{ data.fault_likelihood != null ? (data.fault_likelihood * 100).toFixed(1) + '%' : '-' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="故障类型">
+          {{ faultLabelText(data.fault_label) }}
+        </el-descriptions-item>
+        <el-descriptions-item label="转频" :span="2">
+          {{ displayRotFreq != null ? displayRotFreq.toFixed(2) + ' Hz / ' + (displayRotFreq * 60).toFixed(0) + ' RPM' : '-' }}
+        </el-descriptions-item>
+      </el-descriptions>
+      <el-text v-if="data.recommendation" type="info" size="small" style="margin-top: 6px; display: block;">
+        💡 {{ data.recommendation }}
+      </el-text>
+    </div>
+
+    <!-- 时域特征 -->
+    <div class="detail-group" v-if="data.time_features">
+      <div class="group-title">⏱ 时域特征</div>
+      <el-descriptions :column="3" size="small" border>
+        <el-descriptions-item v-for="item in timeFeatureItems" :key="item.key" :label="item.label">
+          <span :class="{ 'text-danger': item.warn }">{{ fmtVal(item.value, item.precision) }}</span>
+          <el-text v-if="item.normal" type="info" size="small" class="val-hint">{{ item.normal }}</el-text>
+        </el-descriptions-item>
+      </el-descriptions>
+    </div>
+
+    <!-- 轴承故障指示器 -->
+    <div class="detail-group" v-if="bearingIndicators.length">
+      <div class="group-title">🔩 轴承故障指示器</div>
+      <el-descriptions :column="3" size="small" border>
+        <el-descriptions-item v-for="item in bearingIndicators" :key="item.key" :label="item.label">
+          <span :class="item.significant ? 'text-warning' : 'text-muted'">{{ fmtVal(item.value) }}</span>
+          <el-tag v-if="item.significant" type="warning" size="small" style="margin-left: 4px;">显著</el-tag>
+        </el-descriptions-item>
+      </el-descriptions>
+    </div>
+
+    <!-- 齿轮故障指示器 -->
+    <div class="detail-group" v-if="gearIndicators.length">
+      <div class="group-title">⚙ 齿轮故障指示器</div>
+      <el-descriptions :column="3" size="small" border>
+        <el-descriptions-item v-for="item in gearIndicators" :key="item.key" :label="item.label">
+          <span :class="item.level">{{ fmtVal(item.value) }}</span>
+          <el-tag v-if="item.critical" type="danger" size="small" style="margin-left: 4px;">严重</el-tag>
+          <el-tag v-else-if="item.warning" type="warning" size="small" style="margin-left: 4px;">预警</el-tag>
+        </el-descriptions-item>
+      </el-descriptions>
+    </div>
+
+    <!-- 轴承特征频率 (仅当有参数级数据时显示) -->
+    <div class="detail-group" v-if="bearingFreqItems.length">
+      <div class="group-title">🎵 轴承特征频率</div>
+      <el-descriptions :column="2" size="small" border>
+        <el-descriptions-item v-for="item in bearingFreqItems" :key="item.key" :label="item.label">
+          {{ fmtVal(item.value) }} Hz
+        </el-descriptions-item>
+      </el-descriptions>
+    </div>
+
+    <!-- 齿轮特征频率 (仅当有参数级数据时显示) -->
+    <div class="detail-group" v-if="gearFreqItems.length">
+      <div class="group-title">🎵 齿轮特征频率</div>
+      <el-descriptions :column="2" size="small" border>
+        <el-descriptions-item v-for="item in gearFreqItems" :key="item.key" :label="item.label">
+          {{ fmtVal(item.value) }} Hz
+        </el-descriptions-item>
+      </el-descriptions>
+    </div>
+  </div>
+  <div v-else class="placeholder">
+    <el-empty description="无诊断数据" :image-size="80" />
+  </div>
 </template>
 
 <script setup>
@@ -29,137 +93,190 @@ const props = defineProps({
   rotRpm: { type: Number, default: null },
 })
 
-const displayRotFreq = computed(() => {
-  return props.rotFreq ?? (props.orderAnalysis?.rot_freq_hz || null)
+// engine_result 是 order_analysis 的核心数据
+const data = computed(() => {
+  if (!props.orderAnalysis) return null
+  // order_analysis 可能是嵌套结构 { engine_result: {...}, channels: {...} }
+  if (props.orderAnalysis.engine_result) {
+    return props.orderAnalysis.engine_result
+  }
+  // 也可能直接是 engine_result 本身
+  return props.orderAnalysis
 })
 
-const keyLabelMap = {
-  'rot_freq_hz': '转频',
-  'rot_rpm': '转速',
-  'spectrum_features': '频谱特征',
-  'envelope_features': '包络特征',
-  'order_features': '阶次特征',
-  'mesh_freq_hz': '啮合频率',
-  'mesh_freq_ratio': '啮合频率能量比',
-  'sideband_total_ratio': '边频带总能量比',
-  'sideband_count': '边频带数量',
-  'output_mesh_freq_hz': '输出轴啮合频率',
-  'output_mesh_ratio': '输出轴啮合能量比',
-  'BPFO_hz': '外圈故障频率',
-  'BPFI_hz': '内圈故障频率',
-  'BSF_hz': '滚动体故障频率',
-  'FTF_hz': '保持架故障频率',
-  'BPFO_ratio': '外圈能量比',
-  'BPFI_ratio': '内圈能量比',
-  'BSF_ratio': '滚动体能量比',
-  'FTF_ratio': '保持架能量比',
-  'BPFO_harmonic_ratio': '外圈谐波能量比',
-  'BPFI_harmonic_ratio': '内圈谐波能量比',
-  'BSF_harmonic_ratio': '滚动体谐波能量比',
-  'FTF_harmonic_ratio': '保持架谐波能量比',
-  'BPFO_env_ratio': '外圈包络能量比',
-  'BPFI_env_ratio': '内圈包络能量比',
-  'BSF_env_ratio': '滚动体包络能量比',
-  'FTF_env_ratio': '保持架包络能量比',
-  'BPFO_env_harmonic_ratio': '外圈包络谐波能量比',
-  'BPFI_env_harmonic_ratio': '内圈包络谐波能量比',
-  'BSF_env_harmonic_ratio': '滚动体包络谐波能量比',
-  'FTF_env_harmonic_ratio': '保持架包络谐波能量比',
-  'total_env_energy': '包络总能量',
-  'mesh_order': '啮合阶次',
-  'mesh_order_ratio': '啮合阶次能量比',
-  'sideband_order_total_ratio': '边频阶次总能量比',
-  'sideband_order_count': '边频阶次数量',
-  'output_mesh_order': '输出轴啮合阶次',
-  'output_mesh_order_ratio': '输出轴啮合阶次能量比',
-  'BPFO_order': '外圈故障阶次',
-  'BPFI_order': '内圈故障阶次',
-  'BSF_order': '滚动体故障阶次',
-  'FTF_order': '保持架故障阶次',
-  'BPFO_order_ratio': '外圈阶次能量比',
-  'BPFI_order_ratio': '内圈阶次能量比',
-  'BSF_order_ratio': '滚动体阶次能量比',
-  'FTF_order_ratio': '保持架阶次能量比',
-  'BPFO_order_harmonic_ratio': '外圈阶次谐波能量比',
-  'BPFI_order_harmonic_ratio': '内圈阶次谐波能量比',
-  'BSF_order_harmonic_ratio': '滚动体阶次谐波能量比',
-  'FTF_order_harmonic_ratio': '保持架阶次谐波能量比',
-  'engine_result': '引擎结果',
-  'channels': '各通道',
-  'bearing': '轴承',
-  'gear': '齿轮',
-  'method': '方法',
-  'strategy': '策略',
-  'health_score': '健康度',
-  'status': '状态',
-  'time_features': '时域特征',
-  'recommendation': '建议',
-  'fault_indicators': '故障指示器',
-  'envelope_freq': '包络频率',
-  'envelope_amp': '包络幅值',
-  'band_center': '中心频率',
-  'band_width': '带宽',
-  'optimal_fc': '最优中心频率',
-  'optimal_bw': '最优带宽',
-  'max_kurtosis': '最大峭度',
-  'comb_frequencies': '梳状频率',
-  'med_filter_len': 'MED滤波长度',
-  'kurtosis_before': 'MED前峭度',
-  'kurtosis_after': 'MED后峭度',
-  'sidebands': '边频带',
-  'mesh_amp': '啮合幅值',
+const displayRotFreq = computed(() => {
+  if (props.rotFreq != null) return props.rotFreq
+  return data.value?.rot_freq_hz ?? null
+})
+
+// ---- 综合结论 ----
+function scoreClass(hs) {
+  if (hs >= 85) return 'score-good'
+  if (hs >= 60) return 'score-warning'
+  return 'score-danger'
+}
+function statusTagType(s) {
+  return s === 'normal' ? 'success' : s === 'warning' ? 'warning' : 'danger'
+}
+function statusText(s) {
+  return s === 'normal' ? '正常' : s === 'warning' ? '预警' : '故障'
+}
+function faultLabelText(label) {
+  if (!label || label === 'unknown') return '未检出异常'
+  if (label === 'bearing_abnormal') return '轴承异常'
+  if (label === 'gear_abnormal') return '齿轮异常'
+  if (label.startsWith('bearing_')) return '轴承 ' + label.replace('bearing_', '')
+  return label
 }
 
-const flatItems = computed(() => {
-  if (!props.orderAnalysis) return []
-  const result = []
-  const walk = (obj, prefix = '') => {
-    for (const [k, v] of Object.entries(obj)) {
-      const displayKey = keyLabelMap[k] || k
-      const label = prefix ? `${prefix} / ${displayKey}` : displayKey
-      const rawKey = prefix ? `${prefix} / ${k}` : k
-      if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
-        walk(v, label)
-      } else if (!Array.isArray(v)) {
-        result.push({ key: rawKey, label, value: v })
-      }
+// ---- 时域特征 ----
+const timeFeatureDefs = {
+  peak: { label: '峰值', precision: 4 },
+  rms: { label: '均方根', precision: 4 },
+  mean_abs: { label: '平均绝对值', precision: 4 },
+  kurtosis: { label: '峭度', precision: 2, normal: '≈3', warn: v => v > 5 },
+  skewness: { label: '偏度', precision: 2, normal: '≈0' },
+  crest_factor: { label: '峰值因子', precision: 2, normal: '3~5', warn: v => v > 10 },
+  shape_factor: { label: '波形因子', precision: 2, normal: '≈1.11' },
+  impulse_factor: { label: '脉冲因子', precision: 2 },
+  margin: { label: '裕度', precision: 2 },
+  rms_mad_z: { label: 'RMS基线漂移', precision: 2 },
+  kurtosis_mad_z: { label: '峭度基线漂移', precision: 2 },
+  ewma_drift: { label: 'EWMA漂移', precision: 4 },
+  cusum_score: { label: 'CUSUM累积', precision: 2 },
+}
+
+const timeFeatureItems = computed(() => {
+  const tf = data.value?.time_features || {}
+  const items = []
+  for (const [key, def] of Object.entries(timeFeatureDefs)) {
+    if (tf[key] !== undefined && tf[key] !== null) {
+      const v = tf[key]
+      items.push({
+        key,
+        label: def.label,
+        value: v,
+        precision: def.precision,
+        normal: def.normal,
+        warn: def.warn ? def.warn(v) : false,
+      })
     }
   }
-  walk(props.orderAnalysis)
-
-  // 如果传入 rotFreq，覆盖历史诊断值
-  if (props.rotFreq != null) {
-    const rotFreqItem = result.find(item => item.key === 'rot_freq_hz')
-    if (rotFreqItem) rotFreqItem.value = props.rotFreq
-    const rotRpmItem = result.find(item => item.key === 'rot_rpm')
-    if (rotRpmItem) rotRpmItem.value = props.rotRpm ?? (props.rotFreq * 60)
-  }
-
-  return result
+  return items
 })
 
-function formatValue(val) {
-  if (typeof val === 'number') {
-    if (Math.abs(val) < 0.001) return val.toExponential(2)
-    if (Math.abs(val) >= 100) return val.toFixed(1)
-    return val.toFixed(4)
-  }
-  return String(val)
+// ---- 轴承故障指示器 ----
+const indicatorLabelMap = {
+  envelope_peak_snr: '包络峰值信噪比',
+  envelope_kurtosis: '包络峭度',
+  moderate_kurtosis: '中等峭度',
+  envelope_crest_factor: '包络峰值因子',
+  peak_concentration: '峰值集中度',
+  high_freq_ratio: '高频比',
+  low_freq_ratio: '低频比',
+  envelope_peak_snr_stat: '包络峰值SNR(统计)',
+  envelope_kurtosis_stat: '包络峭度(统计)',
+  moderate_kurtosis_stat: '中等峭度(统计)',
+  rotation_harmonic_dominant: '旋转谐波占优',
+  BPFO: '外圈(BPFO)',
+  BPFI: '内圈(BPFI)',
+  BSF: '滚动体(BSF)',
+  FTF: '保持架(FTF)',
 }
 
-function isAnomalyKey(key, val) {
-  if (typeof val !== 'number') return false
-  if (key.includes('_ratio') && val > 0.05) return true
-  if (key.includes('_count') && val >= 2) return true
-  if (key.includes('_env_ratio') && val > 0.03) return true
-  if (key.includes('_order_ratio') && val > 0.03) return true
-  return false
+const bearingIndicators = computed(() => {
+  const bi = data.value?.bearing?.fault_indicators || {}
+  const items = []
+  for (const [k, v] of Object.entries(bi)) {
+    if (typeof v !== 'object' || v === null) continue
+    items.push({
+      key: k,
+      label: indicatorLabelMap[k] || k,
+      value: v.value ?? v.snr ?? v.ratio ?? null,
+      significant: v.significant ?? false,
+    })
+  }
+  return items
+})
+
+const gearIndicators = computed(() => {
+  const gi = data.value?.gear?.fault_indicators || {}
+  const items = []
+  for (const [k, v] of Object.entries(gi)) {
+    if (typeof v !== 'object' || v === null) continue
+    items.push({
+      key: k,
+      label: indicatorLabelMap[k] || k,
+      value: v.value ?? v.ratio ?? v.score ?? null,
+      warning: v.warning ?? false,
+      critical: v.critical ?? false,
+      level: v.critical ? 'text-danger' : v.warning ? 'text-warning' : 'text-muted',
+    })
+  }
+  return items
+})
+
+// ---- 特征频率 ----
+const bearingFreqItems = computed(() => {
+  const bi = data.value?.bearing?.fault_indicators || {}
+  const items = []
+  for (const key of ['BPFO', 'BPFI', 'BSF', 'FTF']) {
+    if (bi[key]?.frequency_hz) {
+      items.push({ key, label: indicatorLabelMap[key], value: bi[key].frequency_hz })
+    }
+  }
+  return items
+})
+
+const gearFreqItems = computed(() => {
+  const gi = data.value?.gear || {}
+  const items = []
+  if (gi.mesh_freq_hz) items.push({ key: 'mesh_freq_hz', label: '啮合频率', value: gi.mesh_freq_hz })
+  if (gi.output_mesh_freq_hz) items.push({ key: 'output_mesh_freq_hz', label: '输出轴啮合频率', value: gi.output_mesh_freq_hz })
+  return items
+})
+
+// ---- 工具函数 ----
+function fmtVal(v, precision = 4) {
+  if (v === null || v === undefined) return '-'
+  if (typeof v === 'number') {
+    if (Math.abs(v) < 0.001) return v.toExponential(2)
+    return v.toFixed(precision)
+  }
+  return String(v)
 }
 </script>
 
 <style scoped>
-.text-danger {
-  color: #f56c6c;
-  font-weight: bold;
+.diagnosis-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
+
+.detail-group {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.group-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1d2129;
+  margin-bottom: 8px;
+}
+
+.val-hint {
+  margin-left: 6px;
+  font-size: 12px;
+}
+
+.score-good { color: #52c41a; font-weight: 600; font-size: 18px; }
+.score-warning { color: #faad14; font-weight: 600; font-size: 18px; }
+.score-danger { color: #f5222d; font-weight: 600; font-size: 18px; }
+
+.text-danger { color: #f5222d; font-weight: bold; }
+.text-warning { color: #faad14; font-weight: 600; }
+.text-muted { color: #666; }
 </style>
