@@ -1,14 +1,14 @@
 # Edge Client — 边端采集客户端
 
-> 本文档说明 `edge/` 目录下的边端采集程序，负责模拟风机现场的工业网关，采集振动信号并上传至云端。
+> 本文档说明 `edge/` 目录下的边端采集程序，负责读取风机现场振动数据并上传至云端。
 
 ---
 
 ## 1. 模块概述
 
-边端客户端模拟安装在风机现场的工业网关，核心职责：
+边端客户端安装在风机现场的工业网关，核心职责：
 
-1. **信号采集**：生成模拟振动信号或读取本地真实 `.npy` 数据文件
+1. **信号采集**：读取本地真实 `.npy` 振动数据文件
 2. **数据压缩**：使用降采样 + msgpack + zlib 压缩，减少上传带宽
 3. **数据上传**：通过 HTTP POST 将数据上传到云端 `/api/ingest/`
 4. **任务轮询**：定期从云端获取手动采集任务，执行后上传结果
@@ -21,7 +21,7 @@
 ```
 edge/
 ├── edge_client.py       # 主程序（采集 + 上传 + 任务轮询）
-├── signal_generator.py  # 信号生成器（模拟/真实 .npy 数据）
+├── edge_client.py       # 主程序（读取 .npy + 上传 + 任务轮询）
 ├── compressor.py        # 数据压缩（降采样 + msgpack + zlib）
 ├── requirements.txt     # Python 依赖
 ├── .env                 # 边端配置文件
@@ -39,8 +39,7 @@ CLOUD_INGEST_URL=http://localhost:8000/api/ingest/
 # 设备列表（支持多设备，逗号分隔）
 DEVICE_IDS=WTG-001,WTG-002,WTG-003,WTG-004,WTG-005
 
-# 数据模式
-USE_REAL_DATA=true
+# 真实数据目录
 DATA_DIR=D:\code\wavelet_study\dataset\HUSTbear\down8192
 
 # 信号参数
@@ -62,7 +61,6 @@ TASK_POLL_INTERVAL=5
 |--------|--------|------|
 | `CLOUD_INGEST_URL` | `http://localhost:8000/api/ingest/` | 云端数据接入地址 |
 | `DEVICE_IDS` | `WTG-001` | 设备编号列表，逗号分隔 |
-| `USE_REAL_DATA` | `true` | `true`=读取 `.npy` 文件，`false`=生成模拟信号 |
 | `DATA_DIR` | — | 真实数据目录（`.npy` 文件路径） |
 | `SAMPLE_RATE` | `25600` | 采样率 Hz |
 | `DURATION` | `10` | 单次采集时长（秒） |
@@ -87,13 +85,6 @@ TASK_POLL_INTERVAL=5
   - 转速模式：`CS`（恒定转速）/ `VS`（变速）
   - 通道：`X` / `Y` / `Z`
 - **示例**：`0.5X_B_VS_0_40_0Hz-X.npy`
-
-### 4.2 模拟数据模式
-
-当 `USE_REAL_DATA=false` 时，生成模拟振动信号：
-
-- 正弦波 + 白噪声 + 周期性冲击（模拟轴承故障）
-- 可调节故障类型、严重程度、转速等参数
 
 ---
 
@@ -141,7 +132,7 @@ python edge_client.py
   │
   ├──→ 为每个设备创建独立线程
   │      │
-  │      ├──→ 采集信号（真实 .npy 或模拟生成）
+  │      ├──→ 读取真实 .npy 数据
   │      │
   │      ├──→ 压缩数据
   │      │

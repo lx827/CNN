@@ -1,13 +1,12 @@
 """
 边端采集客户端（多设备版本）
-模拟安装在风机现场的工业网关，负责：
-1. 生成风机振动信号（模拟）或读取本地真实 .npy 数据
+安装在风机现场的工业网关，负责：
+1. 读取本地真实 .npy 振动数据
 2. 打包并压缩数据
 3. 通过 HTTP POST 上传到云端
 
 支持多设备：一个边端实例可同时为多个设备（WTG-001 ~ WTG-005）采集和上传数据。
 支持云端动态配置：启动时及运行中定期从云端拉取上传间隔等参数。
-支持真实数据：通过 USE_REAL_DATA=true 切换到 .npy 文件读取模式。
 
 运行方式：python edge_client.py
 """
@@ -19,7 +18,6 @@ import requests
 import numpy as np
 from datetime import datetime
 from dotenv import load_dotenv
-from signal_generator import generate_signals
 from compressor import compress_payload
 
 # 加载 .env 文件（脚本所在目录）
@@ -41,7 +39,7 @@ CLOUD_CONFIG_URL = os.getenv("CLOUD_CONFIG_URL", f"{CLOUD_BASE_URL}/api/devices/
 DEVICE_IDS_STR = os.getenv("DEVICE_IDS", os.getenv("DEVICE_ID", "WTG-001"))
 DEVICE_IDS = [d.strip() for d in DEVICE_IDS_STR.split(",") if d.strip()]
 
-# ========== 模拟信号参数 ==========
+# ========== 边端运行参数 ==========
 DEFAULT_UPLOAD_INTERVAL = int(os.getenv("UPLOAD_INTERVAL", "10"))
 DEFAULT_TASK_POLL_INTERVAL = int(os.getenv("TASK_POLL_INTERVAL", "5"))
 COMPRESSION_ENABLED = os.getenv("COMPRESSION_ENABLED", "true").lower() in ("true", "1", "yes")
@@ -51,13 +49,9 @@ DOWNSAMPLE_RATIO = int(os.getenv("DOWNSAMPLE_RATIO", "8"))
 CHANNEL_COUNT = int(os.getenv("CHANNEL_COUNT", "3"))
 
 # ========== 真实数据参数 ==========
-USE_REAL_DATA = os.getenv("USE_REAL_DATA", "false").lower() in ("true", "1", "yes")
 DATA_DIR = os.getenv("DATA_DIR", r"D:\code\wavelet_study\dataset\CW\down8192_CW")
 REAL_SAMPLE_RATE = int(os.getenv("REAL_SAMPLE_RATE", "8192"))
 REAL_DURATION = 10  # 真实数据固定 10 秒
-
-# ========== 模拟离线设备 ==========
-SIMULATE_OFFLINE_DEVICE = os.getenv("SIMULATE_OFFLINE_DEVICE", "").strip()
 
 # ========== 离线检测与超时配置 ==========
 # 连接超时（秒）：TCP 建立连接的最大等待时间
@@ -176,28 +170,17 @@ def fetch_device_config(device_id):
 
 def generate_device_signals(device_id, sample_rate, duration):
     """
-    根据模式生成或读取信号
-    - USE_REAL_DATA=true: 从 .npy 文件读取
-    - USE_REAL_DATA=false: 用 signal_generator 模拟
+    从 .npy 文件读取真实信号数据
     """
-    if USE_REAL_DATA:
-        char = device_data_assignments.get(device_id)
-        if not char:
-            raise ValueError(f"设备 {device_id} 未分配工况")
-        # 从该前缀组中随机选一个具体工况（如 H 组下随机选 H-A/H-B/H-C/H-D）
-        candidates = [p for p in data_groups.keys() if p.startswith(char)]
-        prefix = random.choice(candidates)
-        # 使用传入的 duration（云端配置的 window_seconds），而非固定 REAL_DURATION
-        data = load_group_data(data_groups, prefix, target_duration=duration)
-        return data, REAL_SAMPLE_RATE, duration
-    else:
-        signals = generate_signals(
-            mode="auto",
-            channel_count=get_device_channel_count(device_id),
-            duration=duration,
-            sample_rate=sample_rate
-        )
-        return signals, sample_rate, duration
+    char = device_data_assignments.get(device_id)
+    if not char:
+        raise ValueError(f"设备 {device_id} 未分配工况")
+    # 从该前缀组中随机选一个具体工况（如 H 组下随机选 H-A/H-B/H-C/H-D）
+    candidates = [p for p in data_groups.keys() if p.startswith(char)]
+    prefix = random.choice(candidates)
+    # 使用传入的 duration（云端配置的 window_seconds），而非固定 REAL_DURATION
+    data = load_group_data(data_groups, prefix, target_duration=duration)
+    return data, REAL_SAMPLE_RATE, duration
 
 
 # ==================== 上传 ====================
@@ -215,11 +198,6 @@ def upload_data(device_id, signals, sample_rate, is_special=False, task_id=None,
         cloud_comp = config.get("compression_enabled")
         if cloud_comp is not None:
             comp_enabled = bool(cloud_comp)
-        # 真实数据模式下：优先尊重 .env 中的 DOWNSAMPLE_RATIO，不被云端配置覆盖
-        if not USE_REAL_DATA:
-            cloud_ratio = config.get("downsample_ratio")
-            if cloud_ratio is not None:
-                ratio = int(cloud_ratio)
 
     if comp_enabled:
         compressed_info = compress_payload(
@@ -255,9 +233,8 @@ def upload_data(device_id, signals, sample_rate, is_special=False, task_id=None,
             mode_str = "[特殊采集]" if is_special else "[自动采集]"
             orig = payload.get("original_points", len(next(iter(signals.values()))) if signals else 0)
             comp = payload.get("compressed_points", orig)
-            source = "[真实数据]" if USE_REAL_DATA else "[模拟信号]"
             print(
-                f"[{datetime.now().strftime('%H:%M:%S')}] {mode_str} {source} [{device_id}] 上传成功: "
+                f"[{datetime.now().strftime('%H:%M:%S')}] {mode_str} [{device_id}] 上传成功: "
                 f"{len(signals)} 通道, 原始 {orig} 点 → 压缩后 {comp} 点, "
                 f"采样率 {sample_rate}Hz"
                 + (f", 任务ID={task_id}" if task_id else "")
@@ -308,33 +285,26 @@ def main():
     print("=" * 60)
     print("风机边端数据采集客户端（多设备版）")
     print(f"设备列表: {', '.join(DEVICE_IDS)}")
-    if SIMULATE_OFFLINE_DEVICE:
-        print(f"[模拟离线] 设备 {SIMULATE_OFFLINE_DEVICE} 被配置为模拟离线（不上传数据）")
     print(f"目标: {CLOUD_INGEST_URL}")
-    print(f"数据模式: {'真实数据 (.npy)' if USE_REAL_DATA else '模拟信号 (生成器)'}")
-
-    if USE_REAL_DATA:
-        print(f"数据目录: {DATA_DIR}")
-        print(f"真实采样率: {REAL_SAMPLE_RATE} Hz")
-        # 扫描数据
-        data_groups = scan_data_groups(DATA_DIR)
-        # 按前缀首字母分组（H/I/O）
-        prefix_by_char = {}
-        for p in data_groups.keys():
-            prefix_by_char.setdefault(p[0], []).append(p)
-        sorted_chars = sorted(prefix_by_char.keys())
-        print(f"有效工况组: {len(data_groups)} 组，前缀分类 -> { {k: v for k, v in prefix_by_char.items()} }")
-        # 分配前缀：第1台→H（健康），其余设备→故障数据（I/O 循环）
-        fault_chars = [c for c in sorted_chars if c != 'H']
-        for i, dev_id in enumerate(DEVICE_IDS):
-            if i == 0:
-                char = 'H'
-            else:
-                char = fault_chars[(i - 1) % len(fault_chars)] if fault_chars else sorted_chars[i % len(sorted_chars)]
-            device_data_assignments[dev_id] = char
-            print(f"[{dev_id}] 分配前缀组: {char}（含 {prefix_by_char[char]}）")
-    else:
-        print(f"采样: {SAMPLE_RATE} Hz × {DURATION} s = {SAMPLE_RATE * DURATION} 点/通道")
+    print(f"数据目录: {DATA_DIR}")
+    print(f"真实采样率: {REAL_SAMPLE_RATE} Hz")
+    # 扫描数据
+    data_groups = scan_data_groups(DATA_DIR)
+    # 按前缀首字母分组（H/I/O）
+    prefix_by_char = {}
+    for p in data_groups.keys():
+        prefix_by_char.setdefault(p[0], []).append(p)
+    sorted_chars = sorted(prefix_by_char.keys())
+    print(f"有效工况组: {len(data_groups)} 组，前缀分类 -> { {k: v for k, v in prefix_by_char.items()} }")
+    # 分配前缀：第1台→H（健康），其余设备→故障数据（I/O 循环）
+    fault_chars = [c for c in sorted_chars if c != 'H']
+    for i, dev_id in enumerate(DEVICE_IDS):
+        if i == 0:
+            char = 'H'
+        else:
+            char = fault_chars[(i - 1) % len(fault_chars)] if fault_chars else sorted_chars[i % len(sorted_chars)]
+        device_data_assignments[dev_id] = char
+        print(f"[{dev_id}] 分配前缀组: {char}（含 {prefix_by_char[char]}）")
 
     print(f"压缩: {'已启用' if COMPRESSION_ENABLED else '已关闭'}")
     print(f"云端配置: 每 {CONFIG_REFRESH_INTERVAL} 秒刷新一次")
@@ -368,9 +338,6 @@ def main():
 
         # 1. 轮询所有设备的采集任务（手动触发）
         for dev_id in DEVICE_IDS:
-            if SIMULATE_OFFLINE_DEVICE and dev_id == SIMULATE_OFFLINE_DEVICE:
-                continue
-
             state = device_states[dev_id]
             config = state.get("config", {})
             base_poll_interval = config.get("task_poll_interval", DEFAULT_TASK_POLL_INTERVAL)
@@ -420,9 +387,6 @@ def main():
 
         # 2. 普通定时采集（自动上传），每个设备独立判断
         for dev_id in DEVICE_IDS:
-            if SIMULATE_OFFLINE_DEVICE and dev_id == SIMULATE_OFFLINE_DEVICE:
-                continue
-
             state = device_states[dev_id]
             config = state.get("config", {})
             base_upload_interval = config.get("upload_interval", DEFAULT_UPLOAD_INTERVAL)

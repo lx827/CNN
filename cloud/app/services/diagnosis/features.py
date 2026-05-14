@@ -262,7 +262,7 @@ def compute_imf_energy(signal: List[float], sample_rate: int = 25600) -> Dict[st
     yf = np.array(yf)
     xf = np.array(xf)
 
-    # 把频谱分成 5 个频带，模拟 5 个 IMF 分量的能量
+    # 把频谱分成 5 个频带，估算 5 个 IMF 分量的能量
     max_freq = sample_rate / 2
     band_width = max_freq / 5
     bands = [(i * band_width, (i + 1) * band_width) for i in range(5)]
