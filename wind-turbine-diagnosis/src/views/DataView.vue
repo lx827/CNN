@@ -92,13 +92,19 @@
               </el-button>
             </div>
           </div>
-          <div v-if="computedStats && statsData" class="stats-grid">
-            <el-row :gutter="16">
-              <el-col :xs="12" :sm="8" :md="6" v-for="item in statsDisplay" :key="item.key">
-                <el-statistic :title="item.label" :value="statsData[item.key]" :precision="item.precision" />
-              </el-col>
-            </el-row>
-            <el-text v-if="statsData.window_params" type="info" size="small" style="display: block; margin-top: 8px;">
+          <div v-if="computedStats && statsData" class="stats-grouped">
+            <div v-for="group in statsGroups" :key="group.title" class="stats-group">
+              <div class="stats-group-title">{{ group.icon }} {{ group.title }}</div>
+              <el-descriptions :column="group.items.length > 4 ? 4 : group.items.length" border size="small">
+                <el-descriptions-item v-for="item in group.items" :key="item.key" :label="item.label">
+                  <span class="stat-value">
+                    {{ statsData[item.key] !== null && statsData[item.key] !== undefined ? Number(statsData[item.key]).toFixed(item.precision) : '-' }}
+                  </span>
+                  <el-text v-if="item.normal" type="info" size="small" class="stat-normal">{{ item.normal }}</el-text>
+                </el-descriptions-item>
+              </el-descriptions>
+            </div>
+            <el-text type="info" size="small" style="display: block; margin-top: 8px;">
               加窗参数：窗口大小 {{ statsData.window_params.window_size }} 点，滑动步长 {{ statsData.window_params.step }} 点
             </el-text>
           </div>
@@ -876,15 +882,34 @@ const gearSummaryTable = computed(() => {
 })
 
 const statsDisplay = [
-  { key: 'peak', label: '峰值', precision: 4 },
-  { key: 'rms', label: '均方根 (RMS)', precision: 4 },
-  { key: 'kurtosis', label: '峭度', precision: 4 },
-  { key: 'windowed_kurtosis', label: '加窗峰度', precision: 4 },
-  { key: 'skewness', label: '偏度', precision: 4 },
-  { key: 'margin', label: '裕度', precision: 4 },
-  { key: 'crest_factor', label: '峰值因子', precision: 4 },
-  { key: 'shape_factor', label: '波形因子', precision: 4 },
-  { key: 'impulse_factor', label: '脉冲因子', precision: 4 },
+  { key: 'peak', label: '峰值', precision: 4, normal: '—' },
+  { key: 'rms', label: '均方根', precision: 4, normal: '—' },
+  { key: 'skewness', label: '偏度', precision: 4, normal: '≈ 0' },
+  { key: 'kurtosis', label: '峭度', precision: 4, normal: '≈ 3 (正态)' },
+  { key: 'windowed_kurtosis', label: '加窗峰度', precision: 4, normal: '—' },
+  { key: 'crest_factor', label: '峰值因子', precision: 4, normal: '3~5' },
+  { key: 'shape_factor', label: '波形因子', precision: 4, normal: '≈ 1.11 (正弦)' },
+  { key: 'impulse_factor', label: '脉冲因子', precision: 4, normal: '—' },
+  { key: 'margin', label: '裕度', precision: 4, normal: '—' },
+]
+
+// 统计指标分组
+const statsGroups = [
+  { title: '振动幅值', icon: '📊', items: [
+    { key: 'peak', label: '峰值', precision: 4 },
+    { key: 'rms', label: '均方根', precision: 4 },
+  ]},
+  { title: '分布形态', icon: '📈', items: [
+    { key: 'skewness', label: '偏度', precision: 4, normal: '≈ 0' },
+    { key: 'kurtosis', label: '峭度', precision: 4, normal: '≈ 3' },
+    { key: 'windowed_kurtosis', label: '加窗峰度', precision: 4 },
+  ]},
+  { title: '无量纲因子', icon: '📐', items: [
+    { key: 'crest_factor', label: '峰值因子', precision: 4, normal: '3~5' },
+    { key: 'shape_factor', label: '波形因子', precision: 4, normal: '≈ 1.11' },
+    { key: 'impulse_factor', label: '脉冲因子', precision: 4 },
+    { key: 'margin', label: '裕度', precision: 4 },
+  ]},
 ]
 
 
@@ -1849,16 +1874,34 @@ onUnmounted(() => {
   border-radius: 8px;
 }
 
-.stats-grid {
-  padding: 16px;
-  background: #f5f7fa;
-  border-radius: 8px;
+.stats-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.stats-grid :deep(.el-statistic__content) {
-  font-size: 20px;
+.stats-group {
+  border-radius: 8px;
+  padding: 12px 16px;
+  background: #f5f7fa;
+}
+
+.stats-group-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1d2129;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 18px;
   font-weight: 600;
   color: #165DFF;
+}
+
+.stat-normal {
+  margin-left: 6px;
+  font-size: 12px;
 }
 
 .order-info {
@@ -1899,10 +1942,5 @@ onUnmounted(() => {
   background: #f6ffed;
   border: 1px solid #b7eb8f;
   border-radius: 6px;
-}
-
-.stats-grid :deep(.el-statistic__head) {
-  font-size: 13px;
-  color: #666;
 }
 </style>
