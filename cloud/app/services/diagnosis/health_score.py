@@ -101,17 +101,21 @@ def _compute_health_score(
         has_gear = False
 
     if has_gear:
-        ser = gear_ind.get("ser", {}) if isinstance(gear_ind.get("ser"), dict) else {}
-        if ser.get("critical"):
-            deductions.append(("gear_ser_critical", 12))
-        elif ser.get("warning"):
-            deductions.append(("gear_ser_warning", 6))
+        # 齿轮频率匹配路径（SER/sideband）同样需要时域证据门控：
+        # 无冲击特征时不应扣分，旋转谐波的边频带也会触发 SER/sideband
+        gear_freq_has_evidence = (kurt > 5.0 or crest > 7.0)
+        if gear_freq_has_evidence:
+            ser = gear_ind.get("ser", {}) if isinstance(gear_ind.get("ser"), dict) else {}
+            if ser.get("critical"):
+                deductions.append(("gear_ser_critical", 12))
+            elif ser.get("warning"):
+                deductions.append(("gear_ser_warning", 6))
 
-        sb = gear_ind.get("sideband_count", {}) if isinstance(gear_ind.get("sideband_count"), dict) else {}
-        if sb.get("critical"):
-            deductions.append(("gear_sb_critical", 8))
-        elif sb.get("warning"):
-            deductions.append(("gear_sb_warning", 4))
+            sb = gear_ind.get("sideband_count", {}) if isinstance(gear_ind.get("sideband_count"), dict) else {}
+            if sb.get("critical"):
+                deductions.append(("gear_sb_critical", 8))
+            elif sb.get("warning"):
+                deductions.append(("gear_sb_warning", 4))
 
     if not has_gear:
         car = gear_ind.get("car", {}) if isinstance(gear_ind.get("car"), dict) else {}
