@@ -67,7 +67,8 @@ async def get_channel_envelope(
         bearing_params = _extract_device_param(bearing_params, ("n", "d", "D", "alpha"))
         gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
 
-        # 未配置轴承参数时采用默认诊断逻辑
+        # 【默认诊断逻辑】若该设备未配置有效轴承参数，使用内置默认参数执行包络分析，
+        # 确保用户点击"包络分析"时始终能看到结果。详见 DIAGNOSIS_LOGIC.md §2.3
         def _has_valid_bearing(bp):
             if not bp or not isinstance(bp, dict):
                 return False
@@ -76,7 +77,7 @@ async def get_channel_envelope(
             except (TypeError, ValueError):
                 return False
         if not _has_valid_bearing(bearing_params):
-            bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
+            bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}   # 6205-2RS 默认
 
         # 方法映射
         method_map = {
