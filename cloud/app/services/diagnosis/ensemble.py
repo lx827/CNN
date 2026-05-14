@@ -88,6 +88,19 @@ def _has_gear_params(gear_teeth: Optional[Dict]) -> bool:
         return False
 
 
+def _has_bearing_params(bearing_params: Optional[Dict]) -> bool:
+    """轴承参数有效性：需要 n(滚珠数), d(滚珠直径), D(节圆直径) 均有效"""
+    try:
+        if not bearing_params:
+            return False
+        n = bearing_params.get("n")
+        d = bearing_params.get("d")
+        D = bearing_params.get("D")
+        return all(v is not None for v in [n, d, D]) and float(n or 0) > 0 and float(d or 0) > 0 and float(D or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
     indicators = result.get("fault_indicators", {}) or {}
     param_hits = 0
@@ -265,6 +278,15 @@ def run_research_ensemble(
 
     config = _profile_config(profile, denoise_method)
     has_gear = _has_gear_params(gear_teeth)
+    has_bearing = _has_bearing_params(bearing_params)
+
+    # 参数有效性驱动的分析跳过逻辑：
+    # - 仅配置轴承参数 → 只做轴承诊断，跳过齿轮（避免齿轮统计指标误报）
+    # - 仅配置齿轮参数 → 只做齿轮诊断，跳过轴承（避免轴承统计指标误报）
+    # - 都未配置 → 跑轴承统计指标（始终计算）+ 齿轮统计指标（仅 CAR/阶次峭度）
+    # - 都配置 → 综合（轴承+齿轮）全跑
+    skip_bearing = not has_bearing and has_gear
+    skip_gear = not has_gear and has_bearing
 
     bearing_results: Dict[str, Dict] = {}
     gear_results: Dict[str, Dict] = {}
@@ -298,6 +320,8 @@ def run_research_ensemble(
         rot_freq_by_denoise[denoise] = round(float(rf or 0.0), 3)
 
         for method in config["bearing"]:
+            if skip_bearing:
+                continue
             key = f"{denoise}:{method.value}"
             try:
                 engine = DiagnosisEngine(
@@ -319,6 +343,8 @@ def run_research_ensemble(
                 bearing_votes[key] = {"confidence": 0.0, "abnormal": False, "error": str(exc)}
 
         for method in config["gear"]:
+            if skip_gear:
+                continue
             key = f"{denoise}:{method.value}"
             try:
                 engine = DiagnosisEngine(
@@ -360,8 +386,9 @@ def run_research_ensemble(
         if gear_conf else 0.0
     )
 
-    bearing_score = max(bearing_conf or [0.0]) * 0.55 + bearing_vote_fraction * 0.45
-    gear_score = max(gear_conf or [0.0]) * 0.65 + gear_vote_fraction * 0.35
+    # 被跳过的分析路径 score 强制为 0
+    bearing_score = (max(bearing_conf or [0.0]) * 0.55 + bearing_vote_fraction * 0.45) if not skip_bearing else 0.0
+    gear_score = (max(gear_conf or [0.0]) * 0.65 + gear_vote_fraction * 0.35) if not skip_gear else 0.0
     likelihood = max(time_score * 0.6, bearing_score, gear_score)
 
     best_bearing = bearing_results.get(best_bearing_key, {}) if best_bearing_key else {}
@@ -400,6 +427,10 @@ def run_research_ensemble(
             "gear_confidence": round(float(gear_score), 4),
             "best_bearing": best_bearing_key,
             "best_gear": best_gear_key,
+            "skip_bearing": skip_bearing,
+            "skip_gear": skip_gear,
+            "has_bearing_params": has_bearing,
+            "has_gear_params": has_gear,
         },
         "recommendation": _generate_recommendation(best_bearing, best_gear, status),
     }
