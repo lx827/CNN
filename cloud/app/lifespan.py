@@ -20,6 +20,7 @@ from app.core.websocket import manager
 from app.services.analyzer import analyze_device
 from app.services.diagnosis.features import compute_channel_features
 from app.services.alarms import generate_alarms
+from app.services.offline_guard import is_device_offline
 from app.startup import init_database, create_initial_devices
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,12 @@ async def analysis_worker():
                     continue
 
                 for (device_id,) in devices_with_pending:
+                    # 获取设备配置，离线设备直接跳过，防止旧数据触发异常监测
+                    device = db.query(Device).filter(Device.device_id == device_id).first()
+                    if is_device_offline(device):
+                        logger.info(f"[分析服务] {device_id} 当前离线，跳过未分析批次")
+                        continue
+
                     # 获取该设备所有未分析的批次号
                     pending_batches = db.query(SensorData.batch_index).filter(
                         SensorData.device_id == device_id,
@@ -63,8 +70,6 @@ async def analysis_worker():
                             SensorData.batch_index == batch_index
                         ).all()
 
-                        # 获取设备配置（通道数、采样率）
-                        device = db.query(Device).filter(Device.device_id == device_id).first()
                         expected_channels = device.channel_count if device else 3
                         sample_rate = device.sample_rate if device else SENSOR_SAMPLE_RATE
 
