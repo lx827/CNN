@@ -59,7 +59,9 @@ def _compute_health_score(
     if cusum_score > 8 or ewma_drift > 4:
         deductions.append(("trend_drift_warning", 8))
 
-    # ═══════ 轴承故障扣分（时域峭度是前提）═══════
+    # ═══════ 轴承故障扣分 ═══════
+    # 核心原则：频率匹配和统计路径都只有在时域也有冲击证据时才有效。
+    # 健康轴承的旋转谐波也会在包络谱产生峰值，但时域峭度/峰值因子不会异常。
     bearing_ind = bearing_result.get("fault_indicators", {})
     freq_sig_count = sum(
         v.get("significant") for k, v in bearing_ind.items()
@@ -71,15 +73,24 @@ def _compute_health_score(
             "envelope_peak_snr", "envelope_kurtosis", "high_freq_ratio", "peak_concentration"
         })
     )
-    # 只有时域也有冲击特征时，频率匹配才有意义
+    # 检查旋转谐波主导：包络谱能量集中在低频（转频谐波）而非轴承故障频率
+    rotation_dominant = False
+    low_freq_ind = bearing_ind.get("low_freq_ratio")
+    if isinstance(low_freq_ind, dict):
+        rotation_dominant = low_freq_ind.get("rotation_harmonic_dominant", False)
+
+    # 物理参数路径：时域有冲击(kurt>5)时频率匹配才有效
     if kurt > 5.0:
         if freq_sig_count >= 2:
             deductions.append(("bearing_multi_freq", 10))
         elif freq_sig_count == 1:
             deductions.append(("bearing_single_freq", 5))
-    if stat_sig_count >= 2:
+    # 统计路径：必须同时有时域异常证据(kurt>5 或 crest>7) 且非旋转谐波主导
+    # 否则健康数据也会被误判（旋转谐波的包络谱峰也能触发统计指标）
+    stat_has_evidence = (kurt > 5.0 or crest > 7.0) and not rotation_dominant
+    if stat_has_evidence and stat_sig_count >= 2:
         deductions.append(("bearing_statistical_abnormal", 10))
-    elif stat_sig_count == 1 and (kurt > 5.0 or crest > 7.0):
+    elif stat_has_evidence and stat_sig_count == 1:
         deductions.append(("bearing_statistical_hint", 5))
 
     # ═══════ 齿轮故障扣分（故障类型注释）═══════
@@ -104,17 +115,22 @@ def _compute_health_score(
 
     if not has_gear:
         car = gear_ind.get("car", {}) if isinstance(gear_ind.get("car"), dict) else {}
-        if car.get("critical"):
-            deductions.append(("gear_car_critical", 8))
-        elif car.get("warning"):
-            deductions.append(("gear_car_warning", 4))
-
         order_peak = gear_ind.get("order_peak_concentration", {}) if isinstance(gear_ind.get("order_peak_concentration"), dict) else {}
         order_kurt = gear_ind.get("order_kurtosis", {}) if isinstance(gear_ind.get("order_kurtosis"), dict) else {}
-        if order_peak.get("critical") or order_kurt.get("critical"):
-            deductions.append(("gear_order_stat_critical", 8))
-        elif order_peak.get("warning") or order_kurt.get("warning"):
-            deductions.append(("gear_order_stat_warning", 4))
+        # 齿轮统计指标同样需要时域证据门控：无冲击特征时不应扣分
+        # 旋转谐波天然导致 CAR/peak_conc/kurtosis 偏高，健康数据也会触发
+        gear_stat_has_evidence = (kurt > 5.0 or crest > 7.0)
+        if gear_stat_has_evidence:
+            if car.get("critical"):
+                deductions.append(("gear_car_critical", 8))
+            elif car.get("warning"):
+                deductions.append(("gear_car_warning", 4))
+            if order_peak.get("critical") or order_kurt.get("critical"):
+                deductions.append(("gear_order_stat_critical", 8))
+            elif order_peak.get("warning") or order_kurt.get("warning"):
+                deductions.append(("gear_order_stat_warning", 4))
+        # 无时域证据时，齿轮统计指标不扣分（仅在结果中标记，不影响健康度）
+        # CAR > 3.0 可能是旋转谐波导致的倒谱峰值，不是真正的齿轮故障
 
     # ═══════ 综合评分 ═══════
     total = min(sum(d[1] for d in deductions), 75)
