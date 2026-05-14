@@ -1,13 +1,5 @@
 import request from '../utils/request'
-
-function formatDateTime(dt) {
-  if (!dt) return ''
-  const d = new Date(dt)
-  return d.toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  }).replace(/\//g, '-')
-}
+import { formatDateTime } from '../utils/format'
 
 export const getFaultDiagnosisResult = async (deviceId = 'WTG-001') => {
   const res = await request.get('/api/diagnosis/', {
@@ -83,7 +75,7 @@ export const getFaultDiagnosisResult = async (deviceId = 'WTG-001') => {
         description: `检测到${name2}特征频率轻微突出，持续监测中。`,
         imfComponents: Object.entries(d.imf_energy || {}).map(([k, v], i) => ({
           name: k,
-          energy: v * (0.8 + Math.random() * 0.4),
+          energy: v,
           freq: 180 * (i + 1)
         })),
         probabilities: Object.entries(probs).map(([k, v]) => ({
