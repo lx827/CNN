@@ -173,33 +173,26 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
-import { getDeviceInfo } from '../api'
+import { getStatusType, getStatusText } from '../utils/status'
+import { useDeviceStore } from '../stores/deviceStore'
 
-const devices = ref([])
-const selectedDevice = ref(null)
-const alarmStats = ref({})
+const deviceStore = useDeviceStore()
+
+const devices = computed(() => deviceStore.deviceList)
+const selectedDevice = computed(() => deviceStore.selectedDevice)
+const alarmStats = computed(() => deviceStore.alarmStats)
 
 const gaugeChart = ref(null)
 const pieChart = ref(null)
 let gaugeInstance = null
 let pieInstance = null
 
-const normalCount = ref(0)
-const warningCount = ref(0)
-const faultCount = ref(0)
-const offlineCount = ref(0)
-
-const getStatusType = (status) => {
-  const map = { normal: 'success', warning: 'warning', fault: 'danger', offline: 'info' }
-  return map[status] || 'info'
-}
-
-const getStatusText = (status) => {
-  const map = { normal: '正常', warning: '预警', fault: '故障', offline: '离线' }
-  return map[status] || '未知'
-}
+const normalCount = computed(() => devices.value.filter(d => d.status === 'normal').length)
+const warningCount = computed(() => devices.value.filter(d => d.status === 'warning').length)
+const faultCount = computed(() => devices.value.filter(d => d.status === 'fault').length)
+const offlineCount = computed(() => devices.value.filter(d => d.status === 'offline').length)
 
 const getHealthColor = (health) => {
   if (health >= 85) return '#52C41A'
@@ -208,25 +201,11 @@ const getHealthColor = (health) => {
 }
 
 const loadData = async () => {
-  const res = await getDeviceInfo()
-  const data = res.data
-  devices.value = data.devices || []
-  alarmStats.value = data.alarmStats || {}
-
-  // 统计各状态设备数量
-  normalCount.value = devices.value.filter(d => d.status === 'normal').length
-  warningCount.value = devices.value.filter(d => d.status === 'warning').length
-  faultCount.value = devices.value.filter(d => d.status === 'fault').length
-  offlineCount.value = devices.value.filter(d => d.status === 'offline').length
-
-  // 默认选中第一个设备（如果有）
-  if (devices.value.length > 0 && !selectedDevice.value) {
-    selectedDevice.value = devices.value[0]
-  }
+  await deviceStore.loadDevices(true)
 }
 
 const selectDevice = (dev) => {
-  selectedDevice.value = dev
+  deviceStore.selectDevice(dev.deviceId)
 }
 
 const initGaugeChart = () => {

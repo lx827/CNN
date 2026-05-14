@@ -50,6 +50,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { login } from '../api/index'
+import { useUserStore } from '../stores/userStore'
 
 const router = useRouter()
 const formRef = ref()
@@ -73,7 +74,8 @@ const handleLogin = async () => {
   try {
     const res = await login({ password: form.password })
     if (res.access_token) {
-      localStorage.setItem('access_token', res.access_token)
+      const userStore = useUserStore()
+      userStore.setToken(res.access_token)
       ElMessage.success('登录成功')
       router.push('/dashboard')
     } else {

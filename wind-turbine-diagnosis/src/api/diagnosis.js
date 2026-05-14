@@ -1,5 +1,6 @@
 import request from '../utils/request'
 import { formatDateTime } from '../utils/format'
+import { DEFAULT_HEALTH_SCORE } from '../utils/constants'
 
 export const getFaultDiagnosisResult = async (deviceId = 'WTG-001') => {
   const res = await request.get('/api/diagnosis/', {
@@ -111,7 +112,7 @@ export const getFaultDiagnosisResult = async (deviceId = 'WTG-001') => {
     data: {
       diagnosisTime: formatDateTime(d.analyzed_at),
       overallStatus: d.status || 'normal',
-      healthScore: d.health_score || 87,
+      healthScore: d.health_score || DEFAULT_HEALTH_SCORE,
       faultProbabilities: d.fault_probabilities || {},
       batchIndex: d.batch_index || 0,
       orderAnalysis: d.order_analysis || null,

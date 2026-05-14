@@ -11,6 +11,7 @@ export const login = (data) => request.post('/api/auth/login', data)
 
 import { formatDateTime } from '../utils/format'
 import { calcRms, calcPeak } from '../utils/math'
+import { DEFAULT_SAMPLE_RATE, DEFAULT_CHANNEL_COUNT, DEFAULT_HEALTH_SCORE } from '../utils/constants'
 
 // ==================== Dashboard ====================
 
@@ -24,7 +25,7 @@ export const getDeviceInfo = async () => {
   const deviceList = devices.map((device, idx) => {
     const isOffline = device.status === 'offline'
     const dDiag = diag[device.device_id] || {}
-    const health = isOffline ? null : (dDiag.health_score || device.health_score || 87)
+    const health = isOffline ? null : (dDiag.health_score || device.health_score || DEFAULT_HEALTH_SCORE)
     const status = isOffline ? 'offline' : (dDiag.status || device.status || 'normal')
 
     const getComponentInfo = (channelName) => {
@@ -38,7 +39,7 @@ export const getDeviceInfo = async () => {
     }
 
     const channelNames = device.channel_names || {}
-    const channelCount = device.channel_count || 3
+    const channelCount = device.channel_count || DEFAULT_CHANNEL_COUNT
     const components = []
     for (let i = 1; i <= channelCount; i++) {
       const chName = channelNames[String(i)] || `通道${i}`
@@ -106,7 +107,7 @@ export const getRealtimeVibrationData = async (deviceId = 'WTG-001', preferSpeci
       name: item.channel_name || defaultChannelNames[idx] || `通道${idx + 1}`,
       channel_name: item.channel_name || defaultChannelNames[idx] || `通道${idx + 1}`,
       unit: 'mm/s',
-      sampleRate: item.sample_rate || 25600,
+      sampleRate: item.sample_rate || DEFAULT_SAMPLE_RATE,
       timeDomain: data,
       frequency: fftAmp,
       fftFreq: fftFreq,

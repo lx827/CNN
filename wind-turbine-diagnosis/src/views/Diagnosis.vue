@@ -197,6 +197,7 @@ import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
 import { getFaultDiagnosisResult, getDevices } from '../api'
 import { useRouter } from 'vue-router'
+import { DEFAULT_CHANNEL_COUNT } from '../utils/constants'
 
 const diagnosisTime = ref('')
 const healthScore = ref(87)
@@ -302,7 +303,7 @@ const generateComponents = (deviceChannels, faultProbabilities) => {
   const components = []
 
   // 优先使用设备的 channel_count，其次从 channel_names 推断
-  const channelCount = currentDevice?.channel_count || Object.keys(deviceChannels || {}).length || 3
+  const channelCount = currentDevice?.channel_count || Object.keys(deviceChannels || {}).length || DEFAULT_CHANNEL_COUNT
 
   for (let i = 1; i <= count; i++) {
     const chName = deviceChannels?.[String(i)] || `通道${i}`

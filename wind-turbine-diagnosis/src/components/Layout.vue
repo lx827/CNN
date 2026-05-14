@@ -63,9 +63,11 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useUserStore } from '../stores/userStore'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 
 const activeMenu = computed(() => route.path)
 
@@ -74,7 +76,7 @@ const handleMenuSelect = (index) => {
 }
 
 const handleLogout = () => {
-  localStorage.removeItem('access_token')
+  userStore.clearToken()
   router.push('/login')
 }
 </script>

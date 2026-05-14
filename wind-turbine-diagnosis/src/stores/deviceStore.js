@@ -7,6 +7,7 @@ export const useDeviceStore = defineStore('device', () => {
   const deviceList = ref([])
   const selectedDeviceId = ref(null)
   const loading = ref(false)
+  const alarmStats = ref({})
 
   // ========== Getters ==========
   const selectedDevice = computed(() =>
@@ -22,15 +23,17 @@ export const useDeviceStore = defineStore('device', () => {
   )
 
   // ========== Actions ==========
-  async function loadDevices() {
-    if (deviceList.value.length > 0 && !loading.value) {
+  async function loadDevices(force = false) {
+    if (!force && deviceList.value.length > 0 && !loading.value) {
       // 已有缓存且未在加载中，直接返回（避免重复请求）
       return
     }
     loading.value = true
     try {
       const res = await getDeviceInfo()
-      deviceList.value = res.data?.devices || []
+      const data = res.data || {}
+      deviceList.value = data.devices || []
+      alarmStats.value = data.alarmStats || {}
       // 如果没有选中设备，默认选中第一个在线设备
       if (!selectedDeviceId.value && deviceList.value.length > 0) {
         const firstOnline = deviceList.value.find(d => d.status !== 'offline')
@@ -56,6 +59,7 @@ export const useDeviceStore = defineStore('device', () => {
     selectedDevice,
     onlineDevices,
     offlineDevices,
+    alarmStats,
     loading,
     loadDevices,
     selectDevice,

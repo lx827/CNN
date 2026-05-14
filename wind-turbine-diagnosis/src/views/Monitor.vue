@@ -105,7 +105,7 @@
           <template #default>
             <div class="progress-detail">
               <el-progress :percentage="collectionProgress" :stroke-width="8" />
-              <span class="progress-hint">边端正在按 25600Hz 采集 10s 数据...</span>
+              <span class="progress-hint">边端正在按 {{ DEFAULT_SAMPLE_RATE }}Hz 采集 {{ DEFAULT_WINDOW_SECONDS }}s 数据...</span>
             </div>
           </template>
         </el-alert>
@@ -156,6 +156,7 @@ import * as echarts from 'echarts'
 import { getRealtimeVibrationData, requestCollection, getTaskStatus, getDevices } from '../api'
 import { getWebSocketClient } from '../utils/websocket'
 import { ElMessage } from 'element-plus'
+import { DEFAULT_SAMPLE_RATE, DEFAULT_WINDOW_SECONDS } from '../utils/constants'
 
 const activeChannel = ref(0)
 const channels = ref([])
@@ -382,7 +383,7 @@ const updateCharts = () => {
   const timeData = channel.timeDomain
   const freqData = channel.frequency
   const fftFreq = channel.fftFreq || []
-  const sampleRate = channel.sampleRate || 25600
+  const sampleRate = channel.sampleRate || DEFAULT_SAMPLE_RATE
 
   // 时域图：x 轴为时间（秒）
   const timeX = Array.from({ length: timeData.length }, (_, i) => (i / sampleRate).toFixed(4))

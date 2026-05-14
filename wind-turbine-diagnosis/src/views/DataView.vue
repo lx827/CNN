@@ -686,6 +686,7 @@ import {
 } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import DiagnosisDetail from '../components/DiagnosisDetail.vue'
+import { DEFAULT_SAMPLE_RATE, DEFAULT_CHANNEL_COUNT } from '../utils/constants'
 
 const route = useRoute()
 const loading = ref(false)
@@ -975,7 +976,7 @@ const selectBatch = (device, batch) => {
   selectedDevice.value = device
   selectedBatch.value = batch
   // 通道选项按该批次实际存储的通道数决定（旧批次可能是3通道，新批次可能是2通道）
-  const actualChannels = batch.channel_count || device.channel_count || 3
+  const actualChannels = batch.channel_count || device.channel_count || DEFAULT_CHANNEL_COUNT
   channelOptions.value = Array.from({ length: actualChannels }, (_, i) => i + 1)
   selectedChannel.value = 1
 
@@ -1093,7 +1094,7 @@ const loadTimeDomain = async () => {
     const d = res.data
     if (!d) return
 
-    const sr = d.sample_rate || 25600
+    const sr = d.sample_rate || DEFAULT_SAMPLE_RATE
     const timeData = d.data || []
     const timeX = timeData.map((_, i) => (i / sr).toFixed(4))
 

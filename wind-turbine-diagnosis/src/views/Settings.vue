@@ -402,6 +402,7 @@ import {
   getDevices, getDeviceConfig, updateDeviceConfig, updateBatchDeviceConfig,
   getAlarmThresholds, updateAlarmThresholds
 } from '../api'
+import { DEFAULT_SAMPLE_RATE, DEFAULT_CHANNEL_COUNT } from '../utils/constants'
 
 const deviceList = ref([])
 const saving = ref(false)
@@ -411,9 +412,9 @@ const form = ref({
   device_id: 'WTG-001',
   upload_interval: 10,
   task_poll_interval: 5,
-  sample_rate: 25600,
+  sample_rate: DEFAULT_SAMPLE_RATE,
   window_seconds: 10,
-  channel_count: 3,
+  channel_count: DEFAULT_CHANNEL_COUNT,
   gear_teeth: {},
   bearing_params: {},
   compression_enabled: true,
@@ -494,14 +495,14 @@ const loadConfig = async () => {
     const d = res.data || {}
     form.value.upload_interval = d.upload_interval ?? 10
     form.value.task_poll_interval = d.task_poll_interval ?? 5
-    form.value.sample_rate = d.sample_rate ?? 25600
+    form.value.sample_rate = d.sample_rate ?? DEFAULT_SAMPLE_RATE
     form.value.window_seconds = d.window_seconds ?? 10
-    form.value.channel_count = d.channel_count ?? 3
+    form.value.channel_count = d.channel_count ?? DEFAULT_CHANNEL_COUNT
     form.value.compression_enabled = d.compression_enabled ?? true
     form.value.downsample_ratio = d.downsample_ratio ?? 8
 
     // 加载齿轮/轴承参数（兼容旧格式设备级与新格式通道级）
-    const chCount = form.value.channel_count || 3
+    const chCount = form.value.channel_count || DEFAULT_CHANNEL_COUNT
     const gt = d.gear_teeth || {}
     const bp = d.bearing_params || {}
 

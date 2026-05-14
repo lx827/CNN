@@ -1,13 +1,5 @@
 import request from '../utils/request'
-
-function formatDateTime(dt) {
-  if (!dt) return ''
-  const d = new Date(dt)
-  return d.toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  }).replace(/\//g, '-')
-}
+import { formatDateTime } from '../utils/format'
 
 export const getHistoryAlarmList = async (page = 1, pageSize = 10, filters = {}) => {
   const params = { page, size: pageSize }

@@ -9,6 +9,8 @@ export const HEALTH_THRESHOLD_NORMAL = 80
 // 默认采样率
 export const DEFAULT_SAMPLE_RATE = 25600
 export const DEFAULT_DURATION = 10
+export const DEFAULT_CHANNEL_COUNT = 3
+export const DEFAULT_HEALTH_SCORE = 87
 
 // 颜色常量（与 Element Plus 主题对齐）
 export const COLORS = {

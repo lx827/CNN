@@ -13,7 +13,7 @@
         {{ getStatusText(batch.diagnosis_status) }}
         <span v-if="batch.health_score != null">({{ batch.health_score }}分)</span>
       </el-tag>
-      <el-tag type="info" size="small">采样率 {{ batch?.sample_rate || 25600 }} Hz</el-tag>
+      <el-tag type="info" size="small">采样率 {{ batch?.sample_rate || DEFAULT_SAMPLE_RATE }} Hz</el-tag>
     </span>
     <div class="detail-actions">
       <el-select
@@ -74,6 +74,7 @@
 
 <script setup>
 import { getStatusText, getStatusType } from '../../utils/status'
+import { DEFAULT_SAMPLE_RATE } from '../../utils/constants'
 
 const props = defineProps({
   device: { type: Object, default: null },
