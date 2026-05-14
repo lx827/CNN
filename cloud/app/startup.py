@@ -19,7 +19,7 @@ def init_database():
 
 def create_initial_devices():
     """
-    插入默认模拟设备（如果不存在）。
+    插入默认设备（如果不存在）。
 
     注意：新设备默认不预填 bearing_params 和 gear_teeth，
     避免用户误以为已配置真实机械参数。

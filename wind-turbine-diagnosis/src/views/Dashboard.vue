@@ -175,7 +175,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
-import { getDeviceInfo, getStatistics } from '../api'
+import { getDeviceInfo } from '../api'
 
 const devices = ref([])
 const selectedDevice = ref(null)
@@ -363,22 +363,6 @@ const initPieChart = async () => {
       .filter(([name]) => name !== '正常运行' && validFaultTypes.has(name))
       .map(([name, value]) => ({ name, value: Math.round(value * 100) }))
       .filter(item => item.value > 0)
-  }
-
-  // 如果没有诊断数据，用静态模拟
-  if (pieData.length === 0) {
-    const res = await getStatistics()
-    const faultTypeMap = {
-      gear_wear: '齿轮磨损',
-      bearing_outer_race: '轴承外圈故障',
-      bearing_inner_race: '轴承内圈故障',
-      gear_broken: '齿轮断齿',
-      bearing_ball: '轴承滚动体故障'
-    }
-    pieData = (res.data?.faultDistribution || []).map(item => ({
-      name: faultTypeMap[item.name] || item.name,
-      value: item.value
-    }))
   }
 
   const option = {

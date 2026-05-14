@@ -33,26 +33,6 @@ function formatDateTime(dt) {
 
 // ==================== Dashboard ====================
 
-export const getStatistics = async () => {
-  return {
-    code: 200,
-    data: {
-      faultDistribution: [
-        { value: 12, name: 'gear_wear' },
-        { value: 8, name: 'bearing_outer_race' },
-        { value: 5, name: 'bearing_inner_race' },
-        { value: 3, name: 'gear_broken' },
-        { value: 2, name: 'bearing_ball' }
-      ],
-      monthlyTrend: {
-        months: ['1月', '2月', '3月', '4月', '5月', '6月'],
-        alarms: [3, 5, 4, 7, 2, 4],
-        handled: [2, 4, 3, 5, 2, 3]
-      }
-    }
-  }
-}
-
 export const getDeviceInfo = async () => {
   const res = await request.get('/api/dashboard/')
   const backend = res.data || {}
