@@ -178,7 +178,7 @@ def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
     }
 
 
-def _gear_confidence(result: Dict, has_gear_params: bool) -> Dict[str, Any]:
+def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optional[Dict] = None) -> Dict[str, Any]:
     indicators = result.get("fault_indicators", {}) or {}
     warning_hits = 0
     critical_hits = 0
@@ -194,22 +194,58 @@ def _gear_confidence(result: Dict, has_gear_params: bool) -> Dict[str, Any]:
             warning_hits += 1
             hit_names.append(name)
 
+    # 齿轮置信度需要时域证据门控：
+    # 行星齿轮箱健康数据 kurtosis=8~10, crest=5~9，
+    # 但齿轮指标（SER/CAR/sideband/order_kurtosis）几乎全部标记为 critical。
+    # 没有时域冲击证据时，齿轮指标的 critical_hits 只是旋转谐波的统计假象。
+    # 齿轮专用证据阈值与 health_score.py 一致：
+    # kurtosis > 12 或 crest_factor > 15
+    kurt = _as_float(time_features.get("kurtosis") if time_features else None, 3.0)
+    crest = _as_float(time_features.get("crest_factor") if time_features else None, 5.0)
+    GEAR_KURT_THRESHOLD = 12.0
+    GEAR_CREST_THRESHOLD = 15.0
+    impulse_context = kurt > GEAR_KURT_THRESHOLD or crest > GEAR_CREST_THRESHOLD
+
+    # 检查低频优势（旋转谐波主导时齿轮指标无效）
+    rotation_dominant = False
+    low_freq_ind = indicators.get("low_freq_ratio")
+    if isinstance(low_freq_ind, dict):
+        lf_value = _as_float(low_freq_ind.get("value"), 0.0)
+        if lf_value > 0.55:
+            rotation_dominant = True
+
     confidence = 0.0
     if has_gear_params:
-        if critical_hits >= 1 and (warning_hits + critical_hits) >= 2:
-            confidence = 0.8
-        elif critical_hits >= 1 or warning_hits >= 2:
-            confidence = 0.6
-        elif warning_hits == 1:
-            confidence = 0.35
+        # 有齿轮参数时：SER/sideband 是频率匹配指标，更有区分力
+        # 但仍需要时域冲击证据来排除旋转谐波导致的假阳性
+        if impulse_context and not rotation_dominant:
+            if critical_hits >= 1 and (warning_hits + critical_hits) >= 2:
+                confidence = 0.8
+            elif critical_hits >= 1 or warning_hits >= 2:
+                confidence = 0.6
+            elif warning_hits == 1:
+                confidence = 0.35
+        else:
+            # 无时域冲击证据或旋转谐波主导：齿轮指标降权
+            # 旋转谐波的边频带/SER/CAR 都会触发指标，但不是真实齿轮故障
+            if critical_hits >= 3 and warning_hits >= 1:
+                confidence = 0.35  # 仅弱证据
+            elif critical_hits >= 2:
+                confidence = 0.25
+            else:
+                confidence = 0.0
     else:
         # Without gear geometry, CAR/order statistics are weak evidence only.
-        if critical_hits >= 2:
-            confidence = 0.35
-        elif critical_hits == 1 and warning_hits >= 1:
-            confidence = 0.3
-        elif warning_hits >= 2:
-            confidence = 0.25
+        if impulse_context and not rotation_dominant:
+            if critical_hits >= 2:
+                confidence = 0.35
+            elif critical_hits == 1 and warning_hits >= 1:
+                confidence = 0.3
+            elif warning_hits >= 2:
+                confidence = 0.25
+        else:
+            # 无时域证据时，CAR/order 统计指标不可靠
+            confidence = 0.0
 
     return {
         "confidence": round(float(confidence), 4),
@@ -364,7 +400,7 @@ def run_research_ensemble(
                 )
                 result["denoise"] = denoise
                 gear_results[key] = result
-                vote = _gear_confidence(result, has_gear)
+                vote = _gear_confidence(result, has_gear, time_features)
                 gear_votes[key] = vote
                 if best_gear_key is None or vote["confidence"] > gear_votes[best_gear_key]["confidence"]:
                     best_gear_key = key

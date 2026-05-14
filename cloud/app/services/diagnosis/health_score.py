@@ -33,23 +33,47 @@ def _compute_health_score(
     crest = _sf(time_features.get("crest_factor"), 5.0)
     rms = _sf(time_features.get("rms"), 0.0)
 
+    # 是否为齿轮设备：齿轮路径的峭度阈值需要更宽松
+    # 行星齿轮箱健康峭度可达 8~10，轴承健康峭度 ≈ 3
+    try:
+        is_gear_device = bool(gear_teeth and float(gear_teeth.get("input") or 0) > 0)
+    except (TypeError, ValueError):
+        is_gear_device = False
+
     # 峭度：冲击信号的核心指标
-    if kurt > 20:
-        deductions.append(("kurtosis_extreme", 40))
-    elif kurt > 12:
-        deductions.append(("kurtosis_high", 30))
-    elif kurt > 8:
-        deductions.append(("kurtosis_moderate", 22))
-    elif kurt > 5:
-        deductions.append(("kurtosis_mild", 15))
+    # 齿轮设备使用更高的阈值（行星箱正常 kurt=8~10）
+    # 轴承设备保持原阈值（轴承正常 kurt≈3）
+    if is_gear_device:
+        if kurt > 20:
+            deductions.append(("kurtosis_extreme", 40))
+        elif kurt > 12:
+            deductions.append(("kurtosis_high", 25))
+        elif kurt > 10:
+            deductions.append(("kurtosis_moderate", 15))
+    else:
+        if kurt > 20:
+            deductions.append(("kurtosis_extreme", 40))
+        elif kurt > 12:
+            deductions.append(("kurtosis_high", 30))
+        elif kurt > 8:
+            deductions.append(("kurtosis_moderate", 22))
+        elif kurt > 5:
+            deductions.append(("kurtosis_mild", 15))
 
     # 峰值因子：单大冲击 vs 持续振动
-    if crest > 15:
-        deductions.append(("crest_very_high", 15))
-    elif crest > 10:
-        deductions.append(("crest_high", 10))
-    elif crest > 7:
-        deductions.append(("crest_moderate", 5))
+    # 齿轮设备使用更高阈值（行星箱正常 crest=5~9）
+    if is_gear_device:
+        if crest > 15:
+            deductions.append(("crest_very_high", 15))
+        elif crest > 12:
+            deductions.append(("crest_high", 10))
+    else:
+        if crest > 15:
+            deductions.append(("crest_very_high", 15))
+        elif crest > 10:
+            deductions.append(("crest_high", 10))
+        elif crest > 7:
+            deductions.append(("crest_moderate", 5))
 
     # 动态基线/趋势：本批次窗口内出现持续漂移或突变时扣分。
     # 变速工况下转速变化会导致 RMS/kurtosis 自然波动，
@@ -113,11 +137,31 @@ def _compute_health_score(
     except (TypeError, ValueError):
         has_gear = False
 
+    # 齿轮振动与轴承振动的时域证据标准不同：
+    # 行星齿轮箱健康工况下 kurtosis 可达 8~10（行星轮系固有调制），
+    # 而轴承健康数据 kurtosis ≈ 3。因此齿轮路径需要更严格的证据门控。
+    # 齿轮冲击的证据阈值：kurtosis > 12 或 crest_factor > 12
+    # （行星齿轮箱健康数据 kurt=8~10, crest=5~10.7；N1_45的crest=10.47刚低于12）
+    # 真实齿轮故障中断齿Br_B1_35的crest=13.6 > 12，是唯一超过此阈值的断齿工况
+    # 缺齿Mi的kurt=16~38远超12，磨损We_W1_20的kurt=14.65也超过12
+    # 健康N1_45(kurt=21.9)仍会触发——这是已知局限（行星箱高转速健康峭度偏高）
+    GEAR_KURT_THRESHOLD = 12.0
+    GEAR_CREST_THRESHOLD = 12.0
+
+    # 从轴承或齿轮指标中判断旋转谐波主导
+    # 当轴承被 skip 时，bearing_ind 为空，需要从 gear_ind 中获取
+    low_freq_ind = bearing_ind.get("low_freq_ratio") if bearing_ind else None
+    if isinstance(low_freq_ind, dict):
+        rotation_dominant = low_freq_ind.get("rotation_harmonic_dominant", rotation_dominant)
+    # 齿轮数据中也可能有低频占优的指标
+    low_freq_gear = gear_ind.get("low_freq_ratio") if isinstance(gear_ind.get("low_freq_ratio"), dict) else None
+    if low_freq_gear and low_freq_gear.get("rotation_harmonic_dominant"):
+        rotation_dominant = True
+
     if has_gear:
-        # 齿轮频率匹配路径（SER/sideband）同样需要时域证据门控：
-        # 无冲击特征时不应扣分，旋转谐波的边频带也会触发 SER/sideband
-        # 同时需要 rotation_dominant 保护（与轴承统计路径一致）
-        gear_freq_has_evidence = (kurt > 5.0 or crest > CREST_EVIDENCE_THRESHOLD) and not rotation_dominant
+        # 齿轮频率匹配路径：使用齿轮专用证据阈值
+        # 行星齿轮箱健康数据 kurt=8~10 不应打开齿轮扣分路径
+        gear_freq_has_evidence = (kurt > GEAR_KURT_THRESHOLD or crest > GEAR_CREST_THRESHOLD) and not rotation_dominant
         if gear_freq_has_evidence:
             ser = gear_ind.get("ser", {}) if isinstance(gear_ind.get("ser"), dict) else {}
             if ser.get("critical"):
@@ -135,9 +179,9 @@ def _compute_health_score(
         car = gear_ind.get("car", {}) if isinstance(gear_ind.get("car"), dict) else {}
         order_peak = gear_ind.get("order_peak_concentration", {}) if isinstance(gear_ind.get("order_peak_concentration"), dict) else {}
         order_kurt = gear_ind.get("order_kurtosis", {}) if isinstance(gear_ind.get("order_kurtosis"), dict) else {}
-        # 齿轮统计指标同样需要时域证据门控：无冲击特征时不应扣分
-        # 旋转谐波天然导致 CAR/peak_conc/kurtosis 偏高，健康数据也会触发
-        # 同时需要 rotation_dominant 保护（与轴承统计路径一致）
+        # 齿轮统计指标同样需要时域证据门控
+        # 无齿轮参数时使用轴承级别的证据阈值（kurt>5 或 crest>10）
+        # 因为此时信号来自轴承传感器，轴承健康 kurt≈3
         gear_stat_has_evidence = (kurt > 5.0 or crest > CREST_EVIDENCE_THRESHOLD) and not rotation_dominant
         if gear_stat_has_evidence:
             if car.get("critical"):

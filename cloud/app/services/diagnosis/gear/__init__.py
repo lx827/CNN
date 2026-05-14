@@ -283,18 +283,39 @@ def analyze_sidebands(
 
 def _evaluate_gear_faults(gear_result: Dict) -> Dict:
     """评估齿轮故障指示器
-    
-    旋转谐波（1X, 2X, 3X）在任何信号中都存在且能量最强，
-    统计指标必须设置足够高的阈值以避免将其误判为齿轮故障。
+
+    行星齿轮箱（planet_count≥3）的频域指标阈值与定轴齿轮箱不同：
+    - 行星架构天然产生大量边频带（多个行星轮同时啮合调制）
+    - SER 天然在 5~12 范围（定轴箱健康 < 1.5）
+    - CAR 天然在 10^9~10^10 量级（定轴箱健康 < 2）
+    - sideband_count 天然 = 6（定轴箱健康通常 ≤ 2）
+
+    因此行星箱的 warning/critical 阈值需要大幅提升，
+    否则所有数据（健康和故障）都会被标记为 critical。
     """
     indicators = {}
 
+    # 行星齿轮箱判断：planet_count ≥ 3 → 行星架构
+    planet_count = gear_result.get("planet_count", 0)
+    is_planetary = planet_count >= 3
+
     ser = gear_result.get("ser") if gear_result.get("ser") is not None else 0.0
-    indicators["ser"] = {
-        "value": round(ser, 4),
-        "warning": ser > 1.5,
-        "critical": ser > 3.0,
-    }
+    if is_planetary:
+        # 行星箱 SER 天然 5~12，健康和故障都在此范围
+        # SER > 12 才是异常（实际行星箱故障 SER 也在 5~10）
+        # 因此 SER 对行星箱几乎无区分力，仅设高阈值避免误报
+        indicators["ser"] = {
+            "value": round(ser, 4),
+            "warning": ser > 12.0,
+            "critical": ser > 20.0,
+        }
+    else:
+        # 定轴箱 SER < 1.5 为正常，> 3.0 为严重
+        indicators["ser"] = {
+            "value": round(ser, 4),
+            "warning": ser > 1.5,
+            "critical": ser > 3.0,
+        }
 
     fm0 = gear_result.get("fm0")
     if fm0 is not None:
@@ -306,43 +327,73 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
 
     car = gear_result.get("car")
     if car is not None:
-        # CAR 在旋转谐波清晰时也能达到 ~1.0-1.5（正常范围）
-        # 齿轮故障时 CAR 通常 > 3.0（啮合频率边频在倒谱中产生强峰值）
-        indicators["car"] = {
-            "value": round(car, 4),
-            "warning": car > 2.0,
-            "critical": car > 3.0,
-        }
+        if is_planetary:
+            # 行星箱 CAR 天然 10^9~10^10，对故障无区分力
+            # 仅设极高阈值避免误报（实际值不可能超过此阈值）
+            indicators["car"] = {
+                "value": round(car, 4),
+                "warning": car > 1e15,
+                "critical": car > 1e18,
+            }
+        else:
+            # 定轴箱 CAR 正常 < 2.0，故障 > 3.0
+            indicators["car"] = {
+                "value": round(car, 4),
+                "warning": car > 2.0,
+                "critical": car > 3.0,
+            }
 
     # 边频带统计
     sidebands = gear_result.get("sidebands", [])
     significant_count = sum(1 for sb in sidebands if sb.get("significant"))
-    indicators["sideband_count"] = {
-        "value": significant_count,
-        "warning": significant_count >= 2,
-        "critical": significant_count >= 4,
-    }
+    if is_planetary:
+        # 行星箱天然 6 个边频带（4行星轮 × 调制），对故障无区分力
+        # 仅标记 ≥ 8 为 warning（实际不可能超过此值）
+        indicators["sideband_count"] = {
+            "value": significant_count,
+            "warning": significant_count >= 8,
+            "critical": significant_count >= 10,
+        }
+    else:
+        indicators["sideband_count"] = {
+            "value": significant_count,
+            "warning": significant_count >= 2,
+            "critical": significant_count >= 4,
+        }
 
     # 无齿轮参数时的阶次谱统计指示器
-    # 1X 阶次在所有信号中都是最强峰，导致这些统计值天然偏高
     order_peak_conc = gear_result.get("order_peak_concentration")
     if order_peak_conc is not None:
-        # 健康信号的旋转谐波导致 peak_conc 通常在 0.3-0.5
-        # 故障信号才有真正异常的集中度 > 0.6
-        indicators["order_peak_concentration"] = {
-            "value": round(order_peak_conc, 4),
-            "warning": order_peak_conc > 0.5,
-            "critical": order_peak_conc > 0.7,
-        }
+        if is_planetary:
+            # 行星箱健康 peak_conc = 0.2~0.4（旋转谐波占优）
+            indicators["order_peak_concentration"] = {
+                "value": round(order_peak_conc, 4),
+                "warning": order_peak_conc > 0.7,
+                "critical": order_peak_conc > 0.9,
+            }
+        else:
+            indicators["order_peak_concentration"] = {
+                "value": round(order_peak_conc, 4),
+                "warning": order_peak_conc > 0.5,
+                "critical": order_peak_conc > 0.7,
+            }
 
     order_kurt = gear_result.get("order_kurtosis")
     if order_kurt is not None:
-        # 健康信号的阶次谱峭度通常在 3-5（旋转谐波峰值所致）
-        # 故障信号才真正异常 > 8
-        indicators["order_kurtosis"] = {
-            "value": round(order_kurt, 2),
-            "warning": order_kurt > 5.0,
-            "critical": order_kurt > 8.0,
-        }
+        if is_planetary:
+            # 行星箱健康 order_kurt = 10~1000（旋转谐波峰值导致）
+            # FM4/M6A/M8A 也在 3~5 范围，无区分力
+            # 仅设极高阈值
+            indicators["order_kurtosis"] = {
+                "value": round(order_kurt, 2),
+                "warning": order_kurt > 50.0,
+                "critical": order_kurt > 200.0,
+            }
+        else:
+            indicators["order_kurtosis"] = {
+                "value": round(order_kurt, 2),
+                "warning": order_kurt > 5.0,
+                "critical": order_kurt > 8.0,
+            }
 
     return indicators
