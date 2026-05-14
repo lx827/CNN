@@ -76,6 +76,8 @@ async def get_channel_envelope(
             "kurtogram": BearingMethod.KURTOGRAM,
             "cpw": BearingMethod.CPW,
             "med": BearingMethod.MED,
+            "teager": BearingMethod.TEAGER,
+            "spectral_kurtosis": BearingMethod.SPECTRAL_KURTOSIS,
         }
         bearing_method = method_map.get(method, BearingMethod.ENVELOPE)
 
@@ -108,6 +110,9 @@ async def get_channel_envelope(
                 "med_filter_len": result.get("med_filter_len"),
                 "kurtosis_before": result.get("kurtosis_before"),
                 "kurtosis_after": result.get("kurtosis_after"),
+                "teager_rms": result.get("teager_rms"),
+                "reweighted_score": result.get("reweighted_score"),
+                "spectral_kurtosis_bands": result.get("spectral_kurtosis_bands", []),
                 "features": result.get("features", {}),
                 "fault_indicators": result.get("fault_indicators", {}),
             }

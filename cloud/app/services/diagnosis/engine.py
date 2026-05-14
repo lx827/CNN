@@ -22,6 +22,8 @@ from .bearing import (
     fast_kurtogram,
     cpw_envelope_analysis,
     med_envelope_analysis,
+    teager_envelope_analysis,
+    spectral_kurtosis_envelope_analysis,
 )
 from .gear import (
     compute_fm0_order,
@@ -63,6 +65,8 @@ class BearingMethod(str, Enum):
     KURTOGRAM = "kurtogram"         # Fast Kurtogram 自适应包络
     CPW = "cpw"                     # CPW 预白化 + 包络
     MED = "med"                     # MED 增强 + 包络
+    TEAGER = "teager"               # Teager 能量算子 + 包络
+    SPECTRAL_KURTOSIS = "spectral_kurtosis"  # 自适应谱峭度重加权包络
 
 
 class GearMethod(str, Enum):
@@ -172,6 +176,10 @@ class DiagnosisEngine:
             result = cpw_envelope_analysis(arr, fs, comb_frequencies=comb_freqs)
         elif self.bearing_method == BearingMethod.MED:
             result = med_envelope_analysis(arr, fs)
+        elif self.bearing_method == BearingMethod.TEAGER:
+            result = teager_envelope_analysis(arr, fs)
+        elif self.bearing_method == BearingMethod.SPECTRAL_KURTOSIS:
+            result = spectral_kurtosis_envelope_analysis(arr, fs)
         else:  # ENVELOPE
             result = envelope_analysis(arr, fs)
 
@@ -380,6 +388,28 @@ class DiagnosisEngine:
             "time_features": time_features,
             "recommendation": _generate_recommendation(bearing_result, gear_result, status),
         }
+
+    def analyze_research_ensemble(
+        self,
+        signal: np.ndarray,
+        fs: float,
+        rot_freq: Optional[float] = None,
+        profile: str = "runtime",
+        max_seconds: float = 5.0,
+    ) -> Dict[str, Any]:
+        """运行多算法集成诊断。runtime 用于后台自动诊断，exhaustive 用于网页手动重算法。"""
+        from .ensemble import run_research_ensemble
+
+        return run_research_ensemble(
+            signal,
+            fs,
+            bearing_params=self.bearing_params,
+            gear_teeth=self.gear_teeth,
+            denoise_method=self.denoise_method.value,
+            rot_freq=rot_freq,
+            profile=profile,
+            max_seconds=max_seconds,
+        )
 
     def analyze_all_methods(
         self,

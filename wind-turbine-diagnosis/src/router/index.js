@@ -32,6 +32,12 @@ const routes = [
         meta: { title: '故障诊断' }
       },
       {
+        path: '/research-diagnosis',
+        name: 'ResearchDiagnosis',
+        component: () => import('../views/ResearchDiagnosis.vue'),
+        meta: { title: '高级诊断' }
+      },
+      {
         path: '/alarm',
         name: 'Alarm',
         component: () => import('../views/Alarm.vue'),

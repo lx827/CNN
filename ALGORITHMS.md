@@ -1051,6 +1051,9 @@ $$m(A) = \frac{\sum_{B\cap C=A} m_1(B)m_2(C)}{1-K}, \quad K = \sum_{B\cap C=\emp
 | TSA（时域同步平均） | `diagnosis/gear/metrics.py::compute_tsa_residual_order` | ✅ 工程实现 | 无编码器时基于估计转频等角度重采样，输出 TSA/残差/差分信号 |
 | CPW（倒频谱预白化） | `diagnosis/preprocessing.py::cepstrum_pre_whitening` | ✅ 工程实现 | 支持轴频/啮合频率倒频谱编辑，配合 Kurtogram 包络 |
 | Fast Kurtogram | `diagnosis/bearing.py::fast_kurtogram` | ✅ 工程近似 | 为实时性用多尺度 STFT 近似 Antoni 滤波器组 |
+| TEO 包络 | `diagnosis/bearing.py::teager_envelope_analysis` | ✅ 工程实现 | Teager 能量算子增强弱冲击，再接 Kurtogram 包络 |
+| 自适应谱峭度重加权包络 | `diagnosis/bearing.py::spectral_kurtosis_envelope_analysis` | ✅ 工程近似 | 谱峭度 + 冲击度 + 局部 SNR 联合选带 |
+| 多算法集成诊断 | `diagnosis/ensemble.py::run_research_ensemble` | ✅ 工程实现 | 后台 runtime 投票；网页端支持 balanced/exhaustive 手动重算法 |
 | FM0/FM4/NA4/NB4 | `diagnosis/gear/metrics.py` | ⚠️ 部分实现 | FM0/FM4/M6A/M8A 已接 TSA/残差；NA4/NB4 需历史基线数据 |
 | SER（边频带能量比） | `diagnosis/gear/metrics.py::compute_ser_order` | ✅ 已实现 | 基于阶次谱计算，与阶次页面一致 |
 | 小波阈值去噪 | `diagnosis/preprocessing.py::wavelet_denoise` | ✅ 已实现 | db8 默认，支持 soft/hard/improved 阈值 |

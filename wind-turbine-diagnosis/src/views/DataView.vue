@@ -188,6 +188,8 @@
                 <el-option label="标准包络" value="envelope" />
                 <el-option label="快速峭度图" value="kurtogram" />
                 <el-option label="CPW+包络" value="cpw" />
+                <el-option label="TEO+包络" value="teager" />
+                <el-option label="谱峭度包络" value="spectral_kurtosis" />
                 <el-option label="MED+包络" value="med" />
               </el-select>
               <el-tag v-else type="success" size="small" effect="plain">{{ envelopeMethodLabel }}</el-tag>
@@ -214,6 +216,12 @@
             </el-tag>
             <el-tag v-if="envelopeData.kurtosis_after != null" type="info" size="small" effect="plain" style="margin-left: 8px;">
               MED后峭度 {{ envelopeData.kurtosis_after.toFixed(2) }}
+            </el-tag>
+            <el-tag v-if="envelopeData.teager_rms != null" type="info" size="small" effect="plain" style="margin-left: 8px;">
+              TEO RMS {{ envelopeData.teager_rms.toFixed(4) }}
+            </el-tag>
+            <el-tag v-if="envelopeData.reweighted_score != null" type="info" size="small" effect="plain" style="margin-left: 8px;">
+              SK评分 {{ envelopeData.reweighted_score.toFixed(2) }}
             </el-tag>
           </div>
           <VibrationChart v-if="computedEnvelope" :option="envelopeOption" />
@@ -729,6 +737,8 @@ const envelopeMethodLabel = computed(() => {
     envelope: '标准包络',
     kurtogram: '快速峭度图',
     cpw: 'CPW+包络',
+    teager: 'TEO+包络',
+    spectral_kurtosis: '谱峭度包络',
     med: 'MED+包络',
   }
   return labels[envelopeMethod.value] || envelopeMethod.value
@@ -795,6 +805,8 @@ const bearingMethodLabel = (key) => {
     envelope: '标准包络分析',
     kurtogram: '快速峭度图',
     cpw: 'CPW预白化+包络',
+    teager: 'TEO能量算子+包络',
+    spectral_kurtosis: '自适应谱峭度包络',
     med: 'MED最小熵解卷积+包络',
   }
   return map[key] || key

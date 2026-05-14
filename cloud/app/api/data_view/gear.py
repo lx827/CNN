@@ -213,6 +213,8 @@ async def get_channel_analyze(
             "kurtogram": BearingMethod.KURTOGRAM,
             "cpw": BearingMethod.CPW,
             "med": BearingMethod.MED,
+            "teager": BearingMethod.TEAGER,
+            "spectral_kurtosis": BearingMethod.SPECTRAL_KURTOSIS,
         }
         gear_map = {"standard": GearMethod.STANDARD, "advanced": GearMethod.ADVANCED}
         denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET, "vmd": DenoiseMethod.VMD}
@@ -233,10 +235,16 @@ async def get_channel_analyze(
         # 未配置机械参数时不注入默认参数，改走统计诊断路径。
 
         # CPU 密集型综合分析放入线程池
-        result = await asyncio.to_thread(
-            engine.analyze_comprehensive, signal, sample_rate,
-            skip_bearing=False, skip_gear=False
-        )
+        if strategy == "expert":
+            result = await asyncio.to_thread(
+                engine.analyze_research_ensemble, signal, sample_rate,
+                profile="runtime"
+            )
+        else:
+            result = await asyncio.to_thread(
+                engine.analyze_comprehensive, signal, sample_rate,
+                skip_bearing=False, skip_gear=False
+            )
 
         response_data = {
             "device_id": record.device_id,

@@ -115,10 +115,9 @@ def analyze_device(
                 gear_method=gear_method, denoise_method=denoise,
                 bearing_params=ch_bp, gear_teeth=ch_gt,
             )
-            result = engine.analyze_comprehensive(
+            result = engine.analyze_research_ensemble(
                 sig_arr, sample_rate, rot_freq=rot_freq,
-                skip_bearing=False,
-                skip_gear=False,
+                profile="runtime",
             )
             channel_results.append((ch_name, result))
 
