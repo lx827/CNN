@@ -509,6 +509,11 @@
                 <span style="font-weight: 600;">🔧 轴承诊断 — 各方法检出结论</span>
               </template>
               <el-table :data="bearingSummaryTable" size="small" border style="width: 100%">
+                <template #empty>
+                  <el-text type="info" size="small">
+                    未配置轴承参数，请在<el-link type="primary" @click="$router.push('/devices')">设备配置</el-link>中设置轴承几何参数（n/d/D/α）
+                  </el-text>
+                </template>
                 <el-table-column prop="method" label="诊断方法" width="160" />
                 <el-table-column prop="faults" label="检出故障">
                   <template #default="{ row }">
@@ -555,6 +560,11 @@
                 <span style="font-weight: 600;">⚙️ 齿轮诊断 — 各方法详细参数</span>
               </template>
               <el-table :data="gearSummaryTable" size="small" border style="width: 100%">
+                <template #empty>
+                  <el-text type="info" size="small">
+                    未配置齿轮参数，请在<el-link type="primary" @click="$router.push('/devices')">设备配置</el-link>中设置齿数（input/output）
+                  </el-text>
+                </template>
                 <el-table-column prop="method" label="诊断方法" width="140" />
                 <el-table-column prop="ser" label="SER" width="100">
                   <template #default="{ row }">
