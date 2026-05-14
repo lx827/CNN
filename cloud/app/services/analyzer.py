@@ -168,6 +168,18 @@ def analyze_device(
                 if severity > 0:
                     merged["齿轮磨损"] = max(merged.get("齿轮磨损", 0), severity)
 
+            # 时域峭度证据：齿轮设备 kurt>12 时归入"齿轮磨损"
+            # 行星齿轮箱的频域指标(SER/CAR/sideband)无区分力，时域峭度是唯一检出手段
+            # 当 kurt>12 时即使频域指标不触发，也应标记故障概率
+            tf = r.get("time_features", {})
+            kurt = tf.get("kurtosis", 3.0)
+            # 仅对有齿轮参数的设备做此映射（轴承设备已有轴承指标覆盖）
+            has_gear = r.get("ensemble", {}).get("has_gear_params", False)
+            if has_gear and kurt > 12.0:
+                # 峭度越高概率越大：kurt=12→0.3, kurt=20→0.6, kurt>30→0.8
+                kurt_prob = min(0.8, max(0.3, (kurt - 12.0) / 20.0 + 0.3))
+                merged["齿轮磨损"] = max(merged.get("齿轮磨损", 0), kurt_prob)
+
         fault_probs = {"正常运行": round(float(max(0.0, 1.0 - sum(merged.values()))), 4)}
         for k, v in merged.items():
             fault_probs[k] = round(float(v), 4)
