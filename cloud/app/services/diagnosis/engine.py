@@ -273,6 +273,9 @@ class DiagnosisEngine:
         mesh_freq = rot_freq * z_in if z_in > 0 else None
         mesh_order = float(z_in) if z_in > 0 else None
 
+        # 行星齿轮箱参数（供 _evaluate_gear_faults 使用）
+        planet_count = int(self.gear_teeth.get("planet_count") or 0) if self.gear_teeth else 0
+
         result = {
             "method": self.gear_method.value,
             "strategy": self.strategy.value,
@@ -281,6 +284,7 @@ class DiagnosisEngine:
             "mesh_order": round(mesh_order, 2) if mesh_order else None,
             "rot_freq_estimated_hz": round(rot_freq, 3),
             "rot_freq_std": round(rot_std, 4),
+            "planet_count": planet_count,
         }
 
         # 基于阶次谱的边频带分析（需要齿轮参数）
