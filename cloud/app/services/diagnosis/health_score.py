@@ -3,6 +3,12 @@
 """
 from typing import Dict, Optional
 
+# 峰值因子单独作为统计证据门控的阈值。
+# CW 健康数据 crest_factor 在 7.6~8.1，刚过 7.0 阈值就打开了统计扣分，
+# 导致 false positive。提升至 10.0 — 峰值因子 7~9 在工业振动中属正常范围，
+# 真正的冲击故障通常伴随 crest > 10 或 kurt > 5。
+CREST_EVIDENCE_THRESHOLD = 10.0
+
 
 def _compute_health_score(
     gear_teeth: Optional[Dict],
@@ -46,18 +52,24 @@ def _compute_health_score(
         deductions.append(("crest_moderate", 5))
 
     # 动态基线/趋势：本批次窗口内出现持续漂移或突变时扣分。
+    # 变速工况下转速变化会导致 RMS/kurtosis 自然波动，
+    # kurt_mad_z > 6 对变速信号是正常现象而非故障漂移。
+    # 门控：只有时域冲击证据 (kurt>5 或 crest>10) 存在时才认为基线漂移有意义，
+    # 否则 kurtosis 波动只是变速导致的统计噪声。
     rms_mad_z = _sf(time_features.get("rms_mad_z"), 0.0)
     kurt_mad_z = _sf(time_features.get("kurtosis_mad_z"), 0.0)
     ewma_drift = _sf(time_features.get("ewma_drift"), 0.0)
     cusum_score = _sf(time_features.get("cusum_score"), 0.0)
 
-    if rms_mad_z > 6 or kurt_mad_z > 6:
-        deductions.append(("dynamic_baseline_extreme", 18))
-    elif rms_mad_z > 4 or kurt_mad_z > 4:
-        deductions.append(("dynamic_baseline_warning", 10))
+    baseline_has_evidence = (kurt > 5.0 or crest > CREST_EVIDENCE_THRESHOLD)
+    if baseline_has_evidence:
+        if rms_mad_z > 6 or kurt_mad_z > 6:
+            deductions.append(("dynamic_baseline_extreme", 18))
+        elif rms_mad_z > 4 or kurt_mad_z > 4:
+            deductions.append(("dynamic_baseline_warning", 10))
 
-    if cusum_score > 8 or ewma_drift > 4:
-        deductions.append(("trend_drift_warning", 8))
+        if cusum_score > 8 or ewma_drift > 4:
+            deductions.append(("trend_drift_warning", 8))
 
     # ═══════ 轴承故障扣分 ═══════
     # 核心原则：频率匹配和统计路径都只有在时域也有冲击证据时才有效。
@@ -85,9 +97,10 @@ def _compute_health_score(
             deductions.append(("bearing_multi_freq", 10))
         elif freq_sig_count == 1:
             deductions.append(("bearing_single_freq", 5))
-    # 统计路径：必须同时有时域异常证据(kurt>5 或 crest>7) 且非旋转谐波主导
+    # 统计路径：必须同时有时域异常证据(kurt>5 或 crest>10) 且非旋转谐波主导
     # 否则健康数据也会被误判（旋转谐波的包络谱峰也能触发统计指标）
-    stat_has_evidence = (kurt > 5.0 or crest > 7.0) and not rotation_dominant
+    # 注意：crest > 7~9 在 CW 健康数据上也能出现，提升证据阈值至 10
+    stat_has_evidence = (kurt > 5.0 or crest > CREST_EVIDENCE_THRESHOLD) and not rotation_dominant
     if stat_has_evidence and stat_sig_count >= 2:
         deductions.append(("bearing_statistical_abnormal", 10))
     elif stat_has_evidence and stat_sig_count == 1:
@@ -103,7 +116,8 @@ def _compute_health_score(
     if has_gear:
         # 齿轮频率匹配路径（SER/sideband）同样需要时域证据门控：
         # 无冲击特征时不应扣分，旋转谐波的边频带也会触发 SER/sideband
-        gear_freq_has_evidence = (kurt > 5.0 or crest > 7.0)
+        # 同时需要 rotation_dominant 保护（与轴承统计路径一致）
+        gear_freq_has_evidence = (kurt > 5.0 or crest > CREST_EVIDENCE_THRESHOLD) and not rotation_dominant
         if gear_freq_has_evidence:
             ser = gear_ind.get("ser", {}) if isinstance(gear_ind.get("ser"), dict) else {}
             if ser.get("critical"):
@@ -123,7 +137,8 @@ def _compute_health_score(
         order_kurt = gear_ind.get("order_kurtosis", {}) if isinstance(gear_ind.get("order_kurtosis"), dict) else {}
         # 齿轮统计指标同样需要时域证据门控：无冲击特征时不应扣分
         # 旋转谐波天然导致 CAR/peak_conc/kurtosis 偏高，健康数据也会触发
-        gear_stat_has_evidence = (kurt > 5.0 or crest > 7.0)
+        # 同时需要 rotation_dominant 保护（与轴承统计路径一致）
+        gear_stat_has_evidence = (kurt > 5.0 or crest > CREST_EVIDENCE_THRESHOLD) and not rotation_dominant
         if gear_stat_has_evidence:
             if car.get("critical"):
                 deductions.append(("gear_car_critical", 8))
