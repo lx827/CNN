@@ -169,8 +169,15 @@ class DiagnosisEngine:
             comb_freqs = []
             if self.gear_teeth:
                 z_in = (self.gear_teeth.get("input") or 0) if self.gear_teeth else 0
+                planet_count = (self.gear_teeth.get("planet_count") or 0) if self.gear_teeth else 0
+                z_sun = (self.gear_teeth.get("sun") or 0) if self.gear_teeth else 0
+                z_ring = (self.gear_teeth.get("ring") or 0) if self.gear_teeth else 0
                 if z_in > 0 and rot_freq is not None and rot_freq > 0:
-                    comb_freqs.append(rot_freq * z_in)
+                    # 行星齿轮箱 mesh_freq = Z_ring×Z_sun/(Z_sun+Z_ring) × rot_freq
+                    if planet_count >= 3 and z_sun > 0 and z_ring > 0:
+                        comb_freqs.append(rot_freq * z_ring * z_sun / (z_sun + z_ring))
+                    else:
+                        comb_freqs.append(rot_freq * z_in)
             if rot_freq is not None and rot_freq > 0:
                 comb_freqs.append(rot_freq)
             result = cpw_envelope_analysis(arr, fs, comb_frequencies=comb_freqs)
@@ -270,26 +277,59 @@ class DiagnosisEngine:
         rot_freq = float(rot_freq_used)
 
         z_in = int(float(self.gear_teeth.get("input") or 0)) if self.gear_teeth else 0
-        mesh_freq = rot_freq * z_in if z_in > 0 else None
-        mesh_order = float(z_in) if z_in > 0 else None
+        z_sun = int(float(self.gear_teeth.get("sun") or 0)) if self.gear_teeth else 0
+        z_ring = int(float(self.gear_teeth.get("ring") or 0)) if self.gear_teeth else 0
+        z_planet = int(float(self.gear_teeth.get("planet") or 0)) if self.gear_teeth else 0
 
         # 行星齿轮箱参数（供 _evaluate_gear_faults 使用）
         planet_count = int(self.gear_teeth.get("planet_count") or 0) if self.gear_teeth else 0
+
+        # 啮合阶次计算（相对于输入轴转频）
+        # 定轴齿轮箱: mesh_order = z_in（啮合频率 = 转频 × 齿数）
+        # 行星齿轮箱(ring固定, sun输入): mesh_order = Z_ring×Z_sun/(Z_sun+Z_ring)
+        #   例: 100×28/(28+100) = 21.875 ≈ 175/8
+        if planet_count >= 3 and z_sun > 0 and z_ring > 0:
+            mesh_order = round(z_ring * z_sun / (z_sun + z_ring), 4)
+        elif z_in > 0:
+            mesh_order = float(z_in)
+        else:
+            mesh_order = None
+        mesh_freq = rot_freq * mesh_order if mesh_order else None
 
         result = {
             "method": self.gear_method.value,
             "strategy": self.strategy.value,
             "rot_freq_hz": round(rot_freq, 3),
             "mesh_freq_hz": round(mesh_freq, 2) if mesh_freq else None,
-            "mesh_order": round(mesh_order, 2) if mesh_order else None,
+            "mesh_order": round(mesh_order, 4) if mesh_order else None,
             "rot_freq_estimated_hz": round(rot_freq, 3),
             "rot_freq_std": round(rot_std, 4),
             "planet_count": planet_count,
+            "is_planetary": planet_count >= 3,
         }
+
+        # 行星齿轮箱特征阶次（相对于太阳轮转频，ring固定架构）
+        if planet_count >= 3 and z_sun > 0 and z_ring > 0:
+            # carrier_order = Z_sun / (Z_sun + Z_ring)
+            carrier_order = round(z_sun / (z_sun + z_ring), 4)
+            # sun_fault_order = (Z_ring - Z_sun) × planet_count / (Z_sun + Z_ring)
+            #   例: (100-28)×4/(28+100) = 72×4/128 = 2.25
+            #   但文档给出 25/8=3.125，需确认...
+            #   实际太阳轮故障频率 = Z_ring × f_carrier × planet_count/(Z_ring)
+            #   → (Z_ring/(Z_sun+Z_ring)) × planet_count × f_sun = (100/128)×4×f_sun = 3.125 × f_sun ✅
+            sun_fault_order = round(z_ring / (z_sun + z_ring) * planet_count, 4)
+            planet_fault_order = round(z_ring / (z_sun + z_ring), 4)
+            result["carrier_order"] = carrier_order
+            result["sun_fault_order"] = sun_fault_order
+            result["planet_fault_order"] = planet_fault_order
 
         # 基于阶次谱的边频带分析（需要齿轮参数）
         if mesh_order and mesh_order > 0:
-            sb_result = analyze_sidebands_order(order_axis, order_spectrum, mesh_order)
+            # 行星齿轮箱边频带间隔是 carrier_order，不是 1
+            sb_spacing = 1.0
+            if planet_count >= 3 and z_sun > 0 and z_ring > 0:
+                sb_spacing = round(z_sun / (z_sun + z_ring), 4)
+            sb_result = analyze_sidebands_order(order_axis, order_spectrum, mesh_order, n_sidebands=6, spacing=sb_spacing)
             result["sidebands"] = sb_result["sidebands"]
             result["ser"] = sb_result["ser"]
             result["mesh_amp"] = sb_result["mesh_amp"]

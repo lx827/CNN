@@ -301,12 +301,12 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
 
     ser = gear_result.get("ser") if gear_result.get("ser") is not None else 0.0
     if is_planetary:
-        # 行星箱 SER 天然 5~12，健康和故障都在此范围
-        # SER > 12 才是异常（实际行星箱故障 SER 也在 5~10）
-        # 因此 SER 对行星箱几乎无区分力，仅设高阈值避免误报
+        # 行星箱 SER 天然 2~15（carrier_order 间隔边频带占主导）
+        # 健康和故障 SER 范围完全重叠，无区分力
+        # 设极高阈值避免误报
         indicators["ser"] = {
             "value": round(ser, 4),
-            "warning": ser > 12.0,
+            "warning": ser > 15.0,
             "critical": ser > 20.0,
         }
     else:
@@ -328,12 +328,13 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
     car = gear_result.get("car")
     if car is not None:
         if is_planetary:
-            # 行星箱 CAR 天然 10^9~10^10，对故障无区分力
-            # 仅设极高阈值避免误报（实际值不可能超过此阈值）
+            # 行星箱 CAR 范围 3500 ~ 8.4e9（健康和故障完全重叠）
+            # mesh_order 修复后 CAR 计算正确但仍无区分力
+            # 仅设极高阈值避免误报
             indicators["car"] = {
                 "value": round(car, 4),
-                "warning": car > 1e15,
-                "critical": car > 1e18,
+                "warning": car > 1e10,
+                "critical": car > 1e12,
             }
         else:
             # 定轴箱 CAR 正常 < 2.0，故障 > 3.0
