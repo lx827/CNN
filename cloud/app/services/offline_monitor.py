@@ -31,17 +31,27 @@ logger = logging.getLogger(__name__)
 DEFAULT_OFFLINE_MIN_SECONDS = 300  # 默认 5 分钟
 OFFLINE_CHECK_INTERVAL_SECONDS = 30  # 每 30 秒扫描一次
 
+# 离线阈值上限：即使配置了很大的上传间隔，最多也只等这么久
+# 因为边端数据上传是基于 ingest 端点的 HTTP POST，不是周期性心跳
+# 真正的心跳是 task_poll_interval（边端轮询采集任务的间隔）
+OFFLINE_THRESHOLD_CAP_SECONDS = 600  # 最大 10 分钟
+
 
 def _get_offline_threshold(device: Device, now: datetime) -> datetime:
     """
     根据设备通信间隔计算离线阈值。
-    以任务轮询间隔（实际心跳）为主，以上传间隔为辅，最少 5 分钟。
+    以任务轮询间隔（实际心跳）为主，以上传间隔为辅，最少 5 分钟，最多 10 分钟。
+    上限保护：防止 upload_interval 配置值过大导致离线检测失效。
     """
     base_seconds = DEFAULT_OFFLINE_MIN_SECONDS
     if device.task_poll_interval and device.task_poll_interval > 0:
+        # 轮询间隔是真正的"心跳"，乘以 3 给缓冲 + 60 秒
         base_seconds = max(base_seconds, device.task_poll_interval * 3 + 60)
     if device.upload_interval and device.upload_interval > 0:
-        base_seconds = max(base_seconds, device.upload_interval * 2 + 60)
+        # 上传间隔只是数据上报频率，不是心跳，仅作为参考
+        base_seconds = max(base_seconds, min(device.upload_interval * 2 + 60, 300))
+    # 上限保护：不管配置多大，最多只等 10 分钟
+    base_seconds = min(base_seconds, OFFLINE_THRESHOLD_CAP_SECONDS)
     return now - timedelta(seconds=base_seconds)
 
 
