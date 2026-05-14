@@ -176,6 +176,7 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { getDeviceInfo } from '../api'
+import { getWebSocketClient } from '../utils/websocket'
 
 const devices = ref([])
 const selectedDevice = ref(null)
@@ -418,6 +419,15 @@ onMounted(async () => {
   initGaugeChart()
   initPieChart()
 
+  // WebSocket 监听设备上线/离线事件，实时刷新仪表板
+  const wsClient = getWebSocketClient()
+  wsClient.connect()
+  const onDeviceOnline = wsClient.on('device_online', () => loadData())
+  const onDeviceOffline = wsClient.on('device_offline', () => loadData())
+
+  // 定时轮询兜底：每 60 秒刷新设备状态（防止 WebSocket 断连时状态不更新）
+  const pollTimer = setInterval(() => loadData(), 60000)
+
   const handleResize = () => {
     gaugeInstance?.resize()
     pieInstance?.resize()
@@ -425,6 +435,9 @@ onMounted(async () => {
   window.addEventListener('resize', handleResize)
 
   onUnmounted(() => {
+    onDeviceOnline()
+    onDeviceOffline()
+    clearInterval(pollTimer)
     gaugeInstance?.dispose()
     pieInstance?.dispose()
     window.removeEventListener('resize', handleResize)
