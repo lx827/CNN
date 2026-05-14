@@ -99,6 +99,10 @@ async def get_channel_gear(
         # 兼容前端通道级格式 {"1":{input:18}} → 设备级 {input:18}
         gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
 
+        # 未配置齿轮参数时采用默认诊断逻辑
+        if not _has_valid_gear(gear_teeth):
+            gear_teeth = {"input": 18, "output": 27}
+
         method_map = {
             "standard": GearMethod.STANDARD,
             "advanced": GearMethod.ADVANCED,
@@ -211,6 +215,13 @@ async def get_channel_analyze(
         # 根据通道参数决定跳过哪些分析
         has_bp = _has_valid_bearing(bearing_params)
         has_gt = _has_valid_gear(gear_teeth)
+
+        # 如果都没有配置，采用默认诊断逻辑
+        if not has_bp and not has_gt:
+            bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
+            gear_teeth = {"input": 18, "output": 27}
+            has_bp = True
+            has_gt = True
 
         # CPU 密集型综合分析放入线程池
         result = await asyncio.to_thread(
@@ -335,6 +346,14 @@ async def get_channel_full_analysis(
         # CPU 密集型全算法分析放入线程池
         has_bearing = _has_valid_bearing(bearing_params)
         has_gear = _has_valid_gear(gear_teeth)
+
+        # 如果都没有配置，采用默认诊断逻辑
+        if not has_bearing and not has_gear:
+            bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
+            gear_teeth = {"input": 18, "output": 27}
+            has_bearing = True
+            has_gear = True
+
         result = await asyncio.to_thread(
             engine.analyze_all_methods, signal, sample_rate,
             skip_bearing=not has_bearing, skip_gear=not has_gear

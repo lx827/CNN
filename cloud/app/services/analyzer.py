@@ -110,6 +110,13 @@ def analyze_device(
             has_bearing = _params_valid(ch_bp, "bearing")
             has_gear = _params_valid(ch_gt, "gear")
 
+            # 如果都没有配置，采用默认诊断逻辑（使用默认机械参数做全套诊断）
+            if not has_bearing and not has_gear:
+                ch_bp = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
+                ch_gt = {"input": 18, "output": 27}
+                has_bearing = True
+                has_gear = True
+
             engine = DiagnosisEngine(
                 strategy=strategy, bearing_method=bearing_method,
                 gear_method=gear_method, denoise_method=denoise,
