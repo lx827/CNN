@@ -147,8 +147,6 @@ async def reanalyze_batch(
     device = db.query(Device).filter(Device.device_id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
-    if not device.is_online:
-        raise HTTPException(status_code=400, detail="设备当前离线，无法重新诊断")
 
     records = db.query(SensorData).filter(
         SensorData.device_id == device_id,
@@ -253,8 +251,6 @@ async def reanalyze_all_batches(
     device = db.query(Device).filter(Device.device_id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
-    if not device.is_online:
-        raise HTTPException(status_code=400, detail="设备当前离线，无法重新诊断")
 
     # 查出所有批次号
     batch_indices = [
