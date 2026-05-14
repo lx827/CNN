@@ -529,10 +529,12 @@ def _evaluate_bearing_faults_statistical(
     snr = peak_amp / background if background > 0 else 0.0
 
     # 1. 包络谱峰值显著性（单峰异常——单一最强峰 vs 背景）
+    #    健康轴承的旋转谐波也能产生 SNR~10-15 的包络谱峰值，
+    #    需要更高阈值区分"旋转谐波主导"和"真正的轴承故障冲击"
     indicators["envelope_peak_snr"] = {
         "value": float(round(snr, 2)),
         "snr": float(round(snr, 2)),
-        "significant": bool(snr > 12.0),
+        "significant": bool(snr > 20.0),
     }
 
     # 2. 包络谱峭度（频域峭度——区分"少量超强峰"vs"多个中等峰"）
@@ -541,15 +543,15 @@ def _evaluate_bearing_faults_statistical(
     indicators["envelope_kurtosis"] = {
         "value": float(round(kurt, 2)),
         "snr": float(round(max(0, kurt), 2)),
-        "significant": bool(kurt > 8.0),
+        "significant": bool(kurt > 15.0),
     }
 
-    # 2b. 中等峭度路径：外圈/球故障时峭度常在 2-8，不触发高阈值但仍异常
-    #     需要同时有 peak_snr 显著 + 时域冲击背景佐证（在 ensemble 层判断）
+    # 2b. 中等峭度路径：外圈/球故障时峭度常在 5-15，不触发高阈值但仍异常
+    #     条件放宽至 kurt>5 AND snr>15（低于此的几乎都是旋转谐波噪声）
     indicators["moderate_kurtosis"] = {
         "value": float(round(kurt, 2)),
         "snr": float(round(max(0, kurt), 2)),
-        "significant": bool(kurt > 2.0 and snr > 10.0),
+        "significant": bool(kurt > 5.0 and snr > 15.0),
     }
 
     freq_arr_np = np.array(freq_arr)
@@ -560,10 +562,13 @@ def _evaluate_bearing_faults_statistical(
     low_mask = freq_arr_np <= low_cutoff
     low_energy = float(np.sum(amp_arr[low_mask] ** 2))
     low_freq_ratio = low_energy / total_energy
+    # 旋转谐波主导标记：低频占比 > 40% 说明包络谱能量主要来自转频谐波而非轴承故障
+    rotation_harmonic_dominant = low_freq_ratio > 0.4
     indicators["low_freq_ratio"] = {
         "value": float(round(low_freq_ratio, 4)),
         "snr": float(round((1.0 - low_freq_ratio) * 10, 2)),
-        "significant": False,  # 不作为单独的故障指示器，而是辅助抑制误报
+        "significant": False,  # 辅助抑制误报，不单独判定
+        "rotation_harmonic_dominant": rotation_harmonic_dominant,
     }
 
     # 4. 高频能量比 — 轴承故障冲击能量通常在高频段
@@ -573,17 +578,18 @@ def _evaluate_bearing_faults_statistical(
     indicators["high_freq_ratio"] = {
         "value": float(round(hf_ratio, 4)),
         "snr": float(round(hf_ratio * 10, 2)),
-        "significant": bool(hf_ratio > 0.65),
+        "significant": bool(hf_ratio > 0.65 and not rotation_harmonic_dominant),
     }
 
     # 5. 谱峰集中度 — 前5峰能量占比（故障时少数峰支配，健康时分布均匀）
     sorted_amps = np.sort(amp_arr)[::-1]
     top5_energy = float(np.sum(sorted_amps[:5] ** 2))
     peak_conc = float(top5_energy / total_energy)
+    # 旋转谐波主导时，集中度是转频谐波导致的而非轴承故障，应抑制
     indicators["peak_concentration"] = {
         "value": float(round(peak_conc, 4)),
         "snr": float(round(peak_conc * 10, 2)),
-        "significant": bool(peak_conc > 0.5),
+        "significant": bool(peak_conc > 0.6 and not rotation_harmonic_dominant),
     }
 
     # 6. 包络谱峰值因子（crest_factor_in_spectrum）
@@ -594,7 +600,7 @@ def _evaluate_bearing_faults_statistical(
     indicators["envelope_crest_factor"] = {
         "value": float(round(env_cf, 2)),
         "snr": float(round(env_cf, 2)),
-        "significant": bool(env_cf > 25.0),  # 极高峰值因子 = 谱峰高度集中
+        "significant": bool(env_cf > 35.0 and not rotation_harmonic_dominant),
     }
 
     return indicators

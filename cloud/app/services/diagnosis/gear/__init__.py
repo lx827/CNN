@@ -282,7 +282,11 @@ def analyze_sidebands(
 
 
 def _evaluate_gear_faults(gear_result: Dict) -> Dict:
-    """评估齿轮故障指示器"""
+    """评估齿轮故障指示器
+    
+    旋转谐波（1X, 2X, 3X）在任何信号中都存在且能量最强，
+    统计指标必须设置足够高的阈值以避免将其误判为齿轮故障。
+    """
     indicators = {}
 
     ser = gear_result.get("ser") if gear_result.get("ser") is not None else 0.0
@@ -302,10 +306,12 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
 
     car = gear_result.get("car")
     if car is not None:
+        # CAR 在旋转谐波清晰时也能达到 ~1.0-1.5（正常范围）
+        # 齿轮故障时 CAR 通常 > 3.0（啮合频率边频在倒谱中产生强峰值）
         indicators["car"] = {
             "value": round(car, 4),
-            "warning": car > 1.2,
-            "critical": car > 2.0,
+            "warning": car > 2.0,
+            "critical": car > 3.0,
         }
 
     # 边频带统计
@@ -318,20 +324,25 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
     }
 
     # 无齿轮参数时的阶次谱统计指示器
+    # 1X 阶次在所有信号中都是最强峰，导致这些统计值天然偏高
     order_peak_conc = gear_result.get("order_peak_concentration")
     if order_peak_conc is not None:
+        # 健康信号的旋转谐波导致 peak_conc 通常在 0.3-0.5
+        # 故障信号才有真正异常的集中度 > 0.6
         indicators["order_peak_concentration"] = {
             "value": round(order_peak_conc, 4),
-            "warning": order_peak_conc > 0.3,
-            "critical": order_peak_conc > 0.5,
+            "warning": order_peak_conc > 0.5,
+            "critical": order_peak_conc > 0.7,
         }
 
     order_kurt = gear_result.get("order_kurtosis")
     if order_kurt is not None:
+        # 健康信号的阶次谱峭度通常在 3-5（旋转谐波峰值所致）
+        # 故障信号才真正异常 > 8
         indicators["order_kurtosis"] = {
             "value": round(order_kurt, 2),
-            "warning": order_kurt > 3.0,
-            "critical": order_kurt > 5.0,
+            "warning": order_kurt > 5.0,
+            "critical": order_kurt > 8.0,
         }
 
     return indicators
