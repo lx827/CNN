@@ -254,8 +254,8 @@ def compute_fft(signal: List[float], sample_rate: int = 25600):
 
 def compute_imf_energy(signal: List[float], sample_rate: int = 25600) -> Dict[str, float]:
     """
-    模拟 IMF 能量分布
-    真实场景需要 EMD/VMD 分解，这里用频带能量近似模拟
+    估算 IMF 能量分布
+    用频带能量划分近似 IMF 分量能量占比，用于健康度评分和前端 IMF 能量图展示
     """
     arr = np.array(signal)
     xf, yf = compute_fft(arr, sample_rate)

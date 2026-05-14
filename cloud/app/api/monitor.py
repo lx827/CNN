@@ -144,26 +144,6 @@ def get_latest_monitor(
         sensor_params["rot_freq"] = round(latest_diag.rot_freq, 3)
         sensor_params["rpm_source"] = "estimated"
 
-    # 如果没有真实数据，返回模拟数据保证前端不白屏
-    if not results:
-        import random
-        channel_count = device.channel_count if device else 3
-        for ch in range(1, channel_count + 1):
-            mock_data = [random.uniform(-1, 1) for _ in range(TIME_DOMAIN_POINTS)]
-            results.append({
-                "device_id": device_id,
-                "channel": ch,
-                "channel_name": _get_channel_name(device, ch),
-                "batch_index": 0,
-                "data": mock_data,
-                "sample_rate": 25600,
-                "is_analyzed": 0,
-                "is_special": False,
-                "timestamp": None,
-                "fft_freq": [],
-                "fft_amp": [],
-            })
-
     return {"code": 200, "data": results, "sensor_params": sensor_params}
 
 

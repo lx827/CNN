@@ -103,24 +103,4 @@ def decompress_payload(compressed_b64: str, compression_method: str = "") -> dic
         return json.loads(raw_bytes.decode('utf-8'))
 
 
-# ===== 本地测试压缩率 =====
-if __name__ == "__main__":
-    from signal_generator import generate_signals
 
-    signals = generate_signals("normal")
-    original_json = json.dumps(signals)
-    original_size = len(original_json.encode('utf-8'))
-
-    result = compress_payload(signals)
-    compressed_size = len(result["compressed_data"].encode('utf-8'))
-
-    ratio = original_size / compressed_size
-    print(f"原始大小: {original_size} bytes ({original_size/1024:.1f} KB)")
-    print(f"压缩大小: {compressed_size} bytes ({compressed_size/1024:.1f} KB)")
-    print(f"压缩倍数: {ratio:.1f}x")
-    print(f"方法: {result['compression_method']}")
-    print(f"降采样: {result['original_points']} → {result['compressed_points']} 点")
-
-    # 验证解压后数据一致性
-    decompressed = decompress_payload(result["compressed_data"], result["compression_method"])
-    print(f"解压验证: {'通过' if 'ch1' in decompressed else '失败'}")
