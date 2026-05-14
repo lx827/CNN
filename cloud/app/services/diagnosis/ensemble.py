@@ -97,6 +97,8 @@ def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
         if name.endswith("_stat") or name in {
             "envelope_peak_snr",
             "envelope_kurtosis",
+            "moderate_kurtosis",
+            "envelope_crest_factor",
             "high_freq_ratio",
             "peak_concentration",
         }:
@@ -113,6 +115,13 @@ def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
     cusum = _as_float(time_features.get("cusum_score"), 0.0)
     impulse_context = kurt > 5.0 or crest > 7.0 or rms_mad_z > 6.0 or cusum > 8.0
 
+    # 低频优势度：仅用于弱证据（stat_hits=1）场景的辅助判断
+    low_freq_dominance = False
+    low_freq_indicator = indicators.get("low_freq_ratio", {})
+    low_freq_ratio_raw = _as_float(low_freq_indicator.get("value") if isinstance(low_freq_indicator, dict) else low_freq_indicator, 0.0)
+    if low_freq_ratio_raw > 0.55:
+        low_freq_dominance = True
+
     confidence = 0.0
     if param_hits >= 2:
         confidence = 0.85
@@ -121,7 +130,17 @@ def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
     elif stat_hits >= 3 and impulse_context:
         confidence = 0.65
     elif stat_hits >= 2 and impulse_context:
+        # 双统计指标 + 冲击背景：内圈/外圈/球故障典型模式
+        # moderate_kurtosis 使外圈也能进入此路径
         confidence = 0.55
+    elif stat_hits >= 1 and impulse_context and strongest_snr > 12:
+        # 单统计指标 + 冲击背景 + 较显著 SNR：
+        # 外圈故障仅触发 moderate_kurtosis 而无 envelope_kurtosis 时的兜底
+        # 若包络谱低频占优（轴频谐波），则降权抑制误报
+        if low_freq_dominance:
+            confidence = 0.28
+        else:
+            confidence = 0.45
     elif stat_hits >= 2:
         confidence = 0.35
     elif strongest_snr > 18 and impulse_context:

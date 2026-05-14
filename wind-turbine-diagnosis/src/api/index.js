@@ -129,6 +129,5 @@ export const getRealtimeVibrationData = async (deviceId = 'WTG-001', preferSpeci
 
 export * from './data'
 export * from './device'
-export * from './diagnosis'
 export * from './alarm'
 export * from './system'
