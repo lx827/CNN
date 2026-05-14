@@ -26,12 +26,6 @@ const routes = [
         meta: { title: '实时监测' }
       },
       {
-        path: '/diagnosis',
-        name: 'Diagnosis',
-        component: () => import('../views/Diagnosis.vue'),
-        meta: { title: '故障诊断' }
-      },
-      {
         path: '/research-diagnosis',
         name: 'ResearchDiagnosis',
         component: () => import('../views/ResearchDiagnosis.vue'),

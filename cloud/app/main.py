@@ -7,7 +7,7 @@ import logging
 from fastapi import FastAPI, Depends, WebSocket, Query, status
 from app.core.memory_log import setup_memory_logging
 
-from app.api import ingest, dashboard, monitor, diagnosis, alarms, devices, collect, auth, system
+from app.api import ingest, dashboard, monitor, alarms, devices, collect, auth, system
 from app.api.data_view import router as data_view_router
 from app.api.auth import optional_auth, verify_token_string
 from app.lifespan import lifespan
@@ -39,7 +39,6 @@ app.include_router(ingest.router, dependencies=[Depends(optional_auth)])
 # 需要认证的路由（前端 Bearer Token 或边端 X-Edge-Key）
 app.include_router(dashboard.router, dependencies=[Depends(optional_auth)])
 app.include_router(monitor.router, dependencies=[Depends(optional_auth)])
-app.include_router(diagnosis.router, dependencies=[Depends(optional_auth)])
 app.include_router(alarms.router, dependencies=[Depends(optional_auth)])
 app.include_router(devices.router, dependencies=[Depends(optional_auth)])
 app.include_router(data_view_router, dependencies=[Depends(optional_auth)])
