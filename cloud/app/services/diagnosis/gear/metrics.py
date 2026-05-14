@@ -227,12 +227,16 @@ def analyze_sidebands_order(
     spectrum,
     mesh_order: float,
     n_sidebands: int = 6,
+    spacing: float = 1.0,
 ) -> Dict:
     """
     基于阶次谱的边频带分析
 
+    spacing 参数控制边频带间隔：
+    - 定轴齿轮箱: spacing=1.0（边频带间隔 = 转频阶次）
+    - 行星齿轮箱: spacing=carrier_order = Z_sun/(Z_sun+Z_ring)（边频带间隔 = carrier 转频）
+
     返回边频带的阶次、幅值、显著性、对称性等信息。
-    与 analyze_sidebands 的区别：基于阶次谱而非 FFT 频谱。
     """
     order_axis = np.asarray(order_axis)
     spectrum = np.asarray(spectrum)
@@ -245,8 +249,8 @@ def analyze_sidebands_order(
     total_sb = 0.0
 
     for i in range(1, n_sidebands + 1):
-        sb_low = mesh_order - i
-        sb_high = mesh_order + i
+        sb_low = mesh_order - i * spacing
+        sb_high = mesh_order + i * spacing
 
         amp_low = _order_band_amplitude(order_axis, spectrum, sb_low, 0.3)
         amp_high = _order_band_amplitude(order_axis, spectrum, sb_high, 0.3)
@@ -258,8 +262,9 @@ def analyze_sidebands_order(
 
         sidebands.append({
             "order": i,
-            "order_low": round(sb_low, 2),
-            "order_high": round(sb_high, 2),
+            "spacing": spacing,
+            "order_low": round(sb_low, 4),
+            "order_high": round(sb_high, 4),
             "amp_low": round(amp_low, 6),
             "amp_high": round(amp_high, 6),
             "significant": significant,
