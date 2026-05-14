@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
 from app.models import Device, Diagnosis, Alarm
-from datetime import datetime, timedelta
+from app.services.offline_guard import is_device_offline
+from datetime import datetime
 from typing import Dict
 
 router = APIRouter(prefix="/api/dashboard", tags=["设备总览"])
@@ -28,20 +29,6 @@ BEARING_FAULT_MAP = {
     "轴承BSF": "滚动体故障",
 }
 
-def _get_offline_threshold(device: Device, now: datetime) -> datetime:
-    """
-    根据设备通信间隔计算离线阈值。
-    以任务轮询间隔（实际心跳）为主，以上传间隔为辅，最少 5 分钟。
-    """
-    base_seconds = 300  # 默认 5 分钟
-    # 任务轮询是边端和云端的实际通信频率，以此为基准
-    if device.task_poll_interval and device.task_poll_interval > 0:
-        base_seconds = max(base_seconds, device.task_poll_interval * 3 + 60)
-    # 如果上传间隔更大，也要兜底覆盖
-    if device.upload_interval and device.upload_interval > 0:
-        base_seconds = max(base_seconds, device.upload_interval * 2 + 60)
-    return now - timedelta(seconds=base_seconds)
-
 
 @router.get("/")
 def get_dashboard(db: Session = Depends(get_db)):
@@ -53,12 +40,7 @@ def get_dashboard(db: Session = Depends(get_db)):
     devices = db.query(Device).all()
     device_list = []
     for d in devices:
-        offline_threshold = _get_offline_threshold(d, now)
-        # 判断离线：last_seen_at 为空 或 超过阈值未上传
-        last_seen = d.last_seen_at
-        if last_seen and last_seen.tzinfo is not None:
-            last_seen = last_seen.replace(tzinfo=None)
-        is_offline = last_seen is None or last_seen < offline_threshold
+        is_offline = is_device_offline(d, now)
         effective_status = "offline" if is_offline else d.status
         device_list.append({
             "device_id": d.device_id,
@@ -76,11 +58,7 @@ def get_dashboard(db: Session = Depends(get_db)):
     # 2. 最新诊断结果（取每个设备最新一条）
     latest_diag = {}
     for d in devices:
-        offline_threshold = _get_offline_threshold(d, now)
-        last_seen = d.last_seen_at
-        if last_seen and last_seen.tzinfo is not None:
-            last_seen = last_seen.replace(tzinfo=None)
-        is_offline = last_seen is None or last_seen < offline_threshold
+        is_offline = is_device_offline(d, now)
         diag = db.query(Diagnosis).filter(Diagnosis.device_id == d.device_id) \
             .order_by(Diagnosis.analyzed_at.desc()).first()
         if diag:
