@@ -82,6 +82,10 @@ def create_initial_devices():
                     runtime_hours=dev_info["runtime_hours"],
                     upload_interval=10,
                     task_poll_interval=5,
+                    alarm_thresholds={},
+                    compression_enabled=1,
+                    downsample_ratio=8,
+                    is_online=1,
                     # 默认机械参数：6205-2RS 深沟球轴承 + 常见齿轮箱参数
                     bearing_params={"n": 9, "d": 7.94, "D": 39.04, "alpha": 0},
                     gear_teeth={"input": 18, "output": 27},
@@ -93,7 +97,7 @@ def create_initial_devices():
                     f"(健康度 {dev_info['health_score']}, 状态 {dev_info['status']})"
                 )
             else:
-                # 给已有设备补齐缺失的机械参数（避免全算法分析显示 No Data）
+                # 给已有设备补齐缺失的字段（避免功能异常或显示不一致）
                 updated = False
                 if not existing.bearing_params:
                     existing.bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
@@ -101,8 +105,23 @@ def create_initial_devices():
                 if not existing.gear_teeth:
                     existing.gear_teeth = {"input": 18, "output": 27}
                     updated = True
+                if not existing.alarm_thresholds:
+                    existing.alarm_thresholds = {}
+                    updated = True
+                if not existing.channel_names:
+                    existing.channel_names = {"1": "轴承附近", "2": "驱动端", "3": "风扇端"}
+                    updated = True
+                if existing.compression_enabled is None:
+                    existing.compression_enabled = 1
+                    updated = True
+                if existing.downsample_ratio is None:
+                    existing.downsample_ratio = 8
+                    updated = True
+                if existing.is_online is None:
+                    existing.is_online = 1
+                    updated = True
                 if updated:
-                    logger.info(f"[启动] 为已有设备 {dev_info['device_id']} 补齐默认机械参数")
+                    logger.info(f"[启动] 为已有设备 {dev_info['device_id']} 补齐默认配置")
 
         db.commit()
     finally:

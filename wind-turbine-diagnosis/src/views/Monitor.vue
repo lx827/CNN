@@ -353,7 +353,13 @@ const updateSensorStatus = (chList) => {
   // 更新振动通道状态
   chList.forEach((ch, idx) => {
     if (sensors.value[idx]) {
-      const rms = ch.rms || 0
+      // rms 缺失时不应默认显示正常
+      if (ch.rms == null) {
+        sensors.value[idx].status = 'info'
+        sensors.value[idx].statusText = '数据缺失'
+        return
+      }
+      const rms = ch.rms
       if (rms > 5) {
         sensors.value[idx].status = 'danger'
         sensors.value[idx].statusText = '异常'

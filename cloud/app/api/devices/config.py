@@ -32,7 +32,7 @@ def get_edge_config(device_id: str, db: Session = Depends(get_db)):
             "window_seconds": device.window_seconds or 10,
             "channel_count": device.channel_count or 3,
             "compression_enabled": bool(device.compression_enabled) if device.compression_enabled is not None else True,
-            "downsample_ratio": device.downsample_ratio or 8,
+            "downsample_ratio": device.downsample_ratio if device.downsample_ratio is not None else 8,
         }
     }
 

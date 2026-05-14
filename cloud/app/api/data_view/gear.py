@@ -19,10 +19,33 @@ import asyncio
 logger = logging.getLogger(__name__)
 
 
+def _extract_device_param(params, device_keys):
+    """
+    兼容前端通道级格式与后端设备级格式。
+    前端 Settings.vue 保存的格式：{ "1": {input: 18, output: 27}, "2": {...} }
+    后端诊断引擎期望的格式：{input: 18, output: 27}
+
+    如果 params 已经是设备级，直接返回；
+    如果是通道级，提取第一个包含 device_keys 中任意 key 的有效通道参数。
+    """
+    if not params or not isinstance(params, dict):
+        return params
+    # 已经是设备级格式
+    if any(k in params for k in device_keys):
+        return params
+    # 通道级格式，取第一个有效通道
+    for key in sorted(params.keys()):
+        ch = params.get(key)
+        if ch and isinstance(ch, dict) and any(k in ch for k in device_keys):
+            return ch
+    return params
+
+
 def _has_valid_bearing(bp):
-    """判断轴承参数是否有效"""
+    """判断轴承参数是否有效（支持设备级和通道级格式）"""
     if not bp or not isinstance(bp, dict):
         return False
+    bp = _extract_device_param(bp, ("n", "d", "D", "alpha"))
     try:
         return all(v is not None for v in [bp.get("n"), bp.get("d"), bp.get("D")]) and float(bp.get("n", 0)) > 0 and float(bp.get("d", 0)) > 0 and float(bp.get("D", 0)) > 0
     except (TypeError, ValueError):
@@ -30,9 +53,10 @@ def _has_valid_bearing(bp):
 
 
 def _has_valid_gear(gt):
-    """判断齿轮参数是否有效"""
+    """判断齿轮参数是否有效（支持设备级和通道级格式）"""
     if not gt or not isinstance(gt, dict):
         return False
+    gt = _extract_device_param(gt, ("input", "output"))
     try:
         return gt.get("input") is not None and float(gt.get("input", 0)) > 0
     except (TypeError, ValueError):
@@ -72,6 +96,8 @@ async def get_channel_gear(
         gear_teeth = {}
         if device:
             gear_teeth = device.gear_teeth or {}
+        # 兼容前端通道级格式 {"1":{input:18}} → 设备级 {input:18}
+        gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
 
         method_map = {
             "standard": GearMethod.STANDARD,
@@ -158,6 +184,9 @@ async def get_channel_analyze(
         if device:
             bearing_params = device.bearing_params or {}
             gear_teeth = device.gear_teeth or {}
+        # 兼容前端通道级格式
+        bearing_params = _extract_device_param(bearing_params, ("n", "d", "D", "alpha"))
+        gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
 
         # 映射前端参数到枚举
         strategy_map = {"standard": "standard", "advanced": "advanced", "expert": "expert"}
@@ -288,6 +317,9 @@ async def get_channel_full_analysis(
         if device:
             bearing_params = device.bearing_params or {}
             gear_teeth = device.gear_teeth or {}
+        # 兼容前端通道级格式
+        bearing_params = _extract_device_param(bearing_params, ("n", "d", "D", "alpha"))
+        gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
 
         denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET, "vmd": DenoiseMethod.VMD}
 

@@ -301,10 +301,10 @@ const generateComponents = (deviceChannels, faultProbabilities) => {
   const probs = faultProbabilities || {}
   const components = []
 
-  // 默认 3 个通道
-  const channelCount = Object.keys(deviceChannels || {}).length || 3
+  // 优先使用设备的 channel_count，其次从 channel_names 推断
+  const channelCount = currentDevice?.channel_count || Object.keys(deviceChannels || {}).length || 3
 
-  for (let i = 1; i <= channelCount; i++) {
+  for (let i = 1; i <= count; i++) {
     const chName = deviceChannels?.[String(i)] || `通道${i}`
     const compInfo = getComponentInfo(chName)
 
@@ -464,7 +464,7 @@ const loadDiagnosis = async () => {
   const channelNames = currentDevice?.channel_names || {}
 
   // 生成部件列表
-  componentList.value = generateComponents(channelNames, d.faultProbabilities)
+  componentList.value = generateComponents(channelNames, d.faultProbabilities, currentDevice?.channel_count)
 
   // 保存详细诊断数据
   channelsDetail.value = d.channelsDetail || null
