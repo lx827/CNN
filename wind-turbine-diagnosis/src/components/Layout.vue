@@ -27,6 +27,10 @@
               <el-icon><Warning /></el-icon>
               <span>故障诊断</span>
             </el-menu-item>
+            <el-menu-item index="/research-diagnosis">
+              <el-icon><Cpu /></el-icon>
+              <span>高级诊断</span>
+            </el-menu-item>
             <el-menu-item index="/alarm">
               <el-icon><Bell /></el-icon>
               <span>告警记录</span>

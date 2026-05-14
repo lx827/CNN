@@ -3,6 +3,7 @@
 包含 CORS、静态文件挂载等
 """
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import CORS_ORIGINS
 
 
 def setup_cors(app):
@@ -11,7 +12,7 @@ def setup_cors(app):
     """
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

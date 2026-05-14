@@ -31,6 +31,16 @@ else:
 # ========== 服务配置 ==========
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", 8000))
+CORS_ORIGINS = [
+    item.strip()
+    for item in os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:4173,http://127.0.0.1:4173,"
+        "http://8.137.96.104,null",
+    ).split(",")
+    if item.strip()
+]
 
 # ========== 分析服务配置 ==========
 ANALYZE_INTERVAL_SECONDS = 30  # 每 30 秒执行一次分析

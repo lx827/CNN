@@ -101,4 +101,4 @@ def _get_channel_name(device: Device, channel_num: int) -> str:
 
 
 # 导入子模块以注册路由
-from . import core, spectrum, envelope, order, cepstrum, gear, export, diagnosis_ops
+from . import core, spectrum, envelope, order, cepstrum, gear, research, export, diagnosis_ops

@@ -114,10 +114,8 @@ async def get_channel_gear(
         # 兼容前端通道级格式 {"1":{input:18}} → 设备级 {input:18}
         gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
 
-        # 【默认诊断逻辑】若该设备未配置有效齿轮参数，使用内置默认参数执行诊断，
-        # 确保用户点击"齿轮诊断"时始终能看到结果。详见 DIAGNOSIS_LOGIC.md §2.3
-        if not _has_valid_gear(gear_teeth):
-            gear_teeth = {"input": 18, "output": 27}
+        # 未配置齿轮参数时不再注入默认齿数；
+        # 诊断引擎只返回阶次谱/倒谱等统计异常指标。
 
         method_map = {
             "standard": GearMethod.STANDARD,
@@ -215,6 +213,8 @@ async def get_channel_analyze(
             "kurtogram": BearingMethod.KURTOGRAM,
             "cpw": BearingMethod.CPW,
             "med": BearingMethod.MED,
+            "teager": BearingMethod.TEAGER,
+            "spectral_kurtosis": BearingMethod.SPECTRAL_KURTOSIS,
         }
         gear_map = {"standard": GearMethod.STANDARD, "advanced": GearMethod.ADVANCED}
         denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET, "vmd": DenoiseMethod.VMD}
@@ -232,20 +232,19 @@ async def get_channel_analyze(
         has_bp = _has_valid_bearing(bearing_params)
         has_gt = _has_valid_gear(gear_teeth)
 
-        # 【默认诊断逻辑】若该设备既未配轴承参数也未配齿轮参数，
-        # 使用内置默认机械参数执行全套综合分析，保证 Dashboard 和实时分析有数据。
-        # 详见 DIAGNOSIS_LOGIC.md §2.2
-        if not has_bp and not has_gt:
-            bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}   # 6205-2RS 默认
-            gear_teeth = {"input": 18, "output": 27}                     # 常见齿轮箱默认
-            has_bp = True
-            has_gt = True
+        # 未配置机械参数时不注入默认参数，改走统计诊断路径。
 
         # CPU 密集型综合分析放入线程池
-        result = await asyncio.to_thread(
-            engine.analyze_comprehensive, signal, sample_rate,
-            skip_bearing=not has_bp, skip_gear=not has_gt
-        )
+        if strategy == "expert":
+            result = await asyncio.to_thread(
+                engine.analyze_research_ensemble, signal, sample_rate,
+                profile="runtime"
+            )
+        else:
+            result = await asyncio.to_thread(
+                engine.analyze_comprehensive, signal, sample_rate,
+                skip_bearing=False, skip_gear=False
+            )
 
         response_data = {
             "device_id": record.device_id,
@@ -365,18 +364,11 @@ async def get_channel_full_analysis(
         has_bearing = _has_valid_bearing(bearing_params)
         has_gear = _has_valid_gear(gear_teeth)
 
-        # 【默认诊断逻辑】若该设备既未配轴承参数也未配齿轮参数，
-        # 使用内置默认机械参数执行全算法对比分析，保证全算法分析页面有数据。
-        # 详见 DIAGNOSIS_LOGIC.md §2.2
-        if not has_bearing and not has_gear:
-            bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}   # 6205-2RS 默认
-            gear_teeth = {"input": 18, "output": 27}                     # 常见齿轮箱默认
-            has_bearing = True
-            has_gear = True
+        # 未配置机械参数时不注入默认参数，保留统计诊断与无参数齿轮指标。
 
         result = await asyncio.to_thread(
             engine.analyze_all_methods, signal, sample_rate,
-            skip_bearing=not has_bearing, skip_gear=not has_gear
+            skip_bearing=False, skip_gear=False
         )
 
         response_data = {

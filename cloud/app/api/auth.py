@@ -31,6 +31,22 @@ def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
     return encoded_jwt
 
 
+def verify_token_string(token: str) -> str:
+    """验证 JWT 字符串，返回用户名。"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise JWTError("missing subject")
+        return username
+    except JWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="认证令牌已过期或无效",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> str:
@@ -44,23 +60,7 @@ async def get_current_user(
             detail="未提供认证信息",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="无效的认证令牌",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="认证令牌已过期或无效",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return username
+    return verify_token_string(credentials.credentials)
 
 
 async def optional_auth(

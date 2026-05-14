@@ -68,6 +68,17 @@ export const getChannelFullAnalysis = async (deviceId, batchIndex, channel, conf
   return res
 }
 
+export const getChannelResearchAnalysis = async (deviceId, batchIndex, channel, config = {}) => {
+  const params = {
+    detrend: config.detrend ?? false,
+    profile: config.profile || 'balanced',
+    denoise: config.denoise || 'none',
+    max_seconds: config.max_seconds || 5,
+  }
+  const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/research-analysis`, { params })
+  return res
+}
+
 export const getChannelOrder = async (deviceId, batchIndex, channel, freqMin = 10, freqMax = 100, samplesPerRev = 1024, maxOrder = 50, detrend = false) => {
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/order`, {
     params: { freq_min: freqMin, freq_max: freqMax, samples_per_rev: samplesPerRev, max_order: maxOrder, detrend }

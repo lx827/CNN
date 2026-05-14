@@ -241,6 +241,47 @@ def estimate_rot_freq_envelope(
     return float(env_freqs[mask][peak_idx])
 
 
+def estimate_rot_freq_autocorr(
+    sig: np.ndarray,
+    fs: float,
+    freq_range: Tuple[float, float] = (10, 100),
+) -> Optional[float]:
+    """基于自相关的抗噪转频候选估计。"""
+    arr = prepare_signal(sig)
+    if len(arr) < 16:
+        return None
+
+    try:
+        high = min(fs / 2 - 10.0, max(freq_range[1] * 6, freq_range[1] + 20.0))
+        low = max(1.0, freq_range[0] * 0.5)
+        if low < high:
+            arr = bandpass_filter(arr, fs, low, high)
+    except Exception:
+        pass
+
+    arr = arr / (np.std(arr) + 1e-12)
+    corr = scipy_signal.correlate(arr, arr, mode="full", method="fft")
+    corr = corr[len(corr) // 2:]
+    if corr[0] <= 0:
+        return None
+    corr = corr / corr[0]
+
+    min_lag = max(1, int(fs / freq_range[1]))
+    max_lag = min(len(corr) - 1, int(fs / freq_range[0]))
+    if max_lag <= min_lag:
+        return None
+
+    segment = corr[min_lag:max_lag + 1]
+    peaks, props = scipy_signal.find_peaks(segment, prominence=0.03)
+    if len(peaks) == 0:
+        best = int(np.argmax(segment))
+    else:
+        prominences = props.get("prominences", np.ones_like(peaks, dtype=float))
+        best = int(peaks[int(np.argmax(prominences))])
+    lag = min_lag + best
+    return float(fs / lag) if lag > 0 else None
+
+
 def estimate_rot_freq_spectrum(
     sig: np.ndarray,
     fs: float,
@@ -383,7 +424,7 @@ def estimate_rot_freq_spectrum(
                 best_idx_global = idx_base
                 break
 
-    # ---------- 包络解调辅助 ----------
+    # ---------- 包络解调 / Welch / 自相关候选 ----------
     # 对啮合频率常见区域（200~500Hz）和全局高频峰做包络解调，收集候选
     candidates = [(best_freq_spec, "spectrum")]
 
@@ -403,6 +444,19 @@ def estimate_rot_freq_spectrum(
         env_est = estimate_rot_freq_envelope(sig, fs, high_peak, freq_range=freq_range)
         if env_est:
             candidates.append((env_est, "envelope_high"))
+
+    try:
+        nperseg = min(len(sig), max(256, int(fs)))
+        wf, wp = scipy_signal.welch(sig, fs=fs, nperseg=nperseg)
+        wmask = (wf >= freq_range[0]) & (wf <= freq_range[1])
+        if np.any(wmask):
+            candidates.append((float(wf[wmask][np.argmax(wp[wmask])]), "welch"))
+    except Exception:
+        pass
+
+    ac_est = estimate_rot_freq_autocorr(sig, fs, freq_range=freq_range)
+    if ac_est:
+        candidates.append((ac_est, "autocorr"))
 
     # ---------- 启发式仲裁 ----------
     # 优先选择通过"齿数整数"验证的包络法候选：
@@ -430,5 +484,56 @@ def estimate_rot_freq_spectrum(
             if abs(teeth - teeth_rounded) < 0.30 and 10 <= teeth_rounded <= 50:
                 return float(f_est)
 
-    # 没有通过齿数验证的包络候选，fallback 到频谱法
-    return float(best_freq_spec)
+    # 自相关在强谐波场景下通常能给出真实周期；若频谱最强候选是它的整数倍，
+    # 优先采用自相关候选，避免 2x/3x 谐波冒充转频。
+    autocorr_candidates = [float(f) for f, method in candidates if method == "autocorr"]
+    def _support_energy(f_est: float) -> float:
+        idx = np.argmin(np.abs(freqs - f_est))
+        return float(np.sum(spectrum_norm[
+            max(0, idx - bw_bins):min(len(spectrum), idx + bw_bins + 1)
+        ]))
+
+    for ac_f in autocorr_candidates:
+        for cand_f, _ in candidates:
+            if cand_f <= ac_f:
+                continue
+            ratio = cand_f / ac_f
+            ac_support = _support_energy(ac_f)
+            cand_support = _support_energy(cand_f)
+            if (
+                1.8 <= ratio <= 5.2
+                and abs(ratio - round(ratio)) < 0.18
+                and ac_support > max(min_base_energy * 0.3, cand_support * 0.2)
+            ):
+                return float(ac_f)
+
+    # 没有通过齿数验证时，对频谱/Welch/自相关候选做谐波一致性仲裁。
+    def _candidate_score(f_est: float, method: str) -> float:
+        if f_est < freq_range[0] or f_est > freq_range[1]:
+            return -1.0
+        idx_base = np.argmin(np.abs(freqs - f_est))
+        band = spectrum_norm[
+            max(0, idx_base - bw_bins):min(len(spectrum), idx_base + bw_bins + 1)
+        ]
+        score = float(np.sum(band))
+        for h in range(2, harmonics_num + 1):
+            hf = f_est * h
+            if hf > fs / 2:
+                break
+            idx_h = np.argmin(np.abs(freqs - hf))
+            hband = spectrum_norm[
+                max(0, idx_h - bw_bins):min(len(spectrum), idx_h + bw_bins + 1)
+            ]
+            score += float(np.sum(hband)) / h
+        score -= _sub_harmonic_penalty(f_est)
+        if method == "autocorr":
+            score *= 1.10
+        elif method == "welch":
+            score *= 1.05
+        return score
+
+    best_candidate, _ = max(
+        candidates,
+        key=lambda item: _candidate_score(float(item[0]), item[1])
+    )
+    return float(best_candidate)

@@ -1036,27 +1036,30 @@ $$m(A) = \frac{\sum_{B\cap C=A} m_1(B)m_2(C)}{1-K}, \quad K = \sum_{B\cap C=\emp
 
 | 算法/特征 | 当前实现位置 | 实现状态 | 备注 |
 |----------|------------|---------|------|
-| 轴承特征频率计算 | `analyzer.py::_compute_bearing_fault_freqs` | ✅ 已实现 | 含 BPFO/BPFI/BSF/FTF |
-| 包络谱分析 | `analyzer.py::compute_envelope_spectrum` | ✅ 已实现 | 简化版，未做带通滤波 |
-| 阶次谱分析 | `analyzer.py::_compute_order_spectrum_simple` | ✅ 已实现 | 简化阶次跟踪 |
-| 频谱特征提取 | `analyzer.py::_extract_spectrum_features` | ✅ 已实现 | 含啮合频率、边带能量 |
-| 包络特征提取 | `analyzer.py::_extract_envelope_features` | ✅ 已实现 | 含 BPFO/BPFI/BSF 匹配 |
-| 阶次特征提取 | `analyzer.py::_extract_order_features` | ✅ 已实现 | 含齿轮/轴承阶次 |
-| 转频估计 | `analyzer.py::_estimate_rot_freq_spectrum` | ✅ 已实现 | 频谱峰值法 + 谐波验证 |
-| 时域统计特征 | `analyzer.py::compute_channel_features` | ✅ 已实现 | Peak/RMS/Kurtosis/Crest 等 |
+| 轴承特征频率计算 | `diagnosis/features.py::_compute_bearing_fault_freqs` | ✅ 已实现 | 含 BPFO/BPFI/BSF/FTF；无参数时不套默认型号，走统计异常指标 |
+| 包络谱分析 | `diagnosis/bearing.py::envelope_analysis` | ✅ 已实现 | 带通 + Hilbert + 低通 + 包络谱 |
+| 阶次谱分析 | `diagnosis/order_tracking.py` | ✅ 已实现 | 单帧/多帧/变速 STFT 等角度重采样 |
+| 频谱特征提取 | `diagnosis/features.py::compute_fft_features` | ✅ 已实现 | 含啮合频率、边带能量 |
+| 包络特征提取 | `diagnosis/features.py::compute_envelope_features` | ✅ 已实现 | 含 BPFO/BPFI/BSF 匹配；无参数时输出统计能量 |
+| 阶次特征提取 | `diagnosis/rule_based.py::_extract_order_features` | ✅ 已实现 | 含齿轮/轴承阶次 |
+| 转频估计 | `diagnosis/signal_utils.py::estimate_rot_freq_spectrum` | ✅ 已实现 | 频谱谐波 + Welch + 包络解调 + 自相关候选仲裁，增强抗噪声 |
+| 时域统计特征 | `diagnosis/features.py::compute_time_features` | ✅ 已实现 | Peak/RMS/Kurtosis/Crest + 滑动窗口 MAD/EWMA/CUSUM 批内趋势指标 |
 | IMF 能量 | `analyzer.py::compute_imf_energy` | ✅ 已实现 | 用频带能量近似 |
 | 规则诊断融合 | `analyzer.py::_rule_based_analyze` | ✅ 已实现 | 多特征加权融合 |
 | 神经网络预测 | `nn_predictor.py::predict` | 🔄 预留接口 | 未加载真实模型 |
 | 信号生成器 | `signal_generator.py` | ✅ 已实现 | 模拟正常/齿轮磨损/轴承故障/轴不对中 |
-| TSA（时域同步平均） | — | ❌ 未实现 | 需编码器/转速脉冲支持 |
-| CPW（倒频谱预白化） | — | ❌ 未实现 | 待实现 |
-| Fast Kurtogram | — | ❌ 未实现 | 待实现 |
-| FM0/FM4/NA4/NB4 | — | ❌ 未实现 | 待实现 |
-| SER（边频带能量比） | `analyzer.py` 部分实现 | ⚠️ 部分实现 | 有边带能量计算，未形成 SER 指标 |
-| 小波阈值去噪 | — | ❌ 未实现 | 待实现 |
-| VMD 分解 | — | ❌ 未实现 | 待实现 |
-| CUSUM/EWMA 控制图 | — | ❌ 未实现 | 待实现 |
-| D-S 证据融合 | — | ❌ 未实现 | 待实现 |
+| TSA（时域同步平均） | `diagnosis/gear/metrics.py::compute_tsa_residual_order` | ✅ 工程实现 | 无编码器时基于估计转频等角度重采样，输出 TSA/残差/差分信号 |
+| CPW（倒频谱预白化） | `diagnosis/preprocessing.py::cepstrum_pre_whitening` | ✅ 工程实现 | 支持轴频/啮合频率倒频谱编辑，配合 Kurtogram 包络 |
+| Fast Kurtogram | `diagnosis/bearing.py::fast_kurtogram` | ✅ 工程近似 | 为实时性用多尺度 STFT 近似 Antoni 滤波器组 |
+| TEO 包络 | `diagnosis/bearing.py::teager_envelope_analysis` | ✅ 工程实现 | Teager 能量算子增强弱冲击，再接 Kurtogram 包络 |
+| 自适应谱峭度重加权包络 | `diagnosis/bearing.py::spectral_kurtosis_envelope_analysis` | ✅ 工程近似 | 谱峭度 + 冲击度 + 局部 SNR 联合选带 |
+| 多算法集成诊断 | `diagnosis/ensemble.py::run_research_ensemble` | ✅ 工程实现 | 后台 runtime 投票；网页端支持 balanced/exhaustive 手动重算法 |
+| FM0/FM4/NA4/NB4 | `diagnosis/gear/metrics.py` | ⚠️ 部分实现 | FM0/FM4/M6A/M8A 已接 TSA/残差；NA4/NB4 需历史基线数据 |
+| SER（边频带能量比） | `diagnosis/gear/metrics.py::compute_ser_order` | ✅ 已实现 | 基于阶次谱计算，与阶次页面一致 |
+| 小波阈值去噪 | `diagnosis/preprocessing.py::wavelet_denoise` | ✅ 已实现 | db8 默认，支持 soft/hard/improved 阈值 |
+| VMD 分解 | `diagnosis/vmd_denoise.py` | ✅ 已实现 | 内存优化版，支持 IMF 筛选重构 |
+| CUSUM/EWMA 控制图 | `diagnosis/features.py::compute_time_features` | ⚠️ 批内实现 | 当前基于单批次滑动窗口，长期历史基线仍待接入数据库 |
+| D-S 证据融合 | — | ❌ 未实现 | 暂不强绑定远距离传感器，仅保留通道独立结果与弱融合 |
 
 ---
 

@@ -22,9 +22,12 @@ from .bearing import (
     fast_kurtogram,
     cpw_envelope_analysis,
     med_envelope_analysis,
+    teager_envelope_analysis,
+    spectral_kurtosis_envelope_analysis,
 )
 from .gear import (
     compute_fm0_order,
+    compute_tsa_residual_order,
     compute_car,
     compute_fm4,
     compute_m6a,
@@ -62,6 +65,8 @@ class BearingMethod(str, Enum):
     KURTOGRAM = "kurtogram"         # Fast Kurtogram 自适应包络
     CPW = "cpw"                     # CPW 预白化 + 包络
     MED = "med"                     # MED 增强 + 包络
+    TEAGER = "teager"               # Teager 能量算子 + 包络
+    SPECTRAL_KURTOSIS = "spectral_kurtosis"  # 自适应谱峭度重加权包络
 
 
 class GearMethod(str, Enum):
@@ -151,7 +156,7 @@ class DiagnosisEngine:
                 "fault_indicators": Dict,
             }
         """
-        arr = self.preprocess(signal) if preprocess else np.array(signal, dtype=np.float64) if preprocess else np.array(signal, dtype=np.float64)
+        arr = self.preprocess(signal) if preprocess else np.array(signal, dtype=np.float64)
 
         if rot_freq is None:
             rot_freq, _, _, _ = self._estimate_rot_freq(arr, fs)
@@ -171,6 +176,10 @@ class DiagnosisEngine:
             result = cpw_envelope_analysis(arr, fs, comb_frequencies=comb_freqs)
         elif self.bearing_method == BearingMethod.MED:
             result = med_envelope_analysis(arr, fs)
+        elif self.bearing_method == BearingMethod.TEAGER:
+            result = teager_envelope_analysis(arr, fs)
+        elif self.bearing_method == BearingMethod.SPECTRAL_KURTOSIS:
+            result = spectral_kurtosis_envelope_analysis(arr, fs)
         else:  # ENVELOPE
             result = envelope_analysis(arr, fs)
 
@@ -224,7 +233,7 @@ class DiagnosisEngine:
                 "fault_indicators": Dict,
             }
         """
-        arr = self.preprocess(signal)
+        arr = self.preprocess(signal) if preprocess else np.array(signal, dtype=np.float64)
 
         order_axis = _cached_oa
         order_spectrum = _cached_os
@@ -305,13 +314,21 @@ class DiagnosisEngine:
 
         # 高级齿轮指标（也基于阶次谱，需要齿轮参数）
         if self.gear_method == GearMethod.ADVANCED and mesh_order and mesh_order > 0:
-            result["fm0"] = round(compute_fm0_order(arr, order_axis, order_spectrum, mesh_order), 4)
+            tsa = compute_tsa_residual_order(arr, fs, rot_freq, samples_per_rev=1024)
+            if tsa.get("valid"):
+                result["tsa_revolutions"] = int(tsa.get("revolutions", 0))
+                result["residual_rms"] = round(float(np.sqrt(np.mean(np.asarray(tsa["residual"]) ** 2))), 6)
+                result["fm0"] = round(compute_fm0_order(tsa["tsa_signal"], order_axis, order_spectrum, mesh_order), 4)
+                diff_signal = tsa["differential"]
+            else:
+                result["tsa_revolutions"] = 0
+                result["fm0"] = round(compute_fm0_order(arr, order_axis, order_spectrum, mesh_order), 4)
+                # TSA 无法形成时才退化为高通近似。
+                diff_signal = highpass_filter(arr, fs, mesh_freq * 0.5)
 
-            # 差分信号（简化版：用高通滤波近似）
-            diff_approx = highpass_filter(arr, fs, mesh_freq * 0.5)
-            result["fm4"] = round(compute_fm4(diff_approx), 4)
-            result["m6a"] = round(compute_m6a(diff_approx), 4)
-            result["m8a"] = round(compute_m8a(diff_approx), 4)
+            result["fm4"] = round(compute_fm4(diff_signal), 4)
+            result["m6a"] = round(compute_m6a(diff_signal), 4)
+            result["m8a"] = round(compute_m8a(diff_signal), 4)
 
             # 边频带能量比 SER（基于阶次谱）
             result["ser"] = round(compute_ser_order(order_axis, order_spectrum, mesh_order), 4)
@@ -371,6 +388,28 @@ class DiagnosisEngine:
             "time_features": time_features,
             "recommendation": _generate_recommendation(bearing_result, gear_result, status),
         }
+
+    def analyze_research_ensemble(
+        self,
+        signal: np.ndarray,
+        fs: float,
+        rot_freq: Optional[float] = None,
+        profile: str = "runtime",
+        max_seconds: float = 5.0,
+    ) -> Dict[str, Any]:
+        """运行多算法集成诊断。runtime 用于后台自动诊断，exhaustive 用于网页手动重算法。"""
+        from .ensemble import run_research_ensemble
+
+        return run_research_ensemble(
+            signal,
+            fs,
+            bearing_params=self.bearing_params,
+            gear_teeth=self.gear_teeth,
+            denoise_method=self.denoise_method.value,
+            rot_freq=rot_freq,
+            profile=profile,
+            max_seconds=max_seconds,
+        )
 
     def analyze_all_methods(
         self,

@@ -1,9 +1,10 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { getApiBaseURL } from './backend'
 
 const request = axios.create({
-  baseURL: '/',
-  timeout: 10000
+  baseURL: getApiBaseURL(),
+  timeout: 60000
 })
 
 // 请求拦截器：自动携带 Token
