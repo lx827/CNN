@@ -113,9 +113,8 @@ def create_initial_devices():
                 if existing.downsample_ratio is None:
                     existing.downsample_ratio = 8
                     updated = True
-                if existing.is_online is None:
-                    existing.is_online = 1
-                    updated = True
+                # 不再在启动时强制设 is_online=1
+                # 离线监测是 is_online 的唯一写者，启动初始化不应覆盖其判断
                 if updated:
                     logger.info(f"[启动] 为已有设备 {dev_info['device_id']} 补齐默认配置")
 

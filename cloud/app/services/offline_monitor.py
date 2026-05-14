@@ -87,6 +87,10 @@ async def offline_monitor_worker():
                 now = datetime.utcnow()
                 devices = db.query(Device).all()
 
+                online_count = sum(1 for d in devices if d.is_online)
+                offline_count = len(devices) - online_count
+                logger.info(f"[离线监测] 扫描完成: {online_count} 在线, {offline_count} 离线")
+
                 for device in devices:
                     was_online = bool(device.is_online)
                     is_now_offline = _is_device_offline(device, now)
