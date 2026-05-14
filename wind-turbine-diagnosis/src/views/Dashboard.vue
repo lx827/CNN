@@ -418,16 +418,17 @@ onMounted(async () => {
   initGaugeChart()
   initPieChart()
 
-  window.addEventListener('resize', () => {
+  const handleResize = () => {
     gaugeInstance?.resize()
     pieInstance?.resize()
-  })
-})
+  }
+  window.addEventListener('resize', handleResize)
 
-onUnmounted(() => {
-  gaugeInstance?.dispose()
-  pieInstance?.dispose()
-  window.removeEventListener('resize', () => {})
+  onUnmounted(() => {
+    gaugeInstance?.dispose()
+    pieInstance?.dispose()
+    window.removeEventListener('resize', handleResize)
+  })
 })
 </script>
 
