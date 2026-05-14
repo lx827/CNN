@@ -82,6 +82,9 @@ def create_initial_devices():
                     runtime_hours=dev_info["runtime_hours"],
                     upload_interval=10,
                     task_poll_interval=5,
+                    # 默认机械参数：6205-2RS 深沟球轴承 + 常见齿轮箱参数
+                    bearing_params={"n": 9, "d": 7.94, "D": 39.04, "alpha": 0},
+                    gear_teeth={"input": 18, "output": 27},
                     last_seen_at=datetime.utcnow(),
                 )
                 db.add(device)
@@ -89,6 +92,17 @@ def create_initial_devices():
                     f"[启动] 创建设备: {dev_info['device_id']} "
                     f"(健康度 {dev_info['health_score']}, 状态 {dev_info['status']})"
                 )
+            else:
+                # 给已有设备补齐缺失的机械参数（避免全算法分析显示 No Data）
+                updated = False
+                if not existing.bearing_params:
+                    existing.bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
+                    updated = True
+                if not existing.gear_teeth:
+                    existing.gear_teeth = {"input": 18, "output": 27}
+                    updated = True
+                if updated:
+                    logger.info(f"[启动] 为已有设备 {dev_info['device_id']} 补齐默认机械参数")
 
         db.commit()
     finally:
