@@ -514,6 +514,11 @@ def _evaluate_bearing_faults_statistical(
     """
     无物理参数时的轴承统计诊断。
     基于包络谱统计特征评估是否存在异常冲击。
+
+    新增指标：
+      - low_freq_ratio: 低频能量占比（用于区分轴频谐波 vs 轴承故障）
+      - envelope_crest_factor: 包络谱峰值因子（外圈故障分布较分散时兜底）
+      - moderate_kurtosis: 中等峭度路径（外圈故障峭度通常不高但仍异常）
     """
     indicators = {}
     if len(amp_arr) == 0:
@@ -527,7 +532,7 @@ def _evaluate_bearing_faults_statistical(
     indicators["envelope_peak_snr"] = {
         "value": float(round(snr, 2)),
         "snr": float(round(snr, 2)),
-        "significant": bool(snr > 12.0),  # 仅单一超强峰才报警，排除轴频谐波导致的较高 SNR
+        "significant": bool(snr > 12.0),
     }
 
     # 2. 包络谱峭度（频域峭度——区分"少量超强峰"vs"多个中等峰"）
@@ -536,29 +541,60 @@ def _evaluate_bearing_faults_statistical(
     indicators["envelope_kurtosis"] = {
         "value": float(round(kurt, 2)),
         "snr": float(round(max(0, kurt), 2)),
-        "significant": bool(kurt > 8.0),  # 极高峭度才认为异常，健康轴承的轴频谐波峭度通常在 3-6
+        "significant": bool(kurt > 8.0),
     }
 
-    # 3. 高频能量比 — 轴承故障冲击能量通常在高频段
-    freq_arr = np.array(freq_arr)
-    hf_threshold = max(500.0, rot_freq * 2)
+    # 2b. 中等峭度路径：外圈/球故障时峭度常在 2-8，不触发高阈值但仍异常
+    #     需要同时有 peak_snr 显著 + 时域冲击背景佐证（在 ensemble 层判断）
+    indicators["moderate_kurtosis"] = {
+        "value": float(round(kurt, 2)),
+        "snr": float(round(max(0, kurt), 2)),
+        "significant": bool(kurt > 2.0 and snr > 10.0),
+    }
+
+    freq_arr_np = np.array(freq_arr)
+
+    # 3. 低频能量占比 — 若包络谱能量集中在 <3×转频 → 轴频谐波，非轴承故障
+    low_cutoff = max(rot_freq * 3, 30.0)
     total_energy = float(np.sum(amp_arr ** 2)) + 1e-12
-    hf_mask = freq_arr >= hf_threshold
+    low_mask = freq_arr_np <= low_cutoff
+    low_energy = float(np.sum(amp_arr[low_mask] ** 2))
+    low_freq_ratio = low_energy / total_energy
+    indicators["low_freq_ratio"] = {
+        "value": float(round(low_freq_ratio, 4)),
+        "snr": float(round((1.0 - low_freq_ratio) * 10, 2)),
+        "significant": False,  # 不作为单独的故障指示器，而是辅助抑制误报
+    }
+
+    # 4. 高频能量比 — 轴承故障冲击能量通常在高频段
+    hf_threshold = max(500.0, rot_freq * 2)
+    hf_mask = freq_arr_np >= hf_threshold
     hf_ratio = float(np.sum(amp_arr[hf_mask] ** 2)) / total_energy if np.any(hf_mask) else 0.0
     indicators["high_freq_ratio"] = {
         "value": float(round(hf_ratio, 4)),
         "snr": float(round(hf_ratio * 10, 2)),
-        "significant": bool(hf_ratio > 0.65),  # 包络谱能量主要集中在高频（而非低频轴频谐波）
+        "significant": bool(hf_ratio > 0.65),
     }
 
-    # 4. 谱峰集中度 — 前5峰能量占比（故障时少数峰支配，健康时分布均匀）
+    # 5. 谱峰集中度 — 前5峰能量占比（故障时少数峰支配，健康时分布均匀）
     sorted_amps = np.sort(amp_arr)[::-1]
     top5_energy = float(np.sum(sorted_amps[:5] ** 2))
     peak_conc = float(top5_energy / total_energy)
     indicators["peak_concentration"] = {
         "value": float(round(peak_conc, 4)),
         "snr": float(round(peak_conc * 10, 2)),
-        "significant": bool(peak_conc > 0.5),  # 前5峰能量超过总能量50%才异常
+        "significant": bool(peak_conc > 0.5),
+    }
+
+    # 6. 包络谱峰值因子（crest_factor_in_spectrum）
+    #    外圈故障：包络谱分布较均匀（多个中等峰），峰值因子偏低
+    #    内圈故障：包络谱分布极不均匀（少数超强峰），峰值因子偏高
+    env_rms = float(np.sqrt(np.mean(amp_arr ** 2)))
+    env_cf = float(peak_amp / env_rms) if env_rms > 1e-12 else 0.0
+    indicators["envelope_crest_factor"] = {
+        "value": float(round(env_cf, 2)),
+        "snr": float(round(env_cf, 2)),
+        "significant": bool(env_cf > 25.0),  # 极高峰值因子 = 谱峰高度集中
     }
 
     return indicators

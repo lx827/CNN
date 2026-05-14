@@ -23,10 +23,6 @@
               <el-icon><TrendCharts /></el-icon>
               <span>实时监测</span>
             </el-menu-item>
-            <el-menu-item index="/diagnosis">
-              <el-icon><Warning /></el-icon>
-              <span>故障诊断</span>
-            </el-menu-item>
             <el-menu-item index="/research-diagnosis">
               <el-icon><Cpu /></el-icon>
               <span>高级诊断</span>
