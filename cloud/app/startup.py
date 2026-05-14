@@ -86,9 +86,6 @@ def create_initial_devices():
                     compression_enabled=1,
                     downsample_ratio=8,
                     is_online=1,
-                    # 默认机械参数：6205-2RS 深沟球轴承 + 常见齿轮箱参数
-                    bearing_params={"n": 9, "d": 7.94, "D": 39.04, "alpha": 0},
-                    gear_teeth={"input": 18, "output": 27},
                     last_seen_at=datetime.utcnow(),
                 )
                 db.add(device)
@@ -97,14 +94,8 @@ def create_initial_devices():
                     f"(健康度 {dev_info['health_score']}, 状态 {dev_info['status']})"
                 )
             else:
-                # 给已有设备补齐缺失的字段（避免功能异常或显示不一致）
+                # 给已有设备补齐缺失的非机械参数字段
                 updated = False
-                if not existing.bearing_params:
-                    existing.bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
-                    updated = True
-                if not existing.gear_teeth:
-                    existing.gear_teeth = {"input": 18, "output": 27}
-                    updated = True
                 if not existing.alarm_thresholds:
                     existing.alarm_thresholds = {}
                     updated = True

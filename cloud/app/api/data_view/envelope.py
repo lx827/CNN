@@ -67,6 +67,17 @@ async def get_channel_envelope(
         bearing_params = _extract_device_param(bearing_params, ("n", "d", "D", "alpha"))
         gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
 
+        # 未配置轴承参数时采用默认诊断逻辑
+        def _has_valid_bearing(bp):
+            if not bp or not isinstance(bp, dict):
+                return False
+            try:
+                return all(v is not None for v in [bp.get("n"), bp.get("d"), bp.get("D")]) and float(bp.get("n", 0)) > 0 and float(bp.get("d", 0)) > 0 and float(bp.get("D", 0)) > 0
+            except (TypeError, ValueError):
+                return False
+        if not _has_valid_bearing(bearing_params):
+            bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
+
         # 方法映射
         method_map = {
             "envelope": BearingMethod.ENVELOPE,
