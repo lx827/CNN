@@ -69,12 +69,12 @@ def analyze_device(
     """
     综合分析 — 按通道配置自动分派轴承/齿轮/混合分析
 
-    逻辑：
+    诊断逻辑（详见 DIAGNOSIS_LOGIC.md）：
       - 每通道独立判断 bearing_params 和 gear_teeth 是否有效
-      - 仅有轴承参数 → 只跑轴承分析
-      - 仅有齿轮参数 → 只跑齿轮分析
-      - 两者都有   → 综合（轴承+齿轮）
-      - 两者都无   → 时域+统计回退
+      - 仅有轴承参数 → 只跑轴承分析，跳过齿轮
+      - 仅有齿轮参数 → 只跑齿轮分析，跳过轴承
+      - 两者都有     → 综合（轴承+齿轮）
+      - 两者都无     → 采用默认诊断逻辑（用默认机械参数做全套诊断）
     """
     import traceback as _tb
 
@@ -110,10 +110,12 @@ def analyze_device(
             has_bearing = _params_valid(ch_bp, "bearing")
             has_gear = _params_valid(ch_gt, "gear")
 
-            # 如果都没有配置，采用默认诊断逻辑（使用默认机械参数做全套诊断）
+            # 【默认诊断逻辑】如果该通道既没配轴承参数也没配齿轮参数，
+            # 不跳过诊断，而是使用内置默认参数执行全套诊断，确保 Dashboard 始终有数据。
+            # 详见 DIAGNOSIS_LOGIC.md §2.2
             if not has_bearing and not has_gear:
-                ch_bp = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
-                ch_gt = {"input": 18, "output": 27}
+                ch_bp = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}   # 6205-2RS 默认
+                ch_gt = {"input": 18, "output": 27}                     # 常见齿轮箱默认
                 has_bearing = True
                 has_gear = True
 

@@ -19,7 +19,12 @@ def init_database():
 
 def create_initial_devices():
     """
-    插入默认模拟设备（如果不存在）
+    插入默认模拟设备（如果不存在）。
+
+    注意：新设备默认不预填 bearing_params 和 gear_teeth，
+    避免用户误以为已配置真实机械参数。
+    当设备未配置机械参数时，诊断系统会自动触发"默认诊断逻辑"
+    （使用内置默认参数执行诊断），详见 DIAGNOSIS_LOGIC.md。
     """
     db = SessionLocal()
     try:

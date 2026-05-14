@@ -27,6 +27,9 @@ def _extract_device_param(params, device_keys):
 
     如果 params 已经是设备级，直接返回；
     如果是通道级，提取第一个包含 device_keys 中任意 key 的有效通道参数。
+
+    注：此函数仅做格式转换，不涉及"默认诊断逻辑"。
+    默认参数的注入逻辑在各接口中显式处理，详见 DIAGNOSIS_LOGIC.md。
     """
     if not params or not isinstance(params, dict):
         return params
@@ -42,7 +45,13 @@ def _extract_device_param(params, device_keys):
 
 
 def _has_valid_bearing(bp):
-    """判断轴承参数是否有效（支持设备级和通道级格式）"""
+    """
+    判断轴承参数是否有效（支持设备级和通道级格式）。
+
+    有效性标准：n（滚动体个数）、d（滚动体直径）、D（节径）必须全部存在且大于0。
+    返回 False 表示该设备未配置有效的轴承参数，诊断时将触发"默认诊断逻辑"。
+    详见 DIAGNOSIS_LOGIC.md §2.1
+    """
     if not bp or not isinstance(bp, dict):
         return False
     bp = _extract_device_param(bp, ("n", "d", "D", "alpha"))
@@ -53,7 +62,13 @@ def _has_valid_bearing(bp):
 
 
 def _has_valid_gear(gt):
-    """判断齿轮参数是否有效（支持设备级和通道级格式）"""
+    """
+    判断齿轮参数是否有效（支持设备级和通道级格式）。
+
+    有效性标准：input（主动轮齿数）必须存在且大于0。
+    返回 False 表示该设备未配置有效的齿轮参数，诊断时将触发"默认诊断逻辑"。
+    详见 DIAGNOSIS_LOGIC.md §2.1
+    """
     if not gt or not isinstance(gt, dict):
         return False
     gt = _extract_device_param(gt, ("input", "output"))
@@ -99,7 +114,8 @@ async def get_channel_gear(
         # 兼容前端通道级格式 {"1":{input:18}} → 设备级 {input:18}
         gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
 
-        # 未配置齿轮参数时采用默认诊断逻辑
+        # 【默认诊断逻辑】若该设备未配置有效齿轮参数，使用内置默认参数执行诊断，
+        # 确保用户点击"齿轮诊断"时始终能看到结果。详见 DIAGNOSIS_LOGIC.md §2.3
         if not _has_valid_gear(gear_teeth):
             gear_teeth = {"input": 18, "output": 27}
 
@@ -216,10 +232,12 @@ async def get_channel_analyze(
         has_bp = _has_valid_bearing(bearing_params)
         has_gt = _has_valid_gear(gear_teeth)
 
-        # 如果都没有配置，采用默认诊断逻辑
+        # 【默认诊断逻辑】若该设备既未配轴承参数也未配齿轮参数，
+        # 使用内置默认机械参数执行全套综合分析，保证 Dashboard 和实时分析有数据。
+        # 详见 DIAGNOSIS_LOGIC.md §2.2
         if not has_bp and not has_gt:
-            bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
-            gear_teeth = {"input": 18, "output": 27}
+            bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}   # 6205-2RS 默认
+            gear_teeth = {"input": 18, "output": 27}                     # 常见齿轮箱默认
             has_bp = True
             has_gt = True
 
@@ -347,10 +365,12 @@ async def get_channel_full_analysis(
         has_bearing = _has_valid_bearing(bearing_params)
         has_gear = _has_valid_gear(gear_teeth)
 
-        # 如果都没有配置，采用默认诊断逻辑
+        # 【默认诊断逻辑】若该设备既未配轴承参数也未配齿轮参数，
+        # 使用内置默认机械参数执行全算法对比分析，保证全算法分析页面有数据。
+        # 详见 DIAGNOSIS_LOGIC.md §2.2
         if not has_bearing and not has_gear:
-            bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
-            gear_teeth = {"input": 18, "output": 27}
+            bearing_params = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}   # 6205-2RS 默认
+            gear_teeth = {"input": 18, "output": 27}                     # 常见齿轮箱默认
             has_bearing = True
             has_gear = True
 
