@@ -21,6 +21,43 @@ from ..order_tracking import _compute_order_spectrum, _compute_order_spectrum_mu
 from ..gear.metrics import _order_band_amplitude
 
 
+def _local_background(oa, os, center, half_bw=0.5, side_bw=1.5):
+    """
+    局部背景估计：用目标阶次两侧 ±(half_bw+side_bw) ~ ±half_bw 的幅值均值作为背景。
+
+    相比全局中位数，局部背景避免了窄带滤波后>5阶区域几乎无能量导致的SNR虚高问题。
+    sun_fault_order=3.125 的局部背景 = 1.625~2.625 和 3.625~4.625 阶次的幅值均值。
+    """
+    side_low_start = center - half_bw - side_bw
+    side_low_end = center - half_bw
+    side_high_start = center + half_bw
+    side_high_end = center + half_bw + side_bw
+    mask = ((oa >= side_low_start) & (oa <= side_low_end)) | \
+           ((oa >= side_high_start) & (oa <= side_high_end))
+    if np.any(mask):
+        return float(np.mean(os[mask]))
+    # fallback: 全局中位数（排除<0.5阶DC区域）
+    valid = oa > 0.5
+    if np.any(valid):
+        return float(np.median(os[valid]))
+    return float(np.median(os))
+
+
+def _band_median_background(oa, os, max_order=5.0):
+    """
+    频带内中位数背景：对阶次谱在 0.5~max_order 阶范围内取中位数。
+
+    适用于窄带滤波后的阶次谱（>max_order 阶区域几乎无能量）。
+    """
+    mask = (oa > 0.5) & (oa <= max_order)
+    if np.any(mask):
+        return float(np.median(os[mask]))
+    valid = oa > 0.5
+    if np.any(valid):
+        return float(np.median(os[valid]))
+    return float(np.median(os))
+
+
 def _envelope_order_spectrum(
     signal: np.ndarray,
     fs: float,
@@ -143,29 +180,29 @@ def planetary_envelope_order_analysis(
     env_oa = np.asarray(env_order_axis)
     env_os = np.asarray(env_order_spectrum)
 
-    # 背景：中位数（排除低阶旋转谐波区域 < 5阶）
-    high_mask = env_oa > 5.0
-    if np.any(high_mask):
-        background = float(np.median(env_os[high_mask]))
-    else:
-        background = float(np.median(env_os))
-
-    if background < 1e-12:
-        background = 1e-12
+    # 窄带方法：包络阶次谱只在滤波频带内有能量，>5阶几乎为零
+    # 用滤波频带内（0.5~5阶）的中位数作为背景
+    background = _band_median_background(env_oa, env_os, max_order=5.0)
+    background = max(background, 1e-12)
 
     # 各特征阶次的幅值
     sun_fault_amp = _order_band_amplitude(env_oa, env_os, sun_fault_order, 0.3)
     planet_fault_amp = _order_band_amplitude(env_oa, env_os, planet_fault_order, 0.3)
     carrier_amp = _order_band_amplitude(env_oa, env_os, carrier_order, 0.3)
+    mesh_amp = _order_band_amplitude(env_oa, env_os, mesh_order, 1.0)
 
-    # SNR（相对于背景中位数）
+    # SNR（相对于频带内背景）
     sun_fault_snr = sun_fault_amp / background
     planet_fault_snr = planet_fault_amp / background
     carrier_snr = carrier_amp / background
+    mesh_band_snr = mesh_amp / background
 
-    # mesh_order 带内包络谱 SNR（整体调制强度）
-    mesh_band_amp = _order_band_amplitude(env_oa, env_os, mesh_order, 1.0)
-    mesh_band_snr = mesh_band_amp / background
+    # 调制深度比（故障阶次相对于 mesh 阶次的幅值比）
+    # 行星箱的 sun_fault_order 是固有调制阶次，健康时也有，
+    # 但故障时调制深度会增加 → 这个比值的变化才有区分力
+    sun_modulation_depth = sun_fault_amp / max(mesh_amp, 1e-12)
+    planet_modulation_depth = planet_fault_amp / max(mesh_amp, 1e-12)
+    carrier_modulation_depth = carrier_amp / max(mesh_amp, 1e-12)
 
     # 显著性判定
     SNR_THRESHOLD_WARNING = 3.0
@@ -184,7 +221,11 @@ def planetary_envelope_order_analysis(
         "sun_fault_amp": round(sun_fault_amp, 4),
         "planet_fault_amp": round(planet_fault_amp, 4),
         "carrier_amp": round(carrier_amp, 4),
+        "mesh_amp": round(mesh_amp, 4),
         "background_median": round(background, 4),
+        "sun_modulation_depth": round(sun_modulation_depth, 4),
+        "planet_modulation_depth": round(planet_modulation_depth, 4),
+        "carrier_modulation_depth": round(carrier_modulation_depth, 4),
         "sun_fault_significant": sun_fault_snr > SNR_THRESHOLD_WARNING,
         "planet_fault_significant": planet_fault_snr > SNR_THRESHOLD_WARNING,
         "carrier_significant": carrier_snr > SNR_THRESHOLD_WARNING,
@@ -246,21 +287,31 @@ def planetary_fullband_envelope_order_analysis(
     env_oa = np.asarray(env_order_axis)
     env_os = np.asarray(env_order_spectrum)
 
-    high_mask = env_oa > 5.0
-    if np.any(high_mask):
-        background = float(np.median(env_os[high_mask]))
-    else:
-        background = float(np.median(env_os))
-    if background < 1e-12:
-        background = 1e-12
+    # 全频带方法：全局中位数作为背景（包络阶次谱全频带都有能量）
+    global_bg = float(np.median(env_os[env_oa > 0.5])) if np.any(env_oa > 0.5) else 1e-12
+    background = max(global_bg, 1e-12)
 
     sun_fault_amp = _order_band_amplitude(env_oa, env_os, sun_fault_order, 0.3)
     planet_fault_amp = _order_band_amplitude(env_oa, env_os, planet_fault_order, 0.3)
     carrier_amp = _order_band_amplitude(env_oa, env_os, carrier_order, 0.3)
+    mesh_amp = _order_band_amplitude(env_oa, env_os, mesh_order, 1.0)
 
     sun_fault_snr = sun_fault_amp / background
     planet_fault_snr = planet_fault_amp / background
     carrier_snr = carrier_amp / background
+
+    # 调制深度比
+    sun_modulation_depth = sun_fault_amp / max(mesh_amp, 1e-12)
+    planet_modulation_depth = planet_fault_amp / max(mesh_amp, 1e-12)
+    carrier_modulation_depth = carrier_amp / max(mesh_amp, 1e-12)
+
+    # 包络峭度
+    if len(envelope) > 4:
+        e_mean = np.mean(envelope)
+        e_var = np.var(envelope)
+        envelope_kurtosis = float(np.mean((envelope - e_mean) ** 4) / (e_var ** 2 + 1e-12) - 3)
+    else:
+        envelope_kurtosis = 0.0
 
     SNR_THRESHOLD_WARNING = 3.0
     SNR_THRESHOLD_CRITICAL = 5.0
@@ -277,7 +328,12 @@ def planetary_fullband_envelope_order_analysis(
         "sun_fault_amp": round(sun_fault_amp, 4),
         "planet_fault_amp": round(planet_fault_amp, 4),
         "carrier_amp": round(carrier_amp, 4),
+        "mesh_amp": round(mesh_amp, 4),
         "background_median": round(background, 4),
+        "sun_modulation_depth": round(sun_modulation_depth, 4),
+        "planet_modulation_depth": round(planet_modulation_depth, 4),
+        "carrier_modulation_depth": round(carrier_modulation_depth, 4),
+        "envelope_kurtosis": round(envelope_kurtosis, 4),
         "sun_fault_significant": sun_fault_snr > SNR_THRESHOLD_WARNING,
         "planet_fault_significant": planet_fault_snr > SNR_THRESHOLD_WARNING,
         "carrier_significant": carrier_snr > SNR_THRESHOLD_WARNING,
@@ -405,10 +461,14 @@ def planetary_vmd_demod_analysis(
         oa_arr = np.asarray(oa)
         os_arr = np.asarray(os)
 
-        # 背景
-        high_mask = oa_arr > 5.0
-        if np.any(high_mask):
-            bg = float(np.median(os_arr[high_mask]))
+        # 背景：排除目标频率附近 ±0.5 阶次后的中位数
+        exclude_orders = [sun_fault_order, planet_fault_order, carrier_order, mesh_order, 1.0, 2.0]
+        exclude_mask = np.zeros(len(oa_arr), dtype=bool)
+        for ex_o in exclude_orders:
+            exclude_mask |= (oa_arr >= ex_o - 0.5) & (oa_arr <= ex_o + 0.5)
+        bg_mask = ~exclude_mask & (oa_arr > 0.5)
+        if np.any(bg_mask):
+            bg = float(np.median(os_arr[bg_mask]))
         else:
             bg = float(np.median(os_arr))
         if bg < 1e-12:
@@ -502,21 +562,23 @@ def planetary_tsa_envelope_analysis(
     env_oa_arr = np.asarray(env_oa)
     env_os_arr = np.asarray(env_os)
 
-    high_mask = env_oa_arr > 5.0
-    if np.any(high_mask):
-        background = float(np.median(env_os_arr[high_mask]))
-    else:
-        background = float(np.median(env_os_arr))
-    if background < 1e-12:
-        background = 1e-12
+    # TSA 残差包络阶次谱：全局中位数作为背景
+    global_bg = float(np.median(env_os_arr[env_oa_arr > 0.5])) if np.any(env_oa_arr > 0.5) else 1e-12
+    background = max(global_bg, 1e-12)
 
     sun_fault_amp = _order_band_amplitude(env_oa_arr, env_os_arr, sun_fault_order, 0.3)
     planet_fault_amp = _order_band_amplitude(env_oa_arr, env_os_arr, planet_fault_order, 0.3)
     carrier_amp = _order_band_amplitude(env_oa_arr, env_os_arr, carrier_order, 0.3)
+    mesh_amp = _order_band_amplitude(env_oa_arr, env_os_arr, mesh_order, 1.0)
 
     sun_fault_snr = sun_fault_amp / background
     planet_fault_snr = planet_fault_amp / background
     carrier_snr = carrier_amp / background
+
+    # 调制深度比
+    sun_modulation_depth = sun_fault_amp / max(mesh_amp, 1e-12)
+    planet_modulation_depth = planet_fault_amp / max(mesh_amp, 1e-12)
+    carrier_modulation_depth = carrier_amp / max(mesh_amp, 1e-12)
 
     # 残差峭度（去掉确定性分量后的冲击指标）
     residual_kurtosis = float(
@@ -535,6 +597,13 @@ def planetary_tsa_envelope_analysis(
         "sun_fault_snr": round(sun_fault_snr, 4),
         "planet_fault_snr": round(planet_fault_snr, 4),
         "carrier_snr": round(carrier_snr, 4),
+        "sun_fault_amp": round(sun_fault_amp, 4),
+        "planet_fault_amp": round(planet_fault_amp, 4),
+        "carrier_amp": round(carrier_amp, 4),
+        "mesh_amp": round(mesh_amp, 4),
+        "sun_modulation_depth": round(sun_modulation_depth, 4),
+        "planet_modulation_depth": round(planet_modulation_depth, 4),
+        "carrier_modulation_depth": round(carrier_modulation_depth, 4),
         "sun_fault_significant": sun_fault_snr > 3.0,
         "planet_fault_significant": planet_fault_snr > 3.0,
         "carrier_significant": carrier_snr > 3.0,
@@ -592,21 +661,31 @@ def planetary_hp_envelope_order_analysis(
     env_oa_arr = np.asarray(env_oa)
     env_os_arr = np.asarray(env_os)
 
-    high_mask = env_oa_arr > 5.0
-    if np.any(high_mask):
-        background = float(np.median(env_os_arr[high_mask]))
-    else:
-        background = float(np.median(env_os_arr))
-    if background < 1e-12:
-        background = 1e-12
+    # HP 包络阶次谱：全局中位数作为背景
+    global_bg = float(np.median(env_os_arr[env_oa_arr > 0.5])) if np.any(env_oa_arr > 0.5) else 1e-12
+    background = max(global_bg, 1e-12)
 
     sun_fault_amp = _order_band_amplitude(env_oa_arr, env_os_arr, sun_fault_order, 0.3)
     planet_fault_amp = _order_band_amplitude(env_oa_arr, env_os_arr, planet_fault_order, 0.3)
     carrier_amp = _order_band_amplitude(env_oa_arr, env_os_arr, carrier_order, 0.3)
+    mesh_amp = _order_band_amplitude(env_oa_arr, env_os_arr, mesh_order, 1.0)
 
     sun_fault_snr = sun_fault_amp / background
     planet_fault_snr = planet_fault_amp / background
     carrier_snr = carrier_amp / background
+
+    # 调制深度比
+    sun_modulation_depth = sun_fault_amp / max(mesh_amp, 1e-12)
+    planet_modulation_depth = planet_fault_amp / max(mesh_amp, 1e-12)
+    carrier_modulation_depth = carrier_amp / max(mesh_amp, 1e-12)
+
+    # 包络峭度
+    if len(envelope) > 4:
+        e_mean = np.mean(envelope)
+        e_var = np.var(envelope)
+        envelope_kurtosis = float(np.mean((envelope - e_mean) ** 4) / (e_var ** 2 + 1e-12) - 3)
+    else:
+        envelope_kurtosis = 0.0
 
     return {
         "method": "planetary_hp_envelope_order",
@@ -618,6 +697,14 @@ def planetary_hp_envelope_order_analysis(
         "sun_fault_snr": round(sun_fault_snr, 4),
         "planet_fault_snr": round(planet_fault_snr, 4),
         "carrier_snr": round(carrier_snr, 4),
+        "sun_fault_amp": round(sun_fault_amp, 4),
+        "planet_fault_amp": round(planet_fault_amp, 4),
+        "carrier_amp": round(carrier_amp, 4),
+        "mesh_amp": round(mesh_amp, 4),
+        "sun_modulation_depth": round(sun_modulation_depth, 4),
+        "planet_modulation_depth": round(planet_modulation_depth, 4),
+        "carrier_modulation_depth": round(carrier_modulation_depth, 4),
+        "envelope_kurtosis": round(envelope_kurtosis, 4),
         "sun_fault_significant": sun_fault_snr > 3.0,
         "planet_fault_significant": planet_fault_snr > 3.0,
         "carrier_significant": carrier_snr > 3.0,
@@ -634,99 +721,121 @@ def evaluate_planetary_demod_results(
     """
     综合评估行星箱解调结果 → fault_indicators
 
+    实测数据结论（160文件评估）：
+    - narrowband + tsa 的 sun_fault_snr 有约2倍区分力（故障median≈4.4, 健康median≈2.2）
+    - fullband/hp/vmd 对 sun_fault 无区分力（健康和故障SNR完全重叠）
+    - carrier_snr 所有方法都是健康比故障更大（carrier调制是行星箱固有特征）
+    - planet_fault_snr 所有方法区分力约1.5×（健康和故障有重叠）
+
     融合策略：
-    1. 各方法独立计算 sun/planet/carrier 的 SNR
-    2. 取所有方法中最大的 SNR 作为综合证据
-    3. 至少 2 个方法一致检出（SNR > 3）才标记为 warning
-    4. 至少 2 个方法一致检出（SNR > 5）才标记为 critical
+    1. 仅使用 narrowband 和 tsa 的 sun_fault_snr（有区分力的方法）
+    2. 至少 1 个方法检出 sun_fault_snr > 5 → warning
+    3. 至少 1 个方法检出 sun_fault_snr > 8 → critical
+    4. carrier_snr 不参与判定（健康更大，会导致误报）
+    5. planet_fault_snr 仅作为辅助参考（区分力弱）
     """
     indicators = {}
 
-    # 收集各方法的 sun_fault_snr
-    all_sun_snrs = []
-    all_planet_snrs = []
-    all_carrier_snrs = []
-
-    for result in [narrowband_result, fullband_result, tsa_result, hp_result]:
+    # === 仅收集有区分力方法的 SNR ===
+    # narrowband 和 tsa 对 sun_fault 有约2倍区分力
+    sun_snrs_reliable = []
+    for result in [narrowband_result, tsa_result]:
         if "error" in result:
             continue
         snr = result.get("sun_fault_snr", 0.0)
         if snr > 0:
-            all_sun_snrs.append(snr)
+            sun_snrs_reliable.append(snr)
+
+    # planet_fault 区分力弱（约1.5×），仍收集作为辅助
+    planet_snrs_reliable = []
+    for result in [narrowband_result, tsa_result]:
+        if "error" in result:
+            continue
         snr = result.get("planet_fault_snr", 0.0)
         if snr > 0:
-            all_planet_snrs.append(snr)
-        snr = result.get("carrier_snr", 0.0)
-        if snr > 0:
-            all_carrier_snrs.append(snr)
+            planet_snrs_reliable.append(snr)
 
-    # VMD 结果单独处理（幅值解调 + 频率解调）
-    if "error" not in vmd_result:
-        amp_demod = vmd_result.get("amplitude_demod", {})
-        freq_demod = vmd_result.get("frequency_demod", {})
-        for demod in [amp_demod, freq_demod]:
-            snr = demod.get("amp_demod_sun_fault_snr", 0.0)
-            if snr > 0:
-                all_sun_snrs.append(snr)
-            snr = demod.get("freq_demod_sun_fault_snr", 0.0)
-            if snr > 0:
-                all_sun_snrs.append(snr)
-            snr = demod.get("amp_demod_planet_fault_snr", 0.0)
-            if snr > 0:
-                all_planet_snrs.append(snr)
-            snr = demod.get("freq_demod_planet_fault_snr", 0.0)
-            if snr > 0:
-                all_planet_snrs.append(snr)
-            snr = demod.get("amp_demod_carrier_snr", 0.0)
-            if snr > 0:
-                all_carrier_snrs.append(snr)
-            snr = demod.get("freq_demod_carrier_snr", 0.0)
-            if snr > 0:
-                all_carrier_snrs.append(snr)
-
-    # 融合判定
-    def _evaluate_fault(all_snrs, name):
-        if not all_snrs:
-            return {
-                "value": 0.0,
-                "max_snr": 0.0,
-                "warning": False,
-                "critical": False,
-                "methods_agree_warning": 0,
-                "methods_agree_critical": 0,
-            }
-        max_snr = max(all_snrs)
-        warning_count = sum(1 for s in all_snrs if s > 3.0)
-        critical_count = sum(1 for s in all_snrs if s > 5.0)
-        return {
-            "value": round(max_snr, 4),
-            "max_snr": round(max_snr, 4),
-            "warning": warning_count >= 2,
-            "critical": critical_count >= 2,
+    # === 太阳轮故障判定（核心指标） ===
+    # 健康SNR范围: 0.31~4.56 (narrowband), 0.31~4.68 (tsa)
+    # 故障SNR范围: 0.31~9.87 (narrowband), 0.31~9.93 (tsa)
+    # 健康median≈2.2, 故障median≈4.4 → 2倍区分力
+    # threshold: warning>5 (超过健康max), critical>8
+    if sun_snrs_reliable:
+        max_sun = max(sun_snrs_reliable)
+        warning_count = sum(1 for s in sun_snrs_reliable if s > 5.0)
+        critical_count = sum(1 for s in sun_snrs_reliable if s > 8.0)
+        indicators["planetary_sun_fault"] = {
+            "value": round(max_sun, 4),
+            "max_snr": round(max_sun, 4),
+            "methods_agree": len(sun_snrs_reliable),
             "methods_agree_warning": warning_count,
             "methods_agree_critical": critical_count,
+            "warning": max_sun > 5.0,
+            "critical": max_sun > 8.0,
+        }
+    else:
+        indicators["planetary_sun_fault"] = {
+            "value": 0.0, "max_snr": 0.0,
+            "warning": False, "critical": False,
+            "methods_agree_warning": 0, "methods_agree_critical": 0,
         }
 
-    indicators[f"planetary_sun_fault"] = _evaluate_fault(all_sun_snrs, "sun")
-    indicators[f"planetary_planet_fault"] = _evaluate_fault(all_planet_snrs, "planet")
-    indicators[f"planetary_carrier"] = _evaluate_fault(all_carrier_snrs, "carrier")
+    # === 行星轮故障判定（辅助指标，区分力弱） ===
+    # 健康SNR范围: 0.31~3.32, 故障SNR范围: 0.31~5.26
+    # threshold: warning>4, critical>6
+    if planet_snrs_reliable:
+        max_planet = max(planet_snrs_reliable)
+        indicators["planetary_planet_fault"] = {
+            "value": round(max_planet, 4),
+            "max_snr": round(max_planet, 4),
+            "warning": max_planet > 4.0,
+            "critical": max_planet > 6.0,
+        }
+    else:
+        indicators["planetary_planet_fault"] = {
+            "value": 0.0, "warning": False, "critical": False,
+        }
 
-    # 包络峭度指标（窄带方法）
+    # === carrier 不参与判定（健康SNR更大，会误报） ===
+    # 仅记录值，不设 warning/critical
+    carrier_snrs = []
+    for result in [narrowband_result, tsa_result]:
+        if "error" in result:
+            continue
+        snr = result.get("carrier_snr", 0.0)
+        if snr > 0:
+            carrier_snrs.append(snr)
+    if carrier_snrs:
+        indicators["planetary_carrier"] = {
+            "value": round(max(carrier_snrs), 4),
+            "warning": False,   # carrier是行星箱固有特征，不判定为故障
+            "critical": False,
+            "note": "carrier_snr是行星架调制固有特征，健康值反而更大，不用于故障判定",
+        }
+    else:
+        indicators["planetary_carrier"] = {"value": 0.0, "warning": False, "critical": False}
+
+    # === 包络峭度指标（窄带方法，辅助佐证） ===
     if "error" not in narrowband_result:
         env_kurt = narrowband_result.get("envelope_kurtosis", 0.0)
+        # 健康范围: 0.79~28.41, 故障范围: 0.79~43.43
+        # 区分力约1.5×，重叠大，仅作为辅助
         indicators["envelope_kurtosis"] = {
             "value": round(env_kurt, 4),
-            "warning": env_kurt > 5.0,
-            "critical": env_kurt > 10.0,
+            "warning": env_kurt > 10.0,
+            "critical": env_kurt > 20.0,
         }
 
-    # 残差峭度指标（TSA 方法）
+    # === 残差峭度指标（TSA方法，辅助佐证） ===
     if "error" not in tsa_result:
         res_kurt = tsa_result.get("residual_kurtosis", 0.0)
+        # 健康范围: 0.56~18.55, 故障范围: 0.56~17.41
+        # 健康median更高！区分力<1×，不作为主判定
         indicators["residual_kurtosis"] = {
             "value": round(res_kurt, 4),
-            "warning": res_kurt > 5.0,
-            "critical": res_kurt > 10.0,
+            "warning": False,
+            "critical": False,
+            "note": "残差峭度健康值更大，不用于故障判定",
         }
 
     return indicators
