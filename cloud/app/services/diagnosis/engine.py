@@ -437,7 +437,7 @@ class DiagnosisEngine:
 
             # 综合评估 → 融合各方法的故障指示器
             planetary_indicators = evaluate_planetary_demod_results(
-                narrowband_result, fullband_result, vmd_result, tsa_env_result, hp_env_result
+                narrowband_result, vmd_result
             )
             # 合入主 indicators（行星箱专用指标以 planetary_ 前缀区分）
             for k, v in planetary_indicators.items():

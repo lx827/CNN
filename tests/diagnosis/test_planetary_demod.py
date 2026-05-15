@@ -61,7 +61,7 @@ def get_rot_freq_from_filename(filename):
         return 35.0  # 默认
 
 
-def run_all_methods(signal, fs, rot_freq, gear_teeth):
+def run_all_methods(signal, fs, rot_freq, gear_teeth, skip_vmd=False):
     """运行所有解调方法"""
     results = {}
     methods = [
@@ -69,8 +69,9 @@ def run_all_methods(signal, fs, rot_freq, gear_teeth):
         ("fullband", planetary_fullband_envelope_order_analysis),
         ("tsa_envelope", planetary_tsa_envelope_analysis),
         ("hp_envelope", planetary_hp_envelope_order_analysis),
-        ("vmd_demod", planetary_vmd_demod_analysis),
     ]
+    if not skip_vmd:
+        methods.append(("vmd_demod", planetary_vmd_demod_analysis))
     for name, func in methods:
         try:
             r = func(signal, fs, rot_freq, gear_teeth)
@@ -83,6 +84,14 @@ def run_all_methods(signal, fs, rot_freq, gear_teeth):
                     "carrier_snr": r.get("carrier_snr", 0.0),
                     "sun_fault_significant": r.get("sun_fault_significant", False),
                     "planet_fault_significant": r.get("planet_fault_significant", False),
+                    "sun_modulation_depth": r.get("sun_modulation_depth", 0.0),
+                    "planet_modulation_depth": r.get("planet_modulation_depth", 0.0),
+                    "carrier_modulation_depth": r.get("carrier_modulation_depth", 0.0),
+                    "sun_fault_amp": r.get("sun_fault_amp", 0.0),
+                    "planet_fault_amp": r.get("planet_fault_amp", 0.0),
+                    "carrier_amp": r.get("carrier_amp", 0.0),
+                    "mesh_amp": r.get("mesh_amp", 0.0),
+                    "envelope_kurtosis": r.get("envelope_kurtosis", 0.0),
                 }
                 # VMD 有额外的幅值/频率解调结果
                 if name == "vmd_demod":
@@ -101,9 +110,12 @@ def run_all_methods(signal, fs, rot_freq, gear_teeth):
 
 
 def main():
+    skip_vmd = "--skip-vmd" in sys.argv
     # 收集所有文件
     all_files = sorted(DATA_DIR.glob("*.npy"))
     print(f"找到 {len(all_files)} 个文件")
+    if skip_vmd:
+        print("⚠️ VMD 方法已跳过（使用 --skip-vmd 参数）")
 
     # 按故障类型分组
     groups = {}
@@ -132,7 +144,7 @@ def main():
             if len(signal) > max_samples:
                 signal = signal[:max_samples]
 
-            results = run_all_methods(signal, FS, rot_freq, GEAR_TEETH)
+            results = run_all_methods(signal, FS, rot_freq, GEAR_TEETH, skip_vmd=skip_vmd)
             entry = {
                 "filename": fname,
                 "rot_freq": rot_freq,
@@ -155,8 +167,12 @@ def main():
     # === 统计汇总 ===
     print("\n\n========== 各方法区分力统计 ==========")
 
+    method_list = ["narrowband", "fullband", "tsa_envelope", "hp_envelope"]
+    if not skip_vmd:
+        method_list.append("vmd_demod")
+
     # 按方法收集健康/故障的 SNR 范围
-    for method_name in ["narrowband", "fullband", "tsa_envelope", "hp_envelope", "vmd_demod"]:
+    for method_name in method_list:
         healthy_snrs = {"sun": [], "planet": [], "carrier": []}
         faulty_snrs = {"sun": [], "planet": [], "carrier": []}
 
@@ -237,10 +253,63 @@ def main():
     if healthy_kurt and faulty_kurt:
         print(f"  健康: min={min(healthy_kurt):.2f} max={max(healthy_kurt):.2f} median={np.median(healthy_kurt):.2f}")
         print(f"  故障: min={min(faulty_kurt):.2f} max={max(faulty_kurt):.2f} median={np.median(faulty_kurt):.2f}")
+        discrimination = np.median(faulty_kurt) / np.median(healthy_kurt) if np.median(healthy_kurt) > 0 else 0
+        print(f"  区分力={discrimination:.2f}")
+
+    # 调制深度比统计
+    print("\n\n========== 调制深度比统计（sun_modulation_depth）==========")
+    for method_name in method_list:
+        healthy_md = []
+        faulty_md = []
+        for fault_type, entries in all_results.items():
+            for entry in entries:
+                r = entry["results"].get(method_name, {})
+                if "error" in r:
+                    continue
+                val = r.get("sun_modulation_depth", 0.0)
+                if val > 0:
+                    if fault_type == "He":
+                        healthy_md.append(val)
+                    else:
+                        faulty_md.append(val)
+        print(f"\n--- {method_name} sun_modulation_depth ---")
+        if healthy_md and faulty_md:
+            h_med = np.median(healthy_md)
+            f_med = np.median(faulty_md)
+            discrimination = f_med / h_med if h_med > 0 else 0
+            overlap = max(0, min(max(healthy_md), max(faulty_md)) - max(min(healthy_md), min(faulty_md))) / max(max(healthy_md) - min(healthy_md), max(faulty_md) - min(faulty_md), 1e-12)
+            print(f"  健康: min={min(healthy_md):.4f} max={max(healthy_md):.4f} median={h_med:.4f} (N={len(healthy_md)})")
+            print(f"  故障: min={min(faulty_md):.4f} max={max(faulty_md):.4f} median={f_med:.4f} (N={len(faulty_md)})")
+            print(f"  区分力={discrimination:.2f}  overlap={overlap:.2f}")
+
+    # 包络峭度统计
+    print("\n\n========== 包络峭度统计 ========== ")
+    for method_name in method_list:
+        healthy_kurt = []
+        faulty_kurt = []
+        for fault_type, entries in all_results.items():
+            for entry in entries:
+                r = entry["results"].get(method_name, {})
+                if "error" in r:
+                    continue
+                val = r.get("envelope_kurtosis", 0.0)
+                if val > 0:
+                    if fault_type == "He":
+                        healthy_kurt.append(val)
+                    else:
+                        faulty_kurt.append(val)
+        print(f"\n--- {method_name} envelope_kurtosis ---")
+        if healthy_kurt and faulty_kurt:
+            h_med = np.median(healthy_kurt)
+            f_med = np.median(faulty_kurt)
+            discrimination = f_med / h_med if h_med > 0 else 0
+            print(f"  健康: min={min(healthy_kurt):.4f} max={max(healthy_kurt):.4f} median={h_med:.4f}")
+            print(f"  故障: min={min(faulty_kurt):.4f} max={max(faulty_kurt):.4f} median={f_med:.4f}")
+            print(f"  区分力={discrimination:.2f}")
 
     # 按故障类型细分的 SNR
     print("\n\n========== 按故障类型细分（sun_fault_snr）==========")
-    for method_name in ["narrowband", "fullband", "tsa_envelope", "hp_envelope", "vmd_demod"]:
+    for method_name in method_list:
         print(f"\n--- {method_name} ---")
         for fault_type in ["He", "Br", "Mi", "We", "Rc"]:
             fault_name = FAULT_MAP.get(fault_type, fault_type)
