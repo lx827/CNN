@@ -28,6 +28,7 @@
    2.4 [倒频谱分析](#24-倒频谱分析)
    2.5 [边频带分析](#25-边频带分析)
    2.6 [齿轮故障特征匹配与判别准则](#26-齿轮故障特征匹配与判别准则)
+   2.7 [行星齿轮箱专用诊断方法](#27-行星齿轮箱专用诊断方法)
 3. [轴承与齿轮故障的分离与鉴别诊断](#三轴承与齿轮故障的分离与鉴别诊断)
    3.1 [信号本质差异](#31-信号本质差异)
    3.2 [确定性-随机分离 (DRS / CPW)](#32-确定性-随机分离)
@@ -654,6 +655,167 @@ TSA + 频谱分析
 
 ---
 
+### 2.7 行星齿轮箱专用诊断方法
+
+> **背景**：行星齿轮箱（planetary gearbox）由于多行星轮同时啮合、内外啮合并存、行星架旋转调制等物理机制，其振动信号具有复杂的多重AM-FM调制结构。传统的定轴齿轮诊断指标（SER、CAR、FM4等）在行星箱中健康与故障样本范围完全重叠，无法区分（参见 `docs/planetary_gearbox_diagnosis_progress.md`）。本节总结行星箱专用的信号模型与解调诊断方法，为突破当前项目瓶颈提供理论依据与实现路径。
+
+#### 2.7.1 行星齿轮箱振动信号的AM-FM调制模型
+
+**Feng & Zuo (2012)** 建立了行星齿轮箱局部故障振动信号的解析模型。考虑齿轮故障引起的幅值调制（AM）和频率调制（FM），以及时变传递路径的AM效应，行星箱振动信号可表示为多个AM-FM信号的叠加：
+
+$$x(t) = \sum_{k=1}^{K} a_k(t) \cos\left[2\pi k f_{mesh} t + \phi_k(t)\right]$$
+
+其中：
+- $a_k(t)$：第 $k$ 阶啮合谐波的幅值包络，包含故障特征频率调制和传递路径调制
+- $\phi_k(t)$：相位调制函数
+- $f_{mesh}$：啮合频率
+
+在频域中，该信号表现为以啮合频率谐波为中心、故障特征频率和行星架转频为间隔的**密集边频带结构**。由于多行星轮（通常3~4个）同时啮合，即使健康状态下也存在显著的边频带，导致传统边频带指标（SER）失效。
+
+#### 2.7.2 行星齿轮箱特征阶次（相对于太阳轮转频）
+
+| 特征阶次 | 公式 | 数值（sun=28, ring=100, planet=36, N_p=4）|
+|---------|------|----------------------------------------|
+| **mesh_order** | $Z_{ring} \cdot Z_{sun} / (Z_{sun} + Z_{ring})$ | 21.875 |
+| **carrier_order** | $Z_{sun} / (Z_{sun} + Z_{ring})$ | 0.21875 |
+| **sun_fault_order** | $Z_{ring} / (Z_{sun} + Z_{ring}) \cdot N_p$ | 3.125 |
+| **planet_fault_order** | $Z_{ring} / (Z_{sun} + Z_{ring})$ | 0.78125 |
+
+> ⚠️ **关键**：行星箱的边频带间隔是 carrier_order（0.21875阶），而非定轴箱的1阶。用定轴箱公式（mesh_order=齿数，spacing=1）会导致误诊。
+
+#### 2.7.3 VMD幅频联合解调分析
+
+**Feng, Zhang & Zuo (2017)** 提出基于变分模态分解（VMD）的幅值-频率联合解调方法，有效规避了Fourier谱边频带分析的困难。
+
+**算法流程**：
+
+**Step 1 — VMD分解**
+根据行星箱振动信号的AM-FM特性，模态数 $K$ 可按频带内啮合频率谐波数确定：
+$$K = \left\lfloor \frac{f_s}{2 f_{mesh}} \right\rfloor$$
+
+对于 WTgearbox 数据集（$f_s=8192$ Hz，$f_{mesh}=175/8 \cdot f_{sun}$，$f_{sun}=20\sim55$ Hz），$f_{mesh}\approx 437.5\sim1203$ Hz，故 $K \approx 3\sim9$。
+
+**Step 2 — 敏感IMF选择**
+选择瞬时频率围绕啮合频率 $f_{mesh}$ 或其谐波波动的IMF作为敏感分量。若多个IMF满足，优先选择中心频率更高的IMF（齿轮故障冲击呈高频特征）。
+
+**Step 3 — 经验AM-FM分解**
+对敏感IMF执行经验AM-FM分解，分离幅值包络 $a(t)$ 和载波信号 $c(t)$，避免Bedrosian定理约束导致的负频率问题：
+$$c(t) = \frac{x_{IMF}(t)}{a(t)}, \quad a(t) = \sqrt{x_{IMF}^2(t) + \mathcal{H}^2[x_{IMF}(t)]}$$
+
+**Step 4 — 幅值与频率解调谱**
+- **幅值解调谱**：对 $a(t)$ 做FFT，得到包络谱
+- **频率解调谱**：对载波 $c(t)$ 做Hilbert变换求瞬时频率，再对瞬时频率做FFT
+
+$$f_{inst}(t) = \frac{1}{2\pi} \frac{d}{dt}\arctan\frac{\mathcal{H}[c(t)]}{c(t)}$$
+
+**Step 5 — 故障特征匹配**
+在解调谱中搜索与理论故障特征阶次（sun_fault_order, planet_fault_order, carrier_order）匹配的峰值。
+
+**诊断逻辑**：
+| 故障位置 | 幅值解调谱特征 | 频率解调谱特征 |
+|---------|--------------|--------------|
+| **太阳轮故障** | sun_fault_order 及其谐波突出，伴 1/3 分数谐波（多行星轮不完全一致导致） | 纯净的 sun_fault_order 峰值 |
+| **行星轮故障** | planet_fault_order 及其谐波 | planet_fault_order 峰值 |
+| **齿圈故障** | carrier_order 相关调制 | carrier_order 相关 |
+
+**优势**：解调谱避免了原始Fourier谱中involute边频带的复杂性，幅值解调谱比原始包络谱更纯净，频率解调谱可完全去除传递路径频率干扰。
+
+#### 2.7.4 谱相关解调分析 (SC/SCoh)
+
+**Dong, Liu & Feng (2025)** 提出基于AM-FM模型的谱相关解调分析方法。
+
+**核心原理**：对于AM-FM信号，谱相关密度（SC）在二维谱面上呈现**分组离散特征点**，其循环频率等于调制频率，谱频率等于载波与调制频率的组合。这与冲击信号的垂直线特征显著不同。
+
+**实现要点**：
+1. 计算信号的谱相关密度 $S_x^\alpha(f)$ 或谱相干 $\gamma_x^\alpha(f)$
+2. 在循环频率轴寻找与故障特征频率匹配的离散点群
+3. 通过谱频率轴的精确位置识别调制源（如 $f_{mesh}$, $f_{mesh}\pm f_{fault}$）
+
+**相比传统包络分析的优势**：
+- 能区分AM-FM调制与随机冲击
+- 可识别组合频率的精确来源
+- 对噪声和传递路径变化更鲁棒
+
+#### 2.7.5 调制信号双谱分析 (MSB)
+
+**MSB (Modulation Signal Bispectrum)** 利用相位关系解析二次相位耦合，从边频带中提取故障信息（Guo, Xu, Tian et al.）。
+
+**残余边频带法**（Xu et al. / Feng & Zuo）：
+- 传统同相边频带（in-phase sidebands）受制造/装配误差影响大，健康状态下也可能显著
+- **残余边频带（residual sidebands）** 来自多行星轮啮合的不完全叠加，幅值较小但受误差影响弱
+- 结合MSB可高精度估计残余边频带，实现更稳健的故障诊断
+
+**MSB-SE (Sideband Evaluator)**：
+$$MSB_{SE}(f_c) = \int MSB(f_c, f_\Delta) \, df_\Delta$$
+
+在特征切片 $f_c = 2f_{mesh} - f_{carrier}$ 处，残余边频带的MSB幅值随故障程度单调增长，且不受高负载下误差掩蔽的影响。
+
+#### 2.7.6 连续振动分离 + MED增强 (CVS+MED)
+
+**Tong et al.** 提出针对行星轮故障的连续振动分离（CVS）方法：
+
+**核心思路**：
+1. 利用行星运动的周期性，从原始信号中分离出单个行星轮的啮合振动段
+2. 对分离后的信号执行最小熵解卷积（MED），增强故障冲击成分
+3. 对MED增强后的信号做包络分析
+
+**适用场景**：行星轮局部故障（点蚀、裂纹），特别是当故障冲击被常规啮合振动淹没时。
+
+#### 2.7.7 工程推荐：分阶次包络解调策略
+
+结合本项目 WTgearbox 数据集的实测瓶颈（频域指标完全失效，时域峭度仅有部分区分力），推荐采用以下**分级诊断策略**：
+
+**Level 1 — 时域证据门控（已有）**
+```
+kurtosis > 12  或  crest > 15  →  开启故障证据
+```
+若未通过，输出"健康"或"微弱异常"，结束。
+
+**Level 2 — 窄带包络阶次分析（核心新增）**
+```python
+if is_planetary and mesh_order:
+    # 1. 对 mesh_order 附近频带做窄带滤波
+    band = bandpass_order(order_axis, order_spectrum, mesh_order, bandwidth=2.0)
+    
+    # 2. Hilbert包络
+    envelope = np.abs(hilbert(band))
+    
+    # 3. 对包络做阶次谱分析（等效于幅值解调）
+    env_order_axis, env_order_spectrum = compute_order_spectrum(envelope, fs, rot_freq)
+    
+    # 4. 搜索特征故障阶次峰值
+    sun_amp = order_band_amplitude(env_order_axis, env_order_spectrum, sun_fault_order, 0.3)
+    planet_amp = order_band_amplitude(env_order_axis, env_order_spectrum, planet_fault_order, 0.3)
+    carrier_amp = order_band_amplitude(env_order_axis, env_order_spectrum, carrier_order, 0.3)
+    
+    # 5. 计算峰值显著性（相对于背景中位数）
+    snr_sun = sun_amp / np.median(env_order_spectrum)
+    snr_planet = planet_amp / np.median(env_order_spectrum)
+```
+
+**Level 3 — VMD联合解调（当Level 2证据不足时启用）**
+```python
+# VMD分解 + 敏感IMF选择 + 幅频联合解调
+imfs = vmd(signal, K=int(fs//(2*mesh_freq_hz)), alpha=2000)
+sensitive_imf = select_imf_around_mesh(imfs, mesh_freq_hz)
+env_spectrum = fft_envelope(sensitive_imf)
+freq_demod_spectrum = fft_instantaneous_freq(sensitive_imf)
+```
+
+**阈值建议**：
+| 指标 | 警告阈值 | 危险阈值 |
+|-----|---------|---------|
+| 包络阶次谱 SNR（sun/planet） | > 3 | > 5 |
+| 频率解调谱峰值 | > 2倍中位数 | > 4倍中位数 |
+| 时域 kurtosis（门控用） | > 12 | > 20 |
+
+**注意事项**：
+1. **N1子集误报**：He_N1 高转速样本 kurtosis 可达 8~22，需结合多通道交叉验证或 VMD-IMF选择性峭度缓解
+2. **计算成本**：VMD在2GB服务器上需谨慎，建议K不超过5，信号截断至5秒
+3. **转速范围**：WTgearbox为恒速（20~55 Hz），无需变速阶次跟踪，简化了实现
+
+---
+
 ## 三、轴承与齿轮故障的分离与鉴别诊断
 
 ### 3.1 信号本质差异
@@ -1017,6 +1179,18 @@ $$m(A) = \frac{\sum_{B\cap C=A} m_1(B)m_2(C)}{1-K}, \quad K = \sum_{B\cap C=\emp
 | **Bonnardot et al. (2005)** | *Use of the acceleration signal of a gearbox in order to perform angular resampling...*, MSSP 19: 766-785 | 角域重采样技术 | 2.2 |
 | **汪超等 (2015)** | *基于边频带分析的齿轮故障诊断研究*, 十堰职业技术学院学报 | 边频带与故障模式对应关系 | 2.5 |
 
+### 行星齿轮箱专用诊断文献
+
+| 作者/年份 | 文献 | 核心贡献 | 适用章节 |
+|----------|------|---------|---------|
+| **Feng & Zuo (2012)** | *Vibration signal models for fault diagnosis of planetary gearboxes*, JSV 331(22): 4919-4939 | 行星齿轮箱AM-FM调制信号建模，推导太阳轮/行星轮/齿圈故障的频谱特征 | 2.7.1 |
+| **Feng, Zhang & Zuo (2017)** | *Planetary Gearbox Fault diagnosis via Joint Amplitude and Frequency Demodulation Analysis Based on VMD*, Appl. Sci. 7(8): 775 | VMD+经验AM-FM分解+幅频联合解调，成功诊断太阳轮/行星轮/齿圈局部故障 | 2.7.3 |
+| **Dong, Liu & Feng (2025)** | *Spectral Correlation Demodulation Analysis for Fault Diagnosis of Planetary Gearboxes*, Sensors 25(9): 2694 | 基于AM-FM模型的谱相关/谱相干解调理论，二维离散点群识别故障调制源 | 2.7.4 |
+| **Xu et al. / Feng & Zuo** | *MSB-based methods for planetary gearbox fault diagnosis* (系列论文) | 调制信号双谱(MSB)与残余边频带分析，抑制制造误差干扰，提升诊断稳健性 | 2.7.5 |
+| **Tong et al.** | *Vibration Separation Methodology Compensated by Time-Varying Transfer Function for Fault Diagnosis of Non-Hunting Tooth Planetary Gearbox*, Mech. Syst. Signal Process. | 连续振动分离(CVS)+时变传递函数补偿(TVTF)，单传感器实现行星轮故障定位 | 2.7.6 |
+| **Hong et al.** | *Explanation of the sideband asymmetry in the vibration spectrum of planetary transmissions*, ... | 行星箱调制边频带不对称性物理解释，为边频分析提供理论依据 | 2.7.2 |
+| **Wang et al. (2024)** | *Multi-band Torsional Vibration Amplitude Demodulation for Planetary Gearbox Fault Diagnosis under Time-varying Speed Conditions*, IEEE Access | 多频段扭转振动幅值解调，结合多特征频带信息消除邻频干扰 | 2.7.7 |
+
 ### 综合信号处理与高级方法
 
 | 作者/年份 | 文献 | 核心贡献 | 适用章节 |
@@ -1060,6 +1234,11 @@ $$m(A) = \frac{\sum_{B\cap C=A} m_1(B)m_2(C)}{1-K}, \quad K = \sum_{B\cap C=\emp
 | VMD 分解 | `diagnosis/vmd_denoise.py` | ✅ 已实现 | 内存优化版，支持 IMF 筛选重构 |
 | CUSUM/EWMA 控制图 | `diagnosis/features.py::compute_time_features` | ⚠️ 批内实现 | 当前基于单批次滑动窗口，长期历史基线仍待接入数据库 |
 | D-S 证据融合 | — | ❌ 未实现 | 暂不强绑定远距离传感器，仅保留通道独立结果与弱融合 |
+| 行星箱窄带包络阶次分析 | `diagnosis/gear/planetary_demod.py` (建议) | 🔄 待实现 | 对mesh_order频带包络后做阶次谱，搜索sun/planet故障阶次 |
+| VMD幅频联合解调 | `diagnosis/gear/planetary_vmd_demod.py` (建议) | 🔄 待实现 | 需控制K≤5以适配2GB内存；优先实现Level 2窄带解调 |
+| 谱相关解调分析 (SC/SCoh) | — | ❌ 未实现 | 计算量大，建议作为离线深度分析选项 |
+| MSB残余边频带分析 | — | ❌ 未实现 | 需先实现MSB基础模块 |
+| 连续振动分离 (CVS) | — | ❌ 未实现 | 需编码器或精确转速脉冲，当前硬件条件不支持 |
 
 ---
 
