@@ -1144,6 +1144,574 @@ def planetary_sc_scoh_analysis(
     }
 
 
+def planetary_msb_analysis(
+    signal: np.ndarray,
+    fs: float,
+    rot_freq: float,
+    gear_teeth: Dict,
+) -> Dict:
+    """
+    Level 5: 调制信号双谱分析 (MSB — Modulation Signal Bispectrum)
+
+    核心理论（Guo, Xu, Tian et al. / ALGORITHMS.md 2.7.5）：
+    MSB 利用相位关系解析二次相位耦合（QPC），从边频带中提取故障信息。
+
+    MSB 定义：B(f1, f2) = E[X(f1) * X(f2) * X*(f1+f2)]
+    其中 X(f) 为信号 x(t) 的傅里叶系数，E 为分段平均。
+
+    残余边频带法（Xu et al. / Feng & Zuo）：
+    - 传统同相边频带受制造/装配误差影响大，健康状态下也可能显著
+    - 残余边频带（residual sidebands）来自多行星轮啮合的不完全叠加，
+      值较小但受误差影响弱
+    - 在特征切片 f_c = 2*f_mesh - f_carrier 处，
+      残余边频带的 MSB 幅值随故障程度单调增长，且不受制造误差干扰
+
+    MSB-SE (Sideband Evaluator)：
+    MSB_SE(f_c) = Σ |B(f_c, f_delta)| over f_delta
+
+    实现策略：
+    - 分段平均法（类似 Welch 法），segment_length=1024，50% 重叠
+    - 仅计算诊断所需的特征切片，不计算完整三维双谱
+    - 对切片 f_c = 2*f_mesh - f_carrier 计算全 f_delta 范围
+    - 对涉及 sun_fault / planet_fault / carrier 的组合频率计算切片
+
+    Args:
+        signal: 原始振动信号
+        fs: 采样率
+        rot_freq: 估计转频 Hz
+        gear_teeth: 齿轮参数 {sun, ring, planet, planet_count}
+
+    Returns:
+        {
+            "method": "planetary_msb",
+            "msb_se_mesh_carrier": float,     # MSB-SE at f_c = 2*f_mesh - f_carrier
+            "msb_sun_fault": float,            # MSB 指标 at sun fault slice
+            "msb_planet_fault": float,          # MSB 指标 at planet fault slice
+            "msb_carrier": float,              # MSB 指标 at carrier slice
+            "msb_se_mesh_carrier_significant": bool,
+            "msb_sun_fault_significant": bool,
+            "msb_planet_fault_significant": bool,
+            "msb_carrier_significant": bool,
+            "mesh_order": float,
+            "carrier_order": float,
+            "sun_fault_order": float,
+            "planet_fault_order": float,
+            "f_c_hz": float,                  # 特征切片频率 Hz
+            "n_segments": int,
+            "seg_len": int,
+        }
+    """
+    z_sun = int(gear_teeth.get("sun") or 0)
+    z_ring = int(gear_teeth.get("ring") or 0)
+    planet_count = int(gear_teeth.get("planet_count") or 0)
+
+    if planet_count < 3 or z_sun <= 0 or z_ring <= 0:
+        return {"method": "planetary_msb", "error": "not_planetary"}
+
+    # 特征阶次与频率
+    mesh_order = round(z_ring * z_sun / (z_sun + z_ring), 4)      # 21.875
+    carrier_order = round(z_sun / (z_sun + z_ring), 4)            # 0.21875
+    sun_fault_order = round(z_ring / (z_sun + z_ring) * planet_count, 4)  # 3.125
+    planet_fault_order = round(z_ring / (z_sun + z_ring), 4)      # 0.78125
+
+    mesh_freq = rot_freq * mesh_order
+    carrier_freq = rot_freq * carrier_order
+    sun_fault_freq = rot_freq * sun_fault_order
+    planet_fault_freq = rot_freq * planet_fault_order
+
+    # 特征切片频率：f_c = 2*f_mesh - f_carrier
+    f_c = 2.0 * mesh_freq - carrier_freq
+
+    arr = prepare_signal(signal)
+    # 信号截断至5秒（2GB服务器内存限制）
+    max_samples = int(fs * 5)
+    if len(arr) > max_samples:
+        arr = arr[:max_samples]
+
+    N = len(arr)
+
+    # === 参数设置 ===
+    seg_len = 1024
+    overlap = seg_len // 2  # 50% 重叠
+    step = seg_len - overlap
+
+    # 频率分辨率
+    freq_res = fs / seg_len
+
+    # 计算分段数
+    n_segments = max(1, (N - seg_len) // step + 1)
+    if n_segments < 3:
+        # 至少需要3段才能获得稳定的双谱估计
+        return {"method": "planetary_msb", "error": "signal_too_short"}
+
+    # === Step 1: 分段FFT ===
+    # 对每段做FFT，仅存储正频率部分
+    n_freq_bins = seg_len // 2 + 1  # rfft 输出长度
+    X_segments = np.zeros((n_segments, n_freq_bins), dtype=np.complex128)
+
+    for i in range(n_segments):
+        start = i * step
+        end = start + seg_len
+        if end > N:
+            seg = np.zeros(seg_len)
+            actual_len = N - start
+            if actual_len > 0:
+                seg[:actual_len] = arr[start:N]
+        else:
+            seg = arr[start:end]
+        # 加 Hanning 窗减少频谱泄漏
+        seg = seg * np.hanning(seg_len)
+        X_segments[i] = np.fft.rfft(seg)
+
+    # 频率轴
+    f_axis = np.fft.rfftfreq(seg_len, d=1.0 / fs)
+
+    # === Step 2: 定义 MSB 切片计算函数 ===
+    # MSB(f1, f2) = E[X(f1) * X(f2) * X*(f1+f2)]
+    # 分段平均估计：<X_i(f1) * X_i(f2) * conj(X_i(f1+f2))> over i
+
+    def _msb_slice(f1, f_delta_max=None):
+        """
+        计算 MSB 在固定 f1 处的切片：B(f1, f_delta) for f_delta in [0, f_delta_max]
+
+        f_delta_max 默认 = f_mesh / 2（覆盖啮合频率半带宽）
+
+        Returns:
+            (f_delta_axis, msb_amplitude_slice) — f_delta 轴和对应的 |B(f1, f_delta)| 值
+        """
+        # f1 对应的频率索引
+        k1 = int(round(f1 / freq_res))
+        if k1 < 0 or k1 >= n_freq_bins:
+            return np.array([]), np.array([])
+
+        if f_delta_max is None:
+            f_delta_max = mesh_freq / 2.0
+
+        # f_delta 轴：从 0 到 f_delta_max，步长 freq_res
+        n_delta = int(f_delta_max / freq_res) + 1
+        f_delta_axis = np.arange(n_delta) * freq_res
+
+        msb_slice = np.zeros(n_delta, dtype=np.float64)
+
+        for d_idx in range(n_delta):
+            # f2 = f_delta
+            k2 = int(round(f_delta_axis[d_idx] / freq_res))
+            # f1 + f2 对应的索引
+            k_sum = k1 + k2
+
+            # 验证索引有效性
+            if k2 < 0 or k2 >= n_freq_bins or k_sum < 0 or k_sum >= n_freq_bins:
+                msb_slice[d_idx] = 0.0
+                continue
+
+            # 分段平均：B(f1, f2) = E[X(f1)*X(f2)*conj(X(f1+f2))]
+            # = mean(X_segments[:, k1] * X_segments[:, k2] * conj(X_segments[:, k_sum]))
+            bispectrum_vals = X_segments[:, k1] * X_segments[:, k2] * np.conj(X_segments[:, k_sum])
+            msb_slice[d_idx] = float(np.mean(np.abs(bispectrum_vals)))
+
+        return f_delta_axis, msb_slice
+
+    def _msb_se(f1, f_delta_max=None):
+        """
+        计算 MSB-SE(f1)：|B(f1, f_delta)| 在 f_delta 维度的积分（求和）
+
+        MSB_SE(f1) = Σ |B(f1, f_delta)| for f_delta in [0, f_delta_max]
+
+        Returns:
+            (msb_se_value, f_delta_axis, msb_slice)
+        """
+        f_delta_axis, msb_slice = _msb_slice(f1, f_delta_max)
+        if len(msb_slice) == 0:
+            return 0.0, np.array([]), np.array([])
+        msb_se_value = float(np.sum(msb_slice))
+        return msb_se_value, f_delta_axis, msb_slice
+
+    def _msb_peak_at(f1, f_delta_target, f_delta_bandwidth=None):
+        """
+        在 MSB 切片 f1 处，搜索 f_delta 维度在 f_delta_target 附近的峰值幅值。
+
+        f_delta_bandwidth: 搜索带宽，默认 freq_res × 3
+
+        Returns:
+            peak_amplitude (float)
+        """
+        if f_delta_bandwidth is None:
+            f_delta_bandwidth = freq_res * 3.0
+
+        f_delta_axis, msb_slice = _msb_slice(f1, f_delta_max=f_delta_target + f_delta_bandwidth * 2)
+        if len(msb_slice) == 0:
+            return 0.0
+
+        # 在 f_delta_target ± f_delta_bandwidth 范围内搜索峰值
+        mask = (f_delta_axis >= f_delta_target - f_delta_bandwidth) & \
+               (f_delta_axis <= f_delta_target + f_delta_bandwidth)
+        if not np.any(mask):
+            return 0.0
+
+        return float(np.max(msb_slice[mask]))
+
+    # === Step 3: 计算特征切片 ===
+
+    # 3a. 特征切片 f_c = 2*f_mesh - f_carrier（残余边频带特征）
+    # MSB-SE(f_c)：残余边频带的 MSB 幅值积分，随故障程度单调增长
+    f_c_hz = f_c
+    # 验证 f_c 在有效频率范围内
+    if f_c_hz <= 0 or f_c_hz >= fs / 2.0:
+        # f_c 超出频谱范围，降级处理
+        msb_se_mesh_carrier = 0.0
+        msb_se_mesh_carrier_f_delta_axis = np.array([])
+        msb_se_mesh_carrier_slice = np.array([])
+    else:
+        msb_se_mesh_carrier, msb_se_mesh_carrier_f_delta_axis, msb_se_mesh_carrier_slice = \
+            _msb_se(f_c_hz, f_delta_max=mesh_freq / 2.0)
+
+    # 3b. sun_fault 切片：搜索 MSB 在涉及 sun_fault_freq 的特征切片
+    # 特征切片选项：
+    #   - f1 = mesh_freq - sun_fault_freq（下边频带处）
+    #   - f1 = mesh_freq（啮合频率处，f_delta = sun_fault_freq）
+    #   - f1 = 2*mesh_freq - sun_fault_freq
+    # 选取最有诊断意义的：f1 = mesh_freq，搜索 f_delta ≈ sun_fault_freq
+    msb_sun_fault = 0.0
+    if mesh_freq > 0 and mesh_freq < fs / 2.0 and sun_fault_freq > 0:
+        # 在 mesh_freq 切片中搜索 f_delta = sun_fault_freq 处的峰值
+        msb_sun_fault = _msb_peak_at(mesh_freq, sun_fault_freq)
+        # 补充：在 mesh_freq - sun_fault_freq 切片中搜索
+        f_sun_slice1 = mesh_freq - sun_fault_freq
+        if f_sun_slice1 > 0 and f_sun_slice1 < fs / 2.0:
+            peak1 = _msb_peak_at(f_sun_slice1, carrier_freq)
+            msb_sun_fault = max(msb_sun_fault, peak1)
+
+    # 3c. planet_fault 切片：类似 sun_fault
+    # 特征切片：f1 = mesh_freq，搜索 f_delta ≈ planet_fault_freq
+    msb_planet_fault = 0.0
+    if mesh_freq > 0 and mesh_freq < fs / 2.0 and planet_fault_freq > 0:
+        msb_planet_fault = _msb_peak_at(mesh_freq, planet_fault_freq)
+        f_planet_slice1 = mesh_freq - planet_fault_freq
+        if f_planet_slice1 > 0 and f_planet_slice1 < fs / 2.0:
+            peak1 = _msb_peak_at(f_planet_slice1, carrier_freq)
+            msb_planet_fault = max(msb_planet_fault, peak1)
+
+    # 3d. carrier 切片：carrier_freq 处的 MSB
+    # 特征切片：f1 = mesh_freq，搜索 f_delta ≈ carrier_freq
+    msb_carrier = 0.0
+    if mesh_freq > 0 and mesh_freq < fs / 2.0 and carrier_freq > 0:
+        msb_carrier = _msb_peak_at(mesh_freq, carrier_freq)
+
+    # === Step 4: 背景估计与显著性判定 ===
+    # 背景：在无故障特征频率的切片处计算 MSB-SE 作为参考
+    # 选择几个远离故障频率的切片作为背景参考
+    background_slices = []
+    # 选择 mesh_freq ± offset（offset 远离任何故障频率）处的切片
+    offsets = [rot_freq * 2.0, rot_freq * 4.0, rot_freq * 6.0]
+    for offset in offsets:
+        f_bg = mesh_freq + offset
+        if f_bg > 0 and f_bg < fs / 2.0:
+            bg_se, _, _ = _msb_se(f_bg, f_delta_max=mesh_freq / 2.0)
+            background_slices.append(bg_se)
+        f_bg = mesh_freq - offset
+        if f_bg > 0 and f_bg < fs / 2.0:
+            bg_se, _, _ = _msb_se(f_bg, f_delta_max=mesh_freq / 2.0)
+            background_slices.append(bg_se)
+
+    if background_slices:
+        bg_msb_se = float(np.mean(background_slices))
+    else:
+        bg_msb_se = 1e-12
+
+    bg_msb_se = max(bg_msb_se, 1e-12)
+
+    # MSB-SE SNR：特征切片值相对于背景的比值
+    msb_se_snr = msb_se_mesh_carrier / bg_msb_se
+    msb_sun_snr = msb_sun_fault / bg_msb_se
+    msb_planet_snr = msb_planet_fault / bg_msb_se
+    msb_carrier_snr = msb_carrier / bg_msb_se
+
+    # 显著性阈值
+    # MSB-SE SNR > 3.0 为 warning，> 5.0 为 critical
+    # MSB-SE absolute threshold：需要背景+SNR双重条件
+    MSB_SNR_WARNING = 3.0
+    MSB_SNR_CRITICAL = 5.0
+
+    return {
+        "method": "planetary_msb",
+        "mesh_order": mesh_order,
+        "carrier_order": carrier_order,
+        "sun_fault_order": sun_fault_order,
+        "planet_fault_order": planet_fault_order,
+        "f_c_hz": round(f_c_hz, 4),
+        # MSB-SE 指标（核心诊断指标：随故障程度单调增长）
+        "msb_se_mesh_carrier": round(msb_se_mesh_carrier, 6),
+        "msb_se_snr": round(msb_se_snr, 4),
+        # MSB 峰值指标（辅助参考）
+        "msb_sun_fault": round(msb_sun_fault, 6),
+        "msb_sun_fault_snr": round(msb_sun_snr, 4),
+        "msb_planet_fault": round(msb_planet_fault, 6),
+        "msb_planet_fault_snr": round(msb_planet_snr, 4),
+        "msb_carrier": round(msb_carrier, 6),
+        "msb_carrier_snr": round(msb_carrier_snr, 4),
+        # 背景
+        "bg_msb_se": round(bg_msb_se, 6),
+        # 计算参数
+        "n_segments": n_segments,
+        "seg_len": seg_len,
+        "freq_res": round(freq_res, 4),
+        # 显著性判定
+        "msb_se_mesh_carrier_significant": msb_se_snr > MSB_SNR_WARNING,
+        "msb_sun_fault_significant": msb_sun_snr > MSB_SNR_WARNING,
+        "msb_planet_fault_significant": msb_planet_snr > MSB_SNR_WARNING,
+        "msb_carrier_significant": msb_carrier_snr > MSB_SNR_WARNING,
+        "msb_se_mesh_carrier_warning": msb_se_snr > MSB_SNR_WARNING,
+        "msb_se_mesh_carrier_critical": msb_se_snr > MSB_SNR_CRITICAL,
+        "msb_sun_fault_warning": msb_sun_snr > MSB_SNR_WARNING,
+        "msb_sun_fault_critical": msb_sun_snr > MSB_SNR_CRITICAL,
+        "msb_planet_fault_warning": msb_planet_snr > MSB_SNR_WARNING,
+        "msb_planet_fault_critical": msb_planet_snr > MSB_SNR_CRITICAL,
+        "msb_carrier_warning": msb_carrier_snr > MSB_SNR_WARNING,
+        "msb_carrier_critical": msb_carrier_snr > MSB_SNR_CRITICAL,
+        # 理论注释
+        "note": "MSB残余边频带在f_c=2*f_mesh-f_carrier处随故障程度单调增长，不受制造误差干扰",
+    }
+
+
+def planetary_cvs_med_analysis(
+    signal: np.ndarray,
+    fs: float,
+    rot_freq: float,
+    gear_teeth: Dict,
+) -> Dict:
+    """
+    Level 5: 连续振动分离 + MED增强 (CVS+MED)
+
+    Tong et al. 提出针对行星轮故障的连续振动分离（CVS）方法：
+    1. 利用行星运动的周期性，从原始信号中分离出单个行星轮的啮合振动段
+    2. 对分离后的信号执行最小熵解卷积（MED），增强故障冲击成分
+    3. 对MED增强后的信号做包络分析，搜索故障特征频率
+
+    适用场景：行星轮局部故障（点蚀、裂纹），特别是当故障冲击被常规啮合振动淹没时。
+
+    CVS 核心思路：
+    - 行星架上每个行星轮经过传感器位置的间隔为 carrier_period = 1/carrier_freq
+    - 在每个 carrier_period 内，提取行星轮最接近传感器时的啮合振动段
+    - 平均多段振动得到单行星轮的"连续振动"
+
+    MED 核心思路：
+    - 寻找最优 FIR 滤波器使输出信号峭度最大化（增强尖锐冲击）
+    - 初始化 w = [1, 0, 0, ...]（长度 L=30）
+    - 迭代更新直到收敛或达到最大迭代次数
+
+    约束：
+    - 2GB服务器内存限制
+    - 信号截断至5秒
+    - MED 滤波器长度 L=30，最大迭代 50 次，收敛容差 1e-6
+
+    Args:
+        signal: 原始振动信号
+        fs: 采样率
+        rot_freq: 估计转频 Hz
+        gear_teeth: 齿轮参数 {sun, ring, planet, planet_count}
+
+    Returns:
+        Dict 包含 method, med_kurtosis, envelope_kurtosis, sun/planet/carrier fault SNR,
+        显著性判定标志, 以及 CVS/MED 过程细节
+    """
+    from ..preprocessing import minimum_entropy_deconvolution
+
+    z_sun = int(gear_teeth.get("sun") or 0)
+    z_ring = int(gear_teeth.get("ring") or 0)
+    planet_count = int(gear_teeth.get("planet_count") or 0)
+
+    if planet_count < 3 or z_sun <= 0 or z_ring <= 0:
+        return {"method": "planetary_cvs_med", "error": "not_planetary"}
+
+    # 特征阶次
+    mesh_order = round(z_ring * z_sun / (z_sun + z_ring), 4)      # 21.875
+    carrier_order = round(z_sun / (z_sun + z_ring), 4)            # 0.21875
+    sun_fault_order = round(z_ring / (z_sun + z_ring) * planet_count, 4)  # 3.125
+    planet_fault_order = round(z_ring / (z_sun + z_ring), 4)      # 0.78125
+
+    mesh_freq = rot_freq * mesh_order
+    carrier_freq = rot_freq * carrier_order
+
+    arr = prepare_signal(signal)
+    # 信号截断至5秒（2GB服务器内存限制）
+    max_samples = int(fs * 5)
+    if len(arr) > max_samples:
+        arr = arr[:max_samples]
+
+    N = len(arr)
+
+    # === Step 1: CVS 连续振动分离 ===
+    # carrier_period_samples: 行星架旋转一个 carrier_order 阶次对应的采样点数
+    # 即每个行星轮经过传感器附近一次的时间间隔
+    carrier_period_samples = int(fs / carrier_freq) if carrier_freq > 0 else 0
+
+    # 每段提取长度：carrier_period 的一半（行星轮最接近传感器的半个周期）
+    segment_length = carrier_period_samples // 2
+
+    # 如果 carrier_period 太小（< 2×segment_length），无法有效分离，跳过 CVS 直接用原始信号
+    cvs_applied = False
+    cvs_segments_count = 0
+
+    if carrier_period_samples >= 2 * segment_length and segment_length >= 10 and N >= carrier_period_samples:
+        # 提取每段：从每个 carrier_period 的起点开始，取 segment_length 个点
+        # （行星轮最接近传感器的时刻在 carrier_period 的起始处）
+        segments = []
+        start = 0
+        while start + segment_length <= N:
+            seg = arr[start:start + segment_length]
+            segments.append(seg)
+            start += carrier_period_samples
+
+        if len(segments) >= 3:
+            # 平均多段振动 → 单行星轮的"连续振动"
+            cvs_segments_count = len(segments)
+            min_len = min(len(s) for s in segments)
+            aligned_segments = np.array([s[:min_len] for s in segments])
+            cvs_signal = np.mean(aligned_segments, axis=0)
+            cvs_applied = True
+
+    if cvs_applied:
+        analysis_signal = cvs_signal
+    else:
+        # CVS 不可用时退回到原始信号
+        analysis_signal = arr
+
+    # === Step 2: MED 最小熵解卷积 ===
+    # 使用已有的 minimum_entropy_deconvolution 实现，参数 L=30, max_iter=50, tol=1e-6
+    MED_FILTER_LEN = 30
+    MED_MAX_ITER = 50
+    MED_TOL = 1e-6
+
+    # 计算 MED 前信号的峭度（作为基线对比）
+    analysis_kurt_before = 0.0
+    if len(analysis_signal) > 4:
+        a_mean = np.mean(analysis_signal)
+        a_var = np.var(analysis_signal)
+        if a_var > 1e-12:
+            analysis_kurt_before = float(
+                np.mean((analysis_signal - a_mean) ** 4) / (a_var ** 2) - 3
+            )
+
+    # MED 滤波器长度不能超过信号长度的 1/4
+    effective_filter_len = min(MED_FILTER_LEN, len(analysis_signal) // 4)
+    if effective_filter_len < 2:
+        effective_filter_len = 2
+
+    med_signal, med_filter = minimum_entropy_deconvolution(
+        analysis_signal,
+        filter_len=effective_filter_len,
+        max_iter=MED_MAX_ITER,
+        tol=MED_TOL,
+    )
+
+    # MED 后信号的峭度
+    med_kurtosis = 0.0
+    if len(med_signal) > 4:
+        m_mean = np.mean(med_signal)
+        m_var = np.var(med_signal)
+        if m_var > 1e-12:
+            med_kurtosis = float(
+                np.mean((med_signal - m_mean) ** 4) / (m_var ** 2) - 3
+            )
+
+    # 峭度增强比：MED后 / MED前（>1 表示 MED 成功增强了冲击成分）
+    kurtosis_enhancement = med_kurtosis / max(abs(analysis_kurt_before), 1e-12)
+
+    # === Step 3: 包络分析 ===
+    # MED 增强后的信号做 Hilbert 包络
+    envelope = np.abs(scipy_hilbert(med_signal))
+    envelope = envelope - np.mean(envelope)
+
+    # 包络峭度
+    envelope_kurtosis = 0.0
+    if len(envelope) > 4:
+        e_mean = np.mean(envelope)
+        e_var = np.var(envelope)
+        if e_var > 1e-12:
+            envelope_kurtosis = float(
+                np.mean((envelope - e_mean) ** 4) / (e_var ** 2) - 3
+            )
+
+    # 包络阶次谱 → 搜索故障特征阶次
+    try:
+        env_oa, env_os = _compute_order_spectrum(
+            envelope, fs, rot_freq, samples_per_rev=1024
+        )
+    except Exception:
+        return {"method": "planetary_cvs_med", "error": "order_spectrum_failed"}
+
+    env_oa_arr = np.asarray(env_oa)
+    env_os_arr = np.asarray(env_os)
+
+    # 背景估计：阶次谱 0.5~5阶范围内的中位数
+    global_bg = float(np.median(env_os_arr[env_oa_arr > 0.5])) if np.any(env_oa_arr > 0.5) else 1e-12
+    background = max(global_bg, 1e-12)
+
+    # 各特征阶次的幅值
+    sun_fault_amp = _order_band_amplitude(env_oa_arr, env_os_arr, sun_fault_order, 0.3)
+    planet_fault_amp = _order_band_amplitude(env_oa_arr, env_os_arr, planet_fault_order, 0.3)
+    carrier_amp = _order_band_amplitude(env_oa_arr, env_os_arr, carrier_order, 0.3)
+    mesh_amp = _order_band_amplitude(env_oa_arr, env_os_arr, mesh_order, 1.0)
+
+    # SNR
+    sun_fault_snr = sun_fault_amp / background
+    planet_fault_snr = planet_fault_amp / background
+    carrier_snr = carrier_amp / background
+
+    # 调制深度比
+    sun_modulation_depth = sun_fault_amp / max(mesh_amp, 1e-12)
+    planet_modulation_depth = planet_fault_amp / max(mesh_amp, 1e-12)
+    carrier_modulation_depth = carrier_amp / max(mesh_amp, 1e-12)
+
+    # 显著性阈值
+    SNR_THRESHOLD_WARNING = 3.0
+    SNR_THRESHOLD_CRITICAL = 5.0
+
+    return {
+        "method": "planetary_cvs_med",
+        # 特征阶次
+        "mesh_order": mesh_order,
+        "carrier_order": carrier_order,
+        "sun_fault_order": sun_fault_order,
+        "planet_fault_order": planet_fault_order,
+        # CVS 过程细节
+        "cvs_applied": cvs_applied,
+        "cvs_segments_count": cvs_segments_count,
+        "carrier_freq_hz": round(carrier_freq, 4),
+        "carrier_period_samples": carrier_period_samples,
+        "segment_length": segment_length,
+        # MED 过程细节
+        "med_filter_len": effective_filter_len,
+        "analysis_kurtosis_before_med": round(analysis_kurt_before, 4),
+        "med_kurtosis": round(med_kurtosis, 4),
+        "kurtosis_enhancement": round(kurtosis_enhancement, 4),
+        # 包络分析结果
+        "envelope_kurtosis": round(envelope_kurtosis, 4),
+        "sun_fault_snr": round(sun_fault_snr, 4),
+        "planet_fault_snr": round(planet_fault_snr, 4),
+        "carrier_snr": round(carrier_snr, 4),
+        "sun_fault_amp": round(sun_fault_amp, 4),
+        "planet_fault_amp": round(planet_fault_amp, 4),
+        "carrier_amp": round(carrier_amp, 4),
+        "mesh_amp": round(mesh_amp, 4),
+        "background_median": round(background, 4),
+        # 调制深度比
+        "sun_modulation_depth": round(sun_modulation_depth, 4),
+        "planet_modulation_depth": round(planet_modulation_depth, 4),
+        "carrier_modulation_depth": round(carrier_modulation_depth, 4),
+        # 显著性判定
+        "sun_fault_significant": sun_fault_snr > SNR_THRESHOLD_WARNING,
+        "planet_fault_significant": planet_fault_snr > SNR_THRESHOLD_WARNING,
+        "carrier_significant": carrier_snr > SNR_THRESHOLD_WARNING,
+        "sun_fault_warning": sun_fault_snr > SNR_THRESHOLD_WARNING,
+        "sun_fault_critical": sun_fault_snr > SNR_THRESHOLD_CRITICAL,
+        "planet_fault_warning": planet_fault_snr > SNR_THRESHOLD_WARNING,
+        "planet_fault_critical": planet_fault_snr > SNR_THRESHOLD_CRITICAL,
+        "carrier_warning": carrier_snr > SNR_THRESHOLD_WARNING,
+        "carrier_critical": carrier_snr > SNR_THRESHOLD_CRITICAL,
+    }
+
+
 def evaluate_planetary_demod_results(
     narrowband_result: Dict,
     vmd_result: Dict,
