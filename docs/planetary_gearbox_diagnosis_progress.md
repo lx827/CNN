@@ -1,6 +1,6 @@
 # 行星齿轮箱故障诊断进展与挑战
 
-> **面向接手此问题的开发者**：本文档记录行星齿轮箱诊断算法的当前状态、已知局限、核心瓶颈及未来可能方向。
+> **面向接手此问题的开发者**：本文档记录行星齿轮箱诊断算法的当前状态、已知局限、核心瓶颈及未来实现方向。详细算法理论见 `ALGORITHMS.md` 第 2.7 节。
 
 ---
 
@@ -13,7 +13,7 @@
 - **文件数**: 160 个 `.npy`
 - **故障类型**: He(健康), Br(断齿), Mi(缺齿), We(磨损), Rc(裂纹)
 - **子类型**: N1/N2(健康), B1/B2(断齿), M1/M2(缺齿), W1/W2(磨损), R1/R2(裂纹)
-- **转速**: 20/25/30/35/40/45/50/55 Hz（共8种）
+- **转速**: 20/25/30/35/40/45/50/55 Hz（共8种恒速）
 - **通道**: c1, c2（两个加速度计方向）
 - **文件命名**: `{Fault}_{Sub}_{Speed}-c{Ch}.npy`
 
@@ -28,15 +28,15 @@
 
 **ring固定、sun输入架构的特征阶次**（相对于太阳轮转频 f_sun）:
 
-| 特征 | 公式 | 数值 |
-|------|------|------|
-| **mesh_order** | `Z_ring × Z_sun / (Z_sun + Z_ring)` | 100×28/128 = **21.875** |
-| **mesh_freq** | `mesh_order × f_sun` | **175/8 × f_sun** |
-| **carrier_order** | `Z_sun / (Z_sun + Z_ring)` | 28/128 = **0.21875** |
-| **sun_fault_order** | `Z_ring / (Z_sun + Z_ring) × planet_count` | 100/128 × 4 = **3.125** |
-| **planet_fault_order** | `Z_ring / (Z_sun + Z_ring)` | 100/128 = **0.78125** |
+| 特征 | 公式 | 数值 | ALGORITHMS.md 章节 |
+|------|------|------|-----------------|
+| **mesh_order** | `Z_ring × Z_sun / (Z_sun + Z_ring)` | 100×28/128 = **21.875** | 2.7.2 |
+| **mesh_freq** | `mesh_order × f_sun` | **175/8 × f_sun** | 2.7.2 |
+| **carrier_order** | `Z_sun / (Z_sun + Z_ring)` | 28/128 = **0.21875** | 2.7.2 |
+| **sun_fault_order** | `Z_ring / (Z_sun + Z_ring) × N_p` | 100/128 × 4 = **3.125** | 2.7.2 |
+| **planet_fault_order** | `Z_ring / (Z_sun + Z_ring)` | 100/128 = **0.78125** | 2.7.2 |
 
-> ⚠️ **关键易错点**: 行星箱 `mesh_order ≠ 齿数`！之前代码用 `input=28`（定轴箱公式 mesh_order=齿数），这是错误的。行星箱 mesh_order = 21.875（约 175/8），边频带间隔是 carrier_order = 0.21875（不是 1.0）。
+> ⚠️ **关键易错点**: 行星箱 `mesh_order ≠ 齿数`！之前代码用 `input=28`（定轴箱公式），这是错误的。行星箱 mesh_order=21.875（约175/8），边频带间隔是 carrier_order=0.21875（不是1.0）。
 
 ---
 
@@ -44,7 +44,7 @@
 
 ### 2.1 实验数据（mesh_order 修复后的实测值）
 
-用 5 种故障 × 8 种转速 × 2 通道 = 80 组数据测试，所有频域指标的健康和故障范围完全重叠：
+80 组数据（5故障×8转速×2通道）测试结果——所有频域指标健康和故障范围完全重叠：
 
 | 指标 | 健康(N1/N2)范围 | 故障(Br/Mi/We/Rc)范围 | 区分力 |
 |------|----------------|---------------------|--------|
@@ -57,17 +57,17 @@
 
 ### 2.2 为什么行星箱频域指标失效
 
-**物理原因**（3条叠加效应）:
+**物理原因**（3条叠加效应，详见 ALGORITHMS.md 2.7.1）:
 
-1. **多行星轮同时啮合**：4个行星轮同时与sun和ring啮合，产生4组调制边频带（间隔=carrier_order），这些边频带无论健康/故障都存在且幅值相当
+1. **多行星轮同时啮合**：4个行星轮同时与sun和ring啮合，产生4组调制边频带（间隔=carrier_order），无论健康/故障都存在且幅值相当
 2. **内/外啮合同时发生**：每个行星轮同时与sun（外啮合）和ring（内啮合）接触，信号中包含两组mesh频率族
 3. **行星架旋转调制**：carrier旋转对所有信号施加低频调制，使频谱呈现复杂结构
 
-**结果**：定轴齿轮箱的边频带间隔=轴转频（1阶），边频幅值直接反映故障程度。行星箱的边频带间隔=carrier_order（0.21875阶），且边频带天然6个全显著，SER/CAR等指标健康和故障值在同一范围。
+**Feng & Zuo (2012)** 的AM-FM模型（ALGORITHMS.md 2.7.1）给出了数学解释：行星箱信号是多个AM-FM分量叠加，即使健康状态下也存在显著边频带结构。
 
 ---
 
-## 3. 时域峭度——唯一有效检出手段
+## 3. 时域峭度——当前唯一有效检出手段
 
 ### 3.1 实测数据
 
@@ -119,7 +119,7 @@ analyzer fault_probabilities: kurt>12 → "齿轮磨损" 概率 0.3~0.8
 ```
 analyzer.py  analyze_device()
   ↓
-DiagnosisEngine.analyze_research_ensemble()  ← ensemble.py 的主入口
+DiagnosisEngine.analyze_research_ensemble()  ← ensemble.py 主入口
   ↓
   ├─ preprocess()  → wavelet/VMD 去噪
   ├─ analyze_bearing()  → 轴承诊断(若has_bearing)
@@ -131,14 +131,14 @@ DiagnosisEngine.analyze_research_ensemble()  ← ensemble.py 的主入口
 
 | 文件 | 职责 | 行星箱相关修改 |
 |------|------|--------------|
-| `engine.py` | 调度器：mesh_order/特征阶次计算 | mesh_order用行星公式(21.875), 边频带spacing=carrier_order(0.21875), 添加sun_fault/carrier/planet特征阶次 |
+| `engine.py` | 调度器：mesh_order/特征阶次计算 | mesh_order用行星公式(21.875), 边频带spacing=carrier_order(0.21875), 添加sun_fault/carrier/planet特征阶次, CPW comb_freq也修复 |
 | `gear/__init__.py` | `_evaluate_gear_faults`: 阈值评估 | 行星箱: SER>15/20, CAR>1e10/1e12, sideband≥8/10, order_kurt>50/200 |
 | `gear/metrics.py` | SER/FM4/M6A/M8A/边频带计算 | `analyze_sidebands_order` 添加 `spacing` 参数 |
 | `health_score.py` | 健康度评分 | `is_gear_device` 分离: 齿轮设备kurt阈值>10/>12/>20, crest>12/>15; 轴承设备保持kurt>5/>8/>10/>20 |
 | `ensemble.py` | 多算法集成+置信度 | `_gear_confidence`: 时域证据门控(GEAR_KURT_THRESHOLD=12, GEAR_CREST_THRESHOLD=15) |
 | `analyzer.py` | 设备级融合+fault_probabilities | kurt>12 → "齿轮磨损"概率映射(0.3~0.8) |
 
-### 4.3 阈值不一致问题
+### 4.3 阈值不一致问题 ⚠️
 
 | 参数 | health_score.py | ensemble.py | 说明 |
 |------|----------------|-------------|------|
@@ -148,43 +148,83 @@ DiagnosisEngine.analyze_research_ensemble()  ← ensemble.py 的主入口
 
 ---
 
-## 5. 未来可能方向
+## 5. 推荐实现路径
 
-### 5.1 行星齿轮箱专用诊断方法（文献方向）
+> 详细算法理论见 `ALGORITHMS.md` 第 2.7 节。以下是工程实现优先级。
 
-| 方法 | 原理 | 潜力 | 复杂度 |
-|------|------|------|--------|
-| **行星箱解调分析** | 利用carrier/sun/planet三个特征阶次做分阶次包络解调，而不是围绕mesh_order做边频带 | ★★★★ | 中 |
-| **差分信号（行星轮间）** | 比较不同行星轮的TSA信号差异，局部故障会在某个行星轮产生异常 | ★★★★ | 高 |
-| **时频域联合分析** | STFT或VMD分解后对各IMF单独计算峭度/包络，避免整段信号被旋转谐波淹没 | ★★★ | 中 |
-| **行星箱振动信号分离** | 利用多通道(c1/c2)的信号差异分离sun/ring/planet分量 | ★★★ | 中 |
-| **差分-能量指标** | 比较"减去某行星轮TSA"后的残余信号能量变化 | ★★ | 低 |
-| **窄带包络+阶次跟踪** | 在mesh_order频带做包络，然后对包络做阶次分析，看sun_fault_order峰值 | ★★★★ | 中 |
+### 5.1 分级诊断策略（ALGORITHMS.md 2.7.7）
 
-### 5.2 最有希望的方向：分阶次包络解调
-
-**核心思路**：行星齿轮箱故障不应围绕mesh_order(21.875)做边频带分析，而是围绕特征故障阶次做包络解调：
-
-1. **太阳轮故障**: 对mesh_order频带(21~22阶)做包络，然后在包络的阶次谱中搜索sun_fault_order=3.125的峰值
-2. **行星轮故障**: 对mesh_order频带做包络，在包络阶次谱搜索planet_fault_order=0.78125
-3. **carrier异常**: 在原始阶次谱中检查carrier_order=0.21875的幅值异常
-
-**实现建议**:
-```python
-# 在 engine.py analyze_gear 中添加
-if is_planetary and mesh_order:
-    # 对 mesh_order 频带做窄带滤波+包络
-    band = bandpass_order(order_axis, order_spectrum, mesh_order, bandwidth=2.0)
-    envelope = hilbert(band)
-    # 对包络做阶次谱分析
-    env_order_axis, env_order_spectrum = compute_order_spectrum(envelope, fs, rot_freq)
-    # 搜索 sun_fault_order 峰值
-    sun_fault_amp = order_band_amplitude(env_order_axis, env_order_spectrum, sun_fault_order, 0.3)
-    # 搜索 planet_fault_order 峰值
-    planet_fault_amp = order_band_amplitude(env_order_axis, env_order_spectrum, planet_fault_order, 0.3)
+```
+Level 1（已有）: kurtosis > 12 / crest > 15 时域门控
+      ↓
+Level 2（优先实现）: 窄带包络阶次分析
+      - 对 mesh_order(21.875) 附近做窄带滤波 + Hilbert包络
+      - 对包络做阶次谱，搜索 sun_fault_order(3.125) / planet_fault_order(0.78125)
+      - 计算 SNR > 3~5 为显著
+      ↓
+Level 3（后续）: VMD联合解调
+      - K = floor(fs/(2*fmesh)), 建议 K≤5 控制内存
+      - 信号截断至5秒
 ```
 
-### 5.3 N1子集误报的缓解策略
+**Level 2 是突破当前瓶颈的最佳切入点**——计算量可控（单次Hilbert+FFT），无需新增依赖，可直接在 `engine.py` 的 `analyze_gear` 中实现。
+
+### 5.2 Level 2 实现要点
+
+建议创建 `diagnosis/gear/planetary_demod.py`，核心逻辑：
+
+```python
+def planetary_envelope_order_analysis(signal, fs, rot_freq, gear_teeth):
+    """行星齿轮箱窄带包络阶次分析"""
+    z_sun, z_ring, planet_count = gear_teeth["sun"], gear_teeth["ring"], gear_teeth["planet_count"]
+    
+    # 特征阶次
+    mesh_order = z_ring * z_sun / (z_sun + z_ring)
+    sun_fault_order = z_ring / (z_sun + z_ring) * planet_count
+    carrier_order = z_sun / (z_sun + z_ring)
+    
+    # 1. 窄带滤波：mesh_order ± 2阶
+    mesh_freq = rot_freq * mesh_order
+    band_signal = bandpass_filter(signal, fs, mesh_freq, bandwidth=rot_freq*4)
+    
+    # 2. Hilbert包络
+    envelope = np.abs(hilbert(band_signal))
+    envelope = envelope - np.mean(envelope)  # 去DC
+    
+    # 3. 对包络做阶次谱
+    order_axis, order_spectrum = compute_order_spectrum(envelope, fs, rot_freq)
+    
+    # 4. 搜索特征故障阶次峰值
+    sun_amp = order_band_amplitude(order_axis, order_spectrum, sun_fault_order, 0.3)
+    planet_amp = order_band_amplitude(order_axis, order_spectrum, planet_fault_order, 0.3)
+    carrier_amp = order_band_amplitude(order_axis, order_spectrum, carrier_order, 0.3)
+    
+    # 5. 计算SNR（相对于背景中位数）
+    background = np.median(order_spectrum)
+    snr_sun = sun_amp / background
+    snr_planet = planet_amp / background
+    
+    return {
+        "sun_fault_snr": snr_sun,
+        "planet_fault_snr": snr_planet,
+        "carrier_snr": carrier_amp / background,
+        "sun_fault_significant": snr_sun > 3,
+        "planet_fault_significant": snr_planet > 3,
+    }
+```
+
+### 5.3 集成到 engine.py
+
+在 `analyze_gear` 方法中，当 `is_planetary=True` 时调用行星箱专用分析：
+
+```python
+if is_planetary:
+    planetary_result = planetary_envelope_order_analysis(arr, fs, rot_freq, self.gear_teeth)
+    result["planetary_demod"] = planetary_result
+    # 将 sun_fault/planet_fault 的 SNR 映射到 fault_indicators
+```
+
+### 5.4 N1子集误报的缓解策略
 
 He_N1_40~55的kurt=8~22误触发问题，可能的缓解方式：
 
@@ -193,8 +233,8 @@ He_N1_40~55的kurt=8~22误触发问题，可能的缓解方式：
 | **多通道交叉验证** | c1和c2都有kurt>12才认定故障 | 简单，但缺齿c2 kurt≈11也会漏检 |
 | **旋转谐波优势度门控** | low_freq_ratio>0.55时降低kurt证据权重 | 已实现(rotation_dominant)，但N1_45的low_freq_ratio不高 |
 | **转速归一化** | 同转速下与基线比较kurt偏离度 | 需要基线数据，单次检测无法使用 |
-| **时域同步平均(TSA)后kurt** | TSA消除异步成分后再计算kurt | 更准确，但需要足够多整周期(≥50)，WTgearbox 10秒数据可能不够 |
-| **IMF选择性kurt** | VMD/EMD分解后选故障IMF的kurt | 避免旋转谐波主导的IMF掩盖冲击IMF |
+| **TSA后kurt** | TSA消除异步成分后再计算kurt | 更准确，但WTgearbox 10秒数据可能不够整周期 |
+| **IMF选择性kurt** | VMD分解后选故障IMF的kurt | 避免旋转谐波主导的IMF掩盖冲击IMF |
 
 ---
 
@@ -236,10 +276,11 @@ ssh root@8.137.96.104 "cd /opt/CNN && bash deploy.sh"
 
 ## 7. 历史修复记录
 
-| 版本 | 修复内容 | 效果 |
-|------|---------|------|
-| **v1(旧)** | mesh_order=input=28, 边频带spacing=1, 行星箱阈值偏低 | 健康误报50%+，故障检出靠误驱动的频域指标 |
-| **v2(f3035cc)** | 行星箱阈值大幅提升(SER>12, CAR>1e15), 健康kurt>5→8→10阶梯 | 健康误报降至12.5%，但SER/CAR检出归零 |
-| **v3(d31ce51)** | mesh_order=21.875, spacing=0.21875, sun_fault=3.125 | 频域指标计算正确但仍无区分力；kurt>12是唯一检出路径 |
+| 版本 | commit | 修复内容 | 效果 |
+|------|--------|---------|------|
+| **v1(旧)** | — | mesh_order=input=28, 边频带spacing=1, 行星箱阈值偏低 | 健康误报50%+，故障检出靠误驱动的频域指标 |
+| **v2** | f3035cc | 行星箱阈值大幅提升(SER>12, CAR>1e15), 健康kurt>5→8→10阶梯 | 健康误报降至12.5%，但SER/CAR检出归零 |
+| **v3** | d31ce51 | mesh_order=21.875, spacing=0.21875, sun_fault=3.125, CPW修复 | 频域指标计算正确但仍无区分力；kurt>12是唯一检出路径 |
+| **v4** | 5d78479 | 移除重新诊断API的is_online检查 | 离线设备也能对历史数据重新诊断 |
 
-> **结论**: 行星齿轮箱的诊断瓶颈不在代码实现，而在物理机制——行星架构的频域调制效应天然消除了一阶/二阶统计指标的区分力。突破此瓶颈需要转向分阶次解调、多通道融合或时频联合分析等专用方法。
+> **结论**: 行星齿轮箱的诊断瓶颈不在代码实现，而在物理机制——行星架构的频域调制效应天然消除了一阶/二阶统计指标的区分力。突破此瓶颈需要转向**窄带包络阶次分析**（分阶次解调），详见 ALGORITHMS.md 2.7.3 和 2.7.7。
