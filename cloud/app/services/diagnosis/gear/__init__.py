@@ -35,6 +35,7 @@ from .planetary_demod import (
     planetary_vmd_demod_analysis,
     planetary_tsa_envelope_analysis,
     planetary_hp_envelope_order_analysis,
+    planetary_sc_scoh_analysis,
     evaluate_planetary_demod_results,
 )
 
@@ -57,6 +58,7 @@ __all__ = [
     "planetary_vmd_demod_analysis",
     "planetary_tsa_envelope_analysis",
     "planetary_hp_envelope_order_analysis",
+    "planetary_sc_scoh_analysis",
     "evaluate_planetary_demod_results",
 ]
 
