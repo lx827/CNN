@@ -107,3 +107,4 @@ wind-turbine-diagnosis/vite.config.js
 tests/diagnosis/output/**.png
 CW
 HUSTbear
+tests/diagnosis/planetary_demod_results.json
