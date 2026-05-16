@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Tuple
 from ..signal_utils import prepare_signal, compute_fft_spectrum, _band_energy
 from .metrics import (
     analyze_sidebands_order,
+    analyze_sidebands_zoom_fft,
     compute_fm0_order,
     compute_tsa_residual_order,
     compute_car,

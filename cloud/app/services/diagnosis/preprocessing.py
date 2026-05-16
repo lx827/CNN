@@ -10,7 +10,7 @@
 import numpy as np
 from scipy import signal as scipy_signal
 from scipy.fft import rfft, irfft
-from typing import Tuple, Optional, Literal
+from typing import Tuple, Optional, Literal, Dict
 import pywt
 
 from .signal_utils import prepare_signal, bandpass_filter, lowpass_filter

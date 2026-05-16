@@ -25,6 +25,7 @@ from .bearing import (
     teager_envelope_analysis,
     spectral_kurtosis_envelope_analysis,
 )
+from .bearing_cyclostationary import bearing_sc_scoh_analysis
 from .gear import (
     compute_fm0_order,
     compute_tsa_residual_order,
@@ -34,6 +35,7 @@ from .gear import (
     compute_m8a,
     compute_ser_order,
     analyze_sidebands_order,
+    analyze_sidebands_zoom_fft,
     _evaluate_gear_faults,
 )
 from .gear.planetary_demod import (
@@ -75,6 +77,7 @@ class BearingMethod(str, Enum):
     MED = "med"                     # MED 增强 + 包络
     TEAGER = "teager"               # Teager 能量算子 + 包络
     SPECTRAL_KURTOSIS = "spectral_kurtosis"  # 自适应谱峭度重加权包络
+    SC_SCOH = "sc_scoh"             # 轴承谱相关/谱相干（循环平稳分析）
 
 
 class GearMethod(str, Enum):
@@ -88,6 +91,8 @@ class DenoiseMethod(str, Enum):
     NONE = "none"                   # 无预处理
     WAVELET = "wavelet"             # 小波阈值去噪
     VMD = "vmd"                     # VMD 变分模态分解降噪
+    WAVELET_VMD = "wavelet_vmd"     # 小波+VMD 级联联合降噪
+    WAVELET_LMS = "wavelet_lms"     # 小波+LMS 级联联合降噪
 
 
 class DiagnosisEngine:
@@ -122,6 +127,14 @@ class DiagnosisEngine:
             return wavelet_denoise(arr, wavelet="db8")
         elif self.denoise_method == DenoiseMethod.VMD:
             return vmd_denoise(arr, K=5, alpha=2000)
+        elif self.denoise_method == DenoiseMethod.WAVELET_VMD:
+            from .preprocessing import cascade_wavelet_vmd
+            result, _ = cascade_wavelet_vmd(arr)
+            return result
+        elif self.denoise_method == DenoiseMethod.WAVELET_LMS:
+            from .preprocessing import cascade_wavelet_lms
+            result, _ = cascade_wavelet_lms(arr)
+            return result
         return arr
 
     def _estimate_rot_freq(self, signal: np.ndarray, fs: float):
@@ -195,6 +208,10 @@ class DiagnosisEngine:
             result = teager_envelope_analysis(arr, fs)
         elif self.bearing_method == BearingMethod.SPECTRAL_KURTOSIS:
             result = spectral_kurtosis_envelope_analysis(arr, fs)
+        elif self.bearing_method == BearingMethod.SC_SCOH:
+            result = bearing_sc_scoh_analysis(
+                arr, fs, bearing_params=self.bearing_params, rot_freq=rot_freq
+            )
         else:  # ENVELOPE
             result = envelope_analysis(arr, fs)
 

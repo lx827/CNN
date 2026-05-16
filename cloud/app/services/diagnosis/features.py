@@ -54,6 +54,7 @@ def compute_time_features(signal: np.ndarray) -> Dict[str, float]:
         "crest_factor": round(crest, 4),
     }
     features.update(_compute_dynamic_baseline_features(arr))
+    features.update(compute_nonparam_cusum_features(arr))
     return features
 
 
@@ -401,3 +402,246 @@ def _compute_bearing_fault_orders(rot_freq: float, bearing_params: dict) -> dict
         return {}
     freqs = _compute_bearing_fault_freqs(rot_freq, bearing_params)
     return {k: v / rot_freq for k, v in freqs.items()}
+
+
+# ---------------------------------------------------------------------------
+# 非参数 CUSUM 控制图
+# ---------------------------------------------------------------------------
+
+
+def _sign_cusum(series: np.ndarray, reference: Optional[float] = None) -> Tuple[float, float, Dict]:
+    """
+    符号统计非参数 CUSUM
+
+    ALGORITHMS.md §4.4.1.3：
+    基于符号统计量的 CUSUM，不假设数据服从正态分布，
+    对重尾、偏态的工业振动数据更鲁棒。
+
+    算法流程：
+    1. 以参考值 μ₀（默认为中位数）为基线
+    2. 计算 sign(x_i - μ₀)：正偏差记 +1，负偏差记 -1
+    3. CUSUM 累积：C⁺ = max(0, C⁺ + sign - K), C⁻ = max(0, C⁻ - sign - K)
+    4. K 为参考值（通常取 0.5），H 为决策限（通常取 4~5σ_equivalent）
+
+    与参数 CUSUM 的区别：
+    - 参数 CUSUM 使用 x_i - μ₀ - K（连续值），依赖正态假设
+    - 符号 CUSUM 仅用 sign(x_i - μ₀)（离散值），对任何分布都适用
+    - 对异常值不敏感（只看方向不看大小）
+
+    Args:
+        series: 观测序列（如 RMS 滑动窗口序列）
+        reference: 基线值，None 则取中位数
+
+    Returns:
+        (C⁺_max, C⁻_max, info_dict)
+    """
+    x = np.asarray(series, dtype=np.float64)
+    if len(x) < 4:
+        return 0.0, 0.0, {"method": "sign_cusum", "error": "insufficient_data"}
+
+    # 基线：中位数（比均值更抗异常值）
+    if reference is None:
+        reference = float(np.median(x))
+
+    # 符号统计量
+    signs = np.sign(x - reference)
+    K = 0.5  # 参考值（符号统计的K固定为0.5）
+
+    c_pos = 0.0
+    c_neg = 0.0
+    c_pos_max = 0.0
+    c_neg_max = 0.0
+
+    for s in signs:
+        c_pos = max(0.0, c_pos + s - K)
+        c_neg = max(0.0, c_neg - s - K)
+        c_pos_max = max(c_pos_max, c_pos)
+        c_neg_max = max(c_neg_max, c_neg)
+
+    # 决策限 H：对于符号统计，等效 σ ≈ 1（因为 sign 只有 ±1）
+    # H ≈ 4~5 × n_points的等效标准差
+    # 实际工程中 H 取 n/4 到 n/2 之间的值
+    n = len(x)
+    H = max(4.0, n * 0.1)
+
+    return float(c_pos_max), float(c_neg_max), {
+        "method": "sign_cusum",
+        "reference": round(reference, 6),
+        "K": K,
+        "H": round(H, 2),
+        "alarm_positive": bool(c_pos_max > H),
+        "alarm_negative": bool(c_neg_max > H),
+    }
+
+
+def _mann_whitney_cusum(
+    series: np.ndarray,
+    window_size: int = 10,
+    reference_window: Optional[np.ndarray] = None,
+) -> Tuple[float, float, Dict]:
+    """
+    Mann-Whitney 统计非参数 CUSUM
+
+    ALGORITHMS.md §4.4.1.3：
+    基于 Mann-Whitney U 统计量的 CUSUM，不假设分布形式，
+    对偏态分布和异常值更鲁棒。
+
+    算法流程：
+    1. 将前 window_size 个点作为参考窗口（健康基线）
+    2. 对每个滑动窗口，计算与参考窗口的 Mann-Whitney U 统计量
+    3. 将 U 统计量归一化为 z 分数
+    4. CUSUM 累积归一化 z 分数
+
+    Mann-Whitney U 检验原理：
+    - H0：两个窗口来自同一分布（健康状态）
+    - U = min(U₁, U₂)，其中 U₁ = ∑∑ I(x₁_i > x₂_j)
+    - z = (U - E[U]) / σ_U，E[U] = n₁·n₂/2，σ_U = sqrt(n₁·n₂·(n₁+n₂+1)/12)
+
+    Args:
+        series: 观测序列
+        window_size: 滑动窗口大小
+        reference_window: 健康基线窗口，None 则取序列前 window_size 个点
+
+    Returns:
+        (C⁺_max, C⁻_max, info_dict)
+    """
+    x = np.asarray(series, dtype=np.float64)
+    n = len(x)
+
+    if n < window_size * 2:
+        return 0.0, 0.0, {"method": "mann_whitney_cusum", "error": "insufficient_data"}
+
+    # 参考窗口（健康基线）
+    if reference_window is None:
+        reference_window = x[:window_size]
+    ref = np.asarray(reference_window, dtype=np.float64)
+    n1 = len(ref)
+
+    # 计算每个滑动窗口与参考窗口的 Mann-Whitney z 分数
+    z_scores = []
+    for start in range(window_size, n - window_size + 1, max(1, window_size // 4)):
+        current_window = x[start:start + window_size]
+        if len(current_window) < window_size:
+            continue
+        n2 = len(current_window)
+
+        # 计算 Mann-Whitney U 统计量
+        u1 = 0.0
+        for x1 in ref:
+            for x2 in current_window:
+                if x1 > x2:
+                    u1 += 1.0
+                elif x1 == x2:
+                    u1 += 0.5
+
+        u2 = n1 * n2 - u1
+        u_min = min(u1, u2)
+
+        # 归一化
+        e_u = n1 * n2 / 2.0
+        var_u = n1 * n2 * (n1 + n2 + 1) / 12.0
+        sigma_u = np.sqrt(var_u) if var_u > 0 else 1.0
+
+        z = (u_min - e_u) / sigma_u
+        z_scores.append(z)
+
+    if len(z_scores) < 2:
+        return 0.0, 0.0, {"method": "mann_whitney_cusum", "error": "insufficient_z_scores"}
+
+    # CUSUM 累积 z 分数
+    K_mw = 0.5  # 参考值
+    c_pos = 0.0
+    c_neg = 0.0
+    c_pos_max = 0.0
+    c_neg_max = 0.0
+
+    for z_val in z_scores:
+        c_pos = max(0.0, c_pos + z_val - K_mw)
+        c_neg = max(0.0, c_neg - z_val - K_mw)
+        c_pos_max = max(c_pos_max, c_pos)
+        c_neg_max = max(c_neg_max, c_neg)
+
+    # 决策限：基于 z 分数的 CUSUM，H ≈ 4~5
+    H_mw = 4.0
+
+    return float(c_pos_max), float(c_neg_max), {
+        "method": "mann_whitney_cusum",
+        "window_size": window_size,
+        "n1": n1,
+        "K": K_mw,
+        "H": H_mw,
+        "n_z_scores": len(z_scores),
+        "alarm_positive": bool(c_pos_max > H_mw),
+        "alarm_negative": bool(c_neg_max > H_mw),
+    }
+
+
+def compute_nonparam_cusum_features(signal: np.ndarray) -> Dict[str, float]:
+    """
+    计算非参数 CUSUM 特征（符号统计 + Mann-Whitney）
+
+    ALGORITHMS.md §4.4.1.3：
+    工业振动数据往往非高斯、重尾、偏态。
+    非参数 CUSUM 基于符号统计或 Mann-Whitney 统计量，
+    不假设分布形式，对异常值和偏态分布更鲁棒。
+
+    Args:
+        signal: 输入振动信号
+
+    Returns:
+        {
+            "sign_cusum_positive": float,
+            "sign_cusum_negative": float,
+            "sign_cusum_alarm": bool,
+            "mw_cusum_positive": float,
+            "mw_cusum_negative": float,
+            "mw_cusum_alarm": bool,
+        }
+    """
+    arr = np.asarray(signal, dtype=np.float64)
+    if len(arr) < 512:
+        return {
+            "sign_cusum_positive": 0.0,
+            "sign_cusum_negative": 0.0,
+            "sign_cusum_alarm": False,
+            "mw_cusum_positive": 0.0,
+            "mw_cusum_negative": 0.0,
+            "mw_cusum_alarm": False,
+        }
+
+    # 滑动窗口 RMS 序列（与 _compute_dynamic_baseline_features 相同的窗口策略）
+    n_windows = min(32, max(8, len(arr) // 1024))
+    win = max(128, len(arr) // n_windows)
+    rms_series = []
+    for start in range(0, len(arr) - win + 1, win):
+        chunk = arr[start:start + win]
+        if len(chunk) < 128:
+            continue
+        rms_series.append(float(np.sqrt(np.mean(chunk ** 2))))
+
+    if len(rms_series) < 4:
+        return {
+            "sign_cusum_positive": 0.0,
+            "sign_cusum_negative": 0.0,
+            "sign_cusum_alarm": False,
+            "mw_cusum_positive": 0.0,
+            "mw_cusum_negative": 0.0,
+            "mw_cusum_alarm": False,
+        }
+
+    rms_array = np.array(rms_series)
+
+    # 符号 CUSUM
+    sign_c_pos, sign_c_neg, sign_info = _sign_cusum(rms_array)
+
+    # Mann-Whitney CUSUM
+    mw_c_pos, mw_c_neg, mw_info = _mann_whitney_cusum(rms_array, window_size=max(5, len(rms_array) // 4))
+
+    return {
+        "sign_cusum_positive": round(sign_c_pos, 4),
+        "sign_cusum_negative": round(sign_c_neg, 4),
+        "sign_cusum_alarm": sign_info.get("alarm_positive", False),
+        "mw_cusum_positive": round(mw_c_pos, 4),
+        "mw_cusum_negative": round(mw_c_neg, 4),
+        "mw_cusum_alarm": mw_info.get("alarm_positive", False),
+    }
