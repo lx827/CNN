@@ -28,6 +28,7 @@ from app.services.diagnosis.rule_based import _rule_based_analyze
 from app.services.diagnosis.features import _get_channel_params
 from app.services.diagnosis.channel_consensus import cross_channel_consensus
 from app.core.config import DIAGNOSIS_WEIGHTS
+from app.services.diagnosis.probability_calibration import calibrate_fault_probabilities
 
 
 def _safe_result(msg="分析失败", health=100):
@@ -207,9 +208,8 @@ def analyze_device(
                     tsa_prob = min(0.6, max(0.2, (tsa_rk - 5.0) / 5.0 + 0.2))
                     merged["齿轮磨损"] = max(merged.get("齿轮磨损", 0), tsa_prob)
 
-        fault_probs = {"正常运行": round(float(max(0.0, 1.0 - sum(merged.values()))), 4)}
-        for k, v in merged.items():
-            fault_probs[k] = round(float(v), 4)
+        # 概率校准：将原始 SNR/值映射的概率转换为更真实的故障似然
+        fault_probs = calibrate_fault_probabilities(merged)
 
         first_result = channel_results[0][1]
         rf = first_result.get("bearing", {}).get("rot_freq_hz")
