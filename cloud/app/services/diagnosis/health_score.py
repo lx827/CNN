@@ -175,6 +175,18 @@ def _compute_health_score(
             elif sb.get("warning"):
                 deductions.append(("gear_sb_warning", 4))
 
+    # TSA 残差峭度路径：行星齿轮箱最有效的补充指标（区分力=3.31）
+    # TSA 消除同步啮合成分后残差峭度 > 2.5 时扣分
+    # 健康median=1.19, 故障median=3.95, 区分力=3.31
+    # 此路径独立于 gear_freq_has_evidence，不要求 kurt>12 作为前提
+    tsa_env_result = gear_result.get("planetary_tsa_demod") or {}
+    if isinstance(tsa_env_result, dict) and "error" not in tsa_env_result:
+        tsa_residual_kurt = float(tsa_env_result.get("residual_kurtosis", 0.0))
+        if tsa_residual_kurt > 5.0 and not rotation_dominant:
+            deductions.append(("gear_tsa_residual_kurtosis_critical", 15))
+        elif tsa_residual_kurt > 2.5 and not rotation_dominant:
+            deductions.append(("gear_tsa_residual_kurtosis_warning", 8))
+
     if not has_gear:
         car = gear_ind.get("car", {}) if isinstance(gear_ind.get("car"), dict) else {}
         order_peak = gear_ind.get("order_peak_concentration", {}) if isinstance(gear_ind.get("order_peak_concentration"), dict) else {}

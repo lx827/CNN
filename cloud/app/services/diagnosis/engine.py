@@ -411,7 +411,7 @@ class DiagnosisEngine:
                 fullband_result = {"method": "planetary_fullband_envelope_order", "error": "exception"}
                 result["planetary_fullband_demod"] = fullband_result
 
-            # Level 2c: TSA残差包络阶次分析
+            # Level 2c: TSA残差包络阶次分析（残差峭度区分力=3.31，最有效）
             try:
                 tsa_env_result = planetary_tsa_envelope_analysis(arr, fs, rot_freq, gear_teeth_dict)
                 result["planetary_tsa_demod"] = tsa_env_result
@@ -427,13 +427,36 @@ class DiagnosisEngine:
                 hp_env_result = {"method": "planetary_hp_envelope_order", "error": "exception"}
                 result["planetary_hp_demod"] = hp_env_result
 
-            # Level 3: VMD幅频联合解调
-            try:
-                vmd_result = planetary_vmd_demod_analysis(arr, fs, rot_freq, gear_teeth_dict, max_K=5)
-                result["planetary_vmd_demod"] = vmd_result
-            except Exception:
-                vmd_result = {"method": "planetary_vmd_demod", "error": "exception"}
-                result["planetary_vmd_demod"] = vmd_result
+            # Level 3: VMD幅频联合解调 🔴慢（后台分析默认跳过，仅full-analysis时启用）
+            if getattr(self, '_run_slow_methods', False):
+                try:
+                    vmd_result = planetary_vmd_demod_analysis(arr, fs, rot_freq, gear_teeth_dict, max_K=5)
+                    result["planetary_vmd_demod"] = vmd_result
+                except Exception:
+                    vmd_result = {"method": "planetary_vmd_demod", "error": "exception"}
+                    result["planetary_vmd_demod"] = vmd_result
+            else:
+                vmd_result = {"method": "planetary_vmd_demod", "error": "skipped_slow_method"}
+
+            # Level 4: SC/SCoh 谱相关/谱相干（仅full-analysis时启用）
+            if getattr(self, '_run_slow_methods', False):
+                try:
+                    from .gear.planetary_demod import planetary_sc_scoh_analysis
+                    sc_scoh_result = planetary_sc_scoh_analysis(arr, fs, rot_freq, gear_teeth_dict)
+                    result["planetary_sc_scoh"] = sc_scoh_result
+                except Exception:
+                    sc_scoh_result = {"method": "planetary_sc_scoh", "error": "exception"}
+                    result["planetary_sc_scoh"] = sc_scoh_result
+
+            # Level 5: MSB 调制信号双谱（仅full-analysis时启用）
+            if getattr(self, '_run_slow_methods', False):
+                try:
+                    from .gear.planetary_demod import planetary_msb_analysis
+                    msb_result = planetary_msb_analysis(arr, fs, rot_freq, gear_teeth_dict)
+                    result["planetary_msb"] = msb_result
+                except Exception:
+                    msb_result = {"method": "planetary_msb", "error": "exception"}
+                    result["planetary_msb"] = msb_result
 
             # 综合评估 → 融合各方法的故障指示器
             planetary_indicators = evaluate_planetary_demod_results(
@@ -563,12 +586,15 @@ class DiagnosisEngine:
 
         gear_results = {}
         if not skip_gear:
+            # full-analysis 模式：启用慢方法（VMD/SC/SCoh/MSB）
+            self._run_slow_methods = True
             for method in GearMethod:
                 self.gear_method = method
                 try:
                     gear_results[method.value] = self.analyze_gear(arr, fs, rot_freq)
                 except Exception as e:
                     gear_results[method.value] = {"error": str(e)}
+            self._run_slow_methods = False
 
         # 恢复原始配置
         self.bearing_method = original_bearing

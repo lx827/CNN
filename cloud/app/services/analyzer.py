@@ -180,6 +180,16 @@ def analyze_device(
                 kurt_prob = min(0.8, max(0.3, (kurt - 12.0) / 20.0 + 0.3))
                 merged["齿轮磨损"] = max(merged.get("齿轮磨损", 0), kurt_prob)
 
+            # TSA 残差峭度证据：行星齿轮箱最有效的补充指标（区分力=3.31）
+            # TSA 消除同步啮合后残差峭度 > 2.5 时增加齿轮故障概率
+            # 这捕捉了 kurt 与健康重叠(8~10)但 TSA 残差显著的故障
+            tsa_env = r.get("gear", {}).get("planetary_tsa_demod") or {}
+            if isinstance(tsa_env, dict) and "error" not in tsa_env:
+                tsa_rk = float(tsa_env.get("residual_kurtosis", 0.0))
+                if has_gear and tsa_rk > 2.5:
+                    tsa_prob = min(0.6, max(0.2, (tsa_rk - 2.5) / 5.0 + 0.2))
+                    merged["齿轮磨损"] = max(merged.get("齿轮磨损", 0), tsa_prob)
+
         fault_probs = {"正常运行": round(float(max(0.0, 1.0 - sum(merged.values()))), 4)}
         for k, v in merged.items():
             fault_probs[k] = round(float(v), 4)
