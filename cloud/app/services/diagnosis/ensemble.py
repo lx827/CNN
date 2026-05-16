@@ -212,7 +212,7 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
     tsa_env_result = result.get("planetary_tsa_demod") or {}
     if isinstance(tsa_env_result, dict) and "error" not in tsa_env_result:
         tsa_residual_kurt = _as_float(tsa_env_result.get("residual_kurtosis"), 0.0)
-    TSA_RESIDUAL_KURT_THRESHOLD = 2.5
+    TSA_RESIDUAL_KURT_THRESHOLD = 5.0  # 阈值2.5时健康误报34.4%(N1子集tsa_rk偏高)，提升至5.0(误报9.4%)
     tsa_evidence = tsa_residual_kurt > TSA_RESIDUAL_KURT_THRESHOLD
 
     # 检查低频优势（旋转谐波主导时齿轮指标无效）
@@ -238,12 +238,9 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
                 # kurt>12 但无频域指标时，TSA 残差峭度可作为补充证据
                 confidence = 0.35
         elif tsa_evidence and not rotation_dominant:
-            # 无传统时域证据(kurt<12) 但 TSA 残差峭度 > 2.5
-            # 这捕捉了 kurt 与健康重叠(8~10)但 TSA 残差显著(>2.5)的故障
-            if tsa_residual_kurt > 5.0:
-                confidence = 0.35
-            else:
-                confidence = 0.25
+            # 无传统时域证据(kurt<12) 但 TSA 残差峭度 > 5.0
+            # 这捕捉了 kurt 与健康重叠(8~10)但 TSA 残差显著(>5.0)的故障
+            confidence = 0.35
         else:
             # 无时域冲击证据或旋转谐波主导：齿轮指标降权
             # 旋转谐波的边频带/SER/CAR 都会触发指标，但不是真实齿轮故障
@@ -265,10 +262,7 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
             elif tsa_evidence:
                 confidence = 0.25
         elif tsa_evidence and not rotation_dominant:
-            if tsa_residual_kurt > 5.0:
-                confidence = 0.25
-            else:
-                confidence = 0.2
+            confidence = 0.25
         else:
             # 无时域证据时，CAR/order 统计指标不可靠
             confidence = 0.0
