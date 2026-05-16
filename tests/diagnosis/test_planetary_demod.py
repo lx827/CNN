@@ -1,4 +1,4 @@
-"""
+r"""
 行星齿轮箱解调算法全数据集评估
 
 对 WTgearbox 160 个 .npy 文件运行所有解调方法，
@@ -11,13 +11,13 @@
   - hp_envelope: 高通包络阶次分析 (Level 2d)
   - vmd_demod:   VMD幅频联合解调 (Level 3) — ⚠️ 较慢
   - sc_scoh:     谱相关/谱相干解调 (Level 4)
-  - msb:         调制信号双谱 (Level 5) — ⚠️ 较慢
+  - msb:         调制信号双谱 (Level 5)
 
 用法：
   cd /d D:\code\CNN\cloud
   . venv\Scripts\activate
-  PYTHONPATH=D:\code\CNN\cloud python ../tests/diagnosis/test_planetary_demod.py
-  PYTHONPATH=D:\code\CNN\cloud python ../tests/diagnosis/test_planetary_demod.py --skip-vmd
+  PYTHONPATH=D:\code\CNN\cloud python ..\tests\diagnosis\test_planetary_demod.py
+  PYTHONPATH=D:\code\CNN\cloud python ..\tests\diagnosis\test_planetary_demod.py --skip-vmd
 """
 import sys
 import os

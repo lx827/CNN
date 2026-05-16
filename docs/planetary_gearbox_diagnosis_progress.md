@@ -218,83 +218,36 @@ DiagnosisEngine.analyze_research_ensemble()  ← ensemble.py 主入口
 
 ---
 
-## 5. 推荐实现路径
+## 5. 推荐实现路径（已实现 + 评估结论）
 
-> 详细算法理论见 `ALGORITHMS.md` 第 2.7 节。以下是工程实现优先级。
+> 详细算法理论见 `ALGORITHMS.md` 第 2.7 节。所有方法已实现并评估，以下标注实际效果。
 
-### 5.1 分级诊断策略（ALGORITHMS.md 2.7.7）
+### 5.1 方法实现状态与效果总结
 
-```
-Level 1（已有）: kurtosis > 12 / crest > 15 时域门控
-      ↓
-Level 2（优先实现）: 窄带包络阶次分析
-      - 对 mesh_order(21.875) 附近做窄带滤波 + Hilbert包络
-      - 对包络做阶次谱，搜索 sun_fault_order(3.125) / planet_fault_order(0.78125)
-      - 计算 SNR > 3~5 为显著
-      ↓
-Level 3（后续）: VMD联合解调
-      - K = floor(fs/(2*fmesh)), 建议 K≤5 控制内存
-      - 信号截断至5秒
-```
+| Level | 方法 | 代码文件 | 计算时间 | SNR区分力 | 状态 |
+|-------|------|---------|---------|----------|------|
+| **L1** | 时域峭度门控 | engine.py/health_score.py | 即时 | — | ✅ **唯一有效检出手段** |
+| **L2** | narrowband 窄带包络阶次 | planetary_demod.py | 0.01s | 1.05 ❌ | ✅ 已实现，SNR无区分力 |
+| **L2b** | fullband 全频段包络阶次 | planetary_demod.py | 0.01s | 1.24 ❌ | ✅ 已实现，SNR无区分力 |
+| **L2c** | TSA包络阶次 | planetary_demod.py | 0.08s | 0.85 ❌ | ✅ 已实现，**残差峭度=3.31有效** |
+| **L2d** | HP高通包络阶次 | planetary_demod.py | 0.01s | 1.09 ❌ | ✅ 已实现，SNR无区分力 |
+| **L3** | VMD幅频联合解调 🔴 | planetary_demod.py | 0.7~1.3s | — | 🔴 **很慢，仅作备选** |
+| **L4** | SC/SCoh 谱相关/谱相干 | planetary_demod.py | 0.07s | 1.02 ❌ | ✅ 已实现，SNR无区分力 |
+| **L5** | MSB 调制信号双谱 | planetary_demod.py | 0.01s | 1.29 ❌ | ✅ 已实现，绝对值远<阈值 |
 
-**Level 2 是突破当前瓶颈的最佳切入点**——计算量可控（单次Hilbert+FFT），无需新增依赖，可直接在 `engine.py` 的 `analyze_gear` 中实现。
+> **结论**：7种频域/阶次方法全部无SNR区分力。唯一有效指标仍是 TSA残差峭度(区分力=3.31) 和包络峭度(区分力=3.28)。
 
-### 5.2 Level 2 实现要点
+### 5.2 推荐集成策略
 
-建议创建 `diagnosis/gear/planetary_demod.py`，核心逻辑：
+基于评估结果，推荐以下集成路径：
 
-```python
-def planetary_envelope_order_analysis(signal, fs, rot_freq, gear_teeth):
-    """行星齿轮箱窄带包络阶次分析"""
-    z_sun, z_ring, planet_count = gear_teeth["sun"], gear_teeth["ring"], gear_teeth["planet_count"]
-    
-    # 特征阶次
-    mesh_order = z_ring * z_sun / (z_sun + z_ring)
-    sun_fault_order = z_ring / (z_sun + z_ring) * planet_count
-    carrier_order = z_sun / (z_sun + z_ring)
-    
-    # 1. 窄带滤波：mesh_order ± 2阶
-    mesh_freq = rot_freq * mesh_order
-    band_signal = bandpass_filter(signal, fs, mesh_freq, bandwidth=rot_freq*4)
-    
-    # 2. Hilbert包络
-    envelope = np.abs(hilbert(band_signal))
-    envelope = envelope - np.mean(envelope)  # 去DC
-    
-    # 3. 对包络做阶次谱
-    order_axis, order_spectrum = compute_order_spectrum(envelope, fs, rot_freq)
-    
-    # 4. 搜索特征故障阶次峰值
-    sun_amp = order_band_amplitude(order_axis, order_spectrum, sun_fault_order, 0.3)
-    planet_amp = order_band_amplitude(order_axis, order_spectrum, planet_fault_order, 0.3)
-    carrier_amp = order_band_amplitude(order_axis, order_spectrum, carrier_order, 0.3)
-    
-    # 5. 计算SNR（相对于背景中位数）
-    background = np.median(order_spectrum)
-    snr_sun = sun_amp / background
-    snr_planet = planet_amp / background
-    
-    return {
-        "sun_fault_snr": snr_sun,
-        "planet_fault_snr": snr_planet,
-        "carrier_snr": carrier_amp / background,
-        "sun_fault_significant": snr_sun > 3,
-        "planet_fault_significant": snr_planet > 3,
-    }
-```
+1. **L2 系列方法**（narrowband/fullband/tsa/hp）：保留代码用于诊断结果展示（`/analyze`、`/full-analysis` 端点），但不作为健康度评分和告警的依据
+2. **TSA 残差峭度**：作为 **齿轮诊断的补充指标**，加入 ensemble.py 的 `_gear_confidence` 计算
+3. **L3 VMD** 🔴：标记为慢算法，仅在用户手动触发 `/full-analysis` 时使用，后台分析默认跳过
+4. **L4 SC/SCoh**：保留用于诊断结果展示，不作为评分依据
+5. **L5 MSB**：保留用于诊断结果展示，不作为评分依据
 
-### 5.3 集成到 engine.py
-
-在 `analyze_gear` 方法中，当 `is_planetary=True` 时调用行星箱专用分析：
-
-```python
-if is_planetary:
-    planetary_result = planetary_envelope_order_analysis(arr, fs, rot_freq, self.gear_teeth)
-    result["planetary_demod"] = planetary_result
-    # 将 sun_fault/planet_fault 的 SNR 映射到 fault_indicators
-```
-
-### 5.4 N1子集误报的缓解策略
+### 5.3 N1子集误报的缓解策略
 
 He_N1_40~55的kurt=8~22误触发问题，可能的缓解方式：
 
@@ -304,7 +257,7 @@ He_N1_40~55的kurt=8~22误触发问题，可能的缓解方式：
 | **旋转谐波优势度门控** | low_freq_ratio>0.55时降低kurt证据权重 | 已实现(rotation_dominant)，但N1_45的low_freq_ratio不高 |
 | **转速归一化** | 同转速下与基线比较kurt偏离度 | 需要基线数据，单次检测无法使用 |
 | **TSA后kurt** | TSA消除异步成分后再计算kurt | 更准确，但WTgearbox 10秒数据可能不够整周期 |
-| **IMF选择性kurt** | VMD分解后选故障IMF的kurt | 避免旋转谐波主导的IMF掩盖冲击IMF |
+| **TSA残差峭度** | TSA消除同步啮合后残差峭度 | ✅ 区分力=3.31，当前最有效 |
 
 ---
 
