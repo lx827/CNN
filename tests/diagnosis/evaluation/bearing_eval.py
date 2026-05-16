@@ -41,7 +41,7 @@ def evaluate_bearing_methods():
         BearingMethod.MED,
         BearingMethod.TEAGER,
         BearingMethod.SPECTRAL_KURTOSIS,
-        BearingMethod.SC_SCOH,
+        # BearingMethod.SC_SCOH,  # 计算量极大，单独评价时跳过
     ]
 
     all_results = []

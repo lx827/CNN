@@ -361,6 +361,10 @@ cloud/app/services/diagnosis/bearing.py
 - `fast_kurtogram()`: Fast Kurtogram 自适应频带选择
 - `cpw_envelope_analysis()`: 倒频谱预白化 + 包络
 - `med_envelope_analysis()`: 最小熵解卷积 + 包络
+- `mckd_envelope_analysis()`: 最大相关峭度解卷积(MCKD) + 包络（2025-05新增）
+- `teager_envelope_analysis()`: Teager能量算子 + 包络
+- `spectral_kurtosis_envelope_analysis()`: 自适应谱峭度重加权包络
+- `bearing_sc_scoh_analysis()`: 谱相关/谱相干循环平稳分析
 
 ### 8.5 齿轮诊断指标
 
@@ -391,6 +395,20 @@ cloud/app/services/diagnosis/ensemble.py
   - 仅配置齿轮 → 只做齿轮诊断（`skip_bearing=True`），避免轴承统计指标误报
   - 都未配置 → 跑轴承统计指标 + 齿轮统计指标（CAR/阶次峭度）
   - 都配置 → 综合（轴承+齿轮）全跑
+
+### 8.8 新补充算法（2025-05）
+
+```
+cloud/app/services/diagnosis/emd_denoise.py
+cloud/app/services/diagnosis/mckd.py
+cloud/app/services/diagnosis/wavelet_packet.py
+cloud/app/services/diagnosis/savgol_denoise.py
+```
+
+- `emd_decompose() / ceemdan_decompose()`: EMD/CEEMDAN 经验模态分解降噪，与VMD互补（自适应模态数，适合变速工况）
+- `mckd_deconvolution()`: 最大相关峭度解卷积，与MED互补（引入故障周期约束，降低漏检率）
+- `compute_wavelet_packet_energy_entropy()`: 小波包能量熵，用于齿轮故障频带能量重分布检测
+- `sg_denoise()`: Savitzky-Golay 多项式平滑，计算极快，适合高斯噪声场景
 
 ### 8.7 后台分析入口
 

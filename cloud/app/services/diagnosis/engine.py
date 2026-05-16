@@ -79,6 +79,7 @@ class BearingMethod(str, Enum):
     TEAGER = "teager"               # Teager 能量算子 + 包络
     SPECTRAL_KURTOSIS = "spectral_kurtosis"  # 自适应谱峭度重加权包络
     SC_SCOH = "sc_scoh"             # 轴承谱相关/谱相干（循环平稳分析）
+    MCKD = "mckd"                   # 最大相关峭度解卷积 + 包络
 
 
 class GearMethod(str, Enum):
@@ -94,6 +95,9 @@ class DenoiseMethod(str, Enum):
     VMD = "vmd"                     # VMD 变分模态分解降噪
     WAVELET_VMD = "wavelet_vmd"     # 小波+VMD 级联联合降噪
     WAVELET_LMS = "wavelet_lms"     # 小波+LMS 级联联合降噪
+    EMD = "emd"                     # 经验模态分解降噪
+    CEEMDAN = "ceemdan"             # 完备集成经验模态分解降噪
+    SAVGOL = "savgol"               # Savitzky-Golay 多项式平滑
 
 
 class DiagnosisEngine:
@@ -135,6 +139,18 @@ class DiagnosisEngine:
         elif self.denoise_method == DenoiseMethod.WAVELET_LMS:
             from .preprocessing import cascade_wavelet_lms
             result, _ = cascade_wavelet_lms(arr)
+            return result
+        elif self.denoise_method == DenoiseMethod.EMD:
+            from .emd_denoise import emd_denoise
+            result, _ = emd_denoise(arr, method="emd")
+            return result
+        elif self.denoise_method == DenoiseMethod.CEEMDAN:
+            from .emd_denoise import emd_denoise
+            result, _ = emd_denoise(arr, method="ceemdan")
+            return result
+        elif self.denoise_method == DenoiseMethod.SAVGOL:
+            from .savgol_denoise import sg_denoise
+            result, _ = sg_denoise(arr)
             return result
         return arr
 
@@ -213,6 +229,11 @@ class DiagnosisEngine:
             result = spectral_kurtosis_envelope_analysis(arr, fs)
         elif self.bearing_method == BearingMethod.SC_SCOH:
             result = bearing_sc_scoh_analysis(
+                arr, fs, bearing_params=self.bearing_params, rot_freq=rot_freq
+            )
+        elif self.bearing_method == BearingMethod.MCKD:
+            from .mckd import mckd_envelope_analysis
+            result = mckd_envelope_analysis(
                 arr, fs, bearing_params=self.bearing_params, rot_freq=rot_freq
             )
         else:  # ENVELOPE

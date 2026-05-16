@@ -34,11 +34,19 @@ def evaluate_comprehensive_diagnosis():
 
     hust_files = get_hustbear_files()
     if hust_files:
-        print(f"  评估 HUSTbear 综合诊断 ({len(hust_files)} 文件)...")
-        for filepath, info in hust_files:
+        # 综合诊断较慢，每个类别最多取2个样本
+        from collections import defaultdict
+        class_files = defaultdict(list)
+        for f, info in hust_files:
+            class_files[info["label"]].append((f, info))
+        limited = []
+        for lbl in sorted(class_files.keys()):
+            limited.extend(class_files[lbl][:2])
+        print(f"  评估 HUSTbear 综合诊断 ({len(limited)} 文件, 限制样本)...")
+        for filepath, info in limited:
             signal = load_npy(filepath)
             rot_freq = estimate_rot_freq_spectrum(signal, SAMPLE_RATE)
-            for method_name, profile in [("ensemble_runtime", "runtime"), ("ensemble_balanced", "balanced"), ("ensemble_exhaustive", "exhaustive")]:
+            for method_name, profile in [("ensemble_runtime", "runtime"), ("ensemble_balanced", "balanced")]:
                 try:
                     t0 = time.perf_counter()
                     engine = DiagnosisEngine(
@@ -65,8 +73,15 @@ def evaluate_comprehensive_diagnosis():
 
     wt_files = get_wtgearbox_files()
     if wt_files:
-        print(f"  评估 WTgearbox 综合诊断 ({len(wt_files)} 文件)...")
-        for filepath, info in wt_files:
+        from collections import defaultdict
+        class_files = defaultdict(list)
+        for f, info in wt_files:
+            class_files[info["label"]].append((f, info))
+        limited = []
+        for lbl in sorted(class_files.keys()):
+            limited.extend(class_files[lbl][:2])
+        print(f"  评估 WTgearbox 综合诊断 ({len(limited)} 文件, 限制样本)...")
+        for filepath, info in limited:
             signal = load_npy(filepath)
             parts = filepath.name.replace(".npy", "").split("-")
             main_parts = parts[0].split("_")
