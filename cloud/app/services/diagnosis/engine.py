@@ -418,7 +418,13 @@ class DiagnosisEngine:
                 result["tsa_revolutions"] = 0
                 result["fm0"] = round(compute_fm0_order(arr, order_axis, order_spectrum, mesh_order), 4)
                 # TSA 无法形成时才退化为高通近似。
-                diff_signal = highpass_filter(arr, fs, mesh_freq * 0.5)
+                # mesh_freq 可能为 None/0（rot_freq=0 时），需守卫
+                hp_cutoff = (mesh_freq or 0) * 0.5
+                if hp_cutoff > 0:
+                    diff_signal = highpass_filter(arr, fs, hp_cutoff)
+                else:
+                    # 无有效截止频率时，差分信号 = 原信号去均值
+                    diff_signal = arr - np.mean(arr)
 
             result["fm4"] = round(compute_fm4(diff_signal), 4)
             result["m6a"] = round(compute_m6a(diff_signal), 4)
@@ -429,6 +435,16 @@ class DiagnosisEngine:
 
         # 故障指示器
         indicators = _evaluate_gear_faults(result)
+
+        # === 小波包能量熵（齿轮频带能量重分布检测） ===
+        # 对齿轮故障引起的频带能量集中度变化敏感，
+        # 不依赖行星箱参数，始终计算作为补充频域特征
+        try:
+            from .wavelet_packet import compute_wavelet_packet_energy_entropy
+            wp_entropy = compute_wavelet_packet_energy_entropy(arr, fs, level=3, gear_mesh_freq=mesh_freq)
+            result["wavelet_packet_entropy"] = wp_entropy
+        except Exception:
+            result["wavelet_packet_entropy"] = {"energy_entropy": 0.0, "normalized_entropy": 0.0}
 
         # === 行星齿轮箱专用解调分析 ===
         # 行星箱频域指标(SER/CAR/sideband)无区分力，需用解调方法突破
@@ -676,11 +692,14 @@ class DiagnosisEngine:
             if worst_other < base_health_score:
                 health_score = int(round((base_health_score + worst_other) / 2))
                 # worst_other 比 base 低 20 分以上 → 状态升级
+                # 同步调整 health_score 以保持一致性（status=warning→hs<85, critical→hs<60）
                 if worst_other < base_health_score - 20:
                     if status == "normal":
                         status = "warning"
+                        health_score = min(health_score, 84)
                     elif status == "warning":
                         status = "critical"
+                        health_score = min(health_score, 59)
 
         # 生成各方法检出结论汇总
         summary = _summarize_all_methods(bearing_results, gear_results)

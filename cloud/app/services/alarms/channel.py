@@ -1,6 +1,7 @@
 """
 通道级振动特征与齿轮诊断告警
 """
+import re
 from app.models import Alarm
 from . import _get_threshold, _has_recent_unresolved_alarm
 
@@ -95,7 +96,8 @@ def _check_gear_alarms(
     }
 
     for ch_key, diagnosis in channel_diagnosis.items():
-        ch_num = int(ch_key.replace("ch", "")) if ch_key.startswith("ch") else 1
+        m = re.search(r"\d+", ch_key)
+        ch_num = int(m.group()) if m else 1
         ch_name = channel_names.get(str(ch_num), f"通道{ch_num}")
         gear = diagnosis.get("gear", {})
         if not gear:

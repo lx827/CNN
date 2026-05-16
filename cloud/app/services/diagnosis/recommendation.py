@@ -199,6 +199,7 @@ def _summarize_all_methods(bearing_results: Dict, gear_results: Dict) -> Dict[st
         "kurtogram": "Fast Kurtogram",
         "cpw": "CPW预白化+包络",
         "med": "MED最小熵解卷积+包络",
+        "mckd": "MCKD最大相关峭度解卷积+包络",
         "teager": "Teager能量算子+包络",
         "spectral_kurtosis": "自适应谱峭度包络",
         "sc_scoh": "谱相关/谱相干分析",
