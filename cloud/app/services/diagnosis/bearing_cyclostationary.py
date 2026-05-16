@@ -24,16 +24,17 @@ from .signal_utils import prepare_signal
 def _compute_sc_scoh_bearing(
     signal: np.ndarray,
     fs: float,
-    seg_len: int = 1024,
-    overlap_ratio: float = 0.5,
+    seg_len: int = 2048,
+    overlap_ratio: float = 0.75,
     alpha_max: Optional[float] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     计算谱相关密度和谱相干（底层函数，轴承与行星箱共用）
 
-    使用分段 FFT 估计法：
+    使用分段 FFT 估计法（分段归一化再平均，保证 SCoh ∈ [0,1]）：
     S_x^α(f) = <X(f-α/2) * conj(X(f+α/2))>  (分段平均)
-    γ_x^α(f) = |S_x^α(f)| / sqrt(PSD(f+α/2) * PSD(f-α/2))
+    γ_x^α(f) = <|S_x^α(f)|> / <sqrt(PSD(f+α/2) * PSD(f-α/2))>
+    实际实现：每段先归一化再平均 → scoh = <|X(f-α/2)·conj(X(f+α/2))| / sqrt(PSD_lo·PSD_hi)>
 
     Args:
         signal: 输入信号
@@ -44,7 +45,7 @@ def _compute_sc_scoh_bearing(
 
     Returns:
         (f_axis, alpha_axis, scoh_matrix)
-        scoh_matrix[i_alpha, i_f] = 谱相干值
+        scoh_matrix[i_alpha, i_f] = 谱相干值 (0~1)
     """
     arr = prepare_signal(signal)
     N = len(arr)
@@ -62,16 +63,24 @@ def _compute_sc_scoh_bearing(
 
     # 循环频率轴
     alpha_axis = np.fft.rfftfreq(seg_len, 1.0 / fs)
-    # 只保留 alpha <= alpha_max
     alpha_mask = alpha_axis <= alpha_max
     alpha_axis = alpha_axis[alpha_mask]
     n_alpha = len(alpha_axis)
 
-    # 预分配
-    sc_accum = np.zeros((n_alpha, n_freq), dtype=np.float64)
-    psd_f_plus = np.zeros(n_freq, dtype=np.float64)
-    psd_f_minus = np.zeros(n_freq, dtype=np.float64)
+    # 预计算每个 alpha 对应的频移索引
+    delta_indices = np.zeros(n_alpha, dtype=np.int64)
+    for a_idx, alpha in enumerate(alpha_axis):
+        delta_indices[a_idx] = int(round(alpha * seg_len / fs / 2))
+
+    # 预分配（复数交叉谱累加 + PSD 累加）
+    sc_accum = np.zeros((n_alpha, n_freq), dtype=np.complex128)
+    psd_accum = np.zeros(n_freq, dtype=np.float64)
     count = 0
+
+    # Hanning 窗
+    window = np.hanning(seg_len)
+    # 窗口功率补偿因子
+    win_power = np.sum(window ** 2) / seg_len
 
     for seg_idx in range(n_segments):
         start = seg_idx * step
@@ -79,37 +88,35 @@ def _compute_sc_scoh_bearing(
         if end > N:
             break
         segment = arr[start:end]
-
-        # Hanning 窗
-        window = np.hanning(seg_len)
         seg_windowed = segment * window
 
         # FFT
         X = np.fft.rfft(seg_windowed)
-        PSD = np.abs(X) ** 2 / seg_len
+        # PSD = |X|^2 / (seg_len * win_power)
+        PSD = np.abs(X) ** 2 / (seg_len * win_power)
 
-        # 对每个循环频率 alpha，计算谱相关
-        for a_idx, alpha in enumerate(alpha_axis):
-            # f+α/2 和 f-α/2 的频率索引
-            delta_idx = int(round(alpha * seg_len / fs / 2))
+        # 对每个循环频率 alpha，计算谱相关（复数）
+        for a_idx in range(n_alpha):
+            delta_idx = delta_indices[a_idx]
             if delta_idx == 0:
-                # alpha=0 时，SC = PSD
+                # alpha=0 时，SC = PSD（实数）
                 sc_accum[a_idx, :] += PSD
                 continue
             if delta_idx >= n_freq:
                 continue
 
-            # X(f+α/2) 和 X(f-α/2)
-            X_plus = X[delta_idx:]    # X[f_idx + delta_idx]
-            X_minus = X[:n_freq - delta_idx]  # X[f_idx - delta_idx]
+            f_lo = delta_idx
+            f_hi = n_freq - delta_idx
+            n_valid = f_hi - f_lo
+            lo_idx = np.arange(n_valid)              # f-α/2 索引偏移: 0..n_valid-1
+            hi_idx = lo_idx + 2 * delta_idx           # f+α/2 索引偏移: 2Δ..n_valid+2Δ-1
 
-            # S_x^α(f) = X(f-α/2) * conj(X(f+α/2))
-            sc_slice = X_minus * np.conj(X_plus)
-            sc_accum[a_idx, delta_idx:n_freq] += np.abs(sc_slice)
+            # S_x^α(f) = X(f-α/2) · conj(X(f+α/2)) / (seg_len * win_power)
+            # 关键：累加复数，非循环频率处相位随机，平均后趋零
+            sc_seg = X[lo_idx] * np.conj(X[hi_idx]) / (seg_len * win_power)
+            sc_accum[a_idx, f_lo:f_hi] += sc_seg
 
-        # PSD 用于谱相干归一化
-        psd_f_plus += PSD
-        psd_f_minus += PSD
+        psd_accum += PSD
         count += 1
 
     if count == 0:
@@ -117,15 +124,25 @@ def _compute_sc_scoh_bearing(
 
     # 平均
     sc_avg = sc_accum / count
-    psd_avg = (psd_f_plus + psd_f_minus) / (2 * count)
+    psd_avg = psd_accum / count
 
-    # 谱相干：γ_x^α(f) = |S_x^α(f)| / sqrt(PSD(f+α/2) * PSD(f-α/2))
-    denominator = np.sqrt(psd_avg * psd_avg) + 1e-12
-    scoh = sc_avg / denominator
-
-    # alpha=0 行（自谱），设为1
-    if alpha_axis[0] < fs / seg_len:
-        scoh[0, :] = 1.0
+    # 谱相干：γ_x^α(f) = |<S_x^α(f)>|^2 / (<PSD(f+α/2)> · <PSD(f-α/2)>)
+    # 非循环频率处复数平均趋零 → SCoh 低；真实循环频率处相位对齐 → SCoh 高
+    scoh = np.zeros((n_alpha, n_freq), dtype=np.float64)
+    for a_idx in range(n_alpha):
+        delta_idx = delta_indices[a_idx]
+        if delta_idx == 0:
+            scoh[a_idx, :] = 1.0
+            continue
+        f_lo = delta_idx
+        f_hi = n_freq - delta_idx
+        n_valid = f_hi - f_lo
+        # PSD(f-α/2) 索引: 0..n_valid-1
+        # PSD(f+α/2) 索引: 2Δ..n_valid+2Δ-1
+        psd_lo = psd_avg[:n_valid]
+        psd_hi = psd_avg[2 * delta_idx: n_valid + 2 * delta_idx]
+        denom = psd_lo * psd_hi + 1e-12
+        scoh[a_idx, f_lo:f_hi] = np.abs(sc_avg[a_idx, f_lo:f_hi]) ** 2 / denom
 
     return f_axis, alpha_axis, scoh
 
@@ -135,7 +152,7 @@ def bearing_sc_scoh_analysis(
     fs: float,
     bearing_params: Optional[Dict] = None,
     rot_freq: Optional[float] = None,
-    seg_len: int = 1024,
+    seg_len: int = 2048,
 ) -> Dict:
     """
     轴承谱相关/谱相干分析
@@ -199,9 +216,7 @@ def bearing_sc_scoh_analysis(
 
     # 无轴承参数时，搜索转频附近的循环频率
     if not fault_freqs:
-        # 经验估算：BPFO ≈ 0.4·N·fr, BPFI ≈ 0.6·N·fr
-        # N 未知时搜索常见范围
-        n_est = 8  # 常见轴承滚珠数默认估计
+        n_est = 8
         fault_freqs = {
             "BPFO_est": 0.40 * n_est * rot_freq,
             "BPFI_est": 0.60 * n_est * rot_freq,
@@ -235,15 +250,12 @@ def bearing_sc_scoh_analysis(
             continue
 
         # 在循环频率轴上搜索 f_hz ± 容差
-        # 容差: ±2% 理论频率 或 ±1个频率分辨率
         tol = max(f_hz * 0.03, alpha_resolution * 2)
         alpha_mask = np.abs(alpha_axis - f_hz) <= tol
 
         if np.any(alpha_mask):
-            # 取该循环频率处所有谱频率的 SCoh 最大值
             scoh_slice = scoh[alpha_mask, :]
             peak = float(np.max(scoh_slice))
-            # 背景：中位数
             background = float(np.median(scoh_slice))
             snr = peak / (background + 1e-12)
 
@@ -273,7 +285,7 @@ def bearing_sc_scoh_analysis(
                 "critical": False,
             }
 
-    # 同时搜索谐波 (2×, 3× 故障频率)
+    # 搜索谐波 (2×, 3× 故障频率)
     for name, f_hz in fault_freqs.items():
         for h in [2, 3]:
             h_hz = f_hz * h
