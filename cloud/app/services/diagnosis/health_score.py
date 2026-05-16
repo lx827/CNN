@@ -34,6 +34,7 @@ DEDUCTION_WEIGHT_MAP = {
     "bearing_statistical_abnormal": "kurtosis", "bearing_statistical_hint": "kurtosis",
     # 轴承边带密度
     "bearing_sideband_density": "sideband",
+    "bearing_sideband_asymmetry": "sideband",
     # 轴承 SC/SCoh
     "bearing_sc_scoh_evidence": "scoh_evidence",
     # 齿轮指标
