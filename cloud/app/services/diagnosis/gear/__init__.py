@@ -44,6 +44,7 @@ from .planetary_demod import (
     planetary_cvs_med_analysis,
     evaluate_planetary_demod_results,
 )
+from .vmd_demod import vmd_fixed_axis_demod_analysis
 
 __all__ = [
     "compute_fm0",
@@ -70,6 +71,7 @@ __all__ = [
     "planetary_msb_analysis",
     "planetary_cvs_med_analysis",
     "evaluate_planetary_demod_results",
+    "vmd_fixed_axis_demod_analysis",
 ]
 
 

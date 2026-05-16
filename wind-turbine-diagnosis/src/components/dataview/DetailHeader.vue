@@ -53,6 +53,9 @@
         <el-option label="小波+LMS级联" value="wavelet_lms" />
         <el-option label="EMD降噪" value="emd" />
         <el-option label="CEEMDAN降噪" value="ceemdan" />
+        <el-option label="WP降噪" value="wavelet_packet" />
+        <el-option label="CEEMDAN+WP降噪" value="ceemdan_wp" />
+        <el-option label="EEMD降噪" value="eemd" />
         <el-option label="S-G平滑" value="savgol" />
       </el-select>
       <el-tooltip content="消除基频漂移导致的线性趋势" placement="top">

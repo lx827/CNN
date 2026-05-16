@@ -355,7 +355,10 @@ def cascade_wavelet_lms(
 
 def joint_denoise(
     signal: np.ndarray,
-    strategy: Literal["wavelet_vmd", "wavelet_lms", "wavelet", "vmd"] = "wavelet_vmd",
+    strategy: Literal[
+        "wavelet_vmd", "wavelet_lms", "wavelet", "vmd",
+        "ceemdan_wp", "eemd",
+    ] = "wavelet_vmd",
     wavelet: str = "db8",
     wavelet_level: Optional[int] = None,
     wavelet_mode: Literal["soft", "hard", "improved"] = "soft",
@@ -414,6 +417,33 @@ def joint_denoise(
         kurt_after = float(np.mean(result ** 4) / (np.var(result) ** 2 + 1e-12))
         return result, {
             "method": "vmd",
+            "kurtosis_before": round(kurt_before, 4),
+            "kurtosis_after": round(kurt_after, 4),
+        }
+    elif strategy == "ceemdan_wp":
+        # CEEMDAN + 小波包级联（§14.1）
+        # CEEMDAN 先抑制模态混叠 → 小波包进一步频带筛选重构
+        from .emd_denoise import emd_denoise
+        from .wavelet_packet import wavelet_packet_denoise
+        step1, info1 = emd_denoise(arr, method="ceemdan", ensemble_size=30)
+        step2, info2 = wavelet_packet_denoise(step1, wavelet=wavelet, level=3)
+        kurt_before = float(np.mean(arr ** 4) / (np.var(arr) ** 2 + 1e-12))
+        kurt_after = float(np.mean(step2 ** 4) / (np.var(step2) ** 2 + 1e-12))
+        return step2, {
+            "method": "ceemdan_wp",
+            "ceemdan_info": info1,
+            "wp_info": info2,
+            "kurtosis_before": round(kurt_before, 4),
+            "kurtosis_after": round(kurt_after, 4),
+        }
+    elif strategy == "eemd":
+        from .emd_denoise import emd_denoise
+        result, info = emd_denoise(arr, method="eemd", ensemble_size=30)
+        kurt_before = float(np.mean(arr ** 4) / (np.var(arr) ** 2 + 1e-12))
+        kurt_after = float(np.mean(result ** 4) / (np.var(result) ** 2 + 1e-12))
+        return result, {
+            "method": "eemd",
+            "emd_info": info,
             "kurtosis_before": round(kurt_before, 4),
             "kurtosis_after": round(kurt_after, 4),
         }

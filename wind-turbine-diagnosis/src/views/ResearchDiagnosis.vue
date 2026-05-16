@@ -37,6 +37,9 @@
           <el-option label="小波+LMS" value="wavelet_lms" />
           <el-option label="EMD" value="emd" />
           <el-option label="CEEMDAN" value="ceemdan" />
+          <el-option label="WP降噪" value="wavelet_packet" />
+          <el-option label="CEEMDAN+WP降噪" value="ceemdan_wp" />
+          <el-option label="EEMD降噪" value="eemd" />
           <el-option label="S-G" value="savgol" />
         </el-select>
 

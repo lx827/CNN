@@ -44,7 +44,7 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
 
     if profile == "exhaustive":
         return {
-            "denoise": list(dict.fromkeys(denoise_methods + ["wavelet", "vmd", "wavelet_vmd", "wavelet_lms", "emd", "ceemdan", "savgol"])),
+            "denoise": list(dict.fromkeys(denoise_methods + ["wavelet", "vmd", "wavelet_vmd", "wavelet_lms", "emd", "ceemdan", "savgol", "wavelet_packet", "eemd"])),
             "bearing": [
                 BearingMethod.ENVELOPE,
                 BearingMethod.KURTOGRAM,
@@ -54,6 +54,11 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
                 BearingMethod.MED,
                 BearingMethod.SC_SCOH,
                 BearingMethod.MCKD,
+                BearingMethod.WP,
+                BearingMethod.DWT,
+                BearingMethod.EMD_ENVELOPE,
+                BearingMethod.CEEMDAN_ENVELOPE,
+                BearingMethod.VMD_ENVELOPE,
             ],
             "gear": [GearMethod.STANDARD, GearMethod.ADVANCED],
         }
@@ -68,6 +73,8 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
                 BearingMethod.TEAGER,
                 BearingMethod.SPECTRAL_KURTOSIS,
                 BearingMethod.MCKD,
+                BearingMethod.EMD_ENVELOPE,
+                BearingMethod.VMD_ENVELOPE,
             ],
             "gear": [GearMethod.ADVANCED],
         }

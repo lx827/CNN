@@ -157,7 +157,7 @@ async def get_channel_method_analysis(
     batch_index: int,
     channel: int,
     method: str = Query(default="all", description="分析方法名或'all'运行全部"),
-    denoise: str = Query(default="none", description="none/wavelet/vmd/wavelet_vmd/wavelet_lms"),
+    denoise: str = Query(default="none", description="none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     detrend: bool = Query(default=False, description="是否线性去趋势"),
     db: Session = Depends(get_db),
 ):
@@ -166,7 +166,7 @@ async def get_channel_method_analysis(
 
     method 参数值：
     - 'all': 运行所有轴承+齿轮方法（等效 full-analysis）
-    - 轴承方法: envelope / kurtogram / cpw / med / teager / spectral_kurtosis
+    - 轴承方法: envelope / kurtogram / cpw / med / teager / spectral_kurtosis / wp / dwt / emd_envelope / ceemdan_envelope / vmd_envelope
     - 齿轮方法: gear_standard / gear_advanced
     - 行星箱方法: planetary_narrowband / planetary_fullband / planetary_tsa_envelope
                   / planetary_hp_envelope / planetary_vmd_demod / planetary_sc_scoh / planetary_msb
@@ -202,6 +202,9 @@ async def get_channel_method_analysis(
             "wavelet_lms": DenoiseMethod.WAVELET_LMS,
             "emd": DenoiseMethod.EMD, "ceemdan": DenoiseMethod.CEEMDAN,
             "savgol": DenoiseMethod.SAVGOL,
+            "wavelet_packet": DenoiseMethod.WAVELET_PACKET,
+            "ceemdan_wp": DenoiseMethod.CEEMDAN_WP,
+            "eemd": DenoiseMethod.EEMD,
         }
         denoise_method = denoise_map.get(denoise, DenoiseMethod.NONE)
 
@@ -241,6 +244,11 @@ async def get_channel_method_analysis(
             "spectral_kurtosis": BearingMethod.SPECTRAL_KURTOSIS,
             "sc_scoh": BearingMethod.SC_SCOH,
             "mckd": BearingMethod.MCKD,
+            "wp": BearingMethod.WP,
+            "dwt": BearingMethod.DWT,
+            "emd_envelope": BearingMethod.EMD_ENVELOPE,
+            "ceemdan_envelope": BearingMethod.CEEMDAN_ENVELOPE,
+            "vmd_envelope": BearingMethod.VMD_ENVELOPE,
         }
         if method in bearing_method_map:
             engine = DiagnosisEngine(
@@ -366,7 +374,7 @@ async def get_channel_research_analysis(
     channel: int,
     detrend: bool = Query(default=False, description="whether to linearly detrend"),
     profile: str = Query(default="balanced", description="runtime/balanced/exhaustive"),
-    denoise: str = Query(default="none", description="none/wavelet/vmd/wavelet_vmd/wavelet_lms"),
+    denoise: str = Query(default="none", description="none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     max_seconds: float = Query(default=5.0, ge=1.0, le=10.0),
     db: Session = Depends(get_db),
 ):
@@ -396,6 +404,9 @@ async def get_channel_research_analysis(
         "emd": DenoiseMethod.EMD,
         "ceemdan": DenoiseMethod.CEEMDAN,
         "savgol": DenoiseMethod.SAVGOL,
+        "wavelet_packet": DenoiseMethod.WAVELET_PACKET,
+        "ceemdan_wp": DenoiseMethod.CEEMDAN_WP,
+        "eemd": DenoiseMethod.EEMD,
     }
 
     try:

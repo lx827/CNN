@@ -168,6 +168,11 @@
                 <el-option label="MED+包络" value="med" />
                 <el-option label="谱相关/谱相干" value="sc_scoh" />
                 <el-option label="MCKD增强包络" value="mckd" />
+                <el-option label="WP包络" value="wp" />
+                <el-option label="DWT包络" value="dwt" />
+                <el-option label="EMD包络" value="emd_envelope" />
+                <el-option label="CEEMDAN包络" value="ceemdan_envelope" />
+                <el-option label="VMD包络" value="vmd_envelope" />
               </el-select>
               <el-select
                 v-if="!computedEnvelope"
@@ -182,6 +187,9 @@
                 <el-option label="小波+LMS" value="wavelet_lms" />
                 <el-option label="EMD降噪" value="emd" />
                 <el-option label="CEEMDAN降噪" value="ceemdan" />
+                <el-option label="WP降噪" value="wavelet_packet" />
+                <el-option label="CEEMDAN+WP降噪" value="ceemdan_wp" />
+                <el-option label="EEMD降噪" value="eemd" />
                 <el-option label="S-G平滑" value="savgol" />
               </el-select>
               <el-tag v-else type="success" size="small" effect="plain">{{ envelopeMethodLabel }}</el-tag>
@@ -326,6 +334,9 @@
                   <el-option label="小波+LMS级联" value="wavelet_lms" />
                   <el-option label="EMD降噪" value="emd" />
                   <el-option label="CEEMDAN降噪" value="ceemdan" />
+                  <el-option label="WP降噪" value="wavelet_packet" />
+                  <el-option label="CEEMDAN+WP降噪" value="ceemdan_wp" />
+                  <el-option label="EEMD降噪" value="eemd" />
                   <el-option label="S-G平滑" value="savgol" />
                 </el-select>
                 <el-button
@@ -354,6 +365,9 @@
                   <el-option label="小波+LMS级联" value="wavelet_lms" />
                   <el-option label="EMD降噪" value="emd" />
                   <el-option label="CEEMDAN降噪" value="ceemdan" />
+                  <el-option label="WP降噪" value="wavelet_packet" />
+                  <el-option label="CEEMDAN+WP降噪" value="ceemdan_wp" />
+                  <el-option label="EEMD降噪" value="eemd" />
                   <el-option label="S-G平滑" value="savgol" />
                 </el-select>
                 <el-button
@@ -855,6 +869,11 @@ const envelopeMethodLabel = computed(() => {
     med: 'MED+包络',
     sc_scoh: '谱相关/谱相干',
     mckd: 'MCKD增强包络',
+    wp: 'WP包络',
+    dwt: 'DWT包络',
+    emd_envelope: 'EMD包络',
+    ceemdan_envelope: 'CEEMDAN包络',
+    vmd_envelope: 'VMD包络',
   }
   return labels[envelopeMethod.value] || envelopeMethod.value
 })
@@ -937,6 +956,13 @@ const bearingMethodLabel = (key) => {
     teager: 'TEO能量算子+包络',
     spectral_kurtosis: '自适应谱峭度包络',
     med: 'MED最小熵解卷积+包络',
+    mckd: 'MCKD最大相关峭度解卷积+包络',
+    sc_scoh: '谱相关/谱相干',
+    wp: 'WP小波包+包络',
+    dwt: 'DWT离散小波+包络',
+    emd_envelope: 'EMD经验模态+包络',
+    ceemdan_envelope: 'CEEMDAN互补集合+包络',
+    vmd_envelope: 'VMD变分模态+包络',
   }
   return map[key] || key
 }

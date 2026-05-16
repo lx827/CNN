@@ -160,6 +160,20 @@ class DiagnosisEngine:
             from .savgol_denoise import sg_denoise
             result, _ = sg_denoise(arr)
             return result
+        elif self.denoise_method == DenoiseMethod.WAVELET_PACKET:
+            from .wavelet_packet import wavelet_packet_denoise
+            result, _ = wavelet_packet_denoise(arr)
+            return result
+        elif self.denoise_method == DenoiseMethod.CEEMDAN_WP:
+            from .emd_denoise import emd_denoise
+            from .wavelet_packet import wavelet_packet_denoise
+            step1, _ = emd_denoise(arr, method="ceemdan")
+            step2, _ = wavelet_packet_denoise(step1)
+            return step2
+        elif self.denoise_method == DenoiseMethod.EEMD:
+            from .emd_denoise import emd_denoise
+            result, _ = emd_denoise(arr, method="eemd")
+            return result
         return arr
 
     def _estimate_rot_freq(self, signal: np.ndarray, fs: float):
@@ -244,6 +258,21 @@ class DiagnosisEngine:
             result = mckd_envelope_analysis(
                 arr, fs, bearing_params=self.bearing_params, rot_freq=rot_freq
             )
+        elif self.bearing_method == BearingMethod.WP:
+            from .wavelet_bearing import wavelet_packet_bearing_analysis
+            result = wavelet_packet_bearing_analysis(arr, fs)
+        elif self.bearing_method == BearingMethod.DWT:
+            from .wavelet_bearing import dwt_bearing_analysis
+            result = dwt_bearing_analysis(arr, fs)
+        elif self.bearing_method == BearingMethod.EMD_ENVELOPE:
+            from .modality_bearing import emd_bearing_analysis
+            result = emd_bearing_analysis(arr, fs)
+        elif self.bearing_method == BearingMethod.CEEMDAN_ENVELOPE:
+            from .modality_bearing import ceemdan_bearing_analysis
+            result = ceemdan_bearing_analysis(arr, fs)
+        elif self.bearing_method == BearingMethod.VMD_ENVELOPE:
+            from .modality_bearing import vmd_bearing_analysis
+            result = vmd_bearing_analysis(arr, fs)
         else:  # ENVELOPE
             result = envelope_analysis(arr, fs)
 
