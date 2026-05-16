@@ -56,33 +56,113 @@ def _refine_extrema_parabolic(signal: np.ndarray, idx: np.ndarray) -> np.ndarray
     return np.array(refined)
 
 
-def _pad_extrema_rilling(t: np.ndarray, locs: np.ndarray, mags: np.ndarray,
-                         pad_width: int = 2) -> Tuple[np.ndarray, np.ndarray]:
-    """Rilling 边界镜像填充（参考 emd 库 get_padded_extrema）
+def _pad_extrema_rilling(signal: np.ndarray, max_idx: np.ndarray,
+                         min_idx: np.ndarray, pad_width: int = 3
+                         ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Rilling 边界镜像填充（严格参考 emd 库 _pad_extrema_rilling）
 
-    在信号两端镜像对称地补充虚拟极值点，使包络插值在边界处更稳定。
+    与旧版关键区别：
+    - 对称轴根据信号端点值与首个极值的大小关系确定
+    - 填充幅值取信号在镜像位置的值（而非极值幅值的代数镜像）
+    - 同时处理极大值和极小值，确保左/右两端各有足够极值覆盖
+
+    Returns:
+        (max_locs, max_mags, min_locs, min_mags) 填充后的极值位置和幅值
     """
-    if len(locs) < 2:
-        return locs.copy(), mags.copy()
-    # 左侧镜像
-    left_locs = []
-    left_mags = []
+    N = len(signal)
+    t = np.arange(N, dtype=np.float64)
+
+    if len(max_idx) < 1 or len(min_idx) < 1:
+        return t[max_idx], signal[max_idx], t[min_idx], signal[min_idx]
+
+    max_locs = t[max_idx].copy()
+    max_mags = signal[max_idx].copy()
+    min_locs = t[min_idx].copy()
+    min_mags = signal[min_idx].copy()
+
+    # ── 左侧填充 ──
+    # 确定左对称轴：首个极大值和首个极小值中靠左的那个的位置
+    lmax = max_locs[0]
+    lmin = min_locs[0]
+
+    # 对称轴 = 信号首端值与首个极值的大小关系决定
+    # 如果信号[0] >= 首个极大值 → lsym在极大值位置, 反之在首个极值靠左的位置
+    if signal[0] > max_mags[0]:
+        lsym = lmax
+    elif signal[0] < min_mags[0]:
+        lsym = lmin
+    else:
+        # 信号[0]在极值范围内，对称轴取更靠左的极值位置
+        lsym = min(lmax, lmin)
+
+    # 如果对称轴不在 t[0] 以内，强制设在 t[0]
+    if lsym > t[0]:
+        lsym = t[0]
+
+    # 镜像填充：新极值位置 = 2*lsym - 原位置，幅值 = 信号在新位置对应的值
+    left_max_locs = []
+    left_max_mags = []
+    left_min_locs = []
+    left_min_mags = []
+
     for i in range(1, pad_width + 1):
-        if i <= len(locs):
-            mirror_loc = 2 * locs[0] - locs[i]
-            left_locs.append(mirror_loc)
-            left_mags.append(mags[0] + (mags[0] - mags[i]))
-    # 右侧镜像
-    right_locs = []
-    right_mags = []
+        if i < len(max_locs):
+            new_loc = 2 * lsym - max_locs[i]
+            if new_loc >= 0:
+                idx = int(round(new_loc))
+                idx = max(0, min(idx, N - 1))
+                left_max_locs.append(new_loc)
+                left_max_mags.append(signal[idx])
+        if i < len(min_locs):
+            new_loc = 2 * lsym - min_locs[i]
+            if new_loc >= 0:
+                idx = int(round(new_loc))
+                idx = max(0, min(idx, N - 1))
+                left_min_locs.append(new_loc)
+                left_min_mags.append(signal[idx])
+
+    # ── 右侧填充 ──
+    rmax = max_locs[-1]
+    rmin = min_locs[-1]
+
+    if signal[-1] < max_mags[-1]:
+        rsym = rmax
+    elif signal[-1] > min_mags[-1]:
+        rsym = rmin
+    else:
+        rsym = max(rmax, rmin)
+
+    if rsym < t[-1]:
+        rsym = t[-1]
+
+    right_max_locs = []
+    right_max_mags = []
+    right_min_locs = []
+    right_min_mags = []
+
     for i in range(1, pad_width + 1):
-        if i <= len(locs):
-            mirror_loc = 2 * locs[-1] - locs[-(i + 1)]
-            right_locs.append(mirror_loc)
-            right_mags.append(mags[-1] + (mags[-1] - mags[-(i + 1)]))
-    all_locs = np.concatenate([left_locs[::-1], locs, right_locs])
-    all_mags = np.concatenate([left_mags[::-1], mags, right_mags])
-    return all_locs, all_mags
+        if i < len(max_locs):
+            new_loc = 2 * rsym - max_locs[-(i + 1)]
+            if new_loc <= t[-1]:
+                idx = int(round(new_loc))
+                idx = max(0, min(idx, N - 1))
+                right_max_locs.append(new_loc)
+                right_max_mags.append(signal[idx])
+        if i < len(min_locs):
+            new_loc = 2 * rsym - min_locs[-(i + 1)]
+            if new_loc <= t[-1]:
+                idx = int(round(new_loc))
+                idx = max(0, min(idx, N - 1))
+                right_min_locs.append(new_loc)
+                right_min_mags.append(signal[idx])
+
+    # 合并
+    all_max_locs = np.concatenate([left_max_locs[::-1], max_locs, right_max_locs]) if left_max_locs or right_max_locs else max_locs
+    all_max_mags = np.concatenate([left_max_mags[::-1], max_mags, right_max_mags]) if left_max_mags or right_max_mags else max_mags
+    all_min_locs = np.concatenate([left_min_locs[::-1], min_locs, right_min_locs]) if left_min_locs or right_min_locs else min_locs
+    all_min_mags = np.concatenate([left_min_mags[::-1], min_mags, right_min_mags]) if left_min_mags or right_min_mags else min_mags
+
+    return all_max_locs, all_max_mags, all_min_locs, all_min_mags
 
 
 # ═══════════════════════════════════════════════════════════
@@ -93,25 +173,30 @@ def _compute_envelope_mean(signal: np.ndarray,
                            max_idx: np.ndarray,
                            min_idx: np.ndarray,
                            use_pchip: bool = True,
-                           pad_width: int = 2) -> np.ndarray:
+                           pad_width: int = 3) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """构造上下包络并求平均
 
     Args:
         use_pchip: True 用 PchipInterpolator（保守，无过冲）；
                    False 用 CubicSpline（光滑但可能过冲）
         pad_width: Rilling 边界镜像填充宽度
+
+    Returns:
+        (envelope_mean, upper_env, lower_env) 平均包络、上包络、下包络
+        Rilling 停止准则需要 upper/lower 包络值
     """
     t = np.arange(len(signal), dtype=np.float64)
     if len(max_idx) < 2 or len(min_idx) < 2:
-        return np.zeros_like(signal)
+        return np.zeros_like(signal), np.zeros_like(signal), np.zeros_like(signal)
 
     # 精化极值位置
     max_r = _refine_extrema_parabolic(signal, max_idx)
     min_r = _refine_extrema_parabolic(signal, min_idx)
 
-    # 边界镜像填充
-    max_locs, max_mags = _pad_extrema_rilling(t, max_r, signal[max_idx], pad_width=pad_width)
-    min_locs, min_mags = _pad_extrema_rilling(t, min_r, signal[min_idx], pad_width=pad_width)
+    # 边界镜像填充（新版同时处理极大极小值）
+    max_locs, max_mags, min_locs, min_mags = _pad_extrema_rilling(
+        signal, max_idx.astype(int), min_idx.astype(int), pad_width=pad_width
+    )
 
     # 插值
     if use_pchip:
@@ -122,7 +207,8 @@ def _compute_envelope_mean(signal: np.ndarray,
         upper = CubicSpline(max_locs, max_mags, extrapolate=True)(t)
         lower = CubicSpline(min_locs, min_mags, extrapolate=True)(t)
 
-    return (upper + lower) / 2.0
+    env_mean = (upper + lower) / 2.0
+    return env_mean, upper, lower
 
 
 # ═══════════════════════════════════════════════════════════
@@ -135,24 +221,38 @@ def _stop_sd(proto_imf: np.ndarray, old: np.ndarray) -> float:
     return np.sum((proto_imf - old) ** 2) / denom
 
 
-def _stop_rilling(proto_imf: np.ndarray, old: np.ndarray,
-                  sd1: float = 0.05, sd2: float = 0.5, alpha: float = 0.05) -> bool:
-    """Rilling 停止准则（参考 emd 库）
+def _stop_rilling(upper_env: np.ndarray, lower_env: np.ndarray,
+                  sd1: float = 0.05, sd2: float = 0.5, tol: float = 0.05) -> bool:
+    """Rilling 停止准则（严格参考 emd 库 stop_imf_rilling）
 
-    计算评估函数 E = |proto_imf - old| / mode_amplitude
-    对 (1-alpha) 比例的数据要求 E < sd1，其余要求 E < sd2
+    评估包络对称性而非前后两轮差值：
+    E(t) = |avg_env(t)| / amp(t) = |均值偏移| / 模态振幅
+
+    停止条件 = (E < sd1 的比例 >= 1-tol) AND (所有点 E < sd2)
+
+    Args:
+        upper_env: 上包络
+        lower_env: 下包络
+        sd1: 严格阈值（默认 0.05）
+        sd2: 宽松阈值（默认 0.5）
+        tol: 允许超过 sd1 的比例（默认 0.05 = 5%）
     """
-    mode_amp = np.max(proto_imf) - np.min(proto_imf)
-    if mode_amp < 1e-12:
+    avg_env = (upper_env + lower_env) / 2.0
+    amp = np.abs(upper_env - lower_env) / 2.0
+
+    # 模态振幅过小 → 已收敛
+    if np.max(amp) < 1e-12:
         return True
-    eval_fun = np.abs(proto_imf - old) / mode_amp
-    sorted_eval = np.sort(eval_fun)
-    n = len(sorted_eval)
-    cutoff = int(np.floor((1 - alpha) * n))
-    if cutoff < 1:
-        cutoff = 1
-    cond1 = np.all(sorted_eval[:cutoff] < sd1)
-    cond2 = np.all(sorted_eval[cutoff:] < sd2)
+
+    eval_metric = np.abs(avg_env) / (amp + 1e-18)
+
+    # 条件1: 超过 sd1 的比例 <= tol
+    ratio_over_sd1 = np.mean(eval_metric > sd1)
+    cond1 = ratio_over_sd1 <= tol
+
+    # 条件2: 所有点 E < sd2
+    cond2 = np.all(eval_metric < sd2)
+
     return cond1 and cond2
 
 
@@ -202,10 +302,13 @@ def emd_decompose(
             max_idx, min_idx, _ = _find_extrema(h)
             if len(max_idx) < 2 or len(min_idx) < 2:
                 break
-            m = _compute_envelope_mean(h, max_idx, min_idx, use_pchip=use_pchip)
+            m, upper, lower = _compute_envelope_mean(h, max_idx, min_idx, use_pchip=use_pchip)
             h_new = h - m
             if use_rilling:
-                if _stop_rilling(h_new, h, *rilling_thresh):
+                # Rilling 停止准则：评估包络对称性
+                # 停止时保留当前 proto_imf（不做最后一次均值扣除，与 emd 包一致）
+                if _stop_rilling(upper, lower, *rilling_thresh):
+                    h = h_new  # 停止时接受本轮结果
                     break
             else:
                 sd = _stop_sd(h_new, h)
@@ -240,18 +343,17 @@ def ceemdan_decompose(
     use_rilling: bool = False,
     rilling_thresh: Tuple[float, float, float] = (0.05, 0.5, 0.05),
     use_pchip: bool = True,
-    precompute_noise: bool = True,
 ) -> Tuple[List[np.ndarray], np.ndarray]:
     """
-    CEEMDAN 分解（完备集成经验模态分解）
+    CEEMDAN 分解（完备集成经验模态分解 — Torres 2011 标准）
 
-    优化（参考用户 myemd.py + Torres 2011）：
-    1. 信号标准化后再分解，结果恢复原始幅值
-    2. 预生成噪声数组复用，避免每轮重新生成随机数
-    3. 噪声幅值按残余标准差自适应缩放（Torres 标准）
-
-    Args:
-        precompute_noise: 是否预生成噪声并复用（减少随机数开销）
+    与旧版关键区别（参考 emd 包 complete_ensemble_sift + 用户 myemd.py）：
+    1. 噪声来源：预分解白噪声的各阶 IMF 分层（而非纯白噪声）
+       - 第 k 阶使用白噪声的第 k 阶 IMF，确保噪声频段匹配当前提取层
+    2. 第1阶噪声加到原信号 X 上；第2阶起噪声加到残差上
+    3. 噪声缩放: 第1阶 ε×noise_imf/std(noise_imf) × std(X)
+                  第2阶起 ε×noise_imf × std(residue)
+    4. 逐阶提取：每步只取1个 IMF (= residue - local_mean)
 
     Returns:
         (imfs_list, residual)
@@ -262,39 +364,60 @@ def ceemdan_decompose(
     if xstd < 1e-12:
         return [arr.copy()], np.zeros_like(arr)
 
-    # 标准化（参考用户 myemd.py）
+    # 标准化（与 emd 库 / myemd.py 一致）
     arr_norm = arr / xstd
 
-    # 预生成噪声（标准化单位）
-    if precompute_noise:
-        noise_realizations = [
-            np.random.normal(0, 1.0, N)
-            for _ in range(ensemble_size)
-        ]
-    else:
-        noise_realizations = None
+    # ── 预分解白噪声：每个 ensemble 成员的白噪声分解为 IMF 分层 ──
+    # Torres 2011 核心：CEEMDAN 的噪声应该是白噪声的 IMF 分解而非原白噪声
+    noise_imf_layers: List[List[np.ndarray]] = []
+    for i in range(ensemble_size):
+        white_noise = np.random.normal(0, 1.0, N)
+        wn_imfs, _ = emd_decompose(
+            white_noise, max_imfs=max_imfs, max_sifts=max_sifts,
+            sd_threshold=sd_threshold,
+            use_rilling=use_rilling, rilling_thresh=rilling_thresh,
+            use_pchip=use_pchip, normalize=False,
+        )
+        noise_imf_layers.append(wn_imfs)
 
-    imfs = [np.zeros(N, dtype=np.float64) for _ in range(max_imfs)]
+    imfs: List[np.ndarray] = []
     residue = arr_norm.copy()
 
     for k in range(max_imfs):
-        # Torres 2011: β_k = ε * std(residue)
-        beta = noise_std * float(np.std(residue))
-        if beta < 1e-18:
-            beta = noise_std
+        local_mean_accum = np.zeros(N, dtype=np.float64)
+        valid_ensemble = 0
 
-        mode_accum = np.zeros(N, dtype=np.float64)
         for i in range(ensemble_size):
-            if precompute_noise:
-                noise = noise_realizations[i]
-            else:
-                noise = np.random.normal(0, 1.0, N)
+            wn_imfs_i = noise_imf_layers[i]
 
+            # ── 构造加噪信号 ──
+            # 第1阶: noise 加到 X 上, 使用白噪声第0阶 IMF
+            # 第2阶起: noise 加到 residue 上, 使用白噪声第 k 阶 IMF
+            if k < len(wn_imfs_i):
+                noise_component = wn_imfs_i[k]
+            else:
+                # 白噪声分解出的 IMF 数量少于 k → 用残差作为噪声（衰减至零）
+                continue
+
+            # 噪声缩放（Torres 2011 / emd 包）
             if k == 0:
-                trial = arr_norm + beta * noise
+                # 第1阶: ε × (noise_imf_0 / std(noise_imf_0)) × 1.0
+                # 在标准化空间中 std(X)=1，所以最终是 ε × normalized_noise
+                noise_std_local = float(np.std(noise_component))
+                if noise_std_local > 1e-12:
+                    scaled_noise = noise_std * noise_component / noise_std_local
+                else:
+                    scaled_noise = np.zeros(N)
+                trial = arr_norm + scaled_noise
             else:
-                trial = residue + beta * noise
+                # 第2阶起: ε × noise_imf_k × std(residue)
+                # 噪声幅值与残差成正比，保证各阶 SNR 一致
+                scaled_noise = noise_std * noise_component * float(np.std(residue))
+                trial = residue + scaled_noise
 
+            # ── 提取 local_mean (而非直接取 IMF) ──
+            # get_next_local_mean: 对 trial 做一次筛分 → IMF_1
+            # local_mean = trial - IMF_1
             trial_imfs, _ = emd_decompose(
                 trial, max_imfs=1, max_sifts=max_sifts,
                 sd_threshold=sd_threshold,
@@ -302,17 +425,28 @@ def ceemdan_decompose(
                 use_pchip=use_pchip, normalize=False,
             )
             if trial_imfs:
-                mode_accum += trial_imfs[0]
+                imf_1 = trial_imfs[0]
+                local_mean_i = trial - imf_1
             else:
-                mode_accum += trial
+                # 筛分失败 → local_mean = trial 本身（跳过此成员）
+                local_mean_i = trial
 
-        imf_k = mode_accum / ensemble_size
-        imfs[k] = imf_k
-        residue = residue - imf_k
+            local_mean_accum += local_mean_i
+            valid_ensemble += 1
 
+        if valid_ensemble == 0:
+            break
+
+        # ── 计算本阶结果 ──
+        local_mean_k = local_mean_accum / valid_ensemble
+        imf_k = residue - local_mean_k
+
+        imfs.append(imf_k)
+        residue = local_mean_k  # 残差更新为新 local_mean（与 emd 包一致）
+
+        # 检查残差是否还有极值
         max_idx, min_idx, _ = _find_extrema(residue)
         if len(max_idx) <= 1 and len(min_idx) <= 1:
-            imfs = imfs[:k + 1]
             break
 
     # 恢复原始幅值
@@ -352,7 +486,6 @@ def emd_denoise(
     noise_std: float = 0.2,
     use_rilling: bool = False,
     use_pchip: bool = True,
-    precompute_noise: bool = True,
 ) -> Tuple[np.ndarray, Dict]:
     """
     EMD/CEEMDAN 降噪统一入口
@@ -368,7 +501,6 @@ def emd_denoise(
             ensemble_size=ensemble_size, noise_std=noise_std,
             use_rilling=use_rilling,
             use_pchip=use_pchip,
-            precompute_noise=precompute_noise,
         )
     else:
         imfs, residue = emd_decompose(
