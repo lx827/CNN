@@ -29,6 +29,17 @@ from .metrics import (
     compute_m8a,
     compute_ser_order,
 )
+from .planetary_demod import (
+    planetary_envelope_order_analysis,
+    planetary_fullband_envelope_order_analysis,
+    planetary_vmd_demod_analysis,
+    planetary_tsa_envelope_analysis,
+    planetary_hp_envelope_order_analysis,
+    planetary_sc_scoh_analysis,
+    planetary_msb_analysis,
+    planetary_cvs_med_analysis,
+    evaluate_planetary_demod_results,
+)
 
 __all__ = [
     "compute_fm0",
@@ -44,6 +55,15 @@ __all__ = [
     "analyze_sidebands",
     "analyze_sidebands_order",
     "_evaluate_gear_faults",
+    "planetary_envelope_order_analysis",
+    "planetary_fullband_envelope_order_analysis",
+    "planetary_vmd_demod_analysis",
+    "planetary_tsa_envelope_analysis",
+    "planetary_hp_envelope_order_analysis",
+    "planetary_sc_scoh_analysis",
+    "planetary_msb_analysis",
+    "planetary_cvs_med_analysis",
+    "evaluate_planetary_demod_results",
 ]
 
 

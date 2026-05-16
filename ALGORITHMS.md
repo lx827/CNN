@@ -2,8 +2,9 @@
 
 > **文档用途**：本文件系统梳理轴承与齿轮故障诊断的核心理论、公式、算法流程及工程参数，
 > 作为本项目 `cloud/app/services/analyzer.py`、`signal_generator.py` 及相关模块的算法实现参考。
-> 
+>
 > **覆盖范围**：
+>
 > - 滚动轴承：特征频率、包络分析、谱峭度/快速Kurtogram、倒频谱预白化(CPW)、循环平稳分析、MED、TSA
 > - 齿轮：调制模型、TSA、倒频谱、边频带分析、残余信号解调、啮合冲击调制(MIM)、时域指标(FM0/FM4/NA4/NB4/SER)
 > - 综合：轴承/齿轮信号分离、抗漂变降噪、决策级鲁棒化、工程部署流程
@@ -28,6 +29,7 @@
    2.4 [倒频谱分析](#24-倒频谱分析)
    2.5 [边频带分析](#25-边频带分析)
    2.6 [齿轮故障特征匹配与判别准则](#26-齿轮故障特征匹配与判别准则)
+   2.7 [行星齿轮箱专用诊断方法](#27-行星齿轮箱专用诊断方法)
 3. [轴承与齿轮故障的分离与鉴别诊断](#三轴承与齿轮故障的分离与鉴别诊断)
    3.1 [信号本质差异](#31-信号本质差异)
    3.2 [确定性-随机分离 (DRS / CPW)](#32-确定性-随机分离)
@@ -173,6 +175,7 @@ $$K_Y(f) = \frac{S_{4Y}(f)}{S_{2Y}^2(f)} - 2$$
 #### 1.3.3 Fast Kurtogram 算法流程（Antoni, 2007）
 
 **Step 1 — 构建准解析滤波器组**
+
 - 低通生成滤波器 $h(n)$，截止频率 $f_c = 0.4$
 - 二分段低通：$h_0(n) = h(n)\,e^{j\pi n/4}$，带宽 $[0, 1/4]$，中心偏移 $0.125$
 - 二分段高通：$h_1(n) = h(n)\,e^{3j\pi n/4}$，带宽 $[1/4, 1/2]$，中心偏移 $0.375$
@@ -218,6 +221,7 @@ $\tau$ 为倒频率（quefrency），单位秒。
 
 **Step 4 — 倒频谱编辑（Cepstral Editing / Comb Lifter）**
 识别并编辑确定性分量对应的倒频谱线：
+
 - 齿轮啮合频率族 $\rightarrow$ 对应倒频率 $\tau_{mesh} = 1/f_{mesh}, 2/f_{mesh}, \dots$
 - 轴频族 $\rightarrow$ 对应倒频率 $\tau_{shaft} = 1/f_r, 2/f_r, \dots$
 
@@ -337,6 +341,7 @@ $$\Delta f = \pm (0.02\sim0.03) \times f_{theory}$$
 $$P_{detect} = \max_{f \in [f_{theory}-\Delta f, f_{theory}+\Delta f]} E(f)$$
 
 **Step 4 — 谐波族验证**：
+
 - 外圈：$n\times BPFO$（$n=1,2,3,\dots$）至少检测到前 $3\sim5$ 阶
 - 内圈：$BPFI \pm k f_r$ 边带族，同时验证 $n\times BPFI$
 - 滚动体：$2\times BSF \pm m\times FTF$ 边带
@@ -382,6 +387,7 @@ $$P_{detect} = \max_{f \in [f_{theory}-\Delta f, f_{theory}+\Delta f]} E(f)$$
 $$x(t) = \sum_{k=0}^{K} a_k(t)\cos\left[2\pi k f_{mesh} t + b_k(t) + \theta_k\right]$$
 
 其中：
+
 - 幅值调制：$a_k(t) = A_k\left[1 + \sum_{n=1}^{N} m_{kn}\cos(2\pi n f_{char}t + \phi_{kn})\right]$
 - 相位调制：$b_k(t) = \sum_{l=1}^{L} \beta_{kl}\sin(2\pi l f_{char}t + \varphi_{kl})$
 
@@ -654,6 +660,180 @@ TSA + 频谱分析
 
 ---
 
+### 2.7 行星齿轮箱专用诊断方法
+
+> **背景**：行星齿轮箱（planetary gearbox）由于多行星轮同时啮合、内外啮合并存、行星架旋转调制等物理机制，其振动信号具有复杂的多重AM-FM调制结构。传统的定轴齿轮诊断指标（SER、CAR、FM4等）在行星箱中健康与故障样本范围完全重叠，无法区分（参见 `docs/planetary_gearbox_diagnosis_progress.md`）。本节总结行星箱专用的信号模型与解调诊断方法，为突破当前项目瓶颈提供理论依据与实现路径。
+
+#### 2.7.1 行星齿轮箱振动信号的AM-FM调制模型
+
+**Feng & Zuo (2012)** 建立了行星齿轮箱局部故障振动信号的解析模型。考虑齿轮故障引起的幅值调制（AM）和频率调制（FM），以及时变传递路径的AM效应，行星箱振动信号可表示为多个AM-FM信号的叠加：
+
+$$x(t) = \sum_{k=1}^{K} a_k(t) \cos\left[2\pi k f_{mesh} t + \phi_k(t)\right]$$
+
+其中：
+
+- $a_k(t)$：第 $k$ 阶啮合谐波的幅值包络，包含故障特征频率调制和传递路径调制
+- $\phi_k(t)$：相位调制函数
+- $f_{mesh}$：啮合频率
+
+在频域中，该信号表现为以啮合频率谐波为中心、故障特征频率和行星架转频为间隔的**密集边频带结构**。由于多行星轮（通常3~4个）同时啮合，即使健康状态下也存在显著的边频带，导致传统边频带指标（SER）失效。
+
+#### 2.7.2 行星齿轮箱特征阶次（相对于太阳轮转频）
+
+| 特征阶次 | 公式 | 数值（sun=28, ring=100, planet=36, N_p=4）|
+|---------|------|----------------------------------------|
+| **mesh_order** | $Z_{ring} \cdot Z_{sun} / (Z_{sun} + Z_{ring})$ | 21.875 |
+| **carrier_order** | $Z_{sun} / (Z_{sun} + Z_{ring})$ | 0.21875 |
+| **sun_fault_order** | $Z_{ring} / (Z_{sun} + Z_{ring}) \cdot N_p$ | 3.125 |
+| **planet_fault_order** | $Z_{ring} / (Z_{sun} + Z_{ring})$ | 0.78125 |
+
+> ⚠️ **关键**：行星箱的边频带间隔是 carrier_order（0.21875阶），而非定轴箱的1阶。用定轴箱公式（mesh_order=齿数，spacing=1）会导致误诊。
+
+#### 2.7.3 VMD幅频联合解调分析
+
+**Feng, Zhang & Zuo (2017)** 提出基于变分模态分解（VMD）的幅值-频率联合解调方法，有效规避了Fourier谱边频带分析的困难。
+
+**算法流程**：
+
+**Step 1 — VMD分解**
+根据行星箱振动信号的AM-FM特性，模态数 $K$ 可按频带内啮合频率谐波数确定：
+$$K = \left\lfloor \frac{f_s}{2 f_{mesh}} \right\rfloor$$
+
+对于 WTgearbox 数据集（$f_s=8192$ Hz，$f_{mesh}=175/8 \cdot f_{sun}$，$f_{sun}=20\sim55$ Hz），$f_{mesh}\approx 437.5\sim1203$ Hz，故 $K \approx 3\sim9$。
+
+**Step 2 — 敏感IMF选择**
+选择瞬时频率围绕啮合频率 $f_{mesh}$ 或其谐波波动的IMF作为敏感分量。若多个IMF满足，优先选择中心频率更高的IMF（齿轮故障冲击呈高频特征）。
+
+**Step 3 — 经验AM-FM分解**
+对敏感IMF执行经验AM-FM分解，分离幅值包络 $a(t)$ 和载波信号 $c(t)$，避免Bedrosian定理约束导致的负频率问题：
+$$c(t) = \frac{x_{IMF}(t)}{a(t)}, \quad a(t) = \sqrt{x_{IMF}^2(t) + \mathcal{H}^2[x_{IMF}(t)]}$$
+
+**Step 4 — 幅值与频率解调谱**
+
+- **幅值解调谱**：对 $a(t)$ 做FFT，得到包络谱
+- **频率解调谱**：对载波 $c(t)$ 做Hilbert变换求瞬时频率，再对瞬时频率做FFT
+
+$$f_{inst}(t) = \frac{1}{2\pi} \frac{d}{dt}\arctan\frac{\mathcal{H}[c(t)]}{c(t)}$$
+
+**Step 5 — 故障特征匹配**
+在解调谱中搜索与理论故障特征阶次（sun_fault_order, planet_fault_order, carrier_order）匹配的峰值。
+
+**诊断逻辑**：
+
+| 故障位置 | 幅值解调谱特征 | 频率解调谱特征 |
+|---------|--------------|--------------|
+| **太阳轮故障** | sun_fault_order 及其谐波突出，伴 1/3 分数谐波（多行星轮不完全一致导致） | 纯净的 sun_fault_order 峰值 |
+| **行星轮故障** | planet_fault_order 及其谐波 | planet_fault_order 峰值 |
+| **齿圈故障** | carrier_order 相关调制 | carrier_order 相关 |
+
+**优势**：解调谱避免了原始Fourier谱中involute边频带的复杂性，幅值解调谱比原始包络谱更纯净，频率解调谱可完全去除传递路径频率干扰。
+
+#### 2.7.4 谱相关解调分析 (SC/SCoh)
+
+**Dong, Liu & Feng (2025)** 提出基于AM-FM模型的谱相关解调分析方法。
+
+**核心原理**：对于AM-FM信号，谱相关密度（SC）在二维谱面上呈现**分组离散特征点**，其循环频率等于调制频率，谱频率等于载波与调制频率的组合。这与冲击信号的垂直线特征显著不同。
+
+**实现要点**：
+
+1. 计算信号的谱相关密度 $S_x^\alpha(f)$ 或谱相干 $\gamma_x^\alpha(f)$
+2. 在循环频率轴寻找与故障特征频率匹配的离散点群
+3. 通过谱频率轴的精确位置识别调制源（如 $f_{mesh}$, $f_{mesh}\pm f_{fault}$）
+
+**相比传统包络分析的优势**：
+
+- 能区分AM-FM调制与随机冲击
+- 可识别组合频率的精确来源
+- 对噪声和传递路径变化更鲁棒
+
+#### 2.7.5 调制信号双谱分析 (MSB)
+
+**MSB (Modulation Signal Bispectrum)** 利用相位关系解析二次相位耦合，从边频带中提取故障信息（Guo, Xu, Tian et al.）。
+
+**残余边频带法**（Xu et al. / Feng & Zuo）：
+
+- 传统同相边频带（in-phase sidebands）受制造/装配误差影响大，健康状态下也可能显著
+- **残余边频带（residual sidebands）** 来自多行星轮啮合的不完全叠加，幅值较小但受误差影响弱
+- 结合MSB可高精度估计残余边频带，实现更稳健的故障诊断
+
+**MSB-SE (Sideband Evaluator)**：
+$$MSB_{SE}(f_c) = \int MSB(f_c, f_\Delta) \, df_\Delta$$
+
+在特征切片 $f_c = 2f_{mesh} - f_{carrier}$ 处，残余边频带的MSB幅值随故障程度单调增长，且不受高负载下误差掩蔽的影响。
+
+#### 2.7.6 连续振动分离 + MED增强 (CVS+MED)
+
+**Tong et al.** 提出针对行星轮故障的连续振动分离（CVS）方法：
+
+**核心思路**：
+
+1. 利用行星运动的周期性，从原始信号中分离出单个行星轮的啮合振动段
+2. 对分离后的信号执行最小熵解卷积（MED），增强故障冲击成分
+3. 对MED增强后的信号做包络分析
+
+**适用场景**：行星轮局部故障（点蚀、裂纹），特别是当故障冲击被常规啮合振动淹没时。
+
+#### 2.7.7 工程推荐：分阶次包络解调策略
+
+结合本项目 WTgearbox 数据集的实测瓶颈（频域指标完全失效，时域峭度仅有部分区分力），推荐采用以下**分级诊断策略**：
+
+**Level 1 — 时域证据门控（已有）**
+
+```
+kurtosis > 12  或  crest > 15  →  开启故障证据
+```
+
+若未通过，输出"健康"或"微弱异常"，结束。
+
+**Level 2 — 窄带包络阶次分析（核心新增）**
+
+```python
+if is_planetary and mesh_order:
+    # 1. 对 mesh_order 附近频带做窄带滤波
+    band = bandpass_order(order_axis, order_spectrum, mesh_order, bandwidth=2.0)
+    
+    # 2. Hilbert包络
+    envelope = np.abs(hilbert(band))
+    
+    # 3. 对包络做阶次谱分析（等效于幅值解调）
+    env_order_axis, env_order_spectrum = compute_order_spectrum(envelope, fs, rot_freq)
+    
+    # 4. 搜索特征故障阶次峰值
+    sun_amp = order_band_amplitude(env_order_axis, env_order_spectrum, sun_fault_order, 0.3)
+    planet_amp = order_band_amplitude(env_order_axis, env_order_spectrum, planet_fault_order, 0.3)
+    carrier_amp = order_band_amplitude(env_order_axis, env_order_spectrum, carrier_order, 0.3)
+    
+    # 5. 计算峰值显著性（相对于背景中位数）
+    snr_sun = sun_amp / np.median(env_order_spectrum)
+    snr_planet = planet_amp / np.median(env_order_spectrum)
+```
+
+**Level 3 — VMD联合解调（当Level 2证据不足时启用）**
+
+```python
+# VMD分解 + 敏感IMF选择 + 幅频联合解调
+imfs = vmd(signal, K=int(fs//(2*mesh_freq_hz)), alpha=2000)
+sensitive_imf = select_imf_around_mesh(imfs, mesh_freq_hz)
+env_spectrum = fft_envelope(sensitive_imf)
+freq_demod_spectrum = fft_instantaneous_freq(sensitive_imf)
+```
+
+**阈值建议**：
+
+| 指标 | 警告阈值 | 危险阈值 |
+|-----|---------|---------|
+| 包络阶次谱 SNR（sun/planet） | > 3 | > 5 |
+| 频率解调谱峰值 | > 2倍中位数 | > 4倍中位数 |
+| 时域 kurtosis（门控用） | > 12 | > 20 |
+
+**注意事项**：
+
+1. **N1子集误报**：He_N1 高转速样本 kurtosis 可达 8~22，需结合多通道交叉验证或 VMD-IMF选择性峭度缓解
+2. **计算成本**：VMD在2GB服务器上需谨慎，建议K不超过5，信号截断至5秒
+3. **转速范围**：WTgearbox为恒速（20~55 Hz），无需变速阶次跟踪，简化了实现
+
+---
+
 ## 三、轴承与齿轮故障的分离与鉴别诊断
 
 ### 3.1 信号本质差异
@@ -745,12 +925,14 @@ $$x_{rand}(t) = \mathcal{F}^{-1}[X_{rand}(f)]$$
 #### 4.2.1 小波阈值去噪（工程最成熟、实时性最好）
 
 **核心公式**：
+
 - **软阈值**：$\hat{w} = \text{sgn}(w)\cdot\max(|w|-T, 0)$
 - **硬阈值**：$\hat{w} = w \cdot \mathbb{I}(|w|>T)$
 - **改进非线性阈值**（抑制伪吉布斯振荡）：
   $$\hat{w} = \text{sgn}(w)\cdot\left(|w| - \frac{T}{1+e^{\beta(|w|-T)}}\right)$$
 
 **工程参数选取**：
+
 - **小波基**：轴承/齿轮冲击信号优先选 **db8、sym8、coif5**（紧支撑、正交、高阶消失矩）
 - **分解层数**：$L = \lfloor\log_2(N)\rfloor - 2$，通常 $5\sim7$ 层
 - **阈值**：$T = \sigma\sqrt{2\ln N}$（通用阈值），其中 $\sigma = \text{Median}(|d_{L-1}|)/0.6745$（鲁棒估计）
@@ -759,6 +941,7 @@ $$x_{rand}(t) = \mathcal{F}^{-1}[X_{rand}(f)]$$
 #### 4.2.2 自适应模态分解降噪（EMD/EEMD/VMD）
 
 **算法流程**：
+
 1. 对含噪信号 $x(t)$ 进行 EMD/EEMD/VMD 分解，得到 IMF 分量 $\{c_1(t), c_2(t), \dots, c_K(t)\}$
 2. **IMF 筛选**：计算各 IMF 与原始信号的**互相关系数** $\rho_i$ 和**峭度** $K_i$
 3. **重构规则**：保留 $\rho_i > 0.3$ 且 $K_i > 3$ 的 IMF，剔除高频噪声主导分量
@@ -766,6 +949,7 @@ $$x_{rand}(t) = \mathcal{F}^{-1}[X_{rand}(f)]$$
 
 **VMD 参数优化**：
 VMD 需预设模态数 $K$ 和惩罚因子 $\alpha$。工程上采用 **K-L 散度** 或 **PSO/GA** 自适应优化：
+
 - 目标函数：最小化重构误差 + 最小化模态混叠
 - 优化变量：$(K, \alpha)$，通常 $K \in [3,10]$，$\alpha \in [100, 5000]$
 
@@ -780,6 +964,7 @@ $$\mathbf{w}(n+1) = \mathbf{w}(n) + \mu\, e(n)\, \mathbf{u}(n)$$
 其中 $\mathbf{u}(n)$ 为参考噪声输入（可由独立噪声传感器或延迟信号构造），$\mu$ 为步长。
 
 **工程要点**：
+
 - 变步长 LMS（VSSLMS）：$\mu(n) = \alpha\mu(n-1) + \gamma e^2(n)$，兼顾收敛速度与稳态误差
 - 归一化 LMS（NLMS）：$\mu$ 按输入功率归一化，防止发散
 - 适用于**存在独立参考噪声通道**的场景（如电机轴承诊断中，用机身振动作为参考去除环境噪声）
@@ -789,12 +974,14 @@ $$\mathbf{w}(n+1) = \mathbf{w}(n) + \mu\, e(n)\, \mathbf{u}(n)$$
 当多测点信号为故障源与噪声的线性混合 $\mathbf{x}(t) = \mathbf{A}\mathbf{s}(t)$ 时：
 
 **FastICA / JADE 算法**：
+
 1. 中心化和白化：$\mathbf{z} = \mathbf{Q}\mathbf{x}$
 2. 估计分离矩阵 $\mathbf{W}$，使各分量独立性最大化（基于峭度或负熵）
 3. 分离源信号 $\mathbf{y} = \mathbf{W}\mathbf{z}$
 4. 根据频谱特征识别含故障信息的独立分量
 
 **单通道盲分离**（仅有一个传感器时）：
+
 - **EEMD + ICA**：先用 EEMD 将单通道信号扩展为多通道 IMF 矩阵，再执行 ICA
 - **相空间重构 + FastICA**：通过延迟嵌入将单通道转为正定多通道问题
 
@@ -824,6 +1011,7 @@ $$\mathbf{w}(n+1) = \mathbf{w}(n) + \mu\, e(n)\, \mathbf{u}(n)$$
 对于采用深度学习的诊断系统，噪声会导致特征图激活异常：
 
 **多尺度残差收缩块（MASRSB）**：
+
 - **双注意力不对称阈值块**：将特征图正负响应分离，分别计算动态阈值
 - **自适应阈值斜率模块**：根据特征图局部方差自动调整收缩斜率
 - **物理意义**：强噪声区域特征被收缩至零，弱故障特征被保留并增强
@@ -843,6 +1031,7 @@ $$C_i^+ = \max\left(0,\; x_i - \mu_0 - K + C_{i-1}^+\right)$$
 $$C_i^- = \max\left(0,\; \mu_0 - x_i - K + C_{i-1}^-\right)$$
 
 其中：
+
 - $\mu_0$：健康基线均值（由历史数据估计）
 - $K = \delta\sigma/2$：参考值，$\delta$ 为待检测的最小偏移量（通常取 $0.5\sigma \sim 1.0\sigma$）
 - 决策规则：若 $C_i^+ > H$ 或 $C_i^- > H$（$H \approx 4\sim5\sigma$），则报警
@@ -858,6 +1047,7 @@ $$z_i = \lambda x_i + (1-\lambda)z_{i-1}, \quad 0 < \lambda \leq 1$$
 - 控制限：$UCL/LCL = \mu_0 \pm L\sigma\sqrt{\frac{\lambda}{2-\lambda}[1-(1-\lambda)^{2i}]}$
 
 **工程选择**：
+
 - **EWMA**：适合检测 $0.5\sigma \sim 1.5\sigma$ 的小偏移，对测量误差和自相关数据鲁棒
 - **CUSUM**：适合检测持续单向漂移
 - **Shewhart + CUSUM/EWMA 组合**：Shewhart 抓突发大故障，CUSUM/EWMA 抓缓慢劣化漂移
@@ -871,6 +1061,7 @@ $$z_i = \lambda x_i + (1-\lambda)z_{i-1}, \quad 0 < \lambda \leq 1$$
 ##### 4.4.2.1 滑动窗口基线（Sliding Window Baseline）
 
 **算法**：
+
 1. 维护长度为 $W$（如 $W=1440$ 个点，对应 24 小时）的健康数据环形缓冲区
 2. 每采集一个新样本，剔除最旧样本，重新计算窗口内的：
    - 基线：$\mu_{base} = \text{Median}(x_{t-W+1:t})$（用**中位数**而非均值，抗脉冲干扰）
@@ -917,6 +1108,7 @@ $$w_i = \frac{1/\sigma_i^2}{\sum_{j=1}^M 1/\sigma_j^2}$$
 $$m(A) = \frac{\sum_{B\cap C=A} m_1(B)m_2(C)}{1-K}, \quad K = \sum_{B\cap C=\emptyset} m_1(B)m_2(C)$$
 
 **冲突消解**：当传感器间高度冲突（$K \to 1$）时，经典 D-S 会产生悖论。工程上采用：
+
 - **Murphy 平均法**：先对证据加权平均，再组合
 - **Jousselme 距离修正**：根据证据间距离计算可信度，修正 BPA 后再组合
 - **Markov 链建模**：利用状态转移规律降低随机冲突证据的影响
@@ -993,42 +1185,54 @@ $$m(A) = \frac{\sum_{B\cap C=A} m_1(B)m_2(C)}{1-K}, \quad K = \sum_{B\cap C=\emp
 
 | 作者/年份 | 文献 | 核心贡献 | 适用章节 |
 |----------|------|---------|---------|
-| **Randall & Antoni (2011)** | *Rolling element bearing diagnostics—a tutorial*, MSSP 25(2): 485-520 | 轴承诊断综述教程，涵盖包络分析、谱峭度、循环平稳 | 1.2, 1.3, 1.5 |
-| **Antoni (2006)** | *The spectral kurtosis: a useful tool for characterising non-stationary signals*, MSSP 20(2): 282-307 | 谱峭度严格数学定义 | 1.3 |
-| **Antoni (2007)** | *Fast computation of the kurtogram for the detection of transient faults*, MSSP 21(1): 108-124 | 快速谱峭度图（Fast Kurtogram） | 1.3 |
-| **Randall et al. (2001)** | *The relationship between spectral correlation and envelope analysis...*, MSSP 15(5): 945-962 | 谱相关与包络分析的关系 | 1.5 |
-| **Sawalhi et al. (2007)** | *Enhancement of fault detection... using MED combined with spectral kurtosis*, MSSP 21(6): 2616-2633 | MED+SK 联合增强 | 1.6 |
-| **Ho & Randall (2000)** | *Optimisation of bearing diagnostic techniques using simulated and actual bearing fault signals*, MSSP 14(5): 763-788 | 模拟与实测信号优化诊断 | 1.2 |
-| **Borghesani et al. (2013)** | *Application of cepstrum pre-whitening for the diagnosis of bearing faults under variable speed*, MSSP 36(2): 370-384 | 变速工况倒频谱预白化 | 1.4, 3.2 |
-| **McFadden & Smith (1984)** | *Model for the vibration produced by a single point defect in a rolling element bearing*, JSV 96(1): 69-82 | 单点缺陷振动理论模型 | 1.1 |
-| **Randall (2017)** | *A history of cepstrum analysis and its application to mechanical problems*, MSSP 97: 3-19 | 倒频谱分析历史与应用 | 2.4 |
+| **Randall & Antoni (2011)** | _Rolling element bearing diagnostics—a tutorial_, MSSP 25(2): 485-520 | 轴承诊断综述教程，涵盖包络分析、谱峭度、循环平稳 | 1.2, 1.3, 1.5 |
+| **Antoni (2006)** | _The spectral kurtosis: a useful tool for characterising non-stationary signals_, MSSP 20(2): 282-307 | 谱峭度严格数学定义 | 1.3 |
+| **Antoni (2007)** | _Fast computation of the kurtogram for the detection of transient faults_, MSSP 21(1): 108-124 | 快速谱峭度图（Fast Kurtogram） | 1.3 |
+| **Randall et al. (2001)** | _The relationship between spectral correlation and envelope analysis..._, MSSP 15(5): 945-962 | 谱相关与包络分析的关系 | 1.5 |
+| **Sawalhi et al. (2007)** | _Enhancement of fault detection... using MED combined with spectral kurtosis_, MSSP 21(6): 2616-2633 | MED+SK 联合增强 | 1.6 |
+| **Ho & Randall (2000)** | _Optimisation of bearing diagnostic techniques using simulated and actual bearing fault signals_, MSSP 14(5): 763-788 | 模拟与实测信号优化诊断 | 1.2 |
+| **Borghesani et al. (2013)** | _Application of cepstrum pre-whitening for the diagnosis of bearing faults under variable speed_, MSSP 36(2): 370-384 | 变速工况倒频谱预白化 | 1.4, 3.2 |
+| **McFadden & Smith (1984)** | _Model for the vibration produced by a single point defect in a rolling element bearing_, JSV 96(1): 69-82 | 单点缺陷振动理论模型 | 1.1 |
+| **Randall (2017)** | _A history of cepstrum analysis and its application to mechanical problems_, MSSP 97: 3-19 | 倒频谱分析历史与应用 | 2.4 |
 
 ### 齿轮故障诊断经典文献
 
 | 作者/年份 | 文献 | 核心贡献 | 适用章节 |
 |----------|------|---------|---------|
-| **McFadden (1987)** | *Examination of a technique for the early detection of failure in gears by signal processing of the time domain average*, MSSP 1(2): 173-183 | TSA 早期故障检测经典方法 | 2.2 |
-| **McFadden (1986)** | *Detecting fatigue cracks in gears by amplitude and phase demodulation of the meshing vibration*, J. Vib. Acoust. 108(2): 165-170 | 齿轮啮合振动幅值/相位解调 | 2.2, 2.5 |
-| **Wang & McFadden (1995)** | *Decomposition of Gear Motion Signals and Its Application to Gearbox Diagnostics*, J. Vib. Acoust. 117(3A): 363-369 | 齿轮运动信号分解 | 2.2 |
-| **Randall (1982)** | *A new method of modeling gear faults*, JSV 83(3): 363-374 | 齿轮故障建模 | 2.1 |
-| **Braun (1975)** | *The extraction of periodic waveforms by time domain averaging*, Acustica 23(2): 69-77 | 时域同步平均理论基础 | 2.2 |
-| **Antoni & Randall (2002)** | *Differential diagnosis of gear and bearing faults*, ASME J. Vib. Acoust. 124: 165-171 | 齿轮与轴承故障鉴别诊断 | 3.4 |
-| **Zakrajsek et al. (1993)** | *An analysis of gear fault detection methods as applied to pitting fatigue failure data*, Proc. MFPT | 多种齿轮故障检测方法对比 | 2.3 |
-| **Bonnardot et al. (2005)** | *Use of the acceleration signal of a gearbox in order to perform angular resampling...*, MSSP 19: 766-785 | 角域重采样技术 | 2.2 |
-| **汪超等 (2015)** | *基于边频带分析的齿轮故障诊断研究*, 十堰职业技术学院学报 | 边频带与故障模式对应关系 | 2.5 |
+| **McFadden (1987)** | _Examination of a technique for the early detection of failure in gears by signal processing of the time domain average_, MSSP 1(2): 173-183 | TSA 早期故障检测经典方法 | 2.2 |
+| **McFadden (1986)** | _Detecting fatigue cracks in gears by amplitude and phase demodulation of the meshing vibration_, J. Vib. Acoust. 108(2): 165-170 | 齿轮啮合振动幅值/相位解调 | 2.2, 2.5 |
+| **Wang & McFadden (1995)** | _Decomposition of Gear Motion Signals and Its Application to Gearbox Diagnostics_, J. Vib. Acoust. 117(3A): 363-369 | 齿轮运动信号分解 | 2.2 |
+| **Randall (1982)** | _A new method of modeling gear faults_, JSV 83(3): 363-374 | 齿轮故障建模 | 2.1 |
+| **Braun (1975)** | _The extraction of periodic waveforms by time domain averaging_, Acustica 23(2): 69-77 | 时域同步平均理论基础 | 2.2 |
+| **Antoni & Randall (2002)** | _Differential diagnosis of gear and bearing faults_, ASME J. Vib. Acoust. 124: 165-171 | 齿轮与轴承故障鉴别诊断 | 3.4 |
+| **Zakrajsek et al. (1993)** | _An analysis of gear fault detection methods as applied to pitting fatigue failure data_, Proc. MFPT | 多种齿轮故障检测方法对比 | 2.3 |
+| **Bonnardot et al. (2005)** | _Use of the acceleration signal of a gearbox in order to perform angular resampling..._, MSSP 19: 766-785 | 角域重采样技术 | 2.2 |
+| **汪超等 (2015)** | _基于边频带分析的齿轮故障诊断研究_, 十堰职业技术学院学报 | 边频带与故障模式对应关系 | 2.5 |
+
+### 行星齿轮箱专用诊断文献
+
+| 作者/年份 | 文献 | 核心贡献 | 适用章节 |
+|----------|------|---------|---------|
+| **Feng & Zuo (2012)** | _Vibration signal models for fault diagnosis of planetary gearboxes_, JSV 331(22): 4919-4939 | 行星齿轮箱AM-FM调制信号建模，推导太阳轮/行星轮/齿圈故障的频谱特征 | 2.7.1 |
+| **Feng, Zhang & Zuo (2017)** | _Planetary Gearbox Fault diagnosis via Joint Amplitude and Frequency Demodulation Analysis Based on VMD_, Appl. Sci. 7(8): 775 | VMD+经验AM-FM分解+幅频联合解调，成功诊断太阳轮/行星轮/齿圈局部故障 | 2.7.3 |
+| **Dong, Liu & Feng (2025)** | _Spectral Correlation Demodulation Analysis for Fault Diagnosis of Planetary Gearboxes_, Sensors 25(9): 2694 | 基于AM-FM模型的谱相关/谱相干解调理论，二维离散点群识别故障调制源 | 2.7.4 |
+| **Xu et al. / Feng & Zuo** | _MSB-based methods for planetary gearbox fault diagnosis_ (系列论文) | 调制信号双谱(MSB)与残余边频带分析，抑制制造误差干扰，提升诊断稳健性 | 2.7.5 |
+| **Tong et al.** | _Vibration Separation Methodology Compensated by Time-Varying Transfer Function for Fault Diagnosis of Non-Hunting Tooth Planetary Gearbox_, Mech. Syst. Signal Process. | 连续振动分离(CVS)+时变传递函数补偿(TVTF)，单传感器实现行星轮故障定位 | 2.7.6 |
+| **Hong et al.** | _Explanation of the sideband asymmetry in the vibration spectrum of planetary transmissions_, ... | 行星箱调制边频带不对称性物理解释，为边频分析提供理论依据 | 2.7.2 |
+| **Wang et al. (2024)** | _Multi-band Torsional Vibration Amplitude Demodulation for Planetary Gearbox Fault Diagnosis under Time-varying Speed Conditions_, IEEE Access | 多频段扭转振动幅值解调，结合多特征频带信息消除邻频干扰 | 2.7.7 |
 
 ### 综合信号处理与高级方法
 
 | 作者/年份 | 文献 | 核心贡献 | 适用章节 |
 |----------|------|---------|---------|
-| **Antoni (2009)** | *Cyclostationarity by examples*, MSSP 23: 987-1036 | 循环平稳性教学性综述 | 1.5 |
-| **Endo & Randall (2007)** | *Enhancement of autoregressive model-based gear tooth fault detection technique by the use of MED filter*, MSSP 21(2): 906-919 | MED 在齿轮 AR 模型中的应用 | 1.6 |
-| **Lei et al. (2013)** | *An improved kurtogram method for fault diagnosis... using WPT*, MSSP 35(1-2): 176-199 | 小波包改进 Kurtogram | 1.3 |
-| **Smith et al. (2019)** | *Optimal demodulation-band selection for envelope-based diagnostics: a comparative study...*, MSSP 134: 106303 | 最优解调频带选择对比 | 1.2 |
-| **Liu & Wang (2025)** | *CUSUM for autocorrelated data with measurement error* | 测量误差下的 CUSUM 改进 | 4.4.1 |
-| **Yuan et al. (2025)** | *Multisensor fault diagnosis via Markov chain and Evidence theory*, EAAI | 高冲突证据下的 D-S 融合 | 4.4.3 |
-| **Hanna et al. (GE)** | *Sideband Energy Ratio*, ADAPT.wind | SER 算法与工程应用 | 2.3.7 |
-| **NASA CR-2009-00039501** | *Gear Fault Detection Effectiveness* | NA4 开发背景与公式 | 2.3.3 |
+| **Antoni (2009)** | _Cyclostationarity by examples_, MSSP 23: 987-1036 | 循环平稳性教学性综述 | 1.5 |
+| **Endo & Randall (2007)** | _Enhancement of autoregressive model-based gear tooth fault detection technique by the use of MED filter_, MSSP 21(2): 906-919 | MED 在齿轮 AR 模型中的应用 | 1.6 |
+| **Lei et al. (2013)** | _An improved kurtogram method for fault diagnosis... using WPT_, MSSP 35(1-2): 176-199 | 小波包改进 Kurtogram | 1.3 |
+| **Smith et al. (2019)** | _Optimal demodulation-band selection for envelope-based diagnostics: a comparative study..._, MSSP 134: 106303 | 最优解调频带选择对比 | 1.2 |
+| **Liu & Wang (2025)** | _CUSUM for autocorrelated data with measurement error_ | 测量误差下的 CUSUM 改进 | 4.4.1 |
+| **Yuan et al. (2025)** | _Multisensor fault diagnosis via Markov chain and Evidence theory_, EAAI | 高冲突证据下的 D-S 融合 | 4.4.3 |
+| **Hanna et al. (GE)** | _Sideband Energy Ratio_, ADAPT.wind | SER 算法与工程应用 | 2.3.7 |
+| **NASA CR-2009-00039501** | _Gear Fault Detection Effectiveness_ | NA4 开发背景与公式 | 2.3.3 |
 
 ---
 
@@ -1046,7 +1250,7 @@ $$m(A) = \frac{\sum_{B\cap C=A} m_1(B)m_2(C)}{1-K}, \quad K = \sum_{B\cap C=\emp
 | 时域统计特征 | `diagnosis/features.py::compute_time_features` | ✅ 已实现 | Peak/RMS/Kurtosis/Crest + 滑动窗口 MAD/EWMA/CUSUM 批内趋势指标 |
 | IMF 能量 | `analyzer.py::compute_imf_energy` | ✅ 已实现 | 用频带能量近似 |
 | 规则诊断融合 | `analyzer.py::_rule_based_analyze` | ✅ 已实现 | 多特征加权融合 |
-| 神经网络预测 | `nn_predictor.py::predict` | 🔄 预留接口 | 未加载真实模型 |
+| 神经网络预测 | `app/services/nn_predictor.py::predict` | 🔄 预留接口 | 框架完整（预处理+加载+推理占位），未加载真实模型 |
 | 信号生成器 | `signal_generator.py` | ✅ 已实现 | 模拟正常/齿轮磨损/轴承故障/轴不对中 |
 | TSA（时域同步平均） | `diagnosis/gear/metrics.py::compute_tsa_residual_order` | ✅ 工程实现 | 无编码器时基于估计转频等角度重采样，输出 TSA/残差/差分信号 |
 | CPW（倒频谱预白化） | `diagnosis/preprocessing.py::cepstrum_pre_whitening` | ✅ 工程实现 | 支持轴频/啮合频率倒频谱编辑，配合 Kurtogram 包络 |
@@ -1060,6 +1264,11 @@ $$m(A) = \frac{\sum_{B\cap C=A} m_1(B)m_2(C)}{1-K}, \quad K = \sum_{B\cap C=\emp
 | VMD 分解 | `diagnosis/vmd_denoise.py` | ✅ 已实现 | 内存优化版，支持 IMF 筛选重构 |
 | CUSUM/EWMA 控制图 | `diagnosis/features.py::compute_time_features` | ⚠️ 批内实现 | 当前基于单批次滑动窗口，长期历史基线仍待接入数据库 |
 | D-S 证据融合 | — | ❌ 未实现 | 暂不强绑定远距离传感器，仅保留通道独立结果与弱融合 |
+| 行星箱窄带包络阶次分析 | `diagnosis/gear/planetary_demod.py::planetary_envelope_order_analysis` | ✅ 已实现 | Level 2核心；实测envelope_kurtosis区分力3.28×，SNR无区分力 |
+| VMD幅频联合解调 | `diagnosis/gear/planetary_demod.py::planetary_vmd_demod_analysis` | ✅ 已实现 | Level 3；幅值解调谱+频率解调谱；K≤5内存限制 |
+| 谱相关解调分析 (SC/SCoh) | `diagnosis/gear/planetary_demod.py::planetary_sc_scoh_analysis` | ✅ 已实现 | FFT分段估计谱相关密度+谱相干，循环频率范围0~5×mesh_freq，分段长度1024 |
+| MSB残余边频带分析 | — | ❌ 未实现 | 需先实现MSB基础模块 |
+| 连续振动分离 (CVS) | — | ❌ 未实现 | 需编码器或精确转速脉冲，当前硬件条件不支持 |
 
 ---
 

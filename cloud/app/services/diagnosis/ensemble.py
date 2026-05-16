@@ -199,12 +199,21 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
     # 但齿轮指标（SER/CAR/sideband/order_kurtosis）几乎全部标记为 critical。
     # 没有时域冲击证据时，齿轮指标的 critical_hits 只是旋转谐波的统计假象。
     # 齿轮专用证据阈值与 health_score.py 一致：
-    # kurtosis > 12 或 crest_factor > 15
+    # kurtosis > 12 或 crest_factor > 12（统一为12，与health_score.py一致）
     kurt = _as_float(time_features.get("kurtosis") if time_features else None, 3.0)
     crest = _as_float(time_features.get("crest_factor") if time_features else None, 5.0)
     GEAR_KURT_THRESHOLD = 12.0
-    GEAR_CREST_THRESHOLD = 15.0
+    GEAR_CREST_THRESHOLD = 12.0  # 与 health_score.py 统一
     impulse_context = kurt > GEAR_KURT_THRESHOLD or crest > GEAR_CREST_THRESHOLD
+
+    # TSA 残差峭度证据：区分力=3.31，行星箱最有效的补充指标
+    # TSA 消除同步啮合成分后残差峭度 > 2.5 时增加齿轮置信度
+    tsa_residual_kurt = 0.0
+    tsa_env_result = result.get("planetary_tsa_demod") or {}
+    if isinstance(tsa_env_result, dict) and "error" not in tsa_env_result:
+        tsa_residual_kurt = _as_float(tsa_env_result.get("residual_kurtosis"), 0.0)
+    TSA_RESIDUAL_KURT_THRESHOLD = 5.0  # 阈值2.5时健康误报34.4%(N1子集tsa_rk偏高)，提升至5.0(误报9.4%)
+    tsa_evidence = tsa_residual_kurt > TSA_RESIDUAL_KURT_THRESHOLD
 
     # 检查低频优势（旋转谐波主导时齿轮指标无效）
     rotation_dominant = False
@@ -225,6 +234,13 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
                 confidence = 0.6
             elif warning_hits == 1:
                 confidence = 0.35
+            elif tsa_evidence:
+                # kurt>12 但无频域指标时，TSA 残差峭度可作为补充证据
+                confidence = 0.35
+        elif tsa_evidence and not rotation_dominant:
+            # 无传统时域证据(kurt<12) 但 TSA 残差峭度 > 5.0
+            # 这捕捉了 kurt 与健康重叠(8~10)但 TSA 残差显著(>5.0)的故障
+            confidence = 0.35
         else:
             # 无时域冲击证据或旋转谐波主导：齿轮指标降权
             # 旋转谐波的边频带/SER/CAR 都会触发指标，但不是真实齿轮故障
@@ -243,6 +259,10 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
                 confidence = 0.3
             elif warning_hits >= 2:
                 confidence = 0.25
+            elif tsa_evidence:
+                confidence = 0.25
+        elif tsa_evidence and not rotation_dominant:
+            confidence = 0.25
         else:
             # 无时域证据时，CAR/order 统计指标不可靠
             confidence = 0.0
