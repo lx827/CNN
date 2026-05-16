@@ -22,8 +22,10 @@ from .gear import (
     compute_fm0,
     compute_fm4,
     compute_na4,
+    compute_nb4,
     compute_ser,
     compute_car,
+    msb_residual_sideband_analysis,
 )
 from .preprocessing import (
     wavelet_denoise,
@@ -36,6 +38,18 @@ from .features import (
     compute_envelope_features,
 )
 from .ensemble import run_research_ensemble
+from .fusion import (
+    dempster_shafer_fusion,
+    EvidenceFrame,
+    BPA,
+    dempster_combination,
+    murphy_average_combination,
+    DEFAULT_FAULT_TYPES,
+)
+from .trend_prediction import (
+    holt_winters_forecast,
+    kalman_smooth_health_scores,
+)
 
 __all__ = [
     "DiagnosisEngine",
@@ -49,8 +63,10 @@ __all__ = [
     "compute_fm0",
     "compute_fm4",
     "compute_na4",
+    "compute_nb4",
     "compute_ser",
     "compute_car",
+    "msb_residual_sideband_analysis",
     "wavelet_denoise",
     "cepstrum_pre_whitening",
     "minimum_entropy_deconvolution",
@@ -58,4 +74,14 @@ __all__ = [
     "compute_fft_features",
     "compute_envelope_features",
     "run_research_ensemble",
+    # D-S 证据融合
+    "dempster_shafer_fusion",
+    "EvidenceFrame",
+    "BPA",
+    "dempster_combination",
+    "murphy_average_combination",
+    "DEFAULT_FAULT_TYPES",
+    # 趋势预测
+    "holt_winters_forecast",
+    "kalman_smooth_health_scores",
 ]

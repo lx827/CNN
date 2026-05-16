@@ -4,17 +4,21 @@
 包含基于阶次谱和时域的高级齿轮诊断指标：
 - FM0 / FM0_order: 粗故障检测
 - FM4 / M6A / M8A: 局部故障高阶矩检测
+- NA4: 趋势型故障检测（损伤扩展追踪）
+- NB4: 包络域局部齿损坏
 - SER / SER_order: 边频带能量比
 - CAR: 倒频谱幅值比
 - analyze_sidebands_order: 基于阶次谱的边频带分析
 """
 import numpy as np
 from scipy.fft import rfft, rfftfreq
-from typing import Dict
+from scipy.signal import hilbert
+from typing import Dict, List
 
 from ..signal_utils import (
     prepare_signal,
     compute_fft_spectrum,
+    bandpass_filter,
     _band_energy,
     _order_band_energy,
 )
@@ -303,3 +307,163 @@ def compute_fm0_order(
     if harmonics_sum < 1e-12:
         return 0.0
     return float(pp / harmonics_sum)
+
+
+# ---------------------------------------------------------------------------
+# NA4 / NB4 — 趋势型齿轮故障检测指标
+# ---------------------------------------------------------------------------
+
+
+def compute_na4(
+    residual_signal: np.ndarray,
+    historical_variances: List[float],
+) -> float:
+    """
+    NA4 — 趋势型齿轮故障检测（损伤扩展追踪）
+
+    NA4 是准归一化峭度指标，分母使用历史批次残余信号方差的均值，
+    使得随着损伤扩展 NA4 单调上升，而 FM4 因分母随损伤同步增长而无法单调。
+
+    公式：
+        NA4 = mean((r - r_mean)^4) / (mean(historical_variances))^2
+
+    当无历史数据（historical_variances 为空）时退化为 FM4：
+        NA4 ≈ FM4 = mean((r - r_mean)^4) / (current_variance)^2
+
+    物理意义：
+    - 健康齿轮 NA4 ≈ 3（高斯基准），随局部损伤扩展单调增大
+    - 分母固定为历史均值，即使当前残余方差因损伤增大，NA4 仍持续上升
+    - 适用于齿轮损伤趋势监测和预防性维护决策
+
+    Args:
+        residual_signal: TSA 残余信号（当前批次）
+        historical_variances: 历史批次残余信号方差列表（来自 diagnosis 表）
+                               每个元素为一个 float 方差值，不是原始信号
+
+    Returns:
+        NA4 值（float），健康状态约 3，损伤状态 > 3 且趋势上升
+    """
+    r = np.array(residual_signal, dtype=np.float64)
+    N = len(r)
+    if N < 4:
+        return 0.0
+
+    # 当前残余信号的四阶矩（峭度的分子）
+    r_mean = np.mean(r)
+    numerator = np.mean((r - r_mean) ** 4)
+
+    # 当前方差（用于无历史数据时的退化计算）
+    current_var = np.mean((r - r_mean) ** 2)
+
+    # 分母：历史方差均值，或退化使用当前方差
+    if historical_variances and len(historical_variances) > 0:
+        # 过滤掉无效值（零或负数）
+        valid_vars = [v for v in historical_variances if v > 0]
+        if valid_vars:
+            denom_var = np.mean(valid_vars)
+        else:
+            # 所有历史方差无效，退化为 FM4
+            denom_var = current_var
+    else:
+        # 无历史数据，退化为 FM4
+        denom_var = current_var
+
+    denominator = denom_var ** 2
+    if denominator < 1e-12:
+        return 0.0
+
+    return float(numerator / denominator)
+
+
+def compute_nb4(
+    residual_signal: np.ndarray,
+    fs: float,
+    mesh_freq: float,
+    historical_variances: List[float],
+) -> float:
+    """
+    NB4 — 包络域局部齿损坏检测
+
+    NB4 是包络域的准归一化峭度指标，用于检测由局部齿损坏引起的瞬态负载波动。
+    与 NA4 类似使用历史方差作为分母，但作用于包络信号而非残余信号本身。
+
+    计算步骤：
+    1. 对残余信号在 mesh_freq ± 10% 带宽内做带通滤波（最低截止 50 Hz）
+    2. 对滤波信号做 Hilbert 变换提取包络
+    3. NB4 = mean((E - E_mean)^4) / (mean(historical_variances))^2
+
+    当无历史数据时退化为包络峭度：
+        NB4 ≈ mean((E - E_mean)^4) / (current_envelope_variance)^2
+
+    物理意义：
+    - 局部齿损坏（点蚀、裂纹）在啮合频率附近产生幅值调制
+    - 包络信号捕捉该调制模式，NB4 对局部冲击敏感
+    - 分母使用历史方差使 NB4 具有趋势追踪能力
+    - 健康齿轮 NB4 ≈ 3，损伤状态 > 3 且趋势上升
+
+    Args:
+        residual_signal: TSA 残余信号
+        fs: 采样率 Hz
+        mesh_freq: 啮合频率 Hz（带通滤波中心频率）
+        historical_variances: 历史批次包络信号方差列表（来自 diagnosis 表）
+                               每个元素为一个 float 方差值
+
+    Returns:
+        NB4 值（float），健康状态约 3，损伤状态 > 3 且趋势上升
+    """
+    r = np.array(residual_signal, dtype=np.float64)
+    N = len(r)
+    if N < 4 or fs <= 0 or mesh_freq <= 0:
+        return 0.0
+
+    # --- 带通滤波：mesh_freq ± 10% 带宽，最低截止 50 Hz ---
+    bandwidth_ratio = 0.10  # 10% 带宽
+    f_low = mesh_freq * (1.0 - bandwidth_ratio)
+    f_high = mesh_freq * (1.0 + bandwidth_ratio)
+
+    # 最低截止频率 50 Hz（避免直流/低频噪声干扰）
+    f_low = max(50.0, f_low)
+    # 最高截止不超过奈奎斯特频率
+    f_high = min(fs / 2.0 - 10.0, f_high)
+
+    # 如果低截止超过高截止（mesh_freq 极低的情况），调整带宽
+    if f_low >= f_high:
+        f_low = max(50.0, mesh_freq - 50.0)
+        f_high = min(fs / 2.0 - 10.0, mesh_freq + 50.0)
+        if f_low >= f_high:
+            # mesh_freq 太低或 fs 太低，无法带通滤波，使用原始信号
+            filtered = r
+        else:
+            filtered = bandpass_filter(r, fs, f_low, f_high)
+    else:
+        filtered = bandpass_filter(r, fs, f_low, f_high)
+
+    # --- Hilbert 包络提取 ---
+    envelope = np.abs(hilbert(filtered))
+    N_env = len(envelope)
+    if N_env < 4:
+        return 0.0
+
+    # --- NB4 计算 ---
+    e_mean = np.mean(envelope)
+    numerator = np.mean((envelope - e_mean) ** 4)
+
+    # 当前包络方差（用于无历史数据时的退化计算）
+    current_env_var = np.mean((envelope - e_mean) ** 2)
+
+    # 分母：历史方差均值，或退化使用当前包络方差
+    if historical_variances and len(historical_variances) > 0:
+        valid_vars = [v for v in historical_variances if v > 0]
+        if valid_vars:
+            denom_var = np.mean(valid_vars)
+        else:
+            denom_var = current_env_var
+    else:
+        # 无历史数据，退化为包络峭度
+        denom_var = current_env_var
+
+    denominator = denom_var ** 2
+    if denominator < 1e-12:
+        return 0.0
+
+    return float(numerator / denominator)

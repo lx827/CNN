@@ -5,17 +5,17 @@
 - FM0: 粗故障检测（齿断裂/严重磨损）
 - FM4: 局部故障检测（单/双齿点蚀/裂纹）
 - NA4: 趋势型故障检测（损伤扩展追踪）
-- NB4: 局部齿损坏（包络域）
+- NB4: 包络域局部齿损坏
 - M6A / M8A: 表面损伤高阶矩
 - ER: 能量比（多齿磨损）
 - SER: 边频带能量比（核心频域指标）
 - CAR: 倒频谱幅值比
+- MSB: 调制信号双谱残余边频带分析
 - 边频带分析
 """
 import numpy as np
 from scipy import stats
 from scipy.fft import rfft, rfftfreq
-from scipy.signal import hilbert
 from typing import Dict, List, Optional, Tuple
 
 from ..signal_utils import prepare_signal, compute_fft_spectrum, _band_energy
@@ -25,10 +25,13 @@ from .metrics import (
     compute_tsa_residual_order,
     compute_car,
     compute_fm4,
+    compute_na4,
+    compute_nb4,
     compute_m6a,
     compute_m8a,
     compute_ser_order,
 )
+from .msb import msb_residual_sideband_analysis
 from .planetary_demod import (
     planetary_envelope_order_analysis,
     planetary_fullband_envelope_order_analysis,
@@ -47,11 +50,13 @@ __all__ = [
     "compute_tsa_residual_order",
     "compute_fm4",
     "compute_na4",
+    "compute_nb4",
     "compute_ser",
     "compute_ser_order",
     "compute_car",
     "compute_m6a",
     "compute_m8a",
+    "msb_residual_sideband_analysis",
     "analyze_sidebands",
     "analyze_sidebands_order",
     "_evaluate_gear_faults",
@@ -91,92 +96,6 @@ def compute_fm0(
     if harmonics_sum < 1e-12:
         return 0.0
     return float(pp / harmonics_sum)
-
-
-def compute_na4(
-    residual_signal: np.ndarray,
-    historical_residuals: List[np.ndarray],
-) -> float:
-    """
-    NA4 — 趋势型故障检测（损伤扩展追踪）
-
-    准归一化峭度，分母为历史平均方差，随损伤扩展单调上升。
-
-    Args:
-        residual_signal: 当前残余信号
-        historical_residuals: 历史残余信号列表（至少1条）
-    """
-    r = np.array(residual_signal, dtype=np.float64)
-    N = len(r)
-    if N < 4:
-        return 0.0
-
-    r_mean = np.mean(r)
-    numerator = (1.0 / N) * np.sum((r - r_mean) ** 4)
-
-    if not historical_residuals:
-        denominator = ((1.0 / N) * np.sum((r - r_mean) ** 2)) ** 2
-        return float(numerator / denominator) if denominator > 1e-12 else 0.0
-
-    variances = []
-    for hist in historical_residuals:
-        hist = np.array(hist, dtype=np.float64)
-        if len(hist) > 0:
-            hist_mean = np.mean(hist)
-            variances.append((1.0 / len(hist)) * np.sum((hist - hist_mean) ** 2))
-
-    if not variances:
-        return 0.0
-
-    denom_mean = np.mean(variances)
-    return float(numerator / (denom_mean ** 2)) if denom_mean > 1e-12 else 0.0
-
-
-def compute_nb4(
-    residual_signal: np.ndarray,
-    fs: float,
-    historical_envelopes: Optional[List[np.ndarray]] = None,
-    band_center: Optional[float] = None,
-    band_width: float = 500.0,
-) -> float:
-    """
-    NB4 — 局部齿损坏（包络域）
-
-    检测由局部齿损坏引起的瞬态负载波动（反映在包络上）。
-    """
-    r = np.array(residual_signal, dtype=np.float64)
-
-    # 带通滤波 + 包络
-    if band_center is not None:
-        from ..signal_utils import bandpass_filter
-        filtered = bandpass_filter(r, fs, max(10, band_center - band_width / 2), min(fs / 2 - 10, band_center + band_width / 2))
-    else:
-        filtered = r
-
-    envelope = np.abs(hilbert(filtered))
-    N = len(envelope)
-    if N < 4:
-        return 0.0
-
-    e_mean = np.mean(envelope)
-    numerator = (1.0 / N) * np.sum((envelope - e_mean) ** 4)
-
-    if not historical_envelopes:
-        denominator = ((1.0 / N) * np.sum((envelope - e_mean) ** 2)) ** 2
-        return float(numerator / denominator) if denominator > 1e-12 else 0.0
-
-    variances = []
-    for hist in historical_envelopes:
-        hist = np.array(hist, dtype=np.float64)
-        if len(hist) > 0:
-            hist_mean = np.mean(hist)
-            variances.append((1.0 / len(hist)) * np.sum((hist - hist_mean) ** 2))
-
-    if not variances:
-        return 0.0
-
-    denom_mean = np.mean(variances)
-    return float(numerator / (denom_mean ** 2)) if denom_mean > 1e-12 else 0.0
 
 
 def compute_er(
