@@ -44,6 +44,9 @@ DEDUCTION_WEIGHT_MAP = {
     "gear_na4_trend_critical": "na4_nb4", "gear_na4_trend_warning": "na4_nb4",
     "gear_car_critical": "car", "gear_car_warning": "car",
     "gear_order_stat_critical": "car", "gear_order_stat_warning": "car",
+    # 小波包能量熵
+    "gear_wp_entropy_critical": "wp_entropy", "gear_wp_entropy_warning": "wp_entropy",
+    "gear_mesh_concentration_critical": "wp_entropy", "gear_mesh_concentration_warning": "wp_entropy",
     # D-S 冲突
     "ds_conflict_penalty": "ds_conflict",
 }

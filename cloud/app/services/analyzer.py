@@ -157,10 +157,12 @@ def analyze_device(
 
         worst_status = max(
             ([r["status"] for _, r in channel_results]),
-            key=lambda s: {"normal": 0, "warning": 1, "fault": 2}.get(s, 0)
+            key=lambda s: {"normal": 0, "warning": 1, "fault": 2, "critical": 3}.get(s, 0)
         )
-        if worst_status == "fault" and avg_health >= 75:
+        if worst_status in ("fault", "critical") and avg_health >= 75:
             device_status = "warning"
+        elif worst_status == "critical":
+            device_status = "critical"
         elif device_health >= 85:
             device_status = "normal"
         elif device_health >= 60:

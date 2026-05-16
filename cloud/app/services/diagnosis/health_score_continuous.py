@@ -398,4 +398,27 @@ def compute_continuous_deductions(
                 else:
                     deductions.append(("gear_na4_trend_warning", round(na4_ded, 2)))
 
+    # ═══════ 小波包能量熵扣分（齿轮频带能量重分布） ═══════
+    # normalized_entropy 过高 → 频带能量异常集中（故障指示）
+    # mesh_band_concentration 过高 → 啮合频带能量异常集中
+    wp_entropy = gear_result.get("wavelet_packet_entropy")
+    if isinstance(wp_entropy, dict):
+        wp_ind = gear_ind.get("wavelet_packet_entropy") if isinstance(gear_ind.get("wavelet_packet_entropy"), dict) else {}
+        mesh_conc_ind = gear_ind.get("mesh_band_concentration") if isinstance(gear_ind.get("mesh_band_concentration"), dict) else {}
+        # 门控：齿轮冲击证据 + 无旋转谐波主导
+        wp_gate = min(1.0, gear_impulse if has_gear else gear_stat_impulse) if not rotation_dominant else 0.0
+        if wp_gate > 0.1:
+            if wp_ind.get("critical"):
+                wp_ded = 8.0 * wp_gate
+                deductions.append(("gear_wp_entropy_critical", round(wp_ded, 2)))
+            elif wp_ind.get("warning"):
+                wp_ded = 4.0 * wp_gate
+                deductions.append(("gear_wp_entropy_warning", round(wp_ded, 2)))
+            if mesh_conc_ind.get("critical"):
+                mc_ded = 6.0 * wp_gate
+                deductions.append(("gear_mesh_concentration_critical", round(mc_ded, 2)))
+            elif mesh_conc_ind.get("warning"):
+                mc_ded = 3.0 * wp_gate
+                deductions.append(("gear_mesh_concentration_warning", round(mc_ded, 2)))
+
     return deductions

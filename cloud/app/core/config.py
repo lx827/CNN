@@ -90,6 +90,7 @@ DIAGNOSIS_WEIGHTS = {
     # 特殊指标权重
     "na4_nb4": float(os.getenv("DW_NA4_NB4", "1.0")),
     "scoh_evidence": float(os.getenv("DW_SCOH_EVIDENCE", "0.8")),
+    "wp_entropy": float(os.getenv("DW_WP_ENTROPY", "0.7")),
     "ds_conflict": float(os.getenv("DW_DS_CONFLICT", "8")),
     # 融合权重
     "worst_channel": float(os.getenv("DW_WORST_CHANNEL", "0.35")),

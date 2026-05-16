@@ -337,4 +337,40 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
                 "critical": order_kurt > 8.0,
             }
 
+    # 小波包能量熵（齿轮频带能量重分布指标）
+    wp_entropy = gear_result.get("wavelet_packet_entropy")
+    if isinstance(wp_entropy, dict):
+        norm_entropy = wp_entropy.get("normalized_entropy", 0.0)
+        mesh_conc = wp_entropy.get("mesh_band_concentration", 0.0)
+        if norm_entropy is not None:
+            if is_planetary:
+                # 行星箱能量熵天然偏低（啮合频率能量集中），阈值放宽
+                indicators["wavelet_packet_entropy"] = {
+                    "value": round(norm_entropy, 4),
+                    "warning": norm_entropy > 0.85,
+                    "critical": norm_entropy > 0.92,
+                }
+            else:
+                # 定轴箱：正常频带能量分布较均匀(normalized_entropy≈0.7~0.85)
+                # 故障时啮合频带能量集中→normalized_entropy降低，或某频带异常集中→升高
+                indicators["wavelet_packet_entropy"] = {
+                    "value": round(norm_entropy, 4),
+                    "warning": norm_entropy > 0.9,
+                    "critical": norm_entropy > 0.95,
+                }
+        # 啮合频带能量集中度（mesh_band_concentration）
+        if mesh_conc is not None:
+            if is_planetary:
+                indicators["mesh_band_concentration"] = {
+                    "value": round(mesh_conc, 6),
+                    "warning": mesh_conc > 0.6,
+                    "critical": mesh_conc > 0.75,
+                }
+            else:
+                indicators["mesh_band_concentration"] = {
+                    "value": round(mesh_conc, 6),
+                    "warning": mesh_conc > 0.4,
+                    "critical": mesh_conc > 0.6,
+                }
+
     return indicators
