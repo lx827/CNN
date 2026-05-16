@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 from app.database import get_db
-from app.models import SensorData, Device
+from app.models import SensorData, Device, Diagnosis
 from app.services.diagnosis import (
     DiagnosisEngine, DenoiseMethod, DiagnosisStrategy,
     BearingMethod, GearMethod,
@@ -14,6 +14,43 @@ from .gear import _extract_device_param
 from .diagnosis_ops import _sanitize_for_json
 
 logger = logging.getLogger(__name__)
+
+
+def _save_research_diagnosis(db: Session, device_id: str, batch_index: int,
+                             channel: int, denoise: str, result: dict):
+    """将研究诊断结果写入 diagnosis 表缓存，供 DataView 等模块读取。"""
+    try:
+        diag = db.query(Diagnosis).filter(
+            Diagnosis.device_id == device_id,
+            Diagnosis.batch_index == batch_index,
+            Diagnosis.channel == channel,
+            Diagnosis.denoise_method == denoise,
+        ).first()
+
+        health_score = result.get("health_score")
+        status = result.get("status", "normal")
+
+        if diag:
+            diag.health_score = health_score
+            diag.status = status
+            diag.full_analysis = _sanitize_for_json(result)
+            diag.analyzed_at = __import__("datetime").datetime.utcnow()
+        else:
+            diag = Diagnosis(
+                device_id=device_id,
+                batch_index=batch_index,
+                channel=channel,
+                denoise_method=denoise,
+                health_score=health_score,
+                status=status,
+                full_analysis=_sanitize_for_json(result),
+                analyzed_at=__import__("datetime").datetime.utcnow(),
+            )
+            db.add(diag)
+        db.commit()
+    except Exception as exc:
+        logger.warning("保存研究诊断缓存失败: %s", exc)
+        db.rollback()
 
 # ── 分析方法元数据（名称、分类、说明） ──
 METHOD_INFO = {
@@ -174,6 +211,8 @@ async def get_channel_method_analysis(
                 "denoise": denoise,
                 **result,
             }
+            # 写入数据库缓存，供 DataView 读取
+            _save_research_diagnosis(db, device_id, batch_index, channel, denoise, result)
             return {"code": 200, "data": _sanitize_for_json(response_data)}
 
         # ── 运行单个轴承方法 ──
@@ -372,6 +411,8 @@ async def get_channel_research_analysis(
             "denoise": denoise,
             **result,
         }
+        # 写入数据库缓存，供 DataView 读取
+        _save_research_diagnosis(db, device_id, batch_index, channel, denoise, result)
         return {"code": 200, "data": _sanitize_for_json(response_data)}
     except Exception as exc:
         logger.error("research analysis failed: %s", exc, exc_info=True)

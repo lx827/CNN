@@ -43,6 +43,7 @@
           @reanalyze="onReanalyze"
           @reanalyze-all="onReanalyzeAll"
           @delete-batch="onDeleteBatch(selectedDevice.device_id, selectedBatch.batch_index)"
+          @goto-research="gotoResearchDiagnosis"
         />
       </template>
 
@@ -454,6 +455,14 @@
           </div>
           <div v-else class="placeholder">
             <el-empty description="点击按钮运行全算法故障诊断对比分析" :image-size="80" />
+            <div v-if="faultFreqAnnotations" style="margin-top: 8px; text-align: center;">
+              <el-text type="success" size="small">
+                💡 已有诊断缓存，特征频率已标注在频谱图上
+              </el-text>
+              <el-link type="primary" size="small" style="margin-left: 8px;" @click="gotoResearchDiagnosis">
+                查看高级诊断详情 →
+              </el-link>
+            </div>
           </div>
         </el-col>
       </el-row>
@@ -703,6 +712,9 @@ import {
 } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import DiagnosisDetail from '../components/DiagnosisDetail.vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const route = useRoute()
 const loading = ref(false)
@@ -792,6 +804,9 @@ const fullAnalysisDenoise = ref('none')
 // 频域/阶次诊断明细（手动加载）
 const showDiagnosisDetail = ref(false)
 const loadingDiagnosisDetail = ref(false)
+
+// 特征频率标注（从诊断缓存提取，用于 FFT/包络谱 markLine）
+const faultFreqAnnotations = ref(null)
 
 // 统计指标加窗参数
 const statsWindowSize = ref(1024)
@@ -1033,7 +1048,7 @@ const loadSavedRotFreq = async () => {
     const res = await getChannelDiagnosis(
       selectedDevice.value.device_id,
       selectedBatch.value.batch_index,
-      1  // 查通道1，若没有则回退到批次级诊断记录
+      selectedChannel.value  // 使用当前选中通道
     )
     const d = res.data
     if (d) {
@@ -1045,10 +1060,139 @@ const loadSavedRotFreq = async () => {
           selectedBatch.value.order_analysis = d.order_analysis
         }
       }
+      // 提取特征频率标注信息（轴承特征频率 + 齿轮啮合频率）
+      extractFaultFreqAnnotations(d)
     }
   } catch (e) {
     // 无缓存数据时不报错
   }
+}
+
+/** 从诊断结果提取特征频率列表，用于 FFT/包络谱的 markLine 标注 */
+const extractFaultFreqAnnotations = (diagData) => {
+  const annotations = []
+  // 从 engine_result 或 full_analysis 中提取
+  const engineResult = diagData.engine_result || diagData.full_analysis
+  if (!engineResult) {
+    faultFreqAnnotations.value = null
+    return
+  }
+
+  // 轴承特征频率（从 fault_indicators 或 bearing_results 中提取）
+  const bearingSource = engineResult.bearing?.fault_indicators
+    || engineResult.bearing_results?.envelope?.fault_indicators
+  if (bearingSource) {
+    for (const [name, info] of Object.entries(bearingSource)) {
+      if (info && typeof info === 'object') {
+        const freq = info.detected_hz ?? info.theory_hz
+        if (freq && freq > 0) {
+          annotations.push({
+            freq,
+            name,
+            detected: !!info.significant,
+            type: 'bearing',
+          })
+        }
+      }
+    }
+  }
+
+  // 齿轮特征频率
+  const gearSource = engineResult.gear?.fault_indicators
+    || Object.values(engineResult.gear_results || {})[0]?.fault_indicators
+  if (gearSource) {
+    for (const [name, info] of Object.entries(gearSource)) {
+      if (info && typeof info === 'object') {
+        const freq = info.frequency_hz ?? info.detected_hz ?? info.theory_hz
+        if (freq && freq > 0) {
+          annotations.push({
+            freq,
+            name,
+            detected: !!info.critical || !!info.significant,
+            type: 'gear',
+          })
+        }
+      }
+    }
+  }
+
+  // 啮合频率（从齿轮结果中直接提取）
+  for (const [, gResult] of Object.entries(engineResult.gear_results || {})) {
+    if (gResult.mesh_freq_hz && gResult.mesh_freq_hz > 0) {
+      annotations.push({
+        freq: gResult.mesh_freq_hz,
+        name: '啮合频率',
+        detected: false,
+        type: 'gear_mesh',
+      })
+    }
+  }
+
+  // 转频（如果有的话）
+  const rotFreq = diagData.rot_freq ?? engineResult.rot_freq_hz
+  if (rotFreq && rotFreq > 0) {
+    annotations.push({
+      freq: rotFreq,
+      name: '1×fr',
+      detected: false,
+      type: 'rotation',
+    })
+    annotations.push({
+      freq: rotFreq * 2,
+      name: '2×fr',
+      detected: false,
+      type: 'rotation',
+    })
+  }
+
+  faultFreqAnnotations.value = annotations.length > 0 ? annotations : null
+}
+
+/** 将特征频率标注叠加到 ECharts option 的 markLine 上 */
+const addFreqAnnotationsToOption = (option, freqData) => {
+  if (!faultFreqAnnotations.value || !freqData || freqData.length === 0) return option
+
+  // category 轴需要换算频率到索引
+  const freqStep = freqData.length > 1 ? freqData[1] - freqData[0] : 1
+  const markLineData = []
+
+  for (const ann of faultFreqAnnotations.value) {
+    // 检查频率是否在图表范围内
+    const maxF = parseFloat(freqData[freqData.length - 1])
+    if (ann.freq > maxF) continue
+
+    // 对 category 轴换算为索引位置
+    const idx = Math.round(ann.freq / freqStep)
+    if (idx < 0 || idx >= freqData.length) continue
+
+    const isDetected = ann.detected
+    const labelPrefix = ann.type === 'bearing' ? '🧩' : ann.type === 'gear' ? '⚙' : ann.type === 'gear_mesh' ? '🔧' : '🔄'
+
+    markLineData.push({
+      xAxis: idx,
+      name: `${labelPrefix} ${ann.name}(${ann.freq.toFixed(1)}Hz)`,
+      lineStyle: {
+        type: isDetected ? 'solid' : 'dashed',
+        color: isDetected ? '#F5222D' : ann.type === 'bearing' ? '#165DFF' : ann.type === 'gear' ? '#FAAD14' : '#999',
+        width: isDetected ? 2 : 1,
+      },
+    })
+  }
+
+  if (markLineData.length === 0) return option
+
+  // 添加或合并 markLine
+  const series = option.series?.[0] || {}
+  const existingMarkLine = series.markLine?.data || []
+  series.markLine = {
+    silent: true,
+    symbol: 'none',
+    lineStyle: { type: 'dashed', color: '#999' },
+    data: [...existingMarkLine, ...markLineData],
+    label: { formatter: '{b}', position: 'insideEndTop', fontSize: 10 },
+  }
+  option.series[0] = series
+  return option
 }
 
 const resetComputedState = () => {
@@ -1187,6 +1331,8 @@ const computeFFT = async () => {
         lineStyle: { width: 1.5, color: '#165DFF' }
       }]
     }
+    // 叠加特征频率标注
+    addFreqAnnotationsToOption(fftOption.value, d.fft_freq)
   } catch (e) {
     console.error('FFT 计算失败:', e)
     ElMessage.error('FFT 计算失败')
@@ -1304,6 +1450,8 @@ const computeEnvelope = async () => {
         lineStyle: { width: 1.5, color: '#FAAD14' }
       }]
     }
+    // 叠加特征频率标注（包络谱是轴承诊断核心视图，标注尤为重要）
+    addFreqAnnotationsToOption(envelopeOption.value, d.envelope_freq)
   } catch (e) {
     console.error('包络谱计算失败:', e)
     ElMessage.error('包络谱计算失败: ' + (e.response?.data?.detail || e.message))
@@ -1521,6 +1669,8 @@ const computeFullAnalysis = async () => {
       if (d && d.bearing_results && d.gear_results) {
         fullAnalysisData.value = d
         computedFullAnalysis.value = true
+        // 从缓存数据提取特征频率标注
+        extractFaultFreqAnnotations(d)
         return
       }
     } catch (e) {
@@ -1543,6 +1693,8 @@ const computeFullAnalysis = async () => {
     if (!d) return
     fullAnalysisData.value = d
     computedFullAnalysis.value = true
+    // 从实时计算结果提取特征频率标注
+    extractFaultFreqAnnotations(d)
   } catch (e) {
     console.error('全算法诊断失败:', e)
     ElMessage.error('全算法诊断失败: ' + (e.response?.data?.detail || e.message))
@@ -1802,6 +1954,19 @@ const autoSelectFromQuery = () => {
   if (!batch) return
 
   selectBatch(device, batch)
+}
+
+// 跳转到高级诊断页面，携带当前设备/批次/通道参数
+const gotoResearchDiagnosis = () => {
+  if (!selectedDevice.value || !selectedBatch.value) return
+  router.push({
+    path: '/research-diagnosis',
+    query: {
+      device_id: selectedDevice.value.device_id,
+      batch_index: selectedBatch.value.batch_index,
+      channel: selectedChannel.value,
+    }
+  })
 }
 
 onMounted(async () => {

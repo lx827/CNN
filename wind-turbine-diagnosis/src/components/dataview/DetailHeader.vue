@@ -71,12 +71,16 @@
       <el-button type="danger" size="small" style="margin-left: 8px" @click="$emit('delete-batch')">
         <el-icon><Delete /></el-icon> 删除此批次
       </el-button>
+      <el-button type="success" size="small" style="margin-left: 8px" @click="$emit('goto-research')">
+        <el-icon><Cpu /></el-icon> 高级诊断
+      </el-button>
     </div>
   </div>
 </template>
 
 <script setup>
 import { getStatusText, getStatusType } from '../../utils/status'
+import { Cpu } from '@element-plus/icons-vue'
 
 const props = defineProps({
   device: { type: Object, default: null },
@@ -99,6 +103,7 @@ const emit = defineEmits([
   'reanalyze',
   'reanalyze-all',
   'delete-batch',
+  'goto-research',
 ])
 
 const getChannelName = (chNum) => {

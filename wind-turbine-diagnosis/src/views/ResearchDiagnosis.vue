@@ -46,6 +46,9 @@
         <el-icon><Cpu /></el-icon>
         <span>{{ runMode === 'single' ? '运行方法' : runMode === 'ensemble' ? '集成诊断' : '运行全部' }}</span>
       </el-button>
+      <el-button type="default" @click="gotoDataView">
+        <el-icon><DataLine /></el-icon> 查看数据
+      </el-button>
     </div>
 
     <!-- 方法说明提示 -->
@@ -264,9 +267,12 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Cpu } from '@element-plus/icons-vue'
+import { Cpu, DataLine } from '@element-plus/icons-vue'
+import { useRoute, useRouter } from 'vue-router'
 import { getAllDeviceData, getMethodInfo, getChannelMethodAnalysis, getChannelResearchAnalysis } from '../api'
 
+const route = useRoute()
+const router = useRouter()
 const devices = ref([])
 const selectedDeviceId = ref('')
 const selectedBatchIndex = ref(null)
@@ -382,7 +388,27 @@ watch(runMode, () => { result.value = null })
 const loadDevices = async () => {
   const res = await getAllDeviceData()
   devices.value = res.data || []
-  if (devices.value.length > 0 && !selectedDeviceId.value) {
+  // 从路由 query 参数预选设备/批次/通道（联动跳转）
+  const qDevice = route.query.device_id
+  const qBatch = route.query.batch_index
+  const qChannel = route.query.channel
+  if (qDevice && devices.value.length > 0) {
+    selectedDeviceId.value = qDevice
+    const dev = devices.value.find(d => d.device_id === qDevice)
+    if (dev) {
+      const batch = dev.batches?.find(b => String(b.batch_index) === String(qBatch))
+      if (batch) {
+        selectedBatchIndex.value = batch.batch_index
+      }
+      if (qChannel) {
+        const ch = parseInt(qChannel)
+        const count = dev.channel_count || 3
+        if (ch >= 1 && ch <= count) {
+          selectedChannel.value = ch
+        }
+      }
+    }
+  } else if (devices.value.length > 0 && !selectedDeviceId.value) {
     selectedDeviceId.value = devices.value[0].device_id
   }
 }
@@ -487,6 +513,18 @@ onMounted(() => {
   loadDevices()
   loadMethodInfo()
 })
+
+// 跳转到数据查看页面，携带当前设备/批次参数
+const gotoDataView = () => {
+  if (!selectedDeviceId.value || selectedBatchIndex.value == null) return
+  router.push({
+    path: '/data',
+    query: {
+      device_id: selectedDeviceId.value,
+      batch_index: selectedBatchIndex.value,
+    }
+  })
+}
 </script>
 
 <style scoped>
