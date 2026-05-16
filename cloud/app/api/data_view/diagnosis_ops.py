@@ -78,7 +78,7 @@ def get_channel_diagnosis(
     device_id: str,
     batch_index: int,
     channel: int,
-    denoise_method: Optional[str] = Query(default=None, description="去噪方法过滤: none/wavelet/vmd/wavelet_vmd/wavelet_lms"),
+    denoise_method: Optional[str] = Query(default=None, description="去噪方法过滤: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol"),
     db: Session = Depends(get_db)
 ):
     """
