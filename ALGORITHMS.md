@@ -1258,17 +1258,19 @@ $$m(A) = \frac{\sum_{B\cap C=A} m_1(B)m_2(C)}{1-K}, \quad K = \sum_{B\cap C=\emp
 | TEO 包络 | `diagnosis/bearing.py::teager_envelope_analysis` | ✅ 工程实现 | Teager 能量算子增强弱冲击，再接 Kurtogram 包络 |
 | 自适应谱峭度重加权包络 | `diagnosis/bearing.py::spectral_kurtosis_envelope_analysis` | ✅ 工程近似 | 谱峭度 + 冲击度 + 局部 SNR 联合选带 |
 | 多算法集成诊断 | `diagnosis/ensemble.py::run_research_ensemble` | ✅ 工程实现 | 后台 runtime 投票；网页端支持 balanced/exhaustive 手动重算法 |
-| FM0/FM4/NA4/NB4 | `diagnosis/gear/metrics.py` | ⚠️ 部分实现 | FM0/FM4/M6A/M8A 已接 TSA/残差；NA4/NB4 需历史基线数据 |
+| FM0/FM4/NA4/NB4 | `diagnosis/gear/metrics.py` | ✅ 已实现 | FM0/FM4/M6A/M8A/NA4/NB4 已接 TSA/残差；NA4/NB4 无历史时退化为 FM4 |
 | SER（边频带能量比） | `diagnosis/gear/metrics.py::compute_ser_order` | ✅ 已实现 | 基于阶次谱计算，与阶次页面一致 |
 | 小波阈值去噪 | `diagnosis/preprocessing.py::wavelet_denoise` | ✅ 已实现 | db8 默认，支持 soft/hard/improved 阈值 |
 | VMD 分解 | `diagnosis/vmd_denoise.py` | ✅ 已实现 | 内存优化版，支持 IMF 筛选重构 |
-| CUSUM/EWMA 控制图 | `diagnosis/features.py::compute_time_features` | ⚠️ 批内实现 | 当前基于单批次滑动窗口，长期历史基线仍待接入数据库 |
-| D-S 证据融合 | — | ❌ 未实现 | 暂不强绑定远距离传感器，仅保留通道独立结果与弱融合 |
+| CUSUM/EWMA 控制图 | `diagnosis/features.py::compute_time_features` | ✅ 批内实现 | 当前基于单批次滑动窗口，长期历史基线仍待接入数据库 |
+| D-S 证据融合 | `diagnosis/fusion/ds_fusion.py::dempster_shafer_fusion` | ✅ 已实现 | 已集成到 ensemble.py 多算法融合流程，高冲突(K>0.8)自动切换 Murphy 平均法 |
 | 行星箱窄带包络阶次分析 | `diagnosis/gear/planetary_demod.py::planetary_envelope_order_analysis` | ✅ 已实现 | Level 2核心；实测envelope_kurtosis区分力3.28×，SNR无区分力 |
 | VMD幅频联合解调 | `diagnosis/gear/planetary_demod.py::planetary_vmd_demod_analysis` | ✅ 已实现 | Level 3；幅值解调谱+频率解调谱；K≤5内存限制 |
 | 谱相关解调分析 (SC/SCoh) | `diagnosis/gear/planetary_demod.py::planetary_sc_scoh_analysis` | ✅ 已实现 | FFT分段估计谱相关密度+谱相干，循环频率范围0~5×mesh_freq，分段长度1024 |
-| MSB残余边频带分析 | — | ❌ 未实现 | 需先实现MSB基础模块 |
-| 连续振动分离 (CVS) | — | ❌ 未实现 | 需编码器或精确转速脉冲，当前硬件条件不支持 |
+| MSB残余边频带分析 | `diagnosis/gear/msb.py::msb_residual_sideband_analysis` | ✅ 已实现 | 分段 FFT 估计 MSB 三阶谱 + MSB-SE 切片 + 残余边频带比 |
+| 连续振动分离+MED (CVS+MED) | `diagnosis/gear/planetary_demod.py::planetary_cvs_med_analysis` | ✅ 已实现 | 利用行星运动周期性分离单个行星轮啮合段 → MED 增强 → 包络分析 |
+| 高级诊断独立方法选择 API | `api/data_view/research.py::get_channel_method_analysis` | ✅ 已实现 | 支持独立运行单个轴承/齿轮/行星箱方法或全部方法 |
+| 方法信息元数据 API | `api/data_view/research.py::get_method_info` | ✅ 已实现 | 返回 15 种分析方法的分类、名称和详细说明 |
 
 ---
 
