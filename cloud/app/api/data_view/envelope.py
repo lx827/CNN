@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
-from app.services.diagnosis import DiagnosisEngine, BearingMethod
+from app.services.diagnosis import DiagnosisEngine, BearingMethod, DenoiseMethod
 from . import router, prepare_signal, _get_channel_name
 from datetime import datetime
 import logging
@@ -20,7 +20,8 @@ async def get_channel_envelope(
     channel: int,
     max_freq: Optional[int] = 1000,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    method: str = Query(default="envelope", description="包络分析方法: envelope/kurtogram/cpw/med"),
+    method: str = Query(default="envelope", description="包络分析方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh"),
+    denoise: str = Query(default="none", description="去噪方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms"),
     db: Session = Depends(get_db)
 ):
     """
@@ -81,10 +82,20 @@ async def get_channel_envelope(
         }
         bearing_method = method_map.get(method, BearingMethod.ENVELOPE)
 
+        denoise_map = {
+            "none": DenoiseMethod.NONE,
+            "wavelet": DenoiseMethod.WAVELET,
+            "vmd": DenoiseMethod.VMD,
+            "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
+            "wavelet_lms": DenoiseMethod.WAVELET_LMS,
+        }
+        denoise_method = denoise_map.get(denoise, DenoiseMethod.NONE)
+
         engine = DiagnosisEngine(
             bearing_method=bearing_method,
             bearing_params=bearing_params,
             gear_teeth=gear_teeth,
+            denoise_method=denoise_method,
         )
 
         # CPU 密集型轴承分析放入线程池

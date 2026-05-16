@@ -325,7 +325,7 @@ async def get_channel_method_analysis(
                 gear_teeth=gear_teeth,
             )
             arr = engine.preprocess(signal)
-            rot_freq, _, _, _ = engine._estimate_rot_freq(arr, sample_rate)
+            rot_freq, _, _, _, _ = engine._estimate_rot_freq(arr, sample_rate)
 
             result = await asyncio.to_thread(func, arr, sample_rate, rot_freq, gear_teeth)
             response_data = {

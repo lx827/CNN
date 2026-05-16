@@ -26,9 +26,9 @@ export const getChannelSTFT = async (deviceId, batchIndex, channel, maxFreq = 50
   return res
 }
 
-export const getChannelEnvelope = async (deviceId, batchIndex, channel, maxFreq = 1000, detrend = false, method = 'envelope') => {
+export const getChannelEnvelope = async (deviceId, batchIndex, channel, maxFreq = 1000, detrend = false, method = 'envelope', denoise = 'none') => {
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/envelope`, {
-    params: { max_freq: maxFreq, detrend, method }
+    params: { max_freq: maxFreq, detrend, method, denoise }
   })
   return res
 }

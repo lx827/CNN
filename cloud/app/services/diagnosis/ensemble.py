@@ -371,7 +371,7 @@ def run_research_ensemble(
         cached_oa = cached_os = None
         if rf is None:
             try:
-                rf, cached_oa, cached_os, _ = base._estimate_rot_freq(proc, fs)
+                rf, cached_oa, cached_os, _, _ = base._estimate_rot_freq(proc, fs)
             except Exception:
                 rf = 0.0
         rot_freq_by_denoise[denoise] = round(float(rf or 0.0), 3)

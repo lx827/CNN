@@ -141,7 +141,7 @@ class DiagnosisEngine:
     def _estimate_rot_freq(self, signal: np.ndarray, fs: float):
         """
         使用与阶次追踪（/order 端点）相同的算法估计转频。
-        返回 (rot_freq, order_axis, order_spectrum, tracking_method_str)，供 gear 诊断复用。
+        返回 (rot_freq, order_axis, order_spectrum, tracking_method_str, rot_std)，供 gear 诊断复用。
         """
         try:
             oa, os_, rf, rsd = _compute_order_spectrum_multi_frame(
@@ -153,11 +153,11 @@ class DiagnosisEngine:
                     signal, fs, samples_per_rev=1024, max_order=50
                 )
                 method = "varying_speed"
-            return float(rf), oa, os_, method
+            return float(rf), oa, os_, method, float(rsd)
         except Exception:
             rf = float(_estimate_rot_freq_simple(signal, fs))
             oa, os_ = _compute_order_spectrum(signal, fs, rf, samples_per_rev=1024)
-            return rf, oa, os_, "single_frame"
+            return rf, oa, os_, "single_frame", 0.0
 
     def analyze_bearing(
         self,
@@ -181,7 +181,9 @@ class DiagnosisEngine:
         arr = self.preprocess(signal) if preprocess else np.array(signal, dtype=np.float64)
 
         if rot_freq is None:
-            rot_freq, _, _, _ = self._estimate_rot_freq(arr, fs)
+            rot_freq, _, _, _, rot_std = self._estimate_rot_freq(arr, fs)
+        else:
+            rot_std = 0.0  # 外部指定转频时不携带不确定度
 
         # 选择轴承诊断方法
         if self.bearing_method == BearingMethod.KURTOGRAM:
@@ -230,7 +232,7 @@ class DiagnosisEngine:
             result.get("envelope_freq", []),
             result.get("envelope_amp", []),
             rot_freq,
-            rot_freq_std=0.0,  # 单方法分析不携带 rot_std
+            rot_freq_std=rot_std,
         )
 
         return {
@@ -507,13 +509,14 @@ class DiagnosisEngine:
         arr = self.preprocess(signal)
 
         if rot_freq is None and not skip_gear:
-            rot_freq, cached_oa, cached_os, _ = self._estimate_rot_freq(arr, fs)
+            rot_freq, cached_oa, cached_os, _, rot_std = self._estimate_rot_freq(arr, fs)
         elif rot_freq is None:
             # 无齿轮分析且无转频 → 用简化估计
             try:
-                rot_freq, _, _, _ = self._estimate_rot_freq(arr, fs)
+                rot_freq, _, _, _, rot_std = self._estimate_rot_freq(arr, fs)
             except Exception:
                 rot_freq = 20.0
+                rot_std = 0.0
             cached_oa = cached_os = None
         else:
             cached_oa = cached_os = None
@@ -589,7 +592,7 @@ class DiagnosisEngine:
             arr = self.preprocess(arr)
 
         if rot_freq is None:
-            rot_freq, _, _, _ = self._estimate_rot_freq(arr, fs)
+            rot_freq, _, _, _, _ = self._estimate_rot_freq(arr, fs)
 
         original_bearing = self.bearing_method
         original_gear = self.gear_method
@@ -637,12 +640,26 @@ class DiagnosisEngine:
                 all_statuses.append(gr["status"])
 
         # 用默认的 bearing=包络, gear=标准 计算综合健康度
-        health_score, status, _ = _compute_health_score(
+        base_health_score, status, _ = _compute_health_score(
             self.gear_teeth,
             time_features,
             bearing_results.get(BearingMethod.ENVELOPE.value, {}),
             gear_results.get(GearMethod.STANDARD.value, {}),
         )
+
+        # 若其他方法检出更差结果，融合到综合评分：取 min(base, worst_other)
+        # 避免其他方法检出故障但综合评分被单一方法掩盖
+        health_score = base_health_score
+        if all_health_scores:
+            worst_other = min(all_health_scores)
+            if worst_other < base_health_score:
+                health_score = int(round((base_health_score + worst_other) / 2))
+                # worst_other 比 base 低 20 分以上 → 状态升级
+                if worst_other < base_health_score - 20:
+                    if status == "normal":
+                        status = "warning"
+                    elif status == "warning":
+                        status = "critical"
 
         # 生成各方法检出结论汇总
         summary = _summarize_all_methods(bearing_results, gear_results)

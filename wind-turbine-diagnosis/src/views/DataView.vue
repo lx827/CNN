@@ -168,6 +168,18 @@
                 <el-option label="MED+包络" value="med" />
                 <el-option label="谱相关/谱相干" value="sc_scoh" />
               </el-select>
+              <el-select
+                v-if="!computedEnvelope"
+                v-model="envelopeDenoise"
+                size="small"
+                style="width: 130px"
+              >
+                <el-option label="无预处理" value="none" />
+                <el-option label="小波去噪" value="wavelet" />
+                <el-option label="VMD降噪" value="vmd" />
+                <el-option label="小波+VMD" value="wavelet_vmd" />
+                <el-option label="小波+LMS" value="wavelet_lms" />
+              </el-select>
               <el-tag v-else type="success" size="small" effect="plain">{{ envelopeMethodLabel }}</el-tag>
               <el-button
                 v-if="!computedEnvelope"
@@ -293,8 +305,39 @@
       <el-row :gutter="16" class="spectrum-row">
         <el-col :span="24">
           <div class="section-header">
-            <span class="chart-title">综合故障诊断（全算法对比）</span>
+            <span class="chart-title">综合故障诊断</span>
             <div style="display: flex; align-items: center; gap: 8px;">
+              <!-- 策略快速诊断 -->
+              <template v-if="!computedStrategyAnalyze && !computedFullAnalysis">
+                <el-select v-model="analyzeStrategy" size="small" style="width: 120px">
+                  <el-option label="标准策略" value="standard" />
+                  <el-option label="高级策略" value="advanced" />
+                  <el-option label="专家策略" value="expert" />
+                </el-select>
+                <el-select v-model="analyzeDenoise" size="small" style="width: 130px">
+                  <el-option label="无预处理" value="none" />
+                  <el-option label="小波去噪" value="wavelet" />
+                  <el-option label="VMD分解" value="vmd" />
+                  <el-option label="小波+VMD级联" value="wavelet_vmd" />
+                  <el-option label="小波+LMS级联" value="wavelet_lms" />
+                </el-select>
+                <el-button
+                  type="success"
+                  size="small"
+                  :loading="loadingStrategyAnalyze"
+                  @click="computeStrategyAnalyze"
+                >
+                  <el-icon><DataAnalysis /></el-icon> 策略诊断
+                </el-button>
+                <el-divider direction="vertical" />
+              </template>
+              <el-tag v-if="computedStrategyAnalyze && !computedFullAnalysis" type="success" size="small" effect="plain">
+                {{ analyzeStrategyLabel }}
+              </el-tag>
+              <el-button v-if="computedStrategyAnalyze && !computedFullAnalysis" type="info" size="small" @click="clearStrategyAnalyze">
+                <el-icon><Close /></el-icon> 收起策略
+              </el-button>
+              <!-- 全算法诊断 -->
               <template v-if="!computedFullAnalysis">
                 <el-select v-model="fullAnalysisDenoise" size="small" style="width: 130px">
                   <el-option label="无预处理" value="none" />
@@ -309,13 +352,46 @@
                   :loading="loadingFullAnalysis"
                   @click="computeFullAnalysis"
                 >
-                  <el-icon><DataAnalysis /></el-icon> 运行全算法诊断
+                  <el-icon><DataAnalysis /></el-icon> 全算法诊断
                 </el-button>
               </template>
               <el-button v-else type="info" size="small" @click="clearFullAnalysis">
                 <el-icon><Close /></el-icon> 收起
               </el-button>
             </div>
+          </div>
+          <div v-if="computedStrategyAnalyze && strategyAnalyzeData && !computedFullAnalysis">
+            <!-- 策略诊断简洁结果 -->
+            <el-alert
+              v-if="strategyAnalyzeData.status !== 'normal'"
+              :title="strategyAnalyzeData.status === 'critical' || strategyAnalyzeData.status === 'fault' ? '⚠️ 检出故障特征' : '⚡ 检出预警信号'"
+              :type="strategyAnalyzeData.status === 'critical' || strategyAnalyzeData.status === 'fault' ? 'error' : 'warning'"
+              :description="strategyAnalyzeData.recommendation"
+              show-icon
+              :closable="false"
+              style="margin-bottom: 12px"
+            />
+            <el-alert
+              v-else
+              title="✅ 未检出显著故障特征"
+              type="success"
+              :description="strategyAnalyzeData.recommendation || '策略诊断未检出显著故障特征，设备运行正常。'"
+              show-icon
+              :closable="false"
+              style="margin-bottom: 12px"
+            />
+            <el-descriptions :column="4" size="small" border>
+              <el-descriptions-item label="健康度">{{ strategyAnalyzeData.health_score }}</el-descriptions-item>
+              <el-descriptions-item label="状态">{{ strategyAnalyzeData.status }}</el-descriptions-item>
+              <el-descriptions-item label="转频">{{ strategyAnalyzeData.rot_freq_hz }} Hz</el-descriptions-item>
+              <el-descriptions-item label="策略">{{ analyzeStrategyLabel }}</el-descriptions-item>
+              <el-descriptions-item label="峭度" v-if="strategyAnalyzeData.time_features">{{ strategyAnalyzeData.time_features.kurtosis?.toFixed(4) }}</el-descriptions-item>
+              <el-descriptions-item label="RMS" v-if="strategyAnalyzeData.time_features">{{ strategyAnalyzeData.time_features.rms?.toFixed(4) }}</el-descriptions-item>
+              <el-descriptions-item label="峰值因子" v-if="strategyAnalyzeData.time_features">{{ strategyAnalyzeData.time_features.crest_factor?.toFixed(4) }}</el-descriptions-item>
+            </el-descriptions>
+          </div>
+          <div v-else-if="loadingStrategyAnalyze" class="placeholder">
+            <el-icon class="is-loading"><Loading /></el-icon> 正在执行策略诊断...
           </div>
           <div v-if="computedFullAnalysis && fullAnalysisData">
             <!-- 综合结论 -->
@@ -702,6 +778,7 @@ import {
   getChannelSTFT,
   getChannelEnvelope,
   getChannelGear,
+  getChannelAnalyze,
   getChannelStats,
   getChannelOrder,
   getChannelCepstrum,
@@ -746,6 +823,7 @@ const enableDetrend = ref(false)
 
 // 诊断方法选择
 const envelopeMethod = ref('envelope')
+const envelopeDenoise = ref('none')
 const gearMethod = ref('standard')
 const denoiseMethod = ref('none')
 
@@ -804,6 +882,17 @@ const computedFullAnalysis = ref(false)
 const loadingFullAnalysis = ref(false)
 const fullAnalysisData = ref(null)
 const fullAnalysisDenoise = ref('none')
+
+// 策略快速诊断
+const analyzeStrategy = ref('standard')
+const analyzeDenoise = ref('none')
+const computedStrategyAnalyze = ref(false)
+const loadingStrategyAnalyze = ref(false)
+const strategyAnalyzeData = ref(null)
+const analyzeStrategyLabel = computed(() => {
+  const labels = { standard: '标准策略', advanced: '高级策略', expert: '专家策略' }
+  return labels[analyzeStrategy.value] || analyzeStrategy.value
+})
 
 // 频域/阶次诊断明细（手动加载）
 const showDiagnosisDetail = ref(false)
@@ -1433,7 +1522,8 @@ const computeEnvelope = async () => {
       selectedChannel.value,
       1000,
       enableDetrend.value,
-      envelopeMethod.value
+      envelopeMethod.value,
+      envelopeDenoise.value
     )
     const d = res.data
     if (!d) return
@@ -1711,6 +1801,45 @@ const computeFullAnalysis = async () => {
 const clearFullAnalysis = () => {
   computedFullAnalysis.value = false
   fullAnalysisData.value = null
+}
+
+// ========== 策略快速诊断 ==========
+const computeStrategyAnalyze = async () => {
+  if (!selectedDevice.value || !selectedBatch.value) {
+    ElMessage.warning('请先选择设备和批次')
+    return
+  }
+  loadingStrategyAnalyze.value = true
+  try {
+    const res = await getChannelAnalyze(
+      selectedDevice.value.device_id,
+      selectedBatch.value.batch_index,
+      selectedChannel.value,
+      {
+        strategy: analyzeStrategy.value,
+        denoise: analyzeDenoise.value,
+      }
+    )
+    const d = res.data
+    if (!d) return
+    strategyAnalyzeData.value = d
+    computedStrategyAnalyze.value = true
+    // 提取特征频率标注
+    if (d.bearing_result?.fault_indicators) {
+      extractFaultFreqAnnotations(d)
+    }
+  } catch (e) {
+    console.error('策略诊断失败:', e)
+    ElMessage.error('策略诊断失败: ' + (e.response?.data?.detail || e.message))
+    computedStrategyAnalyze.value = false
+  } finally {
+    loadingStrategyAnalyze.value = false
+  }
+}
+
+const clearStrategyAnalyze = () => {
+  computedStrategyAnalyze.value = false
+  strategyAnalyzeData.value = null
 }
 
 // ========== 按需计算：统计指标 ==========
