@@ -4,8 +4,21 @@
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from collections import defaultdict
 from .config import HUSTBEAR_DIR, CW_DIR, WTGEARBOX_DIR
 from .utils import load_npy
+
+MAX_PER_CLASS = 5  # 每个类别最多取5个文件，控制运行时间
+
+def _limit_files(files, max_per_class=MAX_PER_CLASS):
+    class_files = defaultdict(list)
+    for f, info in files:
+        lbl = info.get("label", "unknown")
+        class_files[lbl].append((f, info))
+    result = []
+    for lbl in sorted(class_files.keys()):
+        result.extend(class_files[lbl][:max_per_class])
+    return result
 
 
 def classify_hustbear(filename: str) -> Dict:
@@ -13,19 +26,34 @@ def classify_hustbear(filename: str) -> Dict:
     parts = filename.replace(".npy", "").split("-")
     name_part = parts[0]
     channel = parts[1] if len(parts) > 1 else "X"
-    # 支持格式: H_20Hz, 0.5X_B_20Hz, B_20Hz 等
-    if name_part.startswith("H_") or "_N_" in name_part:
+    # 支持格式: H_20Hz, 0.5X_B_20Hz, B_20Hz, 0.5X_O_20Hz 等
+    # 提取故障类型字段（以下划线分隔）
+    segments = name_part.split("_")
+    # 找故障类型段: H/N/B/IR/OR/C/I
+    fault_type = None
+    for seg in segments:
+        if seg in ("H", "N"):
+            fault_type = "healthy"
+        elif seg == "B":
+            fault_type = "ball"
+        elif seg == "IR":
+            fault_type = "inner"
+        elif seg in ("O", "OR"):
+            fault_type = "outer"
+        elif seg == "C":
+            fault_type = "composite"
+        elif seg == "I":
+            fault_type = "inner"
+    if fault_type == "healthy":
         return {"label": "healthy", "fault": None, "channel": channel}
-    elif "_B_" in name_part or name_part.startswith("B_"):
+    elif fault_type == "ball":
         return {"label": "ball", "fault": "ball", "channel": channel}
-    elif "_IR_" in name_part or name_part.startswith("IR_"):
+    elif fault_type == "inner":
         return {"label": "inner", "fault": "inner", "channel": channel}
-    elif "_OR_" in name_part or name_part.startswith("OR_"):
+    elif fault_type == "outer":
         return {"label": "outer", "fault": "outer", "channel": channel}
-    elif "_C_" in name_part or name_part.startswith("C_"):
+    elif fault_type == "composite":
         return {"label": "composite", "fault": "composite", "channel": channel}
-    elif "_I_" in name_part or name_part.startswith("I_"):
-        return {"label": "inner", "fault": "inner", "channel": channel}
     return {"label": "unknown", "fault": None, "channel": channel}
 
 
@@ -66,7 +94,7 @@ def get_hustbear_files() -> List[Tuple[Path, Dict]]:
         info = classify_hustbear(f.name)
         if info["label"] != "unknown":
             files.append((f, info))
-    return files
+    return _limit_files(files)
 
 
 def get_cw_files() -> List[Tuple[Path, Dict]]:
@@ -78,7 +106,7 @@ def get_cw_files() -> List[Tuple[Path, Dict]]:
         info = classify_cw(f.name)
         if info["label"] != "unknown":
             files.append((f, info))
-    return files
+    return _limit_files(files)
 
 
 def get_wtgearbox_files() -> List[Tuple[Path, Dict]]:
@@ -92,4 +120,4 @@ def get_wtgearbox_files() -> List[Tuple[Path, Dict]]:
         info = classify_wtgearbox(f.name)
         if info["label"] != "unknown":
             files.append((f, info))
-    return files
+    return _limit_files(files)

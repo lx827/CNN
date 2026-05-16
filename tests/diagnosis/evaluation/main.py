@@ -26,13 +26,26 @@ from evaluation.robustness_eval import evaluate_noise_robustness
 from evaluation.report_generator import generate_final_report
 
 
+def _limit_files(files, max_per_class=5):
+    """限制每个类别的文件数量，加快评价速度"""
+    from collections import defaultdict
+    class_files = defaultdict(list)
+    for f, info in files:
+        lbl = info.get("label", "unknown")
+        class_files[lbl].append((f, info))
+    result = []
+    for lbl in sorted(class_files.keys()):
+        result.extend(class_files[lbl][:max_per_class])
+    return result
+
+
 def main():
     print("╔══════════════════════════════════════════════════════════════╗")
     print("║      故障诊断算法多维度评价框架                                ║")
     print("║      HUSTbear + CW + WTgearbox 三数据集全面评估              ║")
     print("╚══════════════════════════════════════════════════════════════╝")
 
-    # 运行各评价模块
+    # 运行各评价模块（限制样本数以控制运行时间）
     denoise_results = evaluate_denoise_methods()
     bearing_results = evaluate_bearing_methods()
     gear_results = evaluate_gear_methods()

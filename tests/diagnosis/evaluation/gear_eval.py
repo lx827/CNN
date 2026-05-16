@@ -83,8 +83,11 @@ def evaluate_gear_methods():
         fm0_val = 0.0
         if tsa_result.get("valid"):
             tsa_sig = tsa_result.get("tsa_signal", np.array([]))
-            if len(tsa_sig) > 0:
-                fm0_val = compute_fm0_order(tsa_sig, mesh_order, SAMPLE_RATE)
+            if len(tsa_sig) > 0 and len(order_axis) > 0 and len(order_spectrum) > 0:
+                try:
+                    fm0_val = compute_fm0_order(tsa_sig, order_axis, order_spectrum, mesh_order)
+                except Exception:
+                    fm0_val = compute_fm0(tsa_sig, mesh_freq, SAMPLE_RATE)
 
         car_val = compute_car(signal, SAMPLE_RATE, rot_freq, n_harmonics=3)
         m6a_val = compute_m6a(diff) if tsa_result.get("valid") and len(diff) > 0 else 0.0

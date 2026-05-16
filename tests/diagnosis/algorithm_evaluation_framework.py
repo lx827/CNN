@@ -1007,7 +1007,7 @@ def _generate_bearing_report(results: List[Dict]) -> str:
         "### 2.2 故障频率SNR (故障样本平均)",
         "",
         "| 方法 | BPFO SNR | BPFI SNR | BSF SNR | 谐波数 |",
-        "|------|----------|----------|---------|--------|")
+        "|------|----------|----------|---------|--------|"])
     for m in methods:
         bpfo = [r["bpfo_snr"] for r in hust if r["method"]==m and r["fault_label"]!="healthy"]
         bpfi = [r["bpfi_snr"] for r in hust if r["method"]==m and r["fault_label"]!="healthy"]
@@ -1312,7 +1312,7 @@ def _generate_gear_report(results: List[Dict]) -> str:
         "## 4. 各故障类型健康度",
         "",
         "| 故障类型 | 样本数 | 平均健康度 | 标准差 |",
-        "|----------|--------|-----------|--------|")
+        "|----------|--------|-----------|--------|"])
     labels = sorted(set(r["fault_label"] for r in results))
     for lbl in labels:
         hs = [r["health_score"] for r in results if r["fault_label"] == lbl]
