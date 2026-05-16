@@ -525,7 +525,7 @@ class DiagnosisEngine:
         gear_result = self.analyze_gear(arr, fs, rot_freq, preprocess=False,
                                         _cached_oa=cached_oa, _cached_os=cached_os) if not skip_gear else {}
 
-        health_score, status = _compute_health_score(
+        health_score, status, _ = _compute_health_score(
             self.gear_teeth,
             time_features, bearing_result, gear_result
         )
@@ -635,7 +635,7 @@ class DiagnosisEngine:
                 all_statuses.append(gr["status"])
 
         # 用默认的 bearing=包络, gear=标准 计算综合健康度
-        health_score, status = _compute_health_score(
+        health_score, status, _ = _compute_health_score(
             self.gear_teeth,
             time_features,
             bearing_results.get(BearingMethod.ENVELOPE.value, {}),

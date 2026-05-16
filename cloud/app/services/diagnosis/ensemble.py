@@ -18,7 +18,7 @@ import numpy as np
 
 from .engine import BearingMethod, DenoiseMethod, DiagnosisEngine, DiagnosisStrategy, GearMethod
 from .features import compute_time_features
-from .health_score import _compute_health_score, CREST_EVIDENCE_THRESHOLD
+from .health_score import _compute_health_score, CREST_EVIDENCE_THRESHOLD, get_ds_label, is_ds_conflict_high
 from .recommendation import _generate_recommendation
 
 
@@ -452,18 +452,11 @@ def run_research_ensemble(
     best_gear = gear_results.get(best_gear_key, {}) if best_gear_key else {}
     fault_label = _fault_label(best_bearing, best_gear, bearing_score, gear_score)
 
-    # 使用 health_score.py 的权威评分逻辑计算健康度和状态
-    # 确保与单方法诊断路径（analyze_comprehensive）的结果一致
-    health_score, status = _compute_health_score(
-        gear_teeth,
-        time_features,
-        best_bearing,
-        best_gear,
-    )
-
     # ── D-S 证据融合 ──
     # 将轴承和齿轮的投票结果通过 Dempster-Shafer 证据理论融合，
-    # 得到综合故障概率分布，补充 ensemble 的投票融合逻辑。
+    # 得到综合故障概率分布。融合结果参与最终决策：
+    # - dominant_probability > 0.4 且 uncertainty < 0.3 时纳入 fault_label
+    # - conflict > 0.8 时降低健康度并提示人工复核
     ds_fusion_result = {}
     try:
         from .fusion.ds_fusion import dempster_shafer_fusion
@@ -484,6 +477,21 @@ def run_research_ensemble(
         ds_fusion_result = dempster_shafer_fusion(all_method_votes, time_features=time_features)
     except Exception as exc:
         ds_fusion_result = {"error": str(exc)}
+
+    # 使用 health_score.py 的连续衰减评分逻辑计算健康度和状态
+    # D-S 融合结果参与决策：高冲突扣分、主导故障纳入 fault_label
+    health_score, status, deductions = _compute_health_score(
+        gear_teeth,
+        time_features,
+        best_bearing,
+        best_gear,
+        ds_fusion_result=ds_fusion_result,
+    )
+
+    # D-S 融合主导故障标签
+    ds_fault_label = get_ds_label(ds_fusion_result)
+    if ds_fault_label:
+        fault_label = ds_fault_label
 
     return {
         "health_score": health_score,
@@ -514,5 +522,9 @@ def run_research_ensemble(
             "has_gear_params": has_gear,
             "ds_fusion": ds_fusion_result,
         },
-        "recommendation": _generate_recommendation(best_bearing, best_gear, status),
+        "recommendation": _generate_recommendation(
+            best_bearing, best_gear, status,
+            ds_conflict_high=is_ds_conflict_high(ds_fusion_result),
+            deductions=deductions,
+        ),
     }
