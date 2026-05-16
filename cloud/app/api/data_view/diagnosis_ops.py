@@ -78,7 +78,7 @@ def get_channel_diagnosis(
     device_id: str,
     batch_index: int,
     channel: int,
-    denoise_method: Optional[str] = Query(default=None, description="去噪方法过滤: none/wavelet/vmd/med"),
+    denoise_method: Optional[str] = Query(default=None, description="去噪方法过滤: none/wavelet/vmd/wavelet_vmd/wavelet_lms"),
     db: Session = Depends(get_db)
 ):
     """
@@ -172,11 +172,11 @@ async def reanalyze_batch(
     except Exception:
         pass
 
-    # 4. 执行分析
+    # 4. 执行分析（使用配置默认去噪方法）
     try:
         result = await asyncio.to_thread(
             analyze_device, channels_data, sample_rate, device,
-            rot_freq=saved_rot_freq, denoise_method="none"
+            rot_freq=saved_rot_freq
         )
     except Exception as e:
         logger.error(f"[重新诊断] 分析失败: {e}\n{_tb.format_exc()}")
@@ -290,7 +290,7 @@ async def reanalyze_all_batches(
         try:
             result = await asyncio.to_thread(
                 analyze_device, channels_data, sample_rate, device,
-                rot_freq=saved_rot_freq, denoise_method="none"
+                rot_freq=saved_rot_freq
             )
             if result.get("_error"):
                 logger.warning(f"[全部重新诊断] batch {bi} 内部错误: {result['_error']}")

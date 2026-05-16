@@ -44,7 +44,7 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
 
     if profile == "exhaustive":
         return {
-            "denoise": list(dict.fromkeys(denoise_methods + ["wavelet", "wavelet_vmd", "wavelet_lms"])),
+            "denoise": list(dict.fromkeys(denoise_methods + ["wavelet", "vmd", "wavelet_vmd", "wavelet_lms"])),
             "bearing": [
                 BearingMethod.ENVELOPE,
                 BearingMethod.KURTOGRAM,

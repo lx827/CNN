@@ -42,7 +42,7 @@
       </el-select>
       <el-select
         :model-value="denoiseMethod"
-        style="width: 130px; margin-left: 8px"
+        style="width: 150px; margin-left: 8px"
         size="small"
         @change="val => $emit('update:denoiseMethod', val)"
       >

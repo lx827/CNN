@@ -260,6 +260,23 @@ def compute_continuous_deductions(
             else:
                 deductions.append(("bearing_single_freq", round(freq_ded, 2)))
 
+        # 边带密度增强扣分：high_density 或 high_asymmetry 标记时追加扣分
+        # 边带密度高说明故障频率周围调制边带丰富，是轴承故障的强证据
+        sideband_high_count = sum(
+            v.get("high_density", False) for k, v in bearing_ind.items()
+            if isinstance(v, dict) and not k.endswith("_stat")
+        )
+        sideband_asym_count = sum(
+            v.get("high_asymmetry", False) for k, v in bearing_ind.items()
+            if isinstance(v, dict) and not k.endswith("_stat")
+        )
+        if sideband_high_count >= 1 and kurt_gate > 0.3:
+            sb_ded = 4.0 * kurt_gate  # 边带密度高追加 4 分扣分
+            deductions.append(("bearing_sideband_density", round(sb_ded, 2)))
+        if sideband_asym_count >= 1 and kurt_gate > 0.3:
+            sb_asym_ded = 3.0 * kurt_gate  # 边带不对称追加 3 分扣分
+            deductions.append(("bearing_sideband_asymmetry", round(sb_asym_ded, 2)))
+
     # 统计路径门控连续化
     stat_impulse = sigmoid_deduction(kurt, 5.0, 1.0, slope=2.0) + sigmoid_deduction(crest, CREST_EVIDENCE_THRESHOLD, 1.0, slope=2.0)
     stat_gate = min(1.0, stat_impulse) if not rotation_dominant else 0.0
