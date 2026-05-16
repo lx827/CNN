@@ -108,3 +108,4 @@ tests/diagnosis/output/**.png
 CW
 HUSTbear
 tests/diagnosis/planetary_demod_results.json
+tests/diagnosis/planetary_e2e_results.json
