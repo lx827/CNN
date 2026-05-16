@@ -105,8 +105,6 @@ async def get_channel_gear(
         signal = prepare_signal(record.data, detrend=detrend)
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
-        if device and not device.is_online:
-            raise HTTPException(status_code=400, detail="设备当前离线，无法执行齿轮诊断")
 
         gear_teeth = {}
         if device:
@@ -194,8 +192,6 @@ async def get_channel_analyze(
         signal = prepare_signal(record.data, detrend=detrend)
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
-        if device and not device.is_online:
-            raise HTTPException(status_code=400, detail="设备当前离线，无法执行综合分析")
 
         bearing_params = {}
         gear_teeth = {}
@@ -337,8 +333,6 @@ async def get_channel_full_analysis(
             signal = signal[:max_samples]
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
-        if device and not device.is_online:
-            raise HTTPException(status_code=400, detail="设备当前离线，无法执行全算法分析")
 
         bearing_params = {}
         gear_teeth = {}

@@ -39,8 +39,6 @@ async def get_channel_research_analysis(
         raise HTTPException(status_code=404, detail="data not found")
 
     device = db.query(Device).filter(Device.device_id == device_id).first()
-    if device and not device.is_online:
-        raise HTTPException(status_code=400, detail="device is offline")
 
     profile = profile if profile in {"runtime", "balanced", "exhaustive"} else "balanced"
     denoise_map = {
