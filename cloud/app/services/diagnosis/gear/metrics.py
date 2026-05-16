@@ -13,7 +13,7 @@
 import numpy as np
 from scipy.fft import rfft, rfftfreq
 from scipy.signal import hilbert
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from ..signal_utils import (
     prepare_signal,
@@ -21,6 +21,7 @@ from ..signal_utils import (
     bandpass_filter,
     _band_energy,
     _order_band_energy,
+    zoom_fft_analysis,
 )
 
 
@@ -467,3 +468,154 @@ def compute_nb4(
         return 0.0
 
     return float(numerator / denominator)
+
+
+# ---------------------------------------------------------------------------
+# ZOOM-FFT 细化谱边频带分析
+# ---------------------------------------------------------------------------
+
+
+def analyze_sidebands_zoom_fft(
+    signal: np.ndarray,
+    fs: float,
+    mesh_freq: float,
+    rot_freq: float,
+    n_sidebands: int = 6,
+    zoom_factor: int = 16,
+    bandwidth_hz: Optional[float] = None,
+) -> Dict:
+    """
+    基于 ZOOM-FFT 细化谱的边频带分析
+
+    ALGORITHMS.md §2.5.1 Step2：
+    "采用 ZOOM-FFT 或细化谱分析，确保频率分辨率 Δf ≤ f_r/4（至少能分辨 4 根边频）"
+
+    标准 FFT 的频率分辨率 Δf = fs/N，当 Δf > f_r/4 时边频带无法精确分辨。
+    ZOOM-FFT 在不增加数据长度的情况下将指定频带分辨率提升 zoom_factor 倍，
+    使边频间隔可精确分辨。
+
+    算法流程：
+    1. 检查标准 FFT 分辨率是否足够（Δf ≤ rot_freq/4）
+    2. 若不够，用 ZOOM-FFT 细化啮合频率附近频带
+    3. 在细化谱中搜索 n_sidebands 阶边频带
+    4. 计算边频显著性（幅值超过啮合频率的 5%~10%）
+    5. 计算 SER（边频带能量比）和边频不对称性
+
+    Args:
+        signal: 输入振动信号
+        fs: 采样率 Hz
+        mesh_freq: 啮合频率 Hz (f_mesh = Z × f_r)
+        rot_freq: 转频 Hz
+        n_sidebands: 搜索的边频带阶数（默认6阶，与 SER 定义一致）
+        zoom_factor: 细化倍数（默认16，即分辨率提升16倍）
+        bandwidth_hz: 细化带宽 Hz，None 则自动计算
+
+    Returns:
+        {
+            "sidebands": List[Dict],
+            "ser": float,
+            "mesh_amp": float,
+            "resolution_hz": float,
+            "original_resolution_hz": float,
+            "zoom_used": bool,
+            "zoom_factor": int,
+        }
+    """
+    arr = prepare_signal(signal)
+    N = len(arr)
+
+    # 计算原始 FFT 分辨率
+    original_resolution = fs / N
+
+    # 自动计算细化带宽：覆盖 mesh_freq ± n_sidebands × rot_freq
+    if bandwidth_hz is None:
+        bandwidth_hz = max(2 * n_sidebands * rot_freq + rot_freq * 4,
+                          mesh_freq * 0.5)
+    bandwidth_hz = min(bandwidth_hz, fs / 2.0)
+
+    # 判断是否需要 ZOOM-FFT
+    # 标准: Δf ≤ f_r/4 才能精确分辨边频带
+    need_zoom = original_resolution > rot_freq / 4.0
+
+    if need_zoom:
+        # 使用 ZOOM-FFT 细化谱
+        zoom_result = zoom_fft_analysis(
+            arr, fs, center_freq=mesh_freq,
+            bandwidth=bandwidth_hz, zoom_factor=zoom_factor
+        )
+        if not zoom_result.get("valid", False):
+            # ZOOM-FFT 失败，退回标准 FFT
+            xf, yf = compute_fft_spectrum(arr, fs)
+            xf = np.array(xf)
+            yf = np.array(yf)
+            zoom_used = False
+            resolution = original_resolution
+        else:
+            xf = zoom_result["zoom_freq_axis"]
+            yf = zoom_result["zoom_spectrum"]
+            resolution = zoom_result["resolution_hz"]
+            zoom_used = True
+    else:
+        # 标准 FFT 分辨率足够，直接用标准 FFT
+        xf, yf = compute_fft_spectrum(arr, fs)
+        xf = np.array(xf)
+        yf = np.array(yf)
+        resolution = original_resolution
+        zoom_used = False
+
+    # 搜索啮合频率幅值
+    mesh_bw = max(resolution * 3, 2.0)
+    mesh_amp = _band_energy(xf, yf, mesh_freq, mesh_bw)
+    if mesh_amp < 1e-12:
+        return {
+            "sidebands": [],
+            "ser": 0.0,
+            "mesh_amp": 0.0,
+            "resolution_hz": round(resolution, 4),
+            "original_resolution_hz": round(original_resolution, 4),
+            "zoom_used": zoom_used,
+            "zoom_factor": zoom_factor if zoom_used else 1,
+        }
+
+    # 搜索各阶边频带
+    sidebands = []
+    total_sb = 0.0
+    sb_bw = max(resolution * 3, 2.0)  # 边频搜索带宽
+
+    for i in range(1, n_sidebands + 1):
+        sb_low = mesh_freq - i * rot_freq
+        sb_high = mesh_freq + i * rot_freq
+
+        # 确保边频频率在有效范围内
+        if sb_low < 0 or sb_high > fs / 2.0:
+            continue
+
+        amp_low = _band_energy(xf, yf, sb_low, sb_bw)
+        amp_high = _band_energy(xf, yf, sb_high, sb_bw)
+
+        total_sb += amp_low + amp_high
+
+        # 显著性：边频幅值超过啮合频率的 5%~10%
+        significant = (amp_low > mesh_amp * 0.05) or (amp_high > mesh_amp * 0.05)
+
+        sidebands.append({
+            "order": i,
+            "freq_low_hz": round(sb_low, 2),
+            "freq_high_hz": round(sb_high, 2),
+            "amp_low": round(amp_low, 6),
+            "amp_high": round(amp_high, 6),
+            "significant": significant,
+            "asymmetry": round(abs(amp_low - amp_high) / (amp_low + amp_high + 1e-12), 4),
+            "ratio_low": round(amp_low / mesh_amp, 4),
+            "ratio_high": round(amp_high / mesh_amp, 4),
+        })
+
+    return {
+        "sidebands": sidebands,
+        "ser": round(total_sb / mesh_amp, 4),
+        "mesh_amp": round(mesh_amp, 6),
+        "resolution_hz": round(resolution, 4),
+        "original_resolution_hz": round(original_resolution, 4),
+        "zoom_used": zoom_used,
+        "zoom_factor": zoom_factor if zoom_used else 1,
+    }
