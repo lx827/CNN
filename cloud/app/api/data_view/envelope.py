@@ -20,8 +20,8 @@ async def get_channel_envelope(
     channel: int,
     max_freq: Optional[int] = 1000,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    method: str = Query(default="envelope", description="包络分析方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh"),
-    denoise: str = Query(default="none", description="去噪方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms"),
+    method: str = Query(default="envelope", description="包络分析方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd"),
+    denoise: str = Query(default="none", description="去噪方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol"),
     db: Session = Depends(get_db)
 ):
     """
@@ -79,6 +79,7 @@ async def get_channel_envelope(
             "med": BearingMethod.MED,
             "teager": BearingMethod.TEAGER,
             "spectral_kurtosis": BearingMethod.SPECTRAL_KURTOSIS,
+            "mckd": BearingMethod.MCKD,
         }
         bearing_method = method_map.get(method, BearingMethod.ENVELOPE)
 
@@ -88,6 +89,9 @@ async def get_channel_envelope(
             "vmd": DenoiseMethod.VMD,
             "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
             "wavelet_lms": DenoiseMethod.WAVELET_LMS,
+            "emd": DenoiseMethod.EMD,
+            "ceemdan": DenoiseMethod.CEEMDAN,
+            "savgol": DenoiseMethod.SAVGOL,
         }
         denoise_method = denoise_map.get(denoise, DenoiseMethod.NONE)
 

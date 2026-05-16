@@ -167,6 +167,7 @@
                 <el-option label="谱峭度包络" value="spectral_kurtosis" />
                 <el-option label="MED+包络" value="med" />
                 <el-option label="谱相关/谱相干" value="sc_scoh" />
+                <el-option label="MCKD增强包络" value="mckd" />
               </el-select>
               <el-select
                 v-if="!computedEnvelope"
@@ -179,6 +180,9 @@
                 <el-option label="VMD降噪" value="vmd" />
                 <el-option label="小波+VMD" value="wavelet_vmd" />
                 <el-option label="小波+LMS" value="wavelet_lms" />
+                <el-option label="EMD降噪" value="emd" />
+                <el-option label="CEEMDAN降噪" value="ceemdan" />
+                <el-option label="S-G平滑" value="savgol" />
               </el-select>
               <el-tag v-else type="success" size="small" effect="plain">{{ envelopeMethodLabel }}</el-tag>
               <el-button
@@ -314,12 +318,15 @@
                   <el-option label="高级策略" value="advanced" />
                   <el-option label="专家策略" value="expert" />
                 </el-select>
-                <el-select v-model="analyzeDenoise" size="small" style="width: 130px">
+                <el-select v-model="analyzeDenoise" size="small" style="width: 150px">
                   <el-option label="无预处理" value="none" />
                   <el-option label="小波去噪" value="wavelet" />
                   <el-option label="VMD分解" value="vmd" />
                   <el-option label="小波+VMD级联" value="wavelet_vmd" />
                   <el-option label="小波+LMS级联" value="wavelet_lms" />
+                  <el-option label="EMD降噪" value="emd" />
+                  <el-option label="CEEMDAN降噪" value="ceemdan" />
+                  <el-option label="S-G平滑" value="savgol" />
                 </el-select>
                 <el-button
                   type="success"
@@ -339,12 +346,15 @@
               </el-button>
               <!-- 全算法诊断 -->
               <template v-if="!computedFullAnalysis">
-                <el-select v-model="fullAnalysisDenoise" size="small" style="width: 130px">
+                <el-select v-model="fullAnalysisDenoise" size="small" style="width: 150px">
                   <el-option label="无预处理" value="none" />
                   <el-option label="小波去噪" value="wavelet" />
                   <el-option label="VMD分解" value="vmd" />
                   <el-option label="小波+VMD级联" value="wavelet_vmd" />
                   <el-option label="小波+LMS级联" value="wavelet_lms" />
+                  <el-option label="EMD降噪" value="emd" />
+                  <el-option label="CEEMDAN降噪" value="ceemdan" />
+                  <el-option label="S-G平滑" value="savgol" />
                 </el-select>
                 <el-button
                   type="primary"
@@ -844,6 +854,7 @@ const envelopeMethodLabel = computed(() => {
     spectral_kurtosis: '谱峭度包络',
     med: 'MED+包络',
     sc_scoh: '谱相关/谱相干',
+    mckd: 'MCKD增强包络',
   }
   return labels[envelopeMethod.value] || envelopeMethod.value
 })

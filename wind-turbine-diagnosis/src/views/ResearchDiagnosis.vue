@@ -35,6 +35,9 @@
           <el-option label="VMD" value="vmd" />
           <el-option label="小波+VMD" value="wavelet_vmd" />
           <el-option label="小波+LMS" value="wavelet_lms" />
+          <el-option label="EMD" value="emd" />
+          <el-option label="CEEMDAN" value="ceemdan" />
+          <el-option label="S-G" value="savgol" />
         </el-select>
 
         <el-select v-if="runMode === 'ensemble'" v-model="profile" class="select small">

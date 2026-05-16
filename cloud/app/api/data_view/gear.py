@@ -123,6 +123,8 @@ async def get_channel_gear(
             "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,
             "vmd": DenoiseMethod.VMD, "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
             "wavelet_lms": DenoiseMethod.WAVELET_LMS,
+            "emd": DenoiseMethod.EMD, "ceemdan": DenoiseMethod.CEEMDAN,
+            "savgol": DenoiseMethod.SAVGOL,
         }
         gear_method = method_map.get(method, GearMethod.STANDARD)
         denoise_method = denoise_map.get(denoise, DenoiseMethod.NONE)
@@ -171,9 +173,9 @@ async def get_channel_analyze(
     channel: int,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
     strategy: str = Query(default="standard", description="诊断策略: standard/advanced/expert"),
-    bearing_method: str = Query(default="envelope", description="轴承方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh"),
+    bearing_method: str = Query(default="envelope", description="轴承方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd"),
     gear_method: str = Query(default="standard", description="齿轮方法: standard/advanced"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol"),
     db: Session = Depends(get_db)
 ):
     """
@@ -216,12 +218,15 @@ async def get_channel_analyze(
             "teager": BearingMethod.TEAGER,
             "spectral_kurtosis": BearingMethod.SPECTRAL_KURTOSIS,
             "sc_scoh": BearingMethod.SC_SCOH,
+            "mckd": BearingMethod.MCKD,
         }
         gear_map = {"standard": GearMethod.STANDARD, "advanced": GearMethod.ADVANCED}
         denoise_map = {
             "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,
             "vmd": DenoiseMethod.VMD, "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
             "wavelet_lms": DenoiseMethod.WAVELET_LMS,
+            "emd": DenoiseMethod.EMD, "ceemdan": DenoiseMethod.CEEMDAN,
+            "savgol": DenoiseMethod.SAVGOL,
         }
 
         engine = DiagnosisEngine(
@@ -314,7 +319,7 @@ async def get_channel_full_analysis(
     batch_index: int,
     channel: int,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol"),
     db: Session = Depends(get_db)
 ):
     """
@@ -358,6 +363,8 @@ async def get_channel_full_analysis(
             "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,
             "vmd": DenoiseMethod.VMD, "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
             "wavelet_lms": DenoiseMethod.WAVELET_LMS,
+            "emd": DenoiseMethod.EMD, "ceemdan": DenoiseMethod.CEEMDAN,
+            "savgol": DenoiseMethod.SAVGOL,
         }
 
         engine = DiagnosisEngine(

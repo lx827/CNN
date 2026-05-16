@@ -51,6 +51,9 @@
         <el-option label="VMD分解" value="vmd" />
         <el-option label="小波+VMD级联" value="wavelet_vmd" />
         <el-option label="小波+LMS级联" value="wavelet_lms" />
+        <el-option label="EMD降噪" value="emd" />
+        <el-option label="CEEMDAN降噪" value="ceemdan" />
+        <el-option label="S-G平滑" value="savgol" />
       </el-select>
       <el-tooltip content="消除基频漂移导致的线性趋势" placement="top">
         <el-switch

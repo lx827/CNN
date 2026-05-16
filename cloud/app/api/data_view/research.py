@@ -90,6 +90,11 @@ METHOD_INFO = {
         "label": "谱相关/谱相干分析",
         "description": "轴承循环平稳分析：计算谱相关密度(SC)和谱相干系数(SCoh)，在 BPFO/BPFI/BSF 等故障频率处检测循环平稳特征。适合恒速工况下的轴承诊断。",
     },
+    "mckd": {
+        "category": "bearing",
+        "label": "MCKD 增强包络",
+        "description": "最大相关峭度解卷积 + 包络分析：引入故障周期约束优化周期性冲击序列检测，对轴承内圈/外圈故障更敏感。与 MED 互补，MED 最大化全局峭度，MCKD 最大化周期性冲击。",
+    },
     # 齿轮诊断方法
     "gear_standard": {
         "category": "gear",
@@ -195,6 +200,8 @@ async def get_channel_method_analysis(
             "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,
             "vmd": DenoiseMethod.VMD, "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
             "wavelet_lms": DenoiseMethod.WAVELET_LMS,
+            "emd": DenoiseMethod.EMD, "ceemdan": DenoiseMethod.CEEMDAN,
+            "savgol": DenoiseMethod.SAVGOL,
         }
         denoise_method = denoise_map.get(denoise, DenoiseMethod.NONE)
 
@@ -233,6 +240,7 @@ async def get_channel_method_analysis(
             "teager": BearingMethod.TEAGER,
             "spectral_kurtosis": BearingMethod.SPECTRAL_KURTOSIS,
             "sc_scoh": BearingMethod.SC_SCOH,
+            "mckd": BearingMethod.MCKD,
         }
         if method in bearing_method_map:
             engine = DiagnosisEngine(
@@ -385,6 +393,9 @@ async def get_channel_research_analysis(
         "vmd": DenoiseMethod.VMD,
         "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
         "wavelet_lms": DenoiseMethod.WAVELET_LMS,
+        "emd": DenoiseMethod.EMD,
+        "ceemdan": DenoiseMethod.CEEMDAN,
+        "savgol": DenoiseMethod.SAVGOL,
     }
 
     try:
