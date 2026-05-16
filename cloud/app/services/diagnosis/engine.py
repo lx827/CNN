@@ -80,6 +80,11 @@ class BearingMethod(str, Enum):
     SPECTRAL_KURTOSIS = "spectral_kurtosis"  # 自适应谱峭度重加权包络
     SC_SCOH = "sc_scoh"             # 轴承谱相关/谱相干（循环平稳分析）
     MCKD = "mckd"                   # 最大相关峭度解卷积 + 包络
+    WP = "wp"                           # 小波包轴承诊断
+    DWT = "dwt"                         # DWT敏感层轴承诊断
+    EMD_ENVELOPE = "emd_envelope"       # EMD敏感IMF轴承诊断
+    CEEMDAN_ENVELOPE = "ceemdan_envelope" # CEEMDAN敏感IMF轴承诊断
+    VMD_ENVELOPE = "vmd_envelope"       # VMD敏感模态轴承诊断
 
 
 class GearMethod(str, Enum):
@@ -98,6 +103,9 @@ class DenoiseMethod(str, Enum):
     EMD = "emd"                     # 经验模态分解降噪
     CEEMDAN = "ceemdan"             # 完备集成经验模态分解降噪
     SAVGOL = "savgol"               # Savitzky-Golay 多项式平滑
+    WAVELET_PACKET = "wavelet_packet"  # 小波包能量阈值降噪
+    CEEMDAN_WP = "ceemdan_wp"          # CEEMDAN+小波包级联降噪
+    EEMD = "eemd"                      # 集成经验模态分解降噪
 
 
 class DiagnosisEngine:

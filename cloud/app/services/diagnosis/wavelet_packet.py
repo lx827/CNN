@@ -5,10 +5,14 @@
 - wavelet_denoise: 利用小波系数阈值处理进行降噪；
 - 小波包能量熵: 利用小波包分解的全频带覆盖特性提取能量分布特征，
   对齿轮故障引起的频带能量重分布敏感。
+
+新增功能:
+- MSWPEE (Multi-Scale Wavelet Packet Energy Entropy): 多尺度粗粒化处理，
+  对早期微弱故障更敏感（参考 §10.3）
 """
 import numpy as np
 import pywt
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 
 def wavelet_packet_decompose(
@@ -128,4 +132,101 @@ def wavelet_packet_denoise(
         "level": level,
         "energy_threshold_ratio": energy_threshold_ratio,
         "retained_nodes": sum(1 for r in ratios if r >= energy_threshold_ratio),
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# 多尺度小波包能量熵 (MSWPEE)
+# ═══════════════════════════════════════════════════════════
+
+def _coarse_grain(signal: np.ndarray, scale: int) -> np.ndarray:
+    """
+    粗粒化处理（Multi-Scale Processing）
+
+    对原始序列按 scale 因子分段平均，抑制高频随机噪声，
+    凸显低频调制特征（故障特征频率通常在低频段）。
+
+    Args:
+        signal: 输入信号
+        scale: 粗粒化尺度因子（τ=1为原信号，τ=2每2点取平均）
+
+    Returns:
+        粗粒化后的序列（长度 ≈ N/scale）
+    """
+    arr = np.asarray(signal, dtype=np.float64)
+    N = len(arr)
+    if scale <= 1:
+        return arr
+    n_out = N // scale
+    if n_out < 4:
+        return arr  # 信号过短，不粗粒化
+    reshaped = arr[:n_out * scale].reshape(n_out, scale)
+    return np.mean(reshaped, axis=1)
+
+
+def compute_mswpee(
+    signal: np.ndarray,
+    fs: float,
+    wavelet: str = "db8",
+    level: int = 3,
+    max_scale: int = 5,
+    gear_mesh_freq: float = None,
+) -> Dict:
+    """
+    多尺度小波包能量熵 (MSWPEE)
+
+    对各粗粒化序列分别计算小波包能量熵，构建多尺度特征向量。
+    粗粒化处理可抑制高频噪声，凸显故障引起的低频调制特征。
+
+    参考: wavelet_and_modality_decomposition.md §10.3
+
+    Args:
+        signal: 输入信号
+        fs: 采样率
+        wavelet: 小波基
+        level: WP 分解层数
+        max_scale: 最大粗粒化尺度（τ=1,2,...,max_scale）
+        gear_mesh_freq: 啮合频率（用于频带集中度计算）
+
+    Returns:
+        {
+            "mswpee_vector": [H^(1), H^(2), ...],      # 各尺度归一化熵
+            "mswpee_raw_vector": [H_raw^(1), ...],      # 各尺度原始熵
+            "scales": [1, 2, ..., max_scale],
+            "single_scale_results": {...},              # 各尺度的完整WP结果
+            "mswpee_mean": float,                       # 多尺度平均熵
+            "mswpee_std": float,                        # 多尺度熵标准差
+        }
+    """
+    arr = np.asarray(signal, dtype=np.float64)
+    mswpee_vec = []
+    mswpee_raw = []
+    scale_results = {}
+
+    for tau in range(1, max_scale + 1):
+        coarse = _coarse_grain(arr, tau)
+        # 粗粒化后采样率虚拟降低
+        fs_coarse = fs / tau
+
+        wp_result = compute_wavelet_packet_energy_entropy(
+            coarse, fs_coarse, wavelet=wavelet, level=level,
+            gear_mesh_freq=gear_mesh_freq,
+        )
+        mswpee_vec.append(wp_result["normalized_entropy"])
+        mswpee_raw.append(wp_result["energy_entropy"])
+        scale_results[f"scale_{tau}"] = wp_result
+
+    mean_entropy = float(np.mean(mswpee_vec)) if mswpee_vec else 0.0
+    std_entropy = float(np.std(mswpee_vec)) if len(mswpee_vec) > 1 else 0.0
+
+    return {
+        "mswpee_vector": [round(v, 4) for v in mswpee_vec],
+        "mswpee_raw_vector": [round(v, 4) for v in mswpee_raw],
+        "scales": list(range(1, max_scale + 1)),
+        "single_scale_results": scale_results,
+        "mswpee_mean": round(mean_entropy, 4),
+        "mswpee_std": round(std_entropy, 4),
+        "wavelet": wavelet,
+        "level": level,
+        "max_scale": max_scale,
     }

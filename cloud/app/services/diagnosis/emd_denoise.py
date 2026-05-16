@@ -457,6 +457,148 @@ def ceemdan_decompose(
 
 
 # ═══════════════════════════════════════════════════════════
+# EEMD 分解 (Ensemble EMD — Wu & Huang 2009)
+# ═══════════════════════════════════════════════════════════
+
+def eemd_decompose(
+    signal: np.ndarray,
+    max_imfs: int = 10,
+    ensemble_size: int = 50,
+    noise_std: float = 0.2,
+    max_sifts: int = 100,
+    sd_threshold: float = 0.25,
+    use_rilling: bool = False,
+    rilling_thresh: Tuple[float, float, float] = (0.05, 0.5, 0.05),
+    use_pchip: bool = True,
+) -> Tuple[List[np.ndarray], np.ndarray]:
+    """
+    EEMD 分解（集成经验模态分解 — Wu & Huang 2009）
+
+    与 CEEMDAN 的关键区别:
+    - EEMD: 每次对 X+noise 做 EMD，然后对 ensemble 平均
+      → 最终 IMF = 各次 EMD 第 k 个 IMF 的平均
+      → 残留白噪声（不完全分解）
+    - CEEMDAN: 噪声 IMF 分层添加，逐阶提取 local_mean
+      → 完备性保证，残差更干净
+
+    适用场景:
+    - EEMD 计算比 CEEMDAN 快（不需要预分解噪声）
+    - 对模态混叠的抑制比 EMD 好，但不如 CEEMDAN
+    - 作为 CEEMDAN 的轻量替代，适合快速分析
+
+    Args:
+        signal: 输入信号
+        max_imfs: 最大 IMF 数
+        ensemble_size: 集成次数
+        noise_std: 噪声幅值比例（相对于信号 std）
+        max_sifts: 单 IMF 最大筛分次数
+        sd_threshold: SD 准则阈值
+        use_rilling: 是否使用 Rilling 停止准则
+        rilling_thresh: Rilling 参数 (sd1, sd2, alpha)
+        use_pchip: 包络插值方法
+
+    Returns:
+        (imfs_list, residual)
+    """
+    arr = np.array(signal, dtype=np.float64)
+    N = len(arr)
+    xstd = float(np.std(arr))
+    if xstd < 1e-12:
+        return [arr.copy()], np.zeros_like(arr)
+
+    arr_norm = arr / xstd
+
+    # 每个 ensemble 成员独立 EMD
+    all_imfs_by_k: Dict[int, List[np.ndarray]] = {}
+    max_k_found = 0
+
+    for i in range(ensemble_size):
+        noise = np.random.normal(0, noise_std, N)
+        trial = arr_norm + noise
+
+        trial_imfs, trial_residue = emd_decompose(
+            trial, max_imfs=max_imfs, max_sifts=max_sifts,
+            sd_threshold=sd_threshold,
+            use_rilling=use_rilling, rilling_thresh=rilling_thresh,
+            use_pchip=use_pchip, normalize=False,
+        )
+
+        for k, imf in enumerate(trial_imfs):
+            if k not in all_imfs_by_k:
+                all_imfs_by_k[k] = []
+            all_imfs_by_k[k].append(imf)
+
+        max_k_found = max(max_k_found, len(trial_imfs))
+
+    # 对各阶 IMF 做 ensemble 平均
+    imfs = []
+    for k in range(max_k_found):
+        if k in all_imfs_by_k and len(all_imfs_by_k[k]) > 0:
+            avg_imf = np.mean(all_imfs_by_k[k], axis=0)
+            imfs.append(avg_imf)
+
+    # 残差 = 原信号 - ΣIMF
+    residue = arr_norm.copy()
+    for imf in imfs:
+        residue = residue - imf
+
+    # 恢复原始幅值
+    imfs = [imf * xstd for imf in imfs]
+    residue = residue * xstd
+
+    return imfs, residue
+
+
+# ═══════════════════════════════════════════════════════════
+# IMF 能量熵（故障严重度评估）
+# ═══════════════════════════════════════════════════════════
+
+def compute_imf_energy_entropy(imfs: List[np.ndarray]) -> Dict:
+    """
+    IMF 能量熵特征提取（§11.4）
+
+    健康轴承: 能量分布相对均匀 → H_IMF ≈ 2.5~3.5
+    早期故障: 能量开始向故障频带集中 → H_IMF ≈ 1.8~2.5
+    明显故障: 能量高度集中于1~2个IMF → H_IMF ≈ 1.2~1.8
+    严重故障: 能量几乎集中于单一IMF → H_IMF < 1.2
+
+    Args:
+        imfs: IMF 列表
+
+    Returns:
+        {
+            "imf_energy_entropy": float,     # Shannon 熵
+            "normalized_entropy": float,     # 归一化到 [0, 1]
+            "energy_concentration": float,   # 最大IMF能量占比
+            "energies": List[float],         # 各IMF能量
+            "energy_ratios": List[float],    # 各IMF能量占比
+        }
+    """
+    energies = [float(np.sum(np.asarray(imf, dtype=np.float64) ** 2)) for imf in imfs]
+    total = sum(energies) + 1e-12
+    ratios = [e / total for e in energies]
+
+    # Shannon 熵
+    entropy = -sum(r * np.log2(r) for r in ratios if r > 1e-12)
+
+    # 归一化熵
+    n = len(imfs)
+    max_entropy = np.log2(n) if n > 1 else 1.0
+    normalized = float(entropy / max_entropy) if max_entropy > 0 else 0.0
+
+    # 能量集中度 EC
+    ec = float(max(ratios)) if ratios else 0.0
+
+    return {
+        "imf_energy_entropy": round(float(entropy), 4),
+        "normalized_entropy": round(normalized, 4),
+        "energy_concentration": round(ec, 6),
+        "energies": [round(e, 4) for e in energies],
+        "energy_ratios": [round(r, 6) for r in ratios],
+    }
+
+
+# ═══════════════════════════════════════════════════════════
 # 峭度计算（统一为 excess kurtosis）
 # ═══════════════════════════════════════════════════════════
 
@@ -488,7 +630,7 @@ def emd_denoise(
     use_pchip: bool = True,
 ) -> Tuple[np.ndarray, Dict]:
     """
-    EMD/CEEMDAN 降噪统一入口
+    EMD/EEMD/CEEMDAN 降噪统一入口
 
     筛选策略：保留高相关或高峭度IMF，丢弃低频趋势和高频噪声IMF。
     """
@@ -497,6 +639,13 @@ def emd_denoise(
 
     if method == "ceemdan":
         imfs, residue = ceemdan_decompose(
+            arr, max_imfs=max_imfs,
+            ensemble_size=ensemble_size, noise_std=noise_std,
+            use_rilling=use_rilling,
+            use_pchip=use_pchip,
+        )
+    elif method == "eemd":
+        imfs, residue = eemd_decompose(
             arr, max_imfs=max_imfs,
             ensemble_size=ensemble_size, noise_std=noise_std,
             use_rilling=use_rilling,
