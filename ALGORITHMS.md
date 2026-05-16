@@ -1271,6 +1271,12 @@ $$m(A) = \frac{\sum_{B\cap C=A} m_1(B)m_2(C)}{1-K}, \quad K = \sum_{B\cap C=\emp
 | 连续振动分离+MED (CVS+MED) | `diagnosis/gear/planetary_demod.py::planetary_cvs_med_analysis` | ✅ 已实现 | 利用行星运动周期性分离单个行星轮啮合段 → MED 增强 → 包络分析 |
 | 高级诊断独立方法选择 API | `api/data_view/research.py::get_channel_method_analysis` | ✅ 已实现 | 支持独立运行单个轴承/齿轮/行星箱方法或全部方法 |
 | 方法信息元数据 API | `api/data_view/research.py::get_method_info` | ✅ 已实现 | 返回 15 种分析方法的分类、名称和详细说明 |
+| LMS/NLMS/VSSLMS 自适应滤波 | `diagnosis/lms_filter.py` | ✅ 已实现 | 单通道延迟参考自适应滤波，NLMS/VSSLMS 步长自适应；用于联合降噪和单通道 BSS |
+| FastICA + VMD-ICA 盲源分离 | `diagnosis/bss.py` | ✅ 已实现 | FastICA 多通道分离 + VMD 分解后 ICA 单通道扩展；峭度最大选择故障分量 |
+| 轴承 SC/SCoh 循环平稳分析 | `diagnosis/bearing_cyclostationary.py` | ✅ 已实现 | 分段 FFT 复数交叉谱平均 + PSD 频移归一化；搜索 BPFO/BPFI/BSF/FTF 循环频率峰值 |
+| ZOOM-FFT 边频带分析 | `diagnosis/gear/metrics.py::analyze_sidebands_zoom_fft` | ✅ 已实现 | 当 Δf ≤ f_r/4 时自动切换 ZOOM-FFT 高分辨率边频带分析；SER + 显著边频计数 |
+| 级联联合降噪 (wavelet+VMD/LMS) | `diagnosis/preprocessing.py::cascade_wavelet_vmd/lms, joint_denoise` | ✅ 已实现 | 小波→VMD/LMS 两阶段级联去噪；joint_denoise 统一接口，WAVELET_VMD/WAVELET_LMS 新 DenoiseMethod |
+| 非参数 CUSUM (符号/Mann-Whitney) | `diagnosis/features.py::compute_nonparam_cusum_features` | ✅ 已实现 | 符号 CUSUM + Mann-Whitney CUSUM；无需正态假设，集成到 compute_time_features 流 |
 
 ---
 
