@@ -85,6 +85,11 @@ METHOD_INFO = {
         "label": "谱峭度重加权包络",
         "description": "自适应谱峭度重加权包络：结合谱峭度、冲击度和局部 SNR 联合选带，对多频带冲击场景的检测率高于单一 Kurtogram。",
     },
+    "sc_scoh": {
+        "category": "bearing",
+        "label": "谱相关/谱相干分析",
+        "description": "轴承循环平稳分析：计算谱相关密度(SC)和谱相干系数(SCoh)，在 BPFO/BPFI/BSF 等故障频率处检测循环平稳特征。适合恒速工况下的轴承诊断。",
+    },
     # 齿轮诊断方法
     "gear_standard": {
         "category": "gear",
@@ -147,7 +152,7 @@ async def get_channel_method_analysis(
     batch_index: int,
     channel: int,
     method: str = Query(default="all", description="分析方法名或'all'运行全部"),
-    denoise: str = Query(default="none", description="none/wavelet/vmd"),
+    denoise: str = Query(default="none", description="none/wavelet/vmd/wavelet_vmd/wavelet_lms"),
     detrend: bool = Query(default=False, description="是否线性去趋势"),
     db: Session = Depends(get_db),
 ):
@@ -186,7 +191,11 @@ async def get_channel_method_analysis(
             bearing_params = _extract_device_param(device.bearing_params or {}, ("n", "d", "D", "alpha"))
             gear_teeth = _extract_device_param(device.gear_teeth or {}, ("input", "output"))
 
-        denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET, "vmd": DenoiseMethod.VMD}
+        denoise_map = {
+            "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,
+            "vmd": DenoiseMethod.VMD, "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
+            "wavelet_lms": DenoiseMethod.WAVELET_LMS,
+        }
         denoise_method = denoise_map.get(denoise, DenoiseMethod.NONE)
 
         # ── 运行全部方法 ──
@@ -223,6 +232,7 @@ async def get_channel_method_analysis(
             "med": BearingMethod.MED,
             "teager": BearingMethod.TEAGER,
             "spectral_kurtosis": BearingMethod.SPECTRAL_KURTOSIS,
+            "sc_scoh": BearingMethod.SC_SCOH,
         }
         if method in bearing_method_map:
             engine = DiagnosisEngine(
@@ -348,7 +358,7 @@ async def get_channel_research_analysis(
     channel: int,
     detrend: bool = Query(default=False, description="whether to linearly detrend"),
     profile: str = Query(default="balanced", description="runtime/balanced/exhaustive"),
-    denoise: str = Query(default="none", description="none/wavelet/vmd"),
+    denoise: str = Query(default="none", description="none/wavelet/vmd/wavelet_vmd/wavelet_lms"),
     max_seconds: float = Query(default=5.0, ge=1.0, le=10.0),
     db: Session = Depends(get_db),
 ):
@@ -373,6 +383,8 @@ async def get_channel_research_analysis(
         "none": DenoiseMethod.NONE,
         "wavelet": DenoiseMethod.WAVELET,
         "vmd": DenoiseMethod.VMD,
+        "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
+        "wavelet_lms": DenoiseMethod.WAVELET_LMS,
     }
 
     try:

@@ -46,6 +46,8 @@ CORS_ORIGINS = [
 ANALYZE_INTERVAL_SECONDS = 30  # 每 30 秒执行一次分析
 SENSOR_SAMPLE_RATE = int(os.getenv("SENSOR_SAMPLE_RATE", "25600"))  # 采样率 Hz
 SENSOR_WINDOW_SECONDS = int(os.getenv("SENSOR_WINDOW_SECONDS", "10"))  # 每次上传时长（秒）
+# 后台自动诊断默认去噪方法：wavelet(推荐) / none / vmd
+ANALYZE_DENOISE_METHOD = os.getenv("ANALYZE_DENOISE_METHOD", "wavelet")
 
 # ========== 设备配置 ==========
 DEVICE_ID = "WTG-001"

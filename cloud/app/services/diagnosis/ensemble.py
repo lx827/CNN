@@ -44,7 +44,7 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
 
     if profile == "exhaustive":
         return {
-            "denoise": list(dict.fromkeys(denoise_methods + ["wavelet", "wavelet_vmd"])),
+            "denoise": list(dict.fromkeys(denoise_methods + ["wavelet", "wavelet_vmd", "wavelet_lms"])),
             "bearing": [
                 BearingMethod.ENVELOPE,
                 BearingMethod.KURTOGRAM,
@@ -411,6 +411,9 @@ def run_research_ensemble(
                     bearing_params=bearing_params,
                     gear_teeth=gear_teeth,
                 )
+                # exhaustive profile 启用行星箱慢方法（VMD/SC/SCoh/MSB）
+                if profile == "exhaustive":
+                    engine._run_slow_methods = True
                 result = engine.analyze_gear(
                     proc,
                     fs,

@@ -27,7 +27,7 @@ from app.services.diagnosis.order_tracking import (
 from app.services.diagnosis.rule_based import _rule_based_analyze
 from app.services.diagnosis.features import _get_channel_params
 from app.services.diagnosis.channel_consensus import cross_channel_consensus
-from app.core.config import DIAGNOSIS_WEIGHTS
+from app.core.config import DIAGNOSIS_WEIGHTS, ANALYZE_DENOISE_METHOD
 from app.services.diagnosis.probability_calibration import calibrate_fault_probabilities
 
 
@@ -67,10 +67,15 @@ def analyze_device(
     sample_rate: int = 25600,
     device=None,
     rot_freq: Optional[float] = None,
-    denoise_method: str = "none",
+    denoise_method: str = "",
 ):
     """
     综合分析 — 按通道配置自动分派轴承/齿轮/混合分析
+
+    denoise_method 参数：
+    - "" (空字符串): 使用配置默认值 (ANALYZE_DENOISE_METHOD, 默认 "wavelet")
+    - "none": 不使用去噪
+    - "wavelet"/"vmd"/"wavelet_vmd"/"wavelet_lms": 使用对应去噪方法
 
     诊断逻辑（详见 DIAGNOSIS_LOGIC.md）：
       - 每通道独立判断 bearing_params 和 gear_teeth 是否有效
@@ -95,9 +100,13 @@ def analyze_device(
         strategy = getattr(device, "diagnosis_strategy", "advanced") if device else "advanced"
         bearing_method = getattr(device, "bearing_method", "kurtogram") if device else "kurtogram"
         gear_method = getattr(device, "gear_method", "standard") if device else "standard"
-        denoise = denoise_method if denoise_method != "none" else (
-            getattr(device, "denoise_method", "none") if device else "none"
-        )
+        # 去噪方法优先级：1) 调用方显式传入非空值 2) 设备属性 3) 全局配置默认
+        if denoise_method:
+            denoise = denoise_method
+        elif device and getattr(device, "denoise_method", None):
+            denoise = device.denoise_method
+        else:
+            denoise = ANALYZE_DENOISE_METHOD
 
         channel_results = []
         for ch_idx, (ch_name, signal) in enumerate(channels_data.items(), start=1):

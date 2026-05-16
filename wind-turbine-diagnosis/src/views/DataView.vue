@@ -166,6 +166,7 @@
                 <el-option label="TEO+包络" value="teager" />
                 <el-option label="谱峭度包络" value="spectral_kurtosis" />
                 <el-option label="MED+包络" value="med" />
+                <el-option label="谱相关/谱相干" value="sc_scoh" />
               </el-select>
               <el-tag v-else type="success" size="small" effect="plain">{{ envelopeMethodLabel }}</el-tag>
               <el-button
@@ -299,6 +300,8 @@
                   <el-option label="无预处理" value="none" />
                   <el-option label="小波去噪" value="wavelet" />
                   <el-option label="VMD分解" value="vmd" />
+                  <el-option label="小波+VMD级联" value="wavelet_vmd" />
+                  <el-option label="小波+LMS级联" value="wavelet_lms" />
                 </el-select>
                 <el-button
                   type="primary"
@@ -762,6 +765,7 @@ const envelopeMethodLabel = computed(() => {
     teager: 'TEO+包络',
     spectral_kurtosis: '谱峭度包络',
     med: 'MED+包络',
+    sc_scoh: '谱相关/谱相干',
   }
   return labels[envelopeMethod.value] || envelopeMethod.value
 })

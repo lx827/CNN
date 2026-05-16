@@ -33,6 +33,8 @@
           <el-option label="不去噪" value="none" />
           <el-option label="小波" value="wavelet" />
           <el-option label="VMD" value="vmd" />
+          <el-option label="小波+VMD" value="wavelet_vmd" />
+          <el-option label="小波+LMS" value="wavelet_lms" />
         </el-select>
 
         <el-select v-if="runMode === 'ensemble'" v-model="profile" class="select small">

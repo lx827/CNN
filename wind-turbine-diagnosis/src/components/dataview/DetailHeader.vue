@@ -49,6 +49,8 @@
         <el-option label="无预处理" value="none" />
         <el-option label="小波去噪" value="wavelet" />
         <el-option label="VMD分解" value="vmd" />
+        <el-option label="小波+VMD级联" value="wavelet_vmd" />
+        <el-option label="小波+LMS级联" value="wavelet_lms" />
       </el-select>
       <el-tooltip content="消除基频漂移导致的线性趋势" placement="top">
         <el-switch

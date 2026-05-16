@@ -84,7 +84,7 @@ async def get_channel_gear(
     channel: int,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
     method: str = Query(default="standard", description="齿轮诊断方法: standard/advanced"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms"),
     db: Session = Depends(get_db)
 ):
     """
@@ -119,7 +119,11 @@ async def get_channel_gear(
             "standard": GearMethod.STANDARD,
             "advanced": GearMethod.ADVANCED,
         }
-        denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET, "vmd": DenoiseMethod.VMD}
+        denoise_map = {
+            "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,
+            "vmd": DenoiseMethod.VMD, "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
+            "wavelet_lms": DenoiseMethod.WAVELET_LMS,
+        }
         gear_method = method_map.get(method, GearMethod.STANDARD)
         denoise_method = denoise_map.get(denoise, DenoiseMethod.NONE)
 
@@ -167,9 +171,9 @@ async def get_channel_analyze(
     channel: int,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
     strategy: str = Query(default="standard", description="诊断策略: standard/advanced/expert"),
-    bearing_method: str = Query(default="envelope", description="轴承方法: envelope/kurtogram/cpw/med"),
+    bearing_method: str = Query(default="envelope", description="轴承方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh"),
     gear_method: str = Query(default="standard", description="齿轮方法: standard/advanced"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms"),
     db: Session = Depends(get_db)
 ):
     """
@@ -211,9 +215,14 @@ async def get_channel_analyze(
             "med": BearingMethod.MED,
             "teager": BearingMethod.TEAGER,
             "spectral_kurtosis": BearingMethod.SPECTRAL_KURTOSIS,
+            "sc_scoh": BearingMethod.SC_SCOH,
         }
         gear_map = {"standard": GearMethod.STANDARD, "advanced": GearMethod.ADVANCED}
-        denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET, "vmd": DenoiseMethod.VMD}
+        denoise_map = {
+            "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,
+            "vmd": DenoiseMethod.VMD, "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
+            "wavelet_lms": DenoiseMethod.WAVELET_LMS,
+        }
 
         engine = DiagnosisEngine(
             strategy=strategy_map.get(strategy, "standard"),
@@ -230,17 +239,19 @@ async def get_channel_analyze(
 
         # 未配置机械参数时不注入默认参数，改走统计诊断路径。
 
+        # strategy → profile 映射：expert→exhaustive(全算法), advanced→balanced, standard→runtime
+        strategy_to_profile = {
+            "standard": "runtime",
+            "advanced": "balanced",
+            "expert": "exhaustive",
+        }
+        profile = strategy_to_profile.get(strategy, "runtime")
+
         # CPU 密集型综合分析放入线程池
-        if strategy == "expert":
-            result = await asyncio.to_thread(
-                engine.analyze_research_ensemble, signal, sample_rate,
-                profile="runtime"
-            )
-        else:
-            result = await asyncio.to_thread(
-                engine.analyze_comprehensive, signal, sample_rate,
-                skip_bearing=False, skip_gear=False
-            )
+        result = await asyncio.to_thread(
+            engine.analyze_research_ensemble, signal, sample_rate,
+            profile=profile
+        )
 
         response_data = {
             "device_id": record.device_id,
@@ -303,7 +314,7 @@ async def get_channel_full_analysis(
     batch_index: int,
     channel: int,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms"),
     db: Session = Depends(get_db)
 ):
     """
@@ -343,7 +354,11 @@ async def get_channel_full_analysis(
         bearing_params = _extract_device_param(bearing_params, ("n", "d", "D", "alpha"))
         gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
 
-        denoise_map = {"none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET, "vmd": DenoiseMethod.VMD}
+        denoise_map = {
+            "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,
+            "vmd": DenoiseMethod.VMD, "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
+            "wavelet_lms": DenoiseMethod.WAVELET_LMS,
+        }
 
         engine = DiagnosisEngine(
             strategy=DiagnosisStrategy.EXPERT,
