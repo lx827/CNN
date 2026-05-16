@@ -421,6 +421,20 @@ cloud/app/services/analyzer.py
 - 数据长度：每文件约 5~10 秒振动信号（40960~81920 点 @ 8192Hz）
 - 用途：边端真实数据模式读取 `.npy` 文件，按批次上传至云端诊断
 
+**HUSTbear 轴承参数：**
+
+> HUSTbear 数据集使用 ER-16K 轴承，详细参数见下表：
+
+**Table 1. Parameters of the tested bearings**
+
+| Parameter | Value |
+|-----------|-------|
+| Shaft Diameter | 38.52 mm |
+| Ball Diameter | 7.94 mm |
+| Number of Balls | 9 |
+| BPFI | 5.43 fr |
+| BPFO | 3.57 fr |
+
 **CW 轴承数据集（变速工况）：**
 
 > 来源：H. Huang, N. Baddour / Data in Brief 21 (2018) 1745–1749
@@ -437,6 +451,12 @@ cloud/app/services/analyzer.py
     - `C`：升速→降速（Increasing then decreasing）
     - `D`：降速→升速（Decreasing then increasing）
   - 序号：`1` / `2` / `3`（同工况 3 次重复采集）
+
+**Table 2. Parameters of the CW dataset bearings (ER16K)**
+
+| Bearing type | Pitch diameter | Ball diameter | Number of balls | BPFI | BPFO |
+|--------------|----------------|---------------|-----------------|------|------|
+| ER16K | 38.52 mm | 7.94 mm | 9 | 5.43 fr | 3.57 fr |
 
 **健康轴承（H）转速范围：**
 
