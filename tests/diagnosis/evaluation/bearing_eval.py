@@ -41,6 +41,7 @@ def evaluate_bearing_methods():
         BearingMethod.MED,
         BearingMethod.TEAGER,
         BearingMethod.SPECTRAL_KURTOSIS,
+        BearingMethod.MCKD,
         # BearingMethod.SC_SCOH,  # 计算量极大，单独评价时跳过
     ]
 
@@ -115,6 +116,17 @@ def evaluate_bearing_methods():
                     exec_time = (time.perf_counter() - t0) * 1000
                     env_freq = result.get("envelope_freq", [])
                     env_amp = result.get("envelope_amp", [])
+
+                    # 获取综合健康度（与 HUSTbear 保持一致）
+                    hs = 100
+                    status = "normal"
+                    try:
+                        comp = engine.analyze_comprehensive(signal, SAMPLE_RATE, rot_freq=rot_freq)
+                        hs = comp.get("health_score", 100)
+                        status = comp.get("status", "normal")
+                    except Exception:
+                        pass
+
                     all_results.append({
                         "dataset": "CW",
                         "file": filepath.name,
@@ -123,11 +135,11 @@ def evaluate_bearing_methods():
                         "rot_freq": round(rot_freq, 2),
                         "bpfo_snr": round(estimate_fault_freq_snr(env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BPFO"]), 2),
                         "bpfi_snr": round(estimate_fault_freq_snr(env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BPFI"]), 2),
-                        "bsf_snr": 0.0,
-                        "peak_clarity": 0.0,
-                        "harmonic_count": 0,
-                        "health_score": 100,
-                        "status": "normal",
+                        "bsf_snr": round(estimate_fault_freq_snr(env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BSF"]), 2),
+                        "peak_clarity": round(compute_peak_clarity(env_amp), 2),
+                        "harmonic_count": count_harmonics(env_freq, env_amp, rot_freq),
+                        "health_score": hs,
+                        "status": status,
                         "exec_time_ms": round(exec_time, 2),
                     })
                 except Exception:
@@ -224,6 +236,8 @@ def _generate_bearing_report(results: List[Dict]) -> str:
         "| teager | Teager能量算子+包络 | 非线性能量跟踪 |",
         "| spectral_kurtosis | 谱峭度重加权 | 自适应频带评分 |",
         "| sc_scoh | 谱相关/谱相干 | 循环平稳分析，抗噪强 |",
+        "| mckd | 最大相关峭度解卷积+包络 | 周期约束增强，优于MED |",
+
         "",
         "## 2. HUSTbear 数据集性能",
         "",
@@ -305,8 +319,8 @@ def _generate_bearing_report(results: List[Dict]) -> str:
     lines.append("|------|---------|------|")
     lines.append("| 快速筛查 | envelope / kurtogram | 速度快，检出率可接受 |")
     lines.append("| 复杂工况(齿轮干扰) | cpw | 预白化抑制啮合频率 |")
-    lines.append("| 弱冲击增强 | med | 解卷积提高峭度 |")
-    lines.append("| 强噪声环境 | sc_scoh | 循环平稳分析抗噪最强 |")
-    lines.append("| 全面分析 | spectral_kurtosis | 自适应频带选择综合表现均衡 |")
+    lines.append("| 弱冲击增强 | med / mckd | 解卷积提高峭度，MCKD加周期约束 |")
+    lines.append("| 强噪声环境 | sc_scoh / mckd | 循环平稳分析抗噪最强，MCKD周期增强 |")
+    lines.append("| 全面分析 | spectral_kurtosis / mckd | 自适应频带选择综合表现均衡 |")
     lines.append("")
     return "\n".join(lines)

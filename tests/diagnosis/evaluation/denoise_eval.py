@@ -20,6 +20,8 @@ from app.services.diagnosis.preprocessing import (
     cascade_wavelet_lms,
 )
 from app.services.diagnosis.vmd_denoise import vmd_denoise
+from app.services.diagnosis.emd_denoise import emd_denoise
+from app.services.diagnosis.savgol_denoise import sg_denoise
 
 from .config import OUTPUT_DIR, SAMPLE_RATE, MAX_SAMPLES
 from .datasets import get_hustbear_files
@@ -28,6 +30,7 @@ from .utils import (
     compute_snr_db,
     compute_mse,
     compute_correlation,
+    compute_excess_kurtosis,
     add_awgn,
     save_cache,
     save_figure,
@@ -69,6 +72,9 @@ def evaluate_denoise_methods():
         "med": lambda sig: minimum_entropy_deconvolution(sig, filter_len=64, max_iter=30)[0],
         "wavelet_vmd": lambda sig: cascade_wavelet_vmd(sig)[0],
         "wavelet_lms": lambda sig: cascade_wavelet_lms(sig)[0],
+        "emd": lambda sig: emd_denoise(sig, method="emd"),
+        "ceemdan": lambda sig: emd_denoise(sig, method="ceemdan"),
+        "savgol": lambda sig: sg_denoise(sig, window_length=51),
     }
 
     for case_name, signal in test_cases:
@@ -91,8 +97,8 @@ def evaluate_denoise_methods():
                     mse_val = compute_mse(signal, denoised)
                     corr = compute_correlation(signal, denoised)
 
-                    kurt_before = float(np.mean(signal**4) / (np.var(signal)**2 + 1e-12))
-                    kurt_after = float(np.mean(denoised**4) / (np.var(denoised)**2 + 1e-12))
+                    kurt_before = compute_excess_kurtosis(signal)
+                    kurt_after = compute_excess_kurtosis(denoised)
 
                     results.append({
                         "case": case_name,
@@ -173,6 +179,10 @@ def _generate_denoise_report(results: List[Dict]) -> str:
         "| med | 最小熵解卷积 | 增强周期性冲击，轴承专用 |",
         "| wavelet_vmd | 小波+VMD级联 | 强高斯白噪声场景 |",
         "| wavelet_lms | 小波+LMS级联 | 强脉冲型干扰场景 |",
+        "| emd | 经验模态分解 | 自适应模态，非平稳信号 |",
+        "| ceemdan | 完备集成EMD | 抗模态混叠，变速工况 |",
+        "| savgol | Savitzky-Golay平滑 | 高斯噪声，保留峰形，实时 |",
+
         "",
         "## 2. SNR Improvement 对比",
         "",
@@ -223,6 +233,8 @@ def _generate_denoise_report(results: List[Dict]) -> str:
     lines.append("| 高斯白噪声为主 | wavelet_vmd | 级联策略SNR提升最大 |")
     lines.append("| 需要保留冲击细节 | wavelet | 软阈值对冲击友好 |")
     lines.append("| 轴承故障增强 | med | 专门增强周期性冲击 |")
-    lines.append("| 实时性要求高 | wavelet | 单方法最快 |")
+    lines.append("| 实时性要求高 | savgol | O(N)复杂度，极快 |")
+    lines.append("| 非平稳/变速信号 | ceemdan | 自适应模态分解 |")
+    lines.append("| 快速平滑预处理 | savgol | 多项式拟合，无相位失真 |")
     lines.append("")
     return "\n".join(lines)

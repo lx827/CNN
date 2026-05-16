@@ -12,20 +12,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 
 from app.services.diagnosis import DiagnosisEngine, GearMethod, DiagnosisStrategy, DenoiseMethod
-from app.services.diagnosis.gear import compute_fm0_order, compute_ser_order, _evaluate_gear_faults
-from app.services.diagnosis.gear.metrics import (
-    compute_tsa_residual_order,
-    compute_fm4,
-    compute_m6a,
-    compute_m8a,
-    compute_car,
-)
-from app.services.diagnosis.features import compute_time_features
-from app.services.diagnosis.order_tracking import _compute_order_spectrum, _compute_order_spectrum_multi_frame
+from app.services.diagnosis.gear.metrics import compute_tsa_residual_order
 
 from .config import OUTPUT_DIR, SAMPLE_RATE, WTGEARBOX_GEAR, MESH_FREQ_COEFF
 from .datasets import get_wtgearbox_files
-from .utils import load_npy, save_cache, save_figure
+from .utils import load_npy, save_cache, save_figure, compute_excess_kurtosis
 
 import matplotlib.pyplot as plt
 
@@ -54,45 +45,9 @@ def evaluate_gear_methods():
             rot_freq = 30.0
         mesh_freq = MESH_FREQ_COEFF * rot_freq
 
-        # TSA
-        tsa_result = compute_tsa_residual_order(signal, SAMPLE_RATE, rot_freq)
-        tsa_kurt = 0.0
-        fm4_val = 0.0
-        if tsa_result.get("valid"):
-            diff = tsa_result.get("differential", np.array([]))
-            if len(diff) > 0:
-                tsa_kurt = float(np.mean(diff**4) / (np.var(diff)**2 + 1e-12))
-                fm4_val = compute_fm4(diff)
-
-        # 阶次谱
-        try:
-            order_axis, order_spectrum, _, _ = _compute_order_spectrum_multi_frame(
-                signal, SAMPLE_RATE, samples_per_rev=1024, max_order=50
-            )
-        except Exception:
-            try:
-                order_axis, order_spectrum = _compute_order_spectrum(
-                    signal, SAMPLE_RATE, rot_freq, samples_per_rev=1024
-                )
-            except Exception:
-                order_axis, order_spectrum = np.array([]), np.array([])
-
-        mesh_order = MESH_FREQ_COEFF
-        ser_val = compute_ser_order(order_axis, order_spectrum, mesh_order) if len(order_axis) > 0 else 0.0
-
-        fm0_val = 0.0
-        if tsa_result.get("valid"):
-            tsa_sig = tsa_result.get("tsa_signal", np.array([]))
-            if len(tsa_sig) > 0 and len(order_axis) > 0 and len(order_spectrum) > 0:
-                try:
-                    fm0_val = compute_fm0_order(tsa_sig, order_axis, order_spectrum, mesh_order)
-                except Exception:
-                    fm0_val = compute_fm0(tsa_sig, mesh_freq, SAMPLE_RATE)
-
-        car_val = compute_car(signal, SAMPLE_RATE, rot_freq, n_harmonics=3)
-        m6a_val = compute_m6a(diff) if tsa_result.get("valid") and len(diff) > 0 else 0.0
-        m8a_val = compute_m8a(diff) if tsa_result.get("valid") and len(diff) > 0 else 0.0
-
+        # ═══════ 统一走生产路径：analyze_comprehensive ═══════
+        # 从 gear_results 中提取指标，与生产环境完全一致
+        gear_result = {}
         hs = 100
         status = "normal"
         try:
@@ -105,8 +60,24 @@ def evaluate_gear_methods():
             comp = engine.analyze_comprehensive(signal, SAMPLE_RATE, rot_freq=rot_freq)
             hs = comp.get("health_score", 100)
             status = comp.get("status", "normal")
+            gear_result = comp.get("gear_results", {})
         except Exception:
             pass
+
+        ser_val = gear_result.get("ser", 0.0)
+        fm0_val = gear_result.get("fm0", 0.0)
+        fm4_val = gear_result.get("fm4", 0.0)
+        car_val = gear_result.get("car", 0.0)
+        m6a_val = gear_result.get("m6a", 0.0)
+        m8a_val = gear_result.get("m8a", 0.0)
+
+        # TSA 残差峭度作为补充指标（analyze_gear 不返回，需单独计算）
+        tsa_result = compute_tsa_residual_order(signal, SAMPLE_RATE, rot_freq)
+        tsa_kurt = 0.0
+        if tsa_result.get("valid"):
+            diff = tsa_result.get("differential", np.array([]))
+            if len(diff) > 0:
+                tsa_kurt = compute_excess_kurtosis(diff)
 
         all_results.append({
             "file": filepath.name,

@@ -62,7 +62,10 @@ def add_awgn(signal: np.ndarray, target_snr_db: float) -> np.ndarray:
 # ═══════════════════════════════════════════════════════════
 
 def estimate_fault_freq_snr(envelope_freq, envelope_amp, rot_freq, target_freq_coeff):
-    """估计特定故障频率在包络谱中的SNR"""
+    """估计特定故障频率在包络谱中的SNR
+
+    修复: 背景估计排除峰值本身及其紧邻邻域(±3%)，避免SNR被系统性低估。
+    """
     if rot_freq is None or rot_freq <= 0 or not len(envelope_freq):
         return 0.0
     target_freq = target_freq_coeff * rot_freq
@@ -72,10 +75,20 @@ def estimate_fault_freq_snr(envelope_freq, envelope_amp, rot_freq, target_freq_c
         return 0.0
     idx = np.argmin(np.abs(freqs - target_freq))
     peak_amp = amps[idx]
+
+    # 整个 ±10% 频带
     band_mask = (freqs >= target_freq * 0.9) & (freqs <= target_freq * 1.1)
-    if np.sum(band_mask) <= 1:
-        return 0.0
-    background = np.mean(amps[band_mask]) * 0.9
+    # 排除峰值本身 ±3%（避免背景包含峰值）
+    exclude_mask = np.abs(freqs - target_freq) < (target_freq * 0.03)
+    background_mask = band_mask & (~exclude_mask)
+
+    if np.sum(background_mask) <= 0:
+        # 无可用背景区域，退化为整体谱均值（仍排除峰值）
+        bg_amps = amps[~exclude_mask]
+        background = np.mean(bg_amps) if len(bg_amps) > 0 else np.mean(amps)
+    else:
+        background = np.mean(amps[background_mask])
+
     if background < 1e-12:
         background = 1e-12
     return float(peak_amp / background)
@@ -184,6 +197,30 @@ def wilcoxon_test(healthy_scores: List[float], fault_scores: List[float]) -> Dic
         }
     except Exception:
         return {"statistic": 0.0, "pvalue": 1.0, "significant": False}
+
+
+def compute_auc_manual(y_true: List[int], y_scores: List[float]) -> float:
+    """手动计算 ROC-AUC（Mann-Whitney U 统计量），无需 sklearn"""
+    pos_scores = [s for s, t in zip(y_scores, y_true) if t == 1]
+    neg_scores = [s for s, t in zip(y_scores, y_true) if t == 0]
+    if not pos_scores or not neg_scores:
+        return 0.5
+    # Mann-Whitney U
+    u_stat = sum(1 for ps in pos_scores for ns in neg_scores if ps > ns) + \
+             0.5 * sum(1 for ps in pos_scores for ns in neg_scores if ps == ns)
+    return u_stat / (len(pos_scores) * len(neg_scores))
+
+
+def compute_excess_kurtosis(signal: np.ndarray) -> float:
+    """计算 excess kurtosis（正态分布 = 0），与 scipy.stats.kurtosis 一致"""
+    x = np.asarray(signal, dtype=np.float64)
+    if len(x) < 4:
+        return 0.0
+    mu = np.mean(x)
+    sigma2 = np.var(x)
+    if sigma2 < 1e-18:
+        return 0.0
+    return float(np.mean((x - mu) ** 4) / (sigma2 ** 2) - 3.0)
 
 
 # ═══════════════════════════════════════════════════════════
