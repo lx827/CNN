@@ -643,3 +643,42 @@ DataView 实时计算端点（`/analyze`、`/full-analysis`）执行完成后会
 | 前端空白 | 检查 `npm install` 是否完成，代理是否连通 |
 | 内存不足 OOM | 检查线程池是否超过 2 个，信号是否截断到 5 秒 |
 | 数据清空 | 删除 `cloud/turbine.db`，重启后端 |
+
+
+---
+
+## 13. 接口与函数文档
+
+本项目维护以下接口与函数文档，用于记录前后端 API 契约、服务层公共接口及前端组件接口。AI Agent 在修改代码时**必须同步更新**对应文档，确保文档与实际代码保持一致。
+
+### 13.1 文档清单
+
+| 文档路径 | 用途 |
+|----------|------|
+| `docs/api/backend_api.md` | 后端 REST API 和 WebSocket 端点完整文档，包含路径、方法、请求参数、请求体、响应体结构及错误码 |
+| `docs/backend/services.md` | 后端服务层所有公共函数/类接口文档，包含函数签名、参数说明、返回值类型及调用场景 |
+| `docs/frontend/frontend_api.md` | 前端 API 封装（`api/index.js`）和 Vue 组件接口文档，包含函数/组件名、Props、Events、方法及数据流 |
+| `docs/api/frontend_backend_interaction.md` | 前后端交互映射文档，记录前端页面/组件与后端 API 的调用关系、数据格式转换及状态同步逻辑 |
+
+### 13.2 同步维护规则
+
+**任何代码修改涉及以下情况时，必须同步更新对应文档：**
+
+- **新增 / 修改 / 删除 API 端点时** → 同步更新 `docs/api/backend_api.md` 和 `docs/api/frontend_backend_interaction.md`
+- **新增 / 修改 / 删除服务层公共函数时** → 同步更新 `docs/backend/services.md`
+- **新增 / 修改 / 删除前端 API 封装或 Vue 组件时** → 同步更新 `docs/frontend/frontend_api.md` 和 `docs/api/frontend_backend_interaction.md`
+- **修改函数签名（参数、返回值类型）时** → 同步更新对应文档（`services.md` 或 `frontend_api.md`）
+- **修改前后端数据格式（请求体 / 响应体结构）时** → 同步更新所有相关文档（`backend_api.md`、`frontend_backend_interaction.md`、`frontend_api.md`）
+
+> **⚠️ 文档即契约：** 接口文档是前后端协同及后续维护的唯一权威参考。代码与文档不一致会导致前端调用失败、类型错误及调试成本剧增。
+
+### 13.3 修改前必读
+
+AI Agent 在对以下范围进行修改前，**必须先查阅对应文档**，确认现有接口契约后再动手：
+
+- 修改 `cloud/app/api/` 下的路由/端点前 → 查阅 `docs/api/backend_api.md`
+- 修改 `cloud/app/services/` 下的公共函数或类前 → 查阅 `docs/backend/services.md`
+- 修改 `wind-turbine-diagnosis/src/api/` 或 `views/` 下的前端代码前 → 查阅 `docs/frontend/frontend_api.md`
+- 涉及前后端数据交互的修改前 → 查阅 `docs/api/frontend_backend_interaction.md`
+
+若文档尚未创建或内容缺失，应在完成代码修改后**立即补充创建对应文档**，不得留空。
