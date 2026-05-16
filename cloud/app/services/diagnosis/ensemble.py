@@ -460,6 +460,30 @@ def run_research_ensemble(
         best_gear,
     )
 
+    # ── D-S 证据融合 ──
+    # 将轴承和齿轮的投票结果通过 Dempster-Shafer 证据理论融合，
+    # 得到综合故障概率分布，补充 ensemble 的投票融合逻辑。
+    ds_fusion_result = {}
+    try:
+        from .fusion.ds_fusion import dempster_shafer_fusion
+        # 合并轴承和齿轮的投票为统一 method_results
+        all_method_votes = {}
+        for key, vote in bearing_votes.items():
+            all_method_votes[key] = {
+                "confidence": vote.get("confidence", 0.0),
+                "abnormal": vote.get("abnormal", False),
+                "hits": vote.get("hits", []),
+            }
+        for key, vote in gear_votes.items():
+            all_method_votes[key] = {
+                "confidence": vote.get("confidence", 0.0),
+                "abnormal": vote.get("abnormal", False),
+                "hits": vote.get("hits", []),
+            }
+        ds_fusion_result = dempster_shafer_fusion(all_method_votes, time_features=time_features)
+    except Exception as exc:
+        ds_fusion_result = {"error": str(exc)}
+
     return {
         "health_score": health_score,
         "status": status,
@@ -487,6 +511,7 @@ def run_research_ensemble(
             "skip_gear": skip_gear,
             "has_bearing_params": has_bearing,
             "has_gear_params": has_gear,
+            "ds_fusion": ds_fusion_result,
         },
         "recommendation": _generate_recommendation(best_bearing, best_gear, status),
     }
