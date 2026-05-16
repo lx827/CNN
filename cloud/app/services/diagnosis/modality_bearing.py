@@ -269,9 +269,13 @@ def vmd_bearing_analysis(
     arr = remove_dc(np.asarray(signal, dtype=np.float64))
 
     # 分解
-    modes, center_freqs_hz, u_hat = vmd_decompose(arr, K=K, alpha=alpha)
+    modes, omega, u_hat = vmd_decompose(arr, K=K, alpha=alpha)
 
-    if not modes:
+    # omega 是中心频率演化矩阵，取最后一行作为各模态的最终中心频率（Hz）
+    # omega 形状: (K, n_iter)，最终值 = omega[:, -1] * fs / 2（因 VMD 内部归一化到 Nyquist）
+    center_freqs_hz = np.real(omega[:, -1]) * fs / 2.0
+
+    if len(modes) == 0:
         return {
             "envelope_freq": [], "envelope_amp": [],
             "method": "VMD Sensitive Mode Envelope",

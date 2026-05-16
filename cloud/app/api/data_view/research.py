@@ -95,6 +95,31 @@ METHOD_INFO = {
         "label": "MCKD 增强包络",
         "description": "最大相关峭度解卷积 + 包络分析：引入故障周期约束优化周期性冲击序列检测，对轴承内圈/外圈故障更敏感。与 MED 互补，MED 最大化全局峭度，MCKD 最大化周期性冲击。",
     },
+    "wp": {
+        "category": "bearing",
+        "label": "小波包轴承诊断",
+        "description": "小波包分解 + 敏感频带包络分析：对信号做小波包分解，选择能量或峭度最高的节点做包络分析。频带划分比DWT更精细，适合多共振频带轴承。",
+    },
+    "dwt": {
+        "category": "bearing",
+        "label": "DWT 敏感层轴承诊断",
+        "description": "离散小波变换 + 敏感层包络分析：对信号做多级DWT分解，选择峭度最高的细节层做包络分析。计算快速，适合实时诊断。",
+    },
+    "emd_envelope": {
+        "category": "bearing",
+        "label": "EMD 敏感 IMF 包络",
+        "description": "EMD 分解 + 敏感 IMF 包络分析：对信号做EMD分解，选择峭度最高的IMF做包络分析。自适应模态数，适合变速工况。",
+    },
+    "ceemdan_envelope": {
+        "category": "bearing",
+        "label": "CEEMDAN 敏感 IMF 包络",
+        "description": "CEEMDAN 分解 + 敏感 IMF 包络分析：对信号做CEEMDAN分解，选择峭度最高的IMF做包络分析。抑制模态混叠，IMF更纯净。",
+    },
+    "vmd_envelope": {
+        "category": "bearing",
+        "label": "VMD 敏感模态包络",
+        "description": "VMD 分解 + 敏感模态包络分析：对信号做VMD分解，选择峭度最高的模态做包络分析。频带划分自适应且数学严格。",
+    },
     # 齿轮诊断方法
     "gear_standard": {
         "category": "gear",

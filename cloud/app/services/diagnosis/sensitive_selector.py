@@ -323,9 +323,10 @@ def select_vmd_sensitive_modes(
     # 用 VMD 精确中心频率覆盖 estimate
     for s in scored:
         i = s["index"]
-        if i < len(center_freqs) and center_freqs[i] > 0:
-            s["center_freq"] = round(center_freqs[i], 2)
-            s["freq_match"] = round(compute_freq_match_score(center_freqs[i], target_freq), 4)
+        cf_val = float(center_freqs[i]) if i < len(center_freqs) else 0.0
+        if cf_val > 0:
+            s["center_freq"] = round(cf_val, 2)
+            s["freq_match"] = round(compute_freq_match_score(cf_val, target_freq), 4)
 
     # 重新计算综合评分（因为 freq_match 更新了）
     w = BEARING_WEIGHTS if mode == "bearing" else GEAR_WEIGHTS

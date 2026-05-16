@@ -235,6 +235,9 @@ async def get_channel_analyze(
             "wavelet_lms": DenoiseMethod.WAVELET_LMS,
             "emd": DenoiseMethod.EMD, "ceemdan": DenoiseMethod.CEEMDAN,
             "savgol": DenoiseMethod.SAVGOL,
+            "wavelet_packet": DenoiseMethod.WAVELET_PACKET,
+            "ceemdan_wp": DenoiseMethod.CEEMDAN_WP,
+            "eemd": DenoiseMethod.EEMD,
         }
 
         engine = DiagnosisEngine(
@@ -327,7 +330,7 @@ async def get_channel_full_analysis(
     batch_index: int,
     channel: int,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     db: Session = Depends(get_db)
 ):
     """
@@ -373,6 +376,9 @@ async def get_channel_full_analysis(
             "wavelet_lms": DenoiseMethod.WAVELET_LMS,
             "emd": DenoiseMethod.EMD, "ceemdan": DenoiseMethod.CEEMDAN,
             "savgol": DenoiseMethod.SAVGOL,
+            "wavelet_packet": DenoiseMethod.WAVELET_PACKET,
+            "ceemdan_wp": DenoiseMethod.CEEMDAN_WP,
+            "eemd": DenoiseMethod.EEMD,
         }
 
         engine = DiagnosisEngine(
