@@ -356,4 +356,29 @@ def compute_continuous_deductions(
         if scoh_ded > 0.5:
             deductions.append(("bearing_sc_scoh_evidence", round(scoh_ded, 2)))
 
+    # ═══════ NA4/NB4 齿轮趋势指标 ═══════
+    # NA4: 归一化差值信号峭度（局部故障趋势指标）
+    # NB4: 归一化差值信号包络峭度（更敏感的局部故障趋势指标）
+    # NA4 > 3.0 → warning, NA4 > 5.0 → critical（渐进性磨损/裂纹）
+    # NB4 > 3.0 → warning, NB4 > 5.0 → critical
+    na4_val = _sf(gear_result.get("na4"), 0.0)
+    nb4_val = _sf(gear_result.get("nb4"), 0.0)
+
+    if has_gear or (gear_result and any(k in gear_result for k in ["na4", "nb4"])):
+        na4_max = max(na4_val, nb4_val)
+        if na4_max > 2.0:
+            # NA4/NB4 门控：需要齿轮参数或统计证据
+            # 渐进性磨损时 kurt 可能不高（行星箱 kurt=8~10），
+            # 但 NA4/NB4 趋势指标持续升高
+            na4_ded = cascade_deduction(na4_max, [3.0, 5.0], [6, 10])
+            # NA4/NB4 > 5 且无 rotation_dominant → 渐进性磨损/裂纹
+            # NA4/NB4 > 5 且 rotation_dominant → 可能是转速波动
+            if rotation_dominant:
+                na4_ded *= 0.3
+            if na4_ded > 0.5:
+                if na4_max > 5.0:
+                    deductions.append(("gear_na4_trend_critical", round(na4_ded, 2)))
+                else:
+                    deductions.append(("gear_na4_trend_warning", round(na4_ded, 2)))
+
     return deductions

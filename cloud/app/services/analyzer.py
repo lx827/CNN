@@ -26,6 +26,8 @@ from app.services.diagnosis.order_tracking import (
 )
 from app.services.diagnosis.rule_based import _rule_based_analyze
 from app.services.diagnosis.features import _get_channel_params
+from app.services.diagnosis.channel_consensus import cross_channel_consensus
+from app.core.config import DIAGNOSIS_WEIGHTS
 
 
 def _safe_result(msg="分析失败", health=100):
@@ -127,8 +129,22 @@ def analyze_device(
         health_values = [int(r["health_score"]) for _, r in channel_results]
         worst_health = min(health_values)
         avg_health = sum(health_values) / len(health_values)
+
+        # 多通道一致性投票
+        consensus = cross_channel_consensus([r for _, r in channel_results])
+
         # 通道可弱融合，但不假设远距离传感器一定强相关。
-        device_health = int(round(0.35 * worst_health + 0.65 * avg_health))
+        # 一致性投票调整融合权重：一致时最差通道权重更高，不一致时降低最差通道权重
+        worst_weight = DIAGNOSIS_WEIGHTS.get("worst_channel", 0.35) if consensus["consensus_boost"] >= 1.1 else 0.20
+        avg_weight = 1.0 - worst_weight
+        device_health = int(round(worst_weight * worst_health + avg_weight * avg_health))
+
+        # 单通道异常惩罚：仅单通道检出且无一致性故障时，扣分降低
+        if consensus["single_channel_penalty"] < 1.0:
+            # 无一致性故障，降低设备健康度扣分幅度
+            penalty_reduction = int(round((100 - device_health) * (1.0 - consensus["single_channel_penalty"])))
+            device_health = min(100, device_health + penalty_reduction)
+
         worst_status = max(
             ([r["status"] for _, r in channel_results]),
             key=lambda s: {"normal": 0, "warning": 1, "fault": 2}.get(s, 0)
@@ -213,13 +229,15 @@ def analyze_device(
                 "engine_result": first_result,
                 "channels": {ch: r for ch, r in channel_results},
                 "aggregation": {
-                    "method": "weak_channel_fusion",
+                    "method": "weak_channel_fusion_with_consensus",
                     "worst_health": worst_health,
                     "average_health": round(avg_health, 2),
                     "worst_status": worst_status,
+                    "consensus": consensus,
                 },
             },
             "rot_freq": rf,
+            "consensus_hint": consensus.get("recommendation_hint", ""),
         }
 
     except Exception as e:

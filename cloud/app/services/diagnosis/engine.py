@@ -26,6 +26,7 @@ from .bearing import (
     spectral_kurtosis_envelope_analysis,
 )
 from .bearing_cyclostationary import bearing_sc_scoh_analysis
+from .bearing_sideband import evaluate_bearing_sideband_features
 from .gear import (
     compute_fm0_order,
     compute_tsa_residual_order,
@@ -229,6 +230,7 @@ class DiagnosisEngine:
             result.get("envelope_freq", []),
             result.get("envelope_amp", []),
             rot_freq,
+            rot_freq_std=0.0,  # 单方法分析不携带 rot_std
         )
 
         return {
@@ -762,6 +764,7 @@ def _evaluate_bearing_faults(
     env_freq: List[float],
     env_amp: List[float],
     rot_freq: float,
+    rot_freq_std: float = 0.0,
 ) -> Dict[str, Any]:
     """
     评估轴承故障指示器 — 双路并行：
@@ -811,6 +814,11 @@ def _evaluate_bearing_faults(
             "BSF":  (D_val / (2.0 * d_val)) * rot_freq * (1 - dd ** 2),
         }
 
+        # 边带密度分析（增强故障类型区分）
+        sideband_features = evaluate_bearing_sideband_features(
+            env_freq, env_amp, bearing_params, rot_freq,
+        )
+
         param_indicators = {}
         for name, f_hz in freqs.items():
             if f_hz <= 0 or f_hz > freq_arr[-1]:
@@ -818,7 +826,10 @@ def _evaluate_bearing_faults(
                                           "peak_amp": 0.0, "snr": 0.0, "significant": False}
                 continue
 
-            tol = max(f_hz * 0.05, df * 2)
+            # 转频不确定性传播：rot_freq_std 越大，容差越宽
+            # 避免变速工况下因转速不稳定导致漏检
+            rot_freq_uncertainty = rot_freq_std / rot_freq if rot_freq > 0 else 0.05
+            tol = max(f_hz * 0.05, df * 2, f_hz * rot_freq_uncertainty * 0.5)
             mask = np.abs(freq_arr - f_hz) <= tol
 
             # 谐波 SNR
@@ -827,7 +838,7 @@ def _evaluate_bearing_faults(
                 h_freq = f_hz * h
                 if h_freq > freq_arr[-1]:
                     break
-                h_tol = max(h_freq * 0.05, df * 2)
+                h_tol = max(h_freq * 0.05, df * 2, h_freq * rot_freq_uncertainty * 0.5)
                 h_mask = np.abs(freq_arr - h_freq) <= h_tol
                 if np.any(h_mask):
                     h_peak = float(np.max(amp_arr[h_mask]))
@@ -851,7 +862,7 @@ def _evaluate_bearing_faults(
                         sb_f = f_hz + offset
                         if sb_f <= 0 or sb_f > freq_arr[-1]:
                             continue
-                        sb_tol = max(sb_f * 0.05, df * 2)
+                        sb_tol = max(sb_f * 0.05, df * 2, sb_f * rot_freq_uncertainty * 0.5)
                         sb_mask = np.abs(freq_arr - sb_f) <= sb_tol
                         if np.any(sb_mask):
                             sb_peak = float(np.max(amp_arr[sb_mask]))
@@ -869,6 +880,12 @@ def _evaluate_bearing_faults(
                     "significant": significant,
                     "harmonic_snrs": [round(s, 2) for s in harmonic_snrs],
                     "sideband_snrs": [round(s, 2) for s in sideband_snrs] if name == "BPFI" else None,
+                    # 边带密度分析（增强故障类型区分）
+                    "sideband_density": sideband_features.get(name, {}).get("sideband_density", 0.0),
+                    "sideband_significant_count": sideband_features.get(name, {}).get("sideband_significant_count", 0),
+                    "sideband_asymmetry": sideband_features.get(name, {}).get("sideband_asymmetry", 0.0),
+                    "high_density": sideband_features.get(name, {}).get("high_density", False),
+                    "high_asymmetry": sideband_features.get(name, {}).get("high_asymmetry", False),
                 }
             else:
                 param_indicators[name] = {

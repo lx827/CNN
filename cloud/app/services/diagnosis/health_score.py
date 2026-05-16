@@ -17,6 +17,36 @@ CREST_EVIDENCE_THRESHOLD = 10.0
 # 连续衰减扣分模块
 from .health_score_continuous import compute_continuous_deductions, cascade_deduction, sigmoid_deduction
 
+# 权重配置
+from app.core.config import DIAGNOSIS_WEIGHTS
+
+# 扣分名称 → 权重键的映射表
+DEDUCTION_WEIGHT_MAP = {
+    # 时域指标
+    "kurtosis_extreme": "kurtosis", "kurtosis_high": "kurtosis",
+    "kurtosis_moderate": "kurtosis", "kurtosis_mild": "kurtosis",
+    "crest_very_high": "crest_factor", "crest_high": "crest_factor", "crest_moderate": "crest_factor",
+    # 动态基线/趋势
+    "dynamic_baseline_extreme": "kurtosis", "dynamic_baseline_warning": "kurtosis",
+    "trend_drift_warning": "kurtosis",
+    # 轴承频率匹配
+    "bearing_multi_freq": "bpfo", "bearing_single_freq": "bpfo",
+    "bearing_statistical_abnormal": "kurtosis", "bearing_statistical_hint": "kurtosis",
+    # 轴承边带密度
+    "bearing_sideband_density": "sideband",
+    # 轴承 SC/SCoh
+    "bearing_sc_scoh_evidence": "scoh_evidence",
+    # 齿轮指标
+    "gear_ser_critical": "ser", "gear_ser_warning": "ser",
+    "gear_sb_critical": "gear_sideband", "gear_sb_warning": "gear_sideband",
+    "gear_tsa_residual_kurtosis_critical": "fm4", "gear_tsa_residual_kurtosis_warning": "fm4",
+    "gear_na4_trend_critical": "na4_nb4", "gear_na4_trend_warning": "na4_nb4",
+    "gear_car_critical": "car", "gear_car_warning": "car",
+    "gear_order_stat_critical": "car", "gear_order_stat_warning": "car",
+    # D-S 冲突
+    "ds_conflict_penalty": "ds_conflict",
+}
+
 
 def _compute_health_score(
     gear_teeth: Optional[Dict],
@@ -61,8 +91,13 @@ def _compute_health_score(
         if ds_conflict_high:
             deductions.append(("ds_conflict_penalty", 8))
 
-    # ═══════ 综合评分 ═══════
-    total = min(sum(d[1] for d in deductions), 75)
+    # ═══════ 综合评分（加权扣分） ═══════
+    weighted_total = 0.0
+    for ded_name, ded_value in deductions:
+        weight_key = DEDUCTION_WEIGHT_MAP.get(ded_name, "kurtosis")  # 未映射的默认用 kurtosis 权重
+        weight = DIAGNOSIS_WEIGHTS.get(weight_key, 1.0)
+        weighted_total += ded_value * weight
+    total = min(weighted_total, 75)
     score = 100.0 - total
     hs = int(max(0, min(100, round(score))))
 

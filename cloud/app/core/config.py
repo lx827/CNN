@@ -65,3 +65,31 @@ SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production-please")
 # ========== 边端认证 ==========
 # 边端 API Key（云端和边端必须一致，通过 .env 修改）
 EDGE_API_KEY = os.getenv("EDGE_API_KEY", "turbine-edge-secret")
+
+# ========== 诊断权重配置 ==========
+# 健康度扣分权重：可通过 .env 或此处调整
+# 权重越高，对应指标异常时扣分越重
+DIAGNOSIS_WEIGHTS = {
+    # 时域指标权重
+    "kurtosis": float(os.getenv("DW_KURTOSIS", "1.0")),
+    "crest_factor": float(os.getenv("DW_CREST_FACTOR", "0.8")),
+    "rms": float(os.getenv("DW_RMS", "0.6")),
+    "peak": float(os.getenv("DW_PEAK", "0.5")),
+    # 频域指标权重
+    "bpfo": float(os.getenv("DW_BPFO", "1.2")),
+    "bpfi": float(os.getenv("DW_BPFI", "1.2")),
+    "bsf": float(os.getenv("DW_BSF", "1.0")),
+    "sideband": float(os.getenv("DW_SIDEBAND", "0.9")),
+    # 齿轮指标权重
+    "fm4": float(os.getenv("DW_FM4", "0.8")),
+    "ser": float(os.getenv("DW_SER", "0.9")),
+    "car": float(os.getenv("DW_CAR", "0.7")),
+    "gear_sideband": float(os.getenv("DW_GEAR_SIDEBAND", "0.8")),
+    # 特殊指标权重
+    "na4_nb4": float(os.getenv("DW_NA4_NB4", "1.0")),
+    "scoh_evidence": float(os.getenv("DW_SCOH_EVIDENCE", "0.8")),
+    "ds_conflict": float(os.getenv("DW_DS_CONFLICT", "8")),
+    # 融合权重
+    "worst_channel": float(os.getenv("DW_WORST_CHANNEL", "0.35")),
+    "avg_channel": float(os.getenv("DW_AVG_CHANNEL", "0.65")),
+}

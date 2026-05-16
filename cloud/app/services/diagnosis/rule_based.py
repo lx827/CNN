@@ -25,6 +25,23 @@ FEATURE_THRESHOLDS = {
 }
 
 
+def adaptive_rms_baseline(rot_freq_hz: float) -> float:
+    """
+    转速归一化 RMS baseline
+
+    不同转速下振动 RMS 的正常范围差异巨大：
+    - 20Hz 低速设备正常 RMS ≈ 1~2
+    - 40Hz 中速设备正常 RMS ≈ 2~4
+    - 50Hz 高速设备正常 RMS ≈ 3~6
+
+    简化线性模型：baseline = 0.05 × rot_freq + 1.0
+    低速(20Hz): baseline=2.0, 高速(50Hz): baseline=3.5
+    """
+    if rot_freq_hz <= 0:
+        return FEATURE_THRESHOLDS["rms"]["baseline"]
+    return max(1.0, 0.05 * rot_freq_hz + 1.0)
+
+
 def _order_band_energy(order_axis, spectrum, center_order: float, bandwidth: float) -> float:
     """计算指定阶次带能量（阶次域版 _band_energy）"""
     order_axis = np.asarray(order_axis)
@@ -35,17 +52,22 @@ def _order_band_energy(order_axis, spectrum, center_order: float, bandwidth: flo
     return float(np.sum(spectrum[mask] ** 2))
 
 
-def _feature_severity(value: float, metric: str) -> float:
+def _feature_severity(value: float, metric: str, rot_freq: float = 0.0) -> float:
     """
     计算单一特征的严重度 (0.0 ~ 1.0+)
     value: 特征值
     metric: 特征名称
+    rot_freq: 转频(Hz)，用于 RMS baseline 自适应
     """
     cfg = FEATURE_THRESHOLDS.get(metric)
     if not cfg:
         return 0.0
     baseline = cfg["baseline"]
     critical = cfg["critical"]
+    # RMS baseline 自适应：根据转速调整
+    if metric == "rms" and rot_freq > 0:
+        baseline = adaptive_rms_baseline(rot_freq)
+        critical = baseline * 7.5  # 保持 baseline/critical 比例不变
     if value <= baseline or critical <= baseline:
         return 0.0
     return max(0.0, min(1.0, (abs(value) - baseline) / (critical - baseline)))
@@ -108,12 +130,12 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
 
     # 3. 时域特征严重度
     sev = {
-        "rms": _feature_severity(avg_features["rms"], "rms"),
-        "peak": _feature_severity(avg_features["peak"], "peak"),
-        "kurtosis": _feature_severity(avg_features["kurtosis"], "kurtosis"),
-        "crest_factor": _feature_severity(avg_features["crest_factor"], "crest_factor"),
-        "skewness": _feature_severity(abs(avg_features["skewness"]), "skewness"),
-        "impulse_factor": _feature_severity(avg_features["impulse_factor"], "impulse_factor"),
+        "rms": _feature_severity(avg_features["rms"], "rms", rot_freq),
+        "peak": _feature_severity(avg_features["peak"], "peak", rot_freq),
+        "kurtosis": _feature_severity(avg_features["kurtosis"], "kurtosis", rot_freq),
+        "crest_factor": _feature_severity(avg_features["crest_factor"], "crest_factor", rot_freq),
+        "skewness": _feature_severity(abs(avg_features["skewness"]), "skewness", rot_freq),
+        "impulse_factor": _feature_severity(avg_features["impulse_factor"], "impulse_factor", rot_freq),
     }
 
     # 4. 获取设备参数（通道级兼容）& 估计转频
