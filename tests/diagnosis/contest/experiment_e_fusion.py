@@ -5,8 +5,8 @@
 量化融合带来的FAR降低、Accuracy提升和FIA增益。
 
 输出:
-  experiment_e_fusion/far_reduction.png     — FAR降低柱状图（标题写结论）
-  experiment_e_fusion/confidence_dist.png   — 置信度分布对比图
+  experiment_e_fusion/far_reduction.svg     — FAR降低柱状图（标题写结论）
+  experiment_e_fusion/confidence_dist.svg   — 置信度分布对比图
   experiment_e_fusion/fusion_gain.md        — 融合增益汇总表格
 
 运行:
@@ -609,9 +609,9 @@ def _plot_far_reduction(
     ax.grid(axis="y", alpha=0.3)
 
     plt.tight_layout()
-    fig.savefig(EXP_DIR / "far_reduction.png", dpi=FIGURE_DPI, bbox_inches="tight")
+    fig.savefig(EXP_DIR / "far_reduction.svg", bbox_inches="tight")
     plt.close(fig)
-    print(f"  [图表] FAR降低柱状图 → {EXP_DIR / 'far_reduction.png'}")
+    print(f"  [图表] FAR降低柱状图 → {EXP_DIR / 'far_reduction.svg'}")
 
 
 # ────────────────────────────────────────────────────────────
@@ -707,9 +707,9 @@ def _plot_confidence_distribution(
         ax2.grid(alpha=0.3)
 
     plt.tight_layout()
-    fig.savefig(EXP_DIR / "confidence_dist.png", dpi=FIGURE_DPI, bbox_inches="tight")
+    fig.savefig(EXP_DIR / "confidence_dist.svg", bbox_inches="tight")
     plt.close(fig)
-    print(f"  [图表] 置信度分布对比 → {EXP_DIR / 'confidence_dist.png'}")
+    print(f"  [图表] 置信度分布对比 → {EXP_DIR / 'confidence_dist.svg'}")
 
 
 # ────────────────────────────────────────────────────────────

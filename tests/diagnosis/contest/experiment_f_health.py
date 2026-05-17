@@ -476,8 +476,8 @@ def plot_degradation_trajectory(degradation_data: List[Dict],
     plt.tight_layout()
 
     # 保存
-    output_path = EXP_DIR / "health_degradation_trajectory.png"
-    fig.savefig(output_path, dpi=FIGURE_DPI, bbox_inches="tight")
+    output_path = EXP_DIR / "health_degradation_trajectory.svg"
+    fig.savefig(output_path, bbox_inches="tight")
     plt.close(fig)
     print(f"  退化轨迹图已保存: {output_path}")
     return output_path

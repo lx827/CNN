@@ -309,9 +309,9 @@ def _plot_waveform_comparison(clean, noisy, results_or):
         ax1.axvline(center, color=CASCADE_COLOR, linestyle="--", linewidth=1, alpha=0.6)
 
     fig.tight_layout()
-    fig.savefig(OUT_DIR / "fig1_waveform_comparison.png", dpi=FIGURE_DPI, bbox_inches="tight")
+    fig.savefig(OUT_DIR / "fig1_waveform_comparison.svg", bbox_inches="tight")
     plt.close(fig)
-    print(f"  图1已保存: {OUT_DIR / 'fig1_waveform_comparison.png'}")
+    print(f"  图1已保存: {OUT_DIR / 'fig1_waveform_comparison.svg'}")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -390,9 +390,9 @@ def _plot_delta_snr(results_or, results_h):
     )
 
     fig.tight_layout()
-    fig.savefig(OUT_DIR / "fig2_delta_snr.png", dpi=FIGURE_DPI, bbox_inches="tight")
+    fig.savefig(OUT_DIR / "fig2_delta_snr.svg", bbox_inches="tight")
     plt.close(fig)
-    print(f"  图2已保存: {OUT_DIR / 'fig2_delta_snr.png'}")
+    print(f"  图2已保存: {OUT_DIR / 'fig2_delta_snr.svg'}")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -468,9 +468,9 @@ def _plot_multi_metrics(results_or, results_h):
     )
 
     fig.tight_layout()
-    fig.savefig(OUT_DIR / "fig3_multi_metrics.png", dpi=FIGURE_DPI, bbox_inches="tight")
+    fig.savefig(OUT_DIR / "fig3_multi_metrics.svg", bbox_inches="tight")
     plt.close(fig)
-    print(f"  图3已保存: {OUT_DIR / 'fig3_multi_metrics.png'}")
+    print(f"  图3已保存: {OUT_DIR / 'fig3_multi_metrics.svg'}")
 
 
 # ═══════════════════════════════════════════════════════════

@@ -417,11 +417,11 @@ def plot_confusion_matrix_comparison(results: Dict[str, Dict]):
         ax.set_yticklabels(cn_labels)
         ax.set_xlabel("预测标签")
         ax.set_ylabel("真实标签")
-        ax.set_title(f"{label}\nAccuracy = {acc:.1%}", fontsize=14)
+        ax.set_title(f"{label}\n准确率 = {acc:.1%}", fontsize=14)
 
     plt.tight_layout()
-    path = OUTPUT_DIR / "fig1_confusion_matrix_comparison.png"
-    fig.savefig(path, dpi=FIGURE_DPI, bbox_inches="tight")
+    path = OUTPUT_DIR / "fig1_confusion_matrix_comparison.svg"
+    fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
     print(f"  [图1] 混淆矩阵对比图已保存: {path}")
 
@@ -477,7 +477,7 @@ def plot_accuracy_bar(results: Dict[str, Dict]):
 
     ax.set_xticks(range(len(method_names)))
     ax.set_xticklabels(method_names, rotation=30, ha="right")
-    ax.set_ylabel("Accuracy (%)")
+    ax.set_ylabel("准确率 (%)")
     ax.set_ylim(0, 105)
     ax.set_title(title, fontsize=16, fontweight="bold")
     ax.grid(axis="y", alpha=0.3)
@@ -492,8 +492,8 @@ def plot_accuracy_bar(results: Dict[str, Dict]):
     ax.legend(handles=legend_elements, loc="upper left", fontsize=12)
 
     plt.tight_layout()
-    path = OUTPUT_DIR / "fig2_accuracy_bar.png"
-    fig.savefig(path, dpi=FIGURE_DPI, bbox_inches="tight")
+    path = OUTPUT_DIR / "fig2_accuracy_bar.svg"
+    fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
     print(f"  [图2] Accuracy柱状图已保存: {path}")
 
@@ -545,12 +545,12 @@ def plot_roc_comparison(results: Dict[str, Dict]):
 
         # Macro AUC 标注
         macro_auc = roc_data.get("macro_auc_roc", 0.5)
-        ax.text(0.55, 0.35, f"Macro-AUC = {macro_auc:.3f}",
+        ax.text(0.55, 0.35, f"宏平均AUC = {macro_auc:.3f}",
                 fontsize=13, fontweight="bold",
                 bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="gray", alpha=0.9))
 
-        ax.set_xlabel("FPR (虚警率)")
-        ax.set_ylabel("TPR (检出率)")
+        ax.set_xlabel("虚警率 (FPR)")
+        ax.set_ylabel("检出率 (TPR)")
         ax.set_title(f"{method_label} ROC曲线", fontsize=14)
         ax.legend(loc="lower right", fontsize=9)
         ax.set_xlim([0, 1])
@@ -572,8 +572,8 @@ def plot_roc_comparison(results: Dict[str, Dict]):
     )
 
     plt.tight_layout()
-    path = OUTPUT_DIR / "fig3_roc_comparison.png"
-    fig.savefig(path, dpi=FIGURE_DPI, bbox_inches="tight")
+    path = OUTPUT_DIR / "fig3_roc_comparison.svg"
+    fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
     print(f"  [图3] ROC对比图已保存: {path}")
 

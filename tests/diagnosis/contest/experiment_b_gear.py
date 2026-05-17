@@ -227,9 +227,9 @@ def plot_boxplot(results: List[Dict]):
 
     fig.suptitle("齿轮指标箱线图：5种故障类型对比", fontsize=16, y=1.02)
     fig.tight_layout()
-    fig.savefig(OUT_DIR / "boxplot_gear_metrics.png", dpi=FIGURE_DPI, bbox_inches="tight")
+    fig.savefig(OUT_DIR / "boxplot_gear_metrics.svg", bbox_inches="tight")
     plt.close(fig)
-    print(f"  [保存] 箱线图: {OUT_DIR / 'boxplot_gear_metrics.png'}")
+    print(f"  [保存] 箱线图: {OUT_DIR / 'boxplot_gear_metrics.svg'}")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -314,9 +314,9 @@ def plot_confusion_matrix(results: List[Dict]):
 
     plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     fig.tight_layout()
-    fig.savefig(OUT_DIR / "confusion_matrix_gear.png", dpi=FIGURE_DPI, bbox_inches="tight")
+    fig.savefig(OUT_DIR / "confusion_matrix_gear.svg", bbox_inches="tight")
     plt.close(fig)
-    print(f"  [保存] 混淆矩阵: {OUT_DIR / 'confusion_matrix_gear.png'}")
+    print(f"  [保存] 混淆矩阵: {OUT_DIR / 'confusion_matrix_gear.svg'}")
 
     # 保存分类指标 Markdown
     table = generate_classification_metrics_table(cls_metrics, title="齿轮故障5类分类")
@@ -332,7 +332,7 @@ def plot_confusion_matrix(results: List[Dict]):
 # ═══════════════════════════════════════════════════════════
 
 def compute_separability(results: List[Dict]) -> Dict[str, float]:
-    """计算各指标的 healthy vs fault 分离度 = |mean_fault - mean_healthy|"""
+    """计算各指标的 healthy vs fault 分离度 = |故障均值 - 健康均值|"""
     healthy_vals = {key: [] for key in GEAR_METRICS}
     healthy_vals["tsa_kurt"] = []
     fault_vals = {key: [] for key in GEAR_METRICS}
@@ -381,15 +381,15 @@ def plot_separability(sep: Dict[str, float]):
                 bar.get_y() + bar.get_height() / 2,
                 f"{val:.4f}", va="center", fontsize=12)
 
-    ax.set_xlabel("分离度 |mean_fault - mean_healthy|")
+    ax.set_xlabel("分离度 |故障均值 - 健康均值|")
     ax.set_title("齿轮指标分离度对比（TSA残差峭度为综合方法核心指标）", fontsize=14)
     ax.invert_yaxis()  # 最大值在最上面
     ax.grid(axis="x", alpha=0.3)
 
     fig.tight_layout()
-    fig.savefig(OUT_DIR / "separability_gear.png", dpi=FIGURE_DPI, bbox_inches="tight")
+    fig.savefig(OUT_DIR / "separability_gear.svg", bbox_inches="tight")
     plt.close(fig)
-    print(f"  [保存] 分离度柱状图: {OUT_DIR / 'separability_gear.png'}")
+    print(f"  [保存] 分离度柱状图: {OUT_DIR / 'separability_gear.svg'}")
 
 
 # ═══════════════════════════════════════════════════════════

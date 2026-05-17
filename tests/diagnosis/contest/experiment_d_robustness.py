@@ -383,7 +383,7 @@ def _plot_snr_accuracy_decay(
                 # 标注文字
                 offset_y = -5 if is_ensemble else 3
                 ax.annotate(
-                    f"Critical SNR\n={cs} dB",
+                    f"临界信噪比\n={cs} dB",
                     xy=(cs, cs_acc),
                     xytext=(cs + 1.5, cs_acc + offset_y),
                     fontsize=9,
@@ -395,7 +395,7 @@ def _plot_snr_accuracy_decay(
 
     # ── 坐标轴设置 ──────────────────────────────────────────
     ax.set_xlabel("信噪比 SNR (dB)", fontsize=14)
-    ax.set_ylabel("诊断准确率 Accuracy (%)", fontsize=14)
+    ax.set_ylabel("诊断准确率 (%)", fontsize=14)
     ax.set_ylim(0, 105)
     ax.set_xlim(snr_levels[-1] - 2, snr_levels[0] + 2)
     ax.set_xticks(snr_levels)
@@ -424,12 +424,12 @@ def _plot_snr_accuracy_decay(
     else:
         ensemble_cs_str = f"{ensemble_cs} dB"
 
-    title = f"集成方法在噪声干扰下诊断准确率衰减最慢（Critical SNR: {ensemble_cs_str}）"
+    title = f"集成方法在噪声干扰下诊断准确率衰减最慢（临界信噪比: {ensemble_cs_str}）"
     ax.set_title(title, fontsize=15, fontweight="bold", pad=15)
 
     fig.tight_layout()
-    path = output_dir / "snr_accuracy_decay.png"
-    fig.savefig(path, dpi=300, bbox_inches="tight")
+    path = output_dir / "snr_accuracy_decay.svg"
+    fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
     print(f"  [图1] SNR-Accuracy衰减曲线: {path}")
     return path
@@ -482,7 +482,7 @@ def _plot_robustness_index_bar(
         ax.text(bar.get_x() + bar.get_width() / 2, val + 0.02,
                 f"{val:.3f}", ha="center", va="bottom", fontsize=11, fontweight="bold")
 
-    ax.set_ylabel("Robustness Index (AUC归一化)", fontsize=13)
+    ax.set_ylabel("鲁棒性指数 (AUC归一化)", fontsize=13)
     ax.set_ylim(0, 1.15)
     ax.grid(axis="y", alpha=0.3)
 
@@ -498,8 +498,8 @@ def _plot_robustness_index_bar(
     ax.set_title(title, fontsize=14, fontweight="bold", pad=12)
 
     fig.tight_layout()
-    path = output_dir / "robustness_index_bar.png"
-    fig.savefig(path, dpi=300, bbox_inches="tight")
+    path = output_dir / "robustness_index_bar.svg"
+    fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
     print(f"  [图2] Robustness Index柱状图: {path}")
     return path
