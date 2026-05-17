@@ -594,7 +594,7 @@ def compute_hi_robustness(hi_series: List[float], noise_std: float = 0.5) -> flo
 
 def plot_confusion_matrix(cm: np.ndarray, labels: List[str], title: str,
                           subdir: str = "classification", normalize: bool = True) -> Path:
-    """绘制并保存混淆矩阵图"""
+    """绘制并保存混淆矩阵图（统一配色：深蓝对角线，浅灰错误格，不用黑色掩盖）"""
     if normalize:
         cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
         cm_norm = np.nan_to_num(cm_norm)
@@ -605,7 +605,23 @@ def plot_confusion_matrix(cm: np.ndarray, labels: List[str], title: str,
         fmt = "d"
 
     fig, ax = plt.subplots(figsize=(max(6, len(labels) * 0.8), max(5, len(labels) * 0.7)))
-    im = ax.imshow(display_cm, cmap="Blues", interpolation="nearest")
+
+    # 手动构建颜色矩阵（不用 cmap，避免深色掩盖问题）
+    n = len(labels)
+    correct_color = np.array([0.2, 0.4, 0.8])     # 深蓝
+    incorrect_color = np.array([0.92, 0.92, 0.95])  # 浅灰白
+
+    cmap_data = np.ones((n, n, 3))  # 默认白色背景
+    for i in range(n):
+        for j in range(n):
+            intensity = float(display_cm[i, j]) if normalize else float(display_cm[i, j]) / max(1, display_cm.max())
+            if i == j:
+                cmap_data[i, j] = correct_color * min(intensity * 1.2, 1.0)
+            else:
+                cmap_data[i, j] = incorrect_color * intensity + np.array([1.0, 1.0, 1.0]) * (1 - intensity)
+
+    im = ax.imshow(cmap_data, interpolation="nearest", vmin=0, vmax=1)
+
     ax.set_xticks(range(len(labels)))
     ax.set_yticks(range(len(labels)))
     ax.set_xticklabels(labels, rotation=45, ha="right")
@@ -616,12 +632,12 @@ def plot_confusion_matrix(cm: np.ndarray, labels: List[str], title: str,
 
     for i in range(len(labels)):
         for j in range(len(labels)):
-            text = format(display_cm[i, j], fmt)
-            ax.text(j, i, text, ha="center", va="center",
-                    color="white" if display_cm[i, j] > 0.5 else "black")
+            val_norm = display_cm[i, j]
+            text = format(val_norm, fmt)
+            text_color = "white" if (i == j and val_norm > 0.3) else "black"
+            ax.text(j, i, text, ha="center", va="center", color=text_color,
+                    fontweight="bold" if i == j else "normal")
 
-    plt.colorbar(im, ax=ax)
-    plt.tight_layout()
     path = save_figure(fig, f"confusion_matrix_{title.replace(' ', '_').lower()}.png", subdir)
     return path
 
