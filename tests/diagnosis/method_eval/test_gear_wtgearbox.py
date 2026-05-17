@@ -42,9 +42,9 @@ from method_eval.label_mapper import (
     infer_gear_label_from_ensemble,
     infer_binary_label,
 )
-from method_eval.visualizer import (
-    apply_style, plot_confusion_matrix, plot_method_comparison_bar,
-)
+from method_eval.visualizer import apply_style
+from method_eval.plot_generator import save_confusion_matrix_results, save_accuracy_bar_results
+from method_eval.visualizer import plot_confusion_matrix, plot_method_comparison_bar
 
 apply_style()
 
@@ -285,6 +285,13 @@ def test_gear_wtgearbox() -> Dict[str, Any]:
     plot_confusion_matrix(cm_5, WTGEARBOX_LABELS, "Ensemble (齿轮5类)",
                           ensemble_result["accuracy_5"],
                           str(OUTPUT_DIR / "confusion_ensemble_5class.svg"), True)
+
+    # 保存数据到 JSON（用于独立绘图）
+    save_confusion_matrix_results(
+        cm_5, WTGEARBOX_LABELS, "Ensemble (齿轮5类)",
+        ensemble_result["accuracy_5"],
+        OUTPUT_DIR / "results_ensemble_confusion.json", True,
+    )
     table_5 = generate_classification_metrics_table(metrics_5, "WTgearbox Ensemble 五类")
     with open(OUTPUT_DIR / "ensemble_5class_metrics.md", "w", encoding="utf-8") as f:
         f.write(table_5)
@@ -301,6 +308,13 @@ def test_gear_wtgearbox() -> Dict[str, Any]:
         method_names=method_names, metrics={"accuracy": acc_list},
         metric_label="accuracy", title="WTgearbox 齿轮 健康 vs 故障二分类",
         output_path=str(OUTPUT_DIR / "binary_accuracy_comparison.svg"),
+        highlight_indices=[len(method_names) - 1], ylim=(0.5, 1.05),
+    )
+
+    # 保存数据到 JSON（用于独立绘图）
+    save_accuracy_bar_results(
+        method_names, acc_list, "WTgearbox 齿轮 健康 vs 故障二分类",
+        OUTPUT_DIR / "results_accuracy_bar.json",
         highlight_indices=[len(method_names) - 1], ylim=(0.5, 1.05),
     )
 

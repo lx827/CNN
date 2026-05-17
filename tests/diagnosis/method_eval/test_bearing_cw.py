@@ -74,10 +74,10 @@ from evaluation.classification_metrics_eval import (
 OUTPUT_DIR = EXP_DIRS["bearing_cw"]
 
 SKIP_METHODS = {"wp"}
-# 全量模式
-BEARING_METHODS_ACTIVE = [(n, v) for n, v in BEARING_METHODS if v not in SKIP_METHODS]
-# 快速验证模式：取消注释下面一行
-# BEARING_METHODS_ACTIVE = [("标准包络", "envelope"), ("DWT", "dwt"), ("EMD", "emd_envelope")]
+# 快速验证模式
+BEARING_METHODS_ACTIVE = [("标准包络", "envelope"), ("DWT", "dwt"), ("EMD", "emd_envelope")]
+# 全量模式：取消注释下面一行
+# BEARING_METHODS_ACTIVE = [(n, v) for n, v in BEARING_METHODS if v not in SKIP_METHODS]
 
 
 # ═══════════════════════════════════════════════════════════

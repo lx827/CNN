@@ -75,14 +75,14 @@ OUTPUT_DIR = EXP_DIRS["bearing_hustbear"]
 # 过滤掉有 bug 的方法
 SKIP_METHODS = {"wp"}  # 小波包有 bug
 
-# 全量模式：11 种轴承方法 + Ensemble
-BEARING_METHODS_ACTIVE = [(n, v) for n, v in BEARING_METHODS if v not in SKIP_METHODS]
-# 快速验证模式：取消注释下面一行
-# BEARING_METHODS_ACTIVE = [
-#     ("标准包络", "envelope"),
-#     ("DWT", "dwt"),
-#     ("EMD", "emd_envelope"),
-# ]
+# 快速验证模式：3 个最快方法 + Ensemble（验证图表生成）
+# 全量模式：取消注释下面一行
+# BEARING_METHODS_ACTIVE = [(n, v) for n, v in BEARING_METHODS if v not in SKIP_METHODS]
+BEARING_METHODS_ACTIVE = [
+    ("标准包络", "envelope"),
+    ("DWT", "dwt"),
+    ("EMD", "emd_envelope"),
+]
 
 
 # ═══════════════════════════════════════════════════════════
