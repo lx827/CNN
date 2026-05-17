@@ -27,3 +27,17 @@ async def get_channel_envelope(
 - **参数 denoise 可选值**：`none` | `wavelet` | `vmd` | `wavelet_vmd` | `wavelet_lms` | `emd` | `ceemdan` | `savgol` | `wavelet_packet` | `ceemdan_wp` | `eemd`
 - **响应 data**：`{device_id, batch_index, channel, channel_name, sample_rate, is_special, method, envelope_freq, envelope_amp, optimal_fc, optimal_bw, max_kurtosis, comb_frequencies, med_filter_len, kurtosis_before, kurtosis_after, teager_rms, reweighted_score, spectral_kurtosis_bands, features, fault_indicators}`
 - **说明**：包络谱分析（13 种轴承方法）
+
+## 内部辅助函数
+
+### `_extract_device_param`
+
+```python
+def _extract_device_param(params, device_keys)
+```
+
+- **参数**:
+  - `params` (`dict | None`): 设备参数字典
+  - `device_keys` (`list[str]`): 需要提取的键列表
+- **返回值**：`dict` — 从设备参数中提取的键值对字典，若 `params` 为 `None` 则返回空字典
+- **说明**：从设备配置参数中安全提取指定键值，用于 gear/bearing 参数解析

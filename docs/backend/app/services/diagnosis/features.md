@@ -150,3 +150,14 @@ def _get_channel_params(device, channel_index, field)
   - `field` (`str`): 参数字段名（如 `"gear_teeth"` 或 `"bearing_params"`）
 - **返回值**：`dict | None` — 该通道对应的参数字典，若无则返回 None
 - **说明**：兼容旧格式（设备级共用字典，如 `{input:18, output:27}`）与新格式（通道级独立字典，如 `{"1":{input:18}, "2":{input:27}}`）。若字段值中不包含通道键但包含 `"input"`/`"n"`/`"output"` 等通用键，则返回整个字段值作为回退
+
+### `robust_z`
+
+```python
+def robust_z(series)
+```
+
+- **参数**:
+  - `series` (`np.ndarray`): 输入一维序列
+- **返回值**：`float` — 基于中位数绝对偏差（MAD）的鲁棒 z-score
+- **说明**：使用中位数代替均值、MAD 代替标准差计算 z-score，对异常值不敏感。公式为 `0.6745 * (x - median) / MAD`

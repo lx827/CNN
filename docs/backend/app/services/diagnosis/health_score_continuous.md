@@ -68,3 +68,15 @@ def compute_continuous_deductions(
 5. SC/SCoh 循环平稳补充
 6. NA4/NB4 趋势指标
 7. 小波包能量熵
+
+### `_sf`
+
+```python
+def _sf(val, default=0.0)
+```
+
+- **参数**:
+  - `val` — 输入值（通常为 `None` 或数值）
+  - `default` (`float`, 默认 `0.0`): 当 `val` 为 `None` 时的回退值
+- **返回值**：`float` — 安全的浮点数值
+- **说明**：Safe Float 辅助函数。将 `None` 转换为默认浮点值，防止连续扣分计算过程中出现 `TypeError`

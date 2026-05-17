@@ -86,3 +86,9 @@
 |------|------|------|
 | total | int | 总数 |
 | items | List[AlarmOut] | 告警列表 |
+
+### `Config`
+
+- **说明**：Pydantic 模型全局配置类
+- **配置项**：
+  - `from_attributes = True` — 允许从 ORM 对象属性自动映射（Pydantic v2 兼容模式）

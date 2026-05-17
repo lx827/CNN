@@ -48,3 +48,15 @@ def is_ds_conflict_high(ds_fusion_result: Optional[Dict]) -> bool
 ```
 
 - **说明**：判断 D-S 冲突是否过高（conflict > 0.8）
+
+### `_sf`
+
+```python
+def _sf(val, default=0.0)
+```
+
+- **参数**:
+  - `val` — 输入值（通常为 `None` 或数值）
+  - `default` (`float`, 默认 `0.0`): 当 `val` 为 `None` 时的回退值
+- **返回值**：`float` — 安全的浮点数值
+- **说明**：Safe Float 辅助函数。将 `None` 转换为默认浮点值，防止健康度评分过程中出现 `TypeError`

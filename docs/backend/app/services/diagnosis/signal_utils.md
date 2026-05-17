@@ -28,6 +28,9 @@
 | `estimate_rot_freq_envelope` | `estimate_rot_freq_envelope(signal, fs) -> float` | 包络法估计转频 |
 | `zoom_fft_analysis` | `zoom_fft_analysis(signal, fs, center_freq, bandwidth, n_fft) -> Tuple` | ZOOM-FFT 细化谱 |
 | `_band_energy` | `_band_energy(freq, amp, center, bandwidth) -> float` | 频带能量积分 |
+| `_candidate_score` | `_candidate_score(f_est: float, method: str) -> float` | 候选频率置信度评分 |
+| `_sub_harmonic_penalty` | `_sub_harmonic_penalty(f_candidate: float) -> float` | 次谐波惩罚项 |
+| `_support_energy` | `_support_energy(f_est: float) -> float` | 支撑带能量 |
 
 | `parabolic_interpolation` | `parabolic_interpolation(freqs, spectrum, idx) -> float` | 抛物线插值精确定位谱峰频率 |
 | `_order_band_energy` | `_order_band_energy(order_axis, spectrum, center_order: float, bandwidth: float) -> float` | 指定阶次带能量 |

@@ -85,3 +85,79 @@ def planetary_cvs_med_analysis(
   - `gear_teeth` (`Dict`): 齿轮参数 `{sun, ring, planet, planet_count}`
 - **返回值**：`Dict` — 包含 `method`, `med_kurtosis`, `envelope_kurtosis`, 各故障阶次 SNR 及显著性标志
 - **说明**：Level 5 行星齿轮箱诊断。先利用 carrier 周期进行 CVS（连续振动分离）提取单行星轮啮合段，再执行 MED（最小熵解卷积）增强故障冲击，最后做包络阶次谱分析搜索太阳轮/行星轮故障。
+
+## 内部辅助函数
+
+### `_search_fault_orders`
+
+```python
+def _search_fault_orders(oa, os, name)
+```
+
+- **参数**:
+  - `oa` — 阶次轴（数组）
+  - `os` — 阶次谱幅值（数组）
+  - `name` (`str`): 故障类型名称（如 `"sun"`、`"planet"`）
+- **返回值**：`Dict` — 搜索结果字典，包含故障阶次位置、幅值及显著性标志
+- **说明**：在阶次谱中搜索指定故障类型的特征阶次峰值，用于行星齿轮箱太阳轮、行星轮等故障定位。
+
+### `_peak_scoh_at_alpha`
+
+```python
+def _peak_scoh_at_alpha(alpha_target, freq_band=None)
+```
+
+- **参数**:
+  - `alpha_target` (`float`): 目标循环频率 Hz
+  - `freq_band` (`Tuple[float, float]`, 可选): 谱频率搜索范围 `(f_low, f_high)`，默认使用啮合频率附近带宽
+- **返回值**：`(peak_scoh, peak_freq, mean_scoh_in_band)` — 谱相干峰值、峰值频率、带内均值
+- **说明**：在指定循环频率 `alpha_target` 处，搜索谱相干（Spectral Coherence）幅值峰值，用于检测循环平稳故障特征。
+
+### `_peak_sc_at_alpha`
+
+```python
+def _peak_sc_at_alpha(alpha_target, freq_band=None)
+```
+
+- **参数**:
+  - `alpha_target` (`float`): 目标循环频率 Hz
+  - `freq_band` (`Tuple[float, float]`, 可选): 谱频率搜索范围，默认使用啮合频率附近带宽
+- **返回值**：`(peak_sc, peak_freq, mean_sc_in_band)` — 谱相关密度峰值、峰值频率、带内均值
+- **说明**：在指定循环频率 `alpha_target` 处，搜索谱相关密度（Spectral Correlation）幅值峰值。
+
+### `_msb_slice`
+
+```python
+def _msb_slice(f1, f_delta_max=None)
+```
+
+- **参数**:
+  - `f1` (`float`): 固定载波频率 Hz
+  - `f_delta_max` (`float`, 可选): 最大调制频率偏移，默认 `f_mesh / 2`
+- **返回值**：`(f_delta_axis, msb_amplitude_slice)` — 调制频率轴与 MSB 切片幅值
+- **说明**：计算调制信号双谱（MSB）在固定载波频率 `f1` 处的切片：`B(f1, f_delta)` for `f_delta` in `[0, f_delta_max]`。
+
+### `_msb_se`
+
+```python
+def _msb_se(f1, f_delta_max=None)
+```
+
+- **参数**:
+  - `f1` (`float`): 固定载波频率 Hz
+  - `f_delta_max` (`float`, 可选): 最大调制频率偏移，默认 `f_mesh / 2`
+- **返回值**：`(msb_se_value, f_delta_axis, msb_slice)` — MSB-SE 值、调制频率轴、MSB 切片
+- **说明**：计算 MSB-SE(f1)，即 `|B(f1, f_delta)|` 在 `f_delta` 维度的积分（求和）。用于评估载波频率 `f1` 处调制能量的总体水平。
+
+### `_msb_peak_at`
+
+```python
+def _msb_peak_at(f1, f_delta_target, f_delta_bandwidth=None)
+```
+
+- **参数**:
+  - `f1` (`float`): 固定载波频率 Hz
+  - `f_delta_target` (`float`): 目标调制频率 Hz
+  - `f_delta_bandwidth` (`float`, 可选): 搜索带宽，默认 `3 × freq_res`
+- **返回值**：`float` — 峰值幅值
+- **说明**：在 MSB 切片 `f1` 处，搜索 `f_delta` 维度在 `f_delta_target` 附近的峰值幅值。用于检测特定调制频率的边频带故障特征。
