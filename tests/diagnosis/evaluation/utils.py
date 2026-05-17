@@ -278,8 +278,8 @@ def compute_confusion_matrix(y_true: List[str], y_pred: List[str], labels: List[
     cm = np.zeros((n, n), dtype=int)
     label_to_idx = {l: i for i, l in enumerate(labels)}
     for yt, yp in zip(y_true, y_pred):
-        i = label_to_idx.get(yt, -1)
-        j = label_to_idx.get(yp, -1)
+        i = label_to_idx.get(str(yt), -1)
+        j = label_to_idx.get(str(yp), -1)
         if i >= 0 and j >= 0:
             cm[i, j] += 1
     return cm
@@ -430,7 +430,7 @@ def compute_roc_curve(y_true_binary: List[int], scores: List[float]) -> Dict[str
     tp = 0
     fp = 0
     for y in y_sorted:
-        if y == 1:
+        if int(y) == 1:
             tp += 1
         else:
             fp += 1
@@ -460,7 +460,7 @@ def compute_pr_curve(y_true_binary: List[int], scores: List[float]) -> Dict[str,
     tp = 0
     fp = 0
     for y in y_sorted:
-        if y == 1:
+        if int(y) == 1:
             tp += 1
         else:
             fp += 1
@@ -483,9 +483,10 @@ def compute_multiclass_roc_pr(y_true: List[str], scores: List[float], labels: Li
     auc_roc_list = []
     auc_pr_list = []
     for lbl in labels:
-        y_binary = [1 if yt == lbl else 0 for yt in y_true]
-        roc = compute_roc_curve(y_binary, scores)
-        pr = compute_pr_curve(y_binary, scores)
+        y_binary = [1 if str(yt) == str(lbl) else 0 for yt in y_true]
+        scores_safe = [float(s) for s in scores]
+        roc = compute_roc_curve(y_binary, scores_safe)
+        pr = compute_pr_curve(y_binary, scores_safe)
         result["roc"][lbl] = roc
         result["pr"][lbl] = pr
         auc_roc_list.append(roc["auc"])

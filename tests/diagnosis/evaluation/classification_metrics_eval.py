@@ -69,7 +69,7 @@ def evaluate_classification_performance(
 
     # 基础分类指标
     total = len(y_true)
-    correct = sum(1 for yt, yp in zip(y_true, y_pred) if yt == yp)
+    correct = sum(1 for yt, yp in zip(y_true, y_pred) if str(yt) == str(yp))
     accuracy = correct / total if total > 0 else 0.0
 
     # 高级指标

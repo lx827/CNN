@@ -125,7 +125,7 @@ def infer_pred_label_from_result(comp_result: Dict[str, Any]) -> str:
       - 无物理参数显著但有统计显著 → "inner"（内圈最常见）
       - 无任何显著 → "composite"（判定为故障但无法确定类型）
     """
-    hs = comp_result.get("health_score", 100)
+    hs = int(comp_result.get("health_score", 100))
     if hs >= HEALTH_THRESHOLD:
         return "healthy"
 
@@ -136,14 +136,14 @@ def infer_pred_label_from_result(comp_result: Dict[str, Any]) -> str:
     # 物理参数显著项
     param_hits = []
     for name, item in indicators.items():
-        if isinstance(item, dict) and item.get("significant") and not name.endswith("_stat"):
+        if isinstance(item, dict) and bool(item.get("significant", False)) and not name.endswith("_stat"):
             param_hits.append(name)
 
     if not param_hits:
         # 无物理参数显著 → 检查统计指标
         stat_hits = [
             name for name, item in indicators.items()
-            if isinstance(item, dict) and item.get("significant") and name.endswith("_stat")
+            if isinstance(item, dict) and bool(item.get("significant", False)) and name.endswith("_stat")
         ]
         if stat_hits:
             # 统计指标显著，默认标记为最常见的 inner
@@ -178,7 +178,7 @@ def infer_pred_label_ensemble(ensemble_result: Dict[str, Any]) -> str:
     - "bearing_abnormal" → composite
     - "gear_abnormal" → composite（轴承实验中忽略齿轮）
     """
-    hs = ensemble_result.get("health_score", 100)
+    hs = int(ensemble_result.get("health_score", 100))
     if hs >= HEALTH_THRESHOLD:
         return "healthy"
 
@@ -263,7 +263,7 @@ def run_all_methods() -> Dict[str, Dict[str, Any]]:
                 elapsed = (time.perf_counter() - t0) * 1000
 
                 pred = infer_pred_label_from_result(comp)
-                hs = comp.get("health_score", 100)
+                hs = int(comp.get("health_score", 100))
 
                 y_true_list.append(info["label"])
                 y_pred_list.append(pred)
@@ -316,7 +316,7 @@ def run_all_methods() -> Dict[str, Dict[str, Any]]:
             elapsed = (time.perf_counter() - t0) * 1000
 
             pred = infer_pred_label_ensemble(ensemble_result)
-            hs = ensemble_result.get("health_score", 100)
+            hs = int(ensemble_result.get("health_score", 100))
 
             y_true_list.append(info["label"])
             y_pred_list.append(pred)
@@ -389,13 +389,13 @@ def plot_confusion_matrix_comparison(results: Dict[str, Dict]):
             for j in range(cm_norm.shape[1]):
                 if i == j:
                     # 正确分类：深蓝色，强度按比例
-                    intensity = min(cm_norm[i, j], 1.0)
+                    intensity = min(float(cm_norm[i, j]), 1.0)
                     # 解析 CM_COLORS["correct"] → RGB
                     r, g, b = _hex_to_rgb(CM_COLORS["correct"])
                     display[i, j] = (r * intensity, g * intensity, b * intensity)
                 else:
                     # 错误分类：浅灰白，强度按比例
-                    intensity = min(cm_norm[i, j], 1.0)
+                    intensity = min(float(cm_norm[i, j]), 1.0)
                     r, g, b = _hex_to_rgb(CM_COLORS["incorrect"])
                     display[i, j] = (r + (1 - r) * intensity, g + (1 - g) * intensity, b + (1 - b) * intensity)
 
@@ -406,7 +406,7 @@ def plot_confusion_matrix_comparison(results: Dict[str, Dict]):
             for j in range(len(cn_labels)):
                 val_norm = cm_norm[i, j]
                 val_raw = cm_raw[i, j]
-                text_color = "white" if i == j and val_norm > 0.3 else "black"
+                text_color = "white" if i == j and float(val_norm) > 0.3 else "black"
                 ax.text(j, i, f"{val_norm:.2f}\n({val_raw})",
                         ha="center", va="center", fontsize=11,
                         color=text_color, fontweight="bold" if i == j else "normal")

@@ -143,7 +143,7 @@ def run_diagnosis(files: List[Dict]) -> List[Dict]:
         status = "normal"
         try:
             comp = engine.analyze_comprehensive(signal, SAMPLE_RATE, rot_freq=rot_freq)
-            health_score = comp.get("health_score", 100)
+            health_score = int(comp.get("health_score", 100))
             status = comp.get("status", "normal")
             gear_result = comp.get("gear_results", {})
         except Exception as e:
@@ -164,7 +164,7 @@ def run_diagnosis(files: List[Dict]) -> List[Dict]:
         tsa_kurt = 0.0
         try:
             tsa_result = compute_tsa_residual_order(signal, SAMPLE_RATE, rot_freq)
-            if tsa_result.get("valid"):
+            if bool(tsa_result.get("valid", False)):
                 diff = tsa_result.get("differential", np.array([]))
                 if len(diff) > 0:
                     tsa_kurt = compute_excess_kurtosis(diff)
@@ -251,10 +251,10 @@ def predict_label(row: Dict) -> str:
 
     # 故障时：综合判断
     # 用 health_score 量化严重程度
-    ser = row.get("ser", 0.0)
-    fm4 = row.get("fm4", 0.0)
-    fm0 = row.get("fm0", 0.0)
-    tsa_kurt = row.get("tsa_kurt", 0.0)
+    ser = float(row.get("ser", 0.0))
+    fm4 = float(row.get("fm4", 0.0))
+    fm0 = float(row.get("fm0", 0.0))
+    tsa_kurt = float(row.get("tsa_kurt", 0.0))
 
     # 基于指标特征推断（简化规则）
     if fm0 > 1.0 and tsa_kurt > 3.0:
@@ -308,7 +308,7 @@ def plot_confusion_matrix(results: List[Dict]):
         for j in range(len(GEAR_LABELS)):
             val_norm = cm_norm[i, j]
             val_raw = cm[i, j]
-            text_color = "white" if val_norm > 0.5 else "black"
+            text_color = "white" if float(val_norm) > 0.5 else "black"
             ax.text(j, i, f"{val_norm:.2f}\n({val_raw})",
                     ha="center", va="center", color=text_color, fontsize=11)
 

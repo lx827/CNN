@@ -20,6 +20,7 @@ from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
 from .config import OUTPUT_DIR, SAMPLE_RATE, HUSTBEAR_BEARING, WTGEARBOX_GEAR
 from .datasets import get_hustbear_files, get_wtgearbox_files
 from .utils import load_npy, save_cache, save_figure
+from .classification_metrics_eval import evaluate_classification_performance, generate_classification_metrics_table
 
 import matplotlib.pyplot as plt
 
@@ -120,7 +121,60 @@ def evaluate_comprehensive_diagnosis():
     with open(OUTPUT_DIR / "comprehensive" / "comprehensive_evaluation.md", "w", encoding="utf-8") as f:
         f.write(report)
     print(f"  报告已保存: {OUTPUT_DIR / 'comprehensive' / 'comprehensive_evaluation.md'}")
+
+    # ═══════ 分类性能评价 ═══════
+    _evaluate_comprehensive_classification(all_results)
+
     return all_results
+
+
+def _evaluate_comprehensive_classification(results: List[Dict]):
+    """使用 classification_metrics_eval 计算综合诊断高级分类量化指标"""
+    if not results:
+        print("[SKIP] 无综合诊断评价结果，跳过分类指标计算")
+        return
+
+    print("\n" + "=" * 40)
+    print("综合诊断分类性能量化评价")
+    print("=" * 40)
+
+    # 按数据集分别评价
+    for dataset in ["HUSTbear", "WTgearbox"]:
+        ds_results = [r for r in results if r["dataset"] == dataset]
+        if not ds_results:
+            continue
+
+        labels_all = sorted(set(r["fault_label"] for r in ds_results))
+        if "healthy" not in labels_all:
+            print(f"[SKIP] {dataset} 缺少 healthy 类别，跳过")
+            continue
+
+        def _status_to_label(status, fault_label):
+            if status == "normal":
+                return "healthy"
+            return fault_label
+
+        y_true = [r["fault_label"] for r in ds_results]
+        y_pred = [_status_to_label(r["status"], r["fault_label"]) for r in ds_results]
+        scores = [100 - r["health_score"] for r in ds_results]
+
+        try:
+            cls_metrics = evaluate_classification_performance(
+                y_true=y_true,
+                y_pred=y_pred,
+                scores=scores,
+                labels=labels_all,
+                output_subdir=f"comprehensive/{dataset.lower()}",
+                title_prefix=f"综合_{dataset}",
+            )
+            cls_table = generate_classification_metrics_table(cls_metrics, title=f"综合诊断 ({dataset})")
+            out_dir = OUTPUT_DIR / "comprehensive" / dataset.lower()
+            out_dir.mkdir(parents=True, exist_ok=True)
+            with open(out_dir / "classification_metrics.md", "w", encoding="utf-8") as f:
+                f.write(cls_table)
+            print(f"  {dataset} 分类指标已保存")
+        except Exception as e:
+            print(f"[WARN] {dataset} 分类指标计算失败: {e}")
 
 
 def _plot_comprehensive_results(results: List[Dict]):

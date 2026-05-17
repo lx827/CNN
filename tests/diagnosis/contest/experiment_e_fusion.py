@@ -166,7 +166,7 @@ def _predict_label_from_bearing_result(result: Dict, health_score: int) -> str:
     3. 仅统计指标命中 → 优先外圈(误报偏外圈)
     4. health_score < 85 但无命中 → unknown
     """
-    if health_score >= HEALTH_THRESHOLD:
+    if int(health_score) >= HEALTH_THRESHOLD:
         return "healthy"
 
     indicators = result.get("fault_indicators", {}) or {}
@@ -177,7 +177,7 @@ def _predict_label_from_bearing_result(result: Dict, health_score: int) -> str:
     for name, item in indicators.items():
         if not isinstance(item, dict):
             continue
-        if item.get("significant"):
+        if bool(item.get("significant", False)):
             if name.endswith("_stat") or name in {
                 "envelope_peak_snr", "envelope_kurtosis",
                 "moderate_kurtosis", "envelope_crest_factor",
@@ -227,7 +227,7 @@ def _predict_label_from_ensemble(result: Dict) -> str:
         return mapped
 
     # 3. health_score 判断
-    hs = result.get("health_score", 100)
+    hs = int(result.get("health_score", 100))
     if hs >= HEALTH_THRESHOLD:
         return "healthy"
 
@@ -285,7 +285,7 @@ def run_experiment_e():
                 )
                 result = engine.analyze_bearing(signal, SAMPLE_RATE, rot_freq=rot_freq)
                 comp = engine.analyze_comprehensive(signal, SAMPLE_RATE, rot_freq=rot_freq)
-                hs = comp.get("health_score", 100)
+                hs = int(comp.get("health_score", 100))
                 exec_time = (time.perf_counter() - t0) * 1000
 
                 pred_label = _predict_label_from_bearing_result(result, hs)
@@ -295,7 +295,7 @@ def run_experiment_e():
                 indicators = result.get("fault_indicators", {}) or {}
                 n_significant = sum(
                     1 for v in indicators.values()
-                    if isinstance(v, dict) and v.get("significant")
+                    if isinstance(v, dict) and bool(v.get("significant", False))
                 )
                 confidence = min(n_significant / max(len(indicators), 1), 1.0)
 
@@ -339,7 +339,7 @@ def run_experiment_e():
             exec_time = (time.perf_counter() - t0) * 1000
 
             pred_label = _predict_label_from_ensemble(result)
-            hs = result.get("health_score", 100)
+            hs = int(result.get("health_score", 100))
             score = 100.0 - hs
 
             # D-S 融合的连续分数: 使用 dominant_probability

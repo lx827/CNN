@@ -149,7 +149,7 @@ def _find_hustbear_files() -> Tuple[Optional[Path], Optional[Path]]:
 
 def _detection_status(health_score: int, is_fault: bool) -> str:
     """基于 health_score < HEALTH_THRESHOLD 的分类判定"""
-    predicted_fault = health_score < HEALTH_THRESHOLD
+    predicted_fault = int(health_score) < HEALTH_THRESHOLD
     if is_fault and predicted_fault:
         return "TP"
     elif not is_fault and not predicted_fault:
@@ -178,13 +178,13 @@ def _compute_health_score_from_result(
 ) -> int:
     """从轴承分析结果估算健康度"""
     time_feats = compute_time_features(signal)
-    hs, _ = _compute_health_score(
+    hs, _, _ = _compute_health_score(
         gear_teeth=None,
         time_features=time_feats,
         bearing_result=result,
         gear_result={},
     )
-    return hs
+    return int(hs)
 
 
 def _compute_critical_snr(
@@ -254,7 +254,7 @@ def _run_single_method(
                 result = engine.analyze_comprehensive(
                     noisy_fault, fs, rot_freq=rot_freq_fault, skip_gear=True,
                 )
-                health_score_fault = result.get("health_score", 100)
+                health_score_fault = int(result.get("health_score", 100))
             else:
                 # 单一轴承方法: DiagnosisEngine(ADVANCED, bearing_method=bm)
                 engine = DiagnosisEngine(
@@ -288,7 +288,7 @@ def _run_single_method(
                     result_h = engine_h.analyze_comprehensive(
                         noisy_healthy, fs, rot_freq=rot_freq_healthy, skip_gear=True,
                     )
-                    health_score_healthy = result_h.get("health_score", 100)
+                    health_score_healthy = int(result_h.get("health_score", 100))
                 else:
                     engine_h = DiagnosisEngine(
                         strategy=DiagnosisStrategy.ADVANCED,
