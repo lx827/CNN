@@ -25,8 +25,13 @@ async def get_channel_envelope(
 - **async**：✅
 - **参数 method 可选值**：`envelope` | `kurtogram` | `cpw` | `med` | `teager` | `spectral_kurtosis` | `sc_scoh` | `mckd` | `wp` | `dwt` | `emd_envelope` | `ceemdan_envelope` | `vmd_envelope`
 - **参数 denoise 可选值**：`none` | `wavelet` | `vmd` | `wavelet_vmd` | `wavelet_lms` | `emd` | `ceemdan` | `savgol` | `wavelet_packet` | `ceemdan_wp` | `eemd`
+- **参数 max_freq**：包络谱返回的最大频率（Hz），默认 `1000`。当前端点接收此参数，实际计算由诊断引擎内部默认 `1000.0` 处理。
 - **响应 data**：`{device_id, batch_index, channel, channel_name, sample_rate, is_special, method, envelope_freq, envelope_amp, optimal_fc, optimal_bw, max_kurtosis, comb_frequencies, med_filter_len, kurtosis_before, kurtosis_after, teager_rms, reweighted_score, spectral_kurtosis_bands, features, fault_indicators}`
-- **说明**：包络谱分析（13 种轴承方法）
+- **错误码**：
+  - `404`：数据不存在
+  - `400`：信号长度不足（少于 64 采样点）
+  - `500`：计算过程异常（已增强底层鲁棒性，极端场景下仍可能返回）
+- **说明**：包络谱分析（13 种轴承方法）。信号会先被截断到最多 5 秒长度，再进行计算。
 
 ## 内部辅助函数
 

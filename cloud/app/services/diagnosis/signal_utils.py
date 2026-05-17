@@ -37,9 +37,13 @@ def bandpass_filter(
     order: int = 4,
 ) -> np.ndarray:
     """Butterworth 带通滤波"""
+    if len(signal) < order * 7:
+        return signal.copy()
     nyq = fs / 2.0
     low = max(1e-6, f_low / nyq)
     high = min(1.0 - 1e-6, f_high / nyq)
+    if low >= high:
+        return signal.copy()
     b, a = scipy_signal.butter(order, [low, high], btype='band')
     return scipy_signal.filtfilt(b, a, signal)
 
@@ -51,6 +55,8 @@ def lowpass_filter(
     order: int = 4,
 ) -> np.ndarray:
     """Butterworth 低通滤波"""
+    if len(signal) < order * 7:
+        return signal.copy()
     nyq = fs / 2.0
     cut = min(1.0 - 1e-6, f_cut / nyq)
     b, a = scipy_signal.butter(order, cut, btype='low')
@@ -64,6 +70,8 @@ def highpass_filter(
     order: int = 4,
 ) -> np.ndarray:
     """Butterworth 高通滤波"""
+    if len(signal) < order * 7:
+        return signal.copy()
     nyq = fs / 2.0
     cut = max(1e-6, f_cut / nyq)
     b, a = scipy_signal.butter(order, cut, btype='high')
