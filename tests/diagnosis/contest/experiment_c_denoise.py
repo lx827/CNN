@@ -28,7 +28,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 
 # ── contest 统一风格 ──────────────────────────────────────────
-from tests.diagnosis.contest.style import (
+from contest.style import (
     apply_contest_style,
     COLORS,
     METHOD_COLORS,
@@ -46,7 +46,7 @@ import matplotlib.patches as patches
 from matplotlib.lines import Line2D
 
 # ── contest 配置 ──────────────────────────────────────────────
-from tests.diagnosis.contest.config import (
+from contest.config import (
     OUTPUT_DIR,
     EXP_DIRS,
     HUSTBEAR_DIR,

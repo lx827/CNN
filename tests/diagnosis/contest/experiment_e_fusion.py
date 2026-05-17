@@ -26,13 +26,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 
 # ── contest 模块 ──
-from tests.diagnosis.contest.config import (
+from contest.config import (
     OUTPUT_DIR, EXP_DIRS, SAMPLE_RATE, MAX_SECONDS, MAX_SAMPLES,
     HUSTBEAR_BEARING, HUSTBEAR_DIR, BEARING_FREQ_COEFFS,
     HEALTH_THRESHOLD, MAX_PER_CLASS_HUSTBEAR, BEARING_METHODS_COMPARE,
     BEARING_LABELS, LABEL_CN,
 )
-from tests.diagnosis.contest.style import (
+from contest.style import (
     apply_contest_style, COLORS, METHOD_COLORS, get_method_color,
     make_conclusion_title, FIGURE_SIZE, FIGURE_SIZE_WIDE, FIGURE_DPI,
 )

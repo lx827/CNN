@@ -33,12 +33,12 @@ from app.services.diagnosis.engine import (
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
 
 # ── 导入 contest 模块 ──────────────────────────────────────────
-from tests.diagnosis.contest.config import (
+from contest.config import (
     HUSTBEAR_DIR, SAMPLE_RATE, MAX_SAMPLES, MAX_PER_CLASS_HUSTBEAR,
     HUSTBEAR_BEARING, HEALTH_THRESHOLD, BEARING_LABELS, LABEL_CN,
     BEARING_METHODS_COMPARE, EXP_DIRS,
 )
-from tests.diagnosis.contest.style import (
+from contest.style import (
     apply_contest_style, COLORS, CM_COLORS, get_method_color,
     make_conclusion_title, FIGURE_SIZE_WIDE, FIGURE_SIZE, FIGURE_SIZE_TALL,
     FIGURE_DPI,
