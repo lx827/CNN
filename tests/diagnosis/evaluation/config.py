@@ -40,6 +40,6 @@ MESH_FREQ_COEFF = 21.875
 HEALTH_THRESHOLD = 85
 
 # 创建目录
-for sub in ["denoise", "bearing", "gear", "comprehensive", "robustness", "health_trend", "ds_fusion"]:
+for sub in ["denoise", "bearing", "gear", "comprehensive", "robustness", "health_trend", "ds_fusion", "classification", "channel_consensus"]:
     (OUTPUT_DIR / sub).mkdir(parents=True, exist_ok=True)
 CACHE_DIR.mkdir(parents=True, exist_ok=True)

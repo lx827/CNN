@@ -23,6 +23,9 @@ from evaluation.bearing_eval import evaluate_bearing_methods
 from evaluation.gear_eval import evaluate_gear_methods
 from evaluation.comprehensive_eval import evaluate_comprehensive_diagnosis
 from evaluation.robustness_eval import evaluate_noise_robustness
+from evaluation.ds_fusion_eval import evaluate_ds_fusion
+from evaluation.health_trend_eval import evaluate_health_trend
+from evaluation.channel_consensus_eval import evaluate_channel_consensus
 from evaluation.report_generator import generate_final_report
 
 
@@ -45,20 +48,28 @@ def main():
     print("║      HUSTbear + CW + WTgearbox 三数据集全面评估              ║")
     print("╚══════════════════════════════════════════════════════════════╝")
 
-    # 运行各评价模块（限制样本数以控制运行时间）
+    # Phase 1-2: 基础评价模块
     denoise_results = evaluate_denoise_methods()
     bearing_results = evaluate_bearing_methods()
     gear_results = evaluate_gear_methods()
     comprehensive_results = evaluate_comprehensive_diagnosis()
     robustness_results = evaluate_noise_robustness()
 
-    # 生成最终报告
+    # Phase 3: 高级评价模块
+    ds_fusion_results = evaluate_ds_fusion()
+    health_trend_results = evaluate_health_trend()
+    channel_consensus_results = evaluate_channel_consensus()
+
+    # Phase 4: 生成最终报告
     generate_final_report(
         denoise_results,
         bearing_results,
         gear_results,
         comprehensive_results,
         robustness_results,
+        ds_fusion_results,
+        health_trend_results,
+        channel_consensus_results,
     )
 
     from evaluation.config import OUTPUT_DIR
