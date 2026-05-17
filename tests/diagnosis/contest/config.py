@@ -3,6 +3,7 @@
 
 继承 evaluation 模块的配置，增加答辩专用输出目录和样本选择策略。
 """
+import os
 from pathlib import Path
 
 # ── 项目路径 ──────────────────────────────────────────────────
@@ -24,10 +25,10 @@ EXP_DIRS = {
 for d in EXP_DIRS.values():
     d.mkdir(parents=True, exist_ok=True)
 
-# ── 数据集路径（继承 evaluation config） ──────────────────────
-HUSTBEAR_DIR = Path(r"D:\code\wavelet_study\dataset\HUSTbear\down8192")
-CW_DIR       = Path(r"D:\code\CNN\CW\down8192_CW")
-WTGEARBOX_DIR = Path(r"D:\code\wavelet_study\dataset\WTgearbox\down8192")
+# ── 数据集路径（继承 evaluation config，支持环境变量覆盖） ──────────────────────
+HUSTBEAR_DIR  = Path(os.environ.get("HUSTBEAR_DIR", r"D:\code\wavelet_study\dataset\HUSTbear\down8192"))
+CW_DIR       = Path(os.environ.get("CW_DIR", r"D:\code\CNN\CW\down8192_CW"))
+WTGEARBOX_DIR = Path(os.environ.get("WTGEARBOX_DIR", r"D:\code\wavelet_study\dataset\WTgearbox\down8192"))
 
 # ── 信号参数 ──────────────────────────────────────────────────
 SAMPLE_RATE  = 8192
