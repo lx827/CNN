@@ -11,7 +11,7 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "cloud"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "cloud"))
 
 from app.services.diagnosis import DiagnosisEngine, GearMethod
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum

@@ -11,7 +11,7 @@ import os
 import numpy as np
 
 # 添加 cloud 目录到路径
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'cloud'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
 
 from app.services.diagnosis.emd_denoise import (
     emd_decompose, ceemdan_decompose, emd_denoise,

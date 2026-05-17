@@ -16,7 +16,8 @@ warnings.filterwarnings("ignore")
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "KaiTi", "Arial Unicode MS"]
+plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "WenQuanYi Micro Hei",
+                                    "Noto Sans CJK SC", "PingFang SC", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
 from .config import CACHE_DIR, OUTPUT_DIR, HEALTH_THRESHOLD, MAX_SAMPLES
@@ -251,11 +252,14 @@ def load_cache(name: str) -> Optional[Any]:
 
 
 def save_figure(fig, name: str, subdir: str = ""):
-    """保存图片"""
+    """保存图片（SVG矢量格式）"""
     d = OUTPUT_DIR / subdir
     d.mkdir(parents=True, exist_ok=True)
+    # 自动将 .png 扩展名替换为 .svg
+    if name.endswith(".png"):
+        name = name[:-4] + ".svg"
     path = d / name
-    fig.savefig(path, dpi=150, bbox_inches="tight")
+    fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
     return path
 
@@ -288,16 +292,17 @@ def compute_confusion_matrix(y_true: List[str], y_pred: List[str], labels: List[
 def compute_balanced_accuracy(y_true: List[str], y_pred: List[str], labels: List[str]) -> float:
     """计算 Balanced Accuracy = (TPR + TNR) / 2 的多分类平均"""
     cm = compute_confusion_matrix(y_true, y_pred, labels)
+    cm_total = int(cm.sum())
     n = len(labels)
     per_class_tpr = []
     per_class_tnr = []
     for i in range(n):
-        tp = cm[i, i]
-        fn = sum(cm[i, :]) - tp
-        fp = sum(cm[:, i]) - tp
-        tn = sum(cm) - tp - fn - fp
-        tpr = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        tnr = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+        tp = int(cm[i, i])
+        fn = int(cm[i, :].sum()) - tp
+        fp = int(cm[:, i].sum()) - tp
+        tn = cm_total - tp - fn - fp
+        tpr = float(tp) / float(tp + fn) if (tp + fn) > 0 else 0.0
+        tnr = float(tn) / float(tn + fp) if (tn + fp) > 0 else 0.0
         per_class_tpr.append(tpr)
         per_class_tnr.append(tnr)
     return float(np.mean(per_class_tpr) + np.mean(per_class_tnr)) / 2
@@ -306,16 +311,16 @@ def compute_balanced_accuracy(y_true: List[str], y_pred: List[str], labels: List
 def compute_cohen_kappa(y_true: List[str], y_pred: List[str], labels: List[str]) -> float:
     """计算 Cohen's Kappa = (p_o - p_e) / (1 - p_e)"""
     cm = compute_confusion_matrix(y_true, y_pred, labels)
-    total = sum(cm)
+    total = int(cm.sum())
     if total == 0:
         return 0.0
-    p_o = sum(cm[i, i] for i in range(len(labels))) / total
-    row_sums = [sum(cm[i, :]) for i in range(len(labels))]
-    col_sums = [sum(cm[:, i]) for i in range(len(labels))]
+    p_o = sum(int(cm[i, i]) for i in range(len(labels))) / total
+    row_sums = [int(cm[i, :].sum()) for i in range(len(labels))]
+    col_sums = [int(cm[:, i].sum()) for i in range(len(labels))]
     p_e = sum(r * c for r, c in zip(row_sums, col_sums)) / (total * total)
     if p_e >= 1.0:
         return 0.0
-    return (p_o - p_e) / (1 - p_e)
+    return float(p_o - p_e) / float(1 - p_e)
 
 
 def compute_mcc(y_true: List[str], y_pred: List[str], labels: List[str]) -> float:
@@ -324,21 +329,19 @@ def compute_mcc(y_true: List[str], y_pred: List[str], labels: List[str]) -> floa
     n = len(labels)
     if n < 2:
         return 0.0
-    # 多分类 MCC: (c * s - sum_k(p_k * t_k)) / sqrt((c^2 - sum(p_k^2)) * (s^2 - sum(t_k^2)))
-    c = sum(cm)
-    s = sum(cm[i, j] for i in range(n) for j in range(n) if i != j) + sum(cm[i, i] for i in range(n))
+    c_total = int(cm.sum())
     # 简化: 使用二分类公式对每类 One-vs-Rest 取平均
     mccs = []
     for k in range(n):
-        tp = cm[k, k]
-        fn = sum(cm[k, :]) - tp
-        fp = sum(cm[:, k]) - tp
-        tn = c - tp - fn - fp
-        denom = np.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+        tp = int(cm[k, k])
+        fn = int(cm[k, :].sum()) - tp
+        fp = int(cm[:, k].sum()) - tp
+        tn = c_total - tp - fn - fp
+        denom = float(np.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)))
         if denom < 1e-12:
             mccs.append(0.0)
         else:
-            mccs.append((tp * tn - fp * fn) / denom)
+            mccs.append(float(tp * tn - fp * fn) / denom)
     return float(np.mean(mccs))
 
 
@@ -347,11 +350,11 @@ def compute_macro_f1(y_true: List[str], y_pred: List[str], labels: List[str]) ->
     cm = compute_confusion_matrix(y_true, y_pred, labels)
     f1s = []
     for i, lbl in enumerate(labels):
-        tp = cm[i, i]
-        fp = sum(cm[:, i]) - tp
-        fn = sum(cm[i, :]) - tp
-        prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        tp = int(cm[i, i])
+        fp = int(cm[:, i].sum()) - tp
+        fn = int(cm[i, :].sum()) - tp
+        prec = float(tp) / float(tp + fp) if (tp + fp) > 0 else 0.0
+        rec = float(tp) / float(tp + fn) if (tp + fn) > 0 else 0.0
         f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0.0
         f1s.append(f1)
     return float(np.mean(f1s))
@@ -360,22 +363,22 @@ def compute_macro_f1(y_true: List[str], y_pred: List[str], labels: List[str]) ->
 def compute_weighted_f1(y_true: List[str], y_pred: List[str], labels: List[str]) -> float:
     """计算 Weighted-F1 = 按样本数加权平均"""
     cm = compute_confusion_matrix(y_true, y_pred, labels)
-    total = sum(cm)
+    total = int(cm.sum())
     if total == 0:
         return 0.0
     f1s = []
     weights = []
     for i, lbl in enumerate(labels):
-        n_c = sum(cm[i, :])
-        tp = cm[i, i]
-        fp = sum(cm[:, i]) - tp
-        fn = sum(cm[i, :]) - tp
-        prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        n_c = int(cm[i, :].sum())
+        tp = int(cm[i, i])
+        fp = int(cm[:, i].sum()) - tp
+        fn = int(cm[i, :].sum()) - tp
+        prec = float(tp) / float(tp + fp) if (tp + fp) > 0 else 0.0
+        rec = float(tp) / float(tp + fn) if (tp + fn) > 0 else 0.0
         f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0.0
         f1s.append(f1)
-        weights.append(n_c / total)
-    return float(sum(f1 * w for f1, w in zip(f1s, weights)))
+        weights.append(float(n_c) / float(total))
+    return float(sum(f * w for f, w in zip(f1s, weights)))
 
 
 def compute_fdr_far_mdr_fia(y_true: List[str], y_pred: List[str], labels: List[str]) -> Dict[str, float]:
@@ -383,19 +386,19 @@ def compute_fdr_far_mdr_fia(y_true: List[str], y_pred: List[str], labels: List[s
     healthy_label = "healthy"
     fault_labels = [l for l in labels if l != healthy_label]
     cm = compute_confusion_matrix(y_true, y_pred, labels)
-    total = sum(cm)
+    total = int(cm.sum())
 
     # 全局二分类视角
-    tp = sum(cm[i, i] for i, l in enumerate(labels) if l != healthy_label)
-    fn = sum(sum(cm[i, :]) - cm[i, i] for i, l in enumerate(labels) if l != healthy_label)
-    fp = sum(sum(cm[:, i]) - cm[i, i] for i, l in enumerate(labels) if l != healthy_label)
-    tn = cm[labels.index(healthy_label), labels.index(healthy_label)] if healthy_label in labels else 0
+    tp = sum(int(cm[i, i]) for i, l in enumerate(labels) if l != healthy_label)
+    fn = sum(int(cm[i, :].sum()) - int(cm[i, i]) for i, l in enumerate(labels) if l != healthy_label)
+    fp = sum(int(cm[:, i].sum()) - int(cm[i, i]) for i, l in enumerate(labels) if l != healthy_label)
+    tn = int(cm[labels.index(healthy_label), labels.index(healthy_label)]) if healthy_label in labels else 0
 
-    fdr = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    far = fp / (fp + tn) if (fp + tn) > 0 else 0.0
-    mdr = fn / (tp + fn) if (tp + fn) > 0 else 0.0
+    fdr = float(tp) / float(tp + fn) if (tp + fn) > 0 else 0.0
+    far = float(fp) / float(fp + tn) if (fp + tn) > 0 else 0.0
+    mdr = float(fn) / float(tp + fn) if (tp + fn) > 0 else 0.0
     # FIA: 正确隔离数 / 总故障数
-    fia = tp / (tp + fn) if (tp + fn) > 0 else 0.0  # 同 FDR 但含义不同
+    fia = float(tp) / float(tp + fn) if (tp + fn) > 0 else 0.0  # 同 FDR 但含义不同
     detection_score = fdr - far
 
     return {
@@ -632,8 +635,8 @@ def plot_roc_curves(roc_data: Dict[str, Dict], title: str, subdir: str = "classi
         auc_val = roc.get("auc", 0.5)
         ax.plot(fpr, tpr, label=f"{lbl} (AUC={auc_val:.3f})")
     ax.plot([0, 1], [0, 1], "k--", alpha=0.3, label="随机")
-    ax.set_xlabel("FPR (虚警率)")
-    ax.set_ylabel("TPR (检出率)")
+    ax.set_xlabel("虚警率 (FPR)")
+    ax.set_ylabel("检出率 (TPR)")
     ax.set_title(title)
     ax.legend(loc="lower right", fontsize=8)
     ax.grid(alpha=0.3)
@@ -649,8 +652,8 @@ def plot_pr_curves(pr_data: Dict[str, Dict], title: str, subdir: str = "classifi
         precision = pr.get("precision", [1, 0])
         auc_val = pr.get("auc", 0.0)
         ax.plot(recall, precision, label=f"{lbl} (AUC={auc_val:.3f})")
-    ax.set_xlabel("Recall (检出率)")
-    ax.set_ylabel("Precision (精确率)")
+    ax.set_xlabel("检出率 (Recall)")
+    ax.set_ylabel("精确率 (Precision)")
     ax.set_title(title)
     ax.legend(loc="lower left", fontsize=8)
     ax.grid(alpha=0.3)

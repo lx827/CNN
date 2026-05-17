@@ -12,7 +12,7 @@
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'cloud'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
 
 import numpy as np
 from app.services.diagnosis.features import _compute_bearing_fault_freqs

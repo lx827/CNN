@@ -1,6 +1,6 @@
 """齿轮诊断明细测试：查看 fault_indicators 的具体内容"""
 import os, sys, glob, numpy as np
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'cloud'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
 
 from app.services.diagnosis.ensemble import run_research_ensemble
 

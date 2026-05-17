@@ -23,7 +23,7 @@ import numpy as np
 from collections import defaultdict
 
 # 把 cloud 目录加入路径
-CLOUD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "cloud"))
+CLOUD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "cloud"))
 if CLOUD_DIR not in sys.path:
     sys.path.insert(0, CLOUD_DIR)
 

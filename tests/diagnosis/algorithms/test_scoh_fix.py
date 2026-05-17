@@ -1,6 +1,6 @@
 """验证 SC/SCoh 归一化修复"""
 import sys, os, numpy as np
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'cloud'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
 from app.services.diagnosis.bearing_cyclostationary import bearing_sc_scoh_analysis
 
 # HUSTbear 内圈故障

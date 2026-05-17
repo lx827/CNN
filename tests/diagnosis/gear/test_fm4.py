@@ -1,6 +1,6 @@
 """测试 FM4/M6A/M8A 对行星齿轮箱的区分力"""
 import os, sys, glob, numpy as np
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'cloud'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
 
 from app.services.diagnosis.gear.metrics import compute_tsa_residual_order, compute_fm4, compute_m6a, compute_m8a
 

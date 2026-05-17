@@ -196,7 +196,7 @@ def plot_boxplot(results: List[Dict]):
 
     fig, axes = plt.subplots(1, 3, figsize=FIGURE_SIZE_GRID)
 
-    for col, (metric_key, metric_title) in enumerate(core_metrics):
+    for col, (metric_key, metric_title) in enumerate(zip(core_metrics, core_titles)):
         ax = axes[col]
         box_data = []
         labels_cn = []

@@ -21,7 +21,7 @@ import numpy as np
 from collections import defaultdict
 
 # 添加项目路径
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "cloud"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "cloud"))
 
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum

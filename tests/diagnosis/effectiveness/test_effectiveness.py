@@ -22,7 +22,7 @@ import glob
 import numpy as np
 
 # 添加 cloud 模块路径
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'cloud'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
 
 from app.services.diagnosis.ensemble import run_research_ensemble
 

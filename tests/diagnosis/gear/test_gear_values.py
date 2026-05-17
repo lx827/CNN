@@ -1,6 +1,6 @@
 """齿轮指标值对比：健康 vs 故障"""
 import os, sys, glob, numpy as np
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'cloud'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
 
 from app.services.diagnosis.engine import DiagnosisEngine, DiagnosisStrategy, DenoiseMethod, GearMethod
 from app.services.diagnosis.features import compute_time_features

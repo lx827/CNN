@@ -21,7 +21,7 @@ import numpy as np
 import json
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "cloud"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "cloud"))
 
 from app.services.diagnosis.engine import DiagnosisEngine, DenoiseMethod, DiagnosisStrategy, GearMethod
 

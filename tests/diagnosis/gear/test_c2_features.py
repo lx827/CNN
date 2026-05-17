@@ -1,6 +1,6 @@
 """对比 He_N1 和 He_N2 的 c2 通道特征"""
 import os, sys, glob, numpy as np
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'cloud'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
 from app.services.diagnosis.features import compute_time_features
 
 WTGEAR_DATA_DIR = r"D:\code\wavelet_study\dataset\WTgearbox\down8192"

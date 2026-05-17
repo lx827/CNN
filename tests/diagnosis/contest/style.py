@@ -47,7 +47,10 @@ FIGURE_SIZE_GRID = (14, 8) # 多子图用
 
 # ── Matplotlib rcParams ───────────────────────────────────────
 RC_PARAMS = {
-    "font.family":        ["SimHei", "Microsoft YaHei", "sans-serif"],
+    "font.family":        "sans-serif",
+    "font.sans-serif":    ["SimHei", "Microsoft YaHei", "WenQuanYi Micro Hei",
+                           "Noto Sans CJK SC", "PingFang SC", "DejaVu Sans"],
+    "axes.unicode_minus": False,
     "font.size":          14,
     "axes.titlesize":     16,
     "axes.labelsize":     14,
@@ -56,7 +59,7 @@ RC_PARAMS = {
     "legend.fontsize":    12,
     "figure.dpi":         FIGURE_DPI,
     "savefig.dpi":        FIGURE_DPI,
-    "savefig.format":     "png",
+    "savefig.format":     "svg",
     "savefig.bbox":       "tight",
     "axes.grid":          True,
     "grid.alpha":         0.3,

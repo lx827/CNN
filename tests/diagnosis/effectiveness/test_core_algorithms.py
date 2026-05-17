@@ -24,7 +24,7 @@ except ModuleNotFoundError:
     plt = None
 
 # 把 cloud 目录加入路径
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'cloud'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
 
 from app.services.diagnosis import (
     DiagnosisEngine,

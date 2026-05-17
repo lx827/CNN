@@ -595,8 +595,8 @@ def run_experiment_d() -> Dict[str, Any]:
 
     total_methods = len(ROBUSTNESS_METHODS)
     total_snr = len(snr_levels)
-    total_runs = total_methods * total_snr * (2 if healthy_signal else 1)
-    print(f"\n  总运行次数: {total_runs} ({total_methods}方法 × {total_snr}SNR × {'2文件' if healthy_signal else '1文件'})")
+    total_runs = total_methods * total_snr * (2 if healthy_signal is not None else 1)
+    print(f"\n  总运行次数: {total_runs} ({total_methods}方法 × {total_snr}SNR × {'2文件' if healthy_signal is not None else '1文件'})")
     print()
 
     start_time = time.time()

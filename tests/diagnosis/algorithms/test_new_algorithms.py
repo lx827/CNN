@@ -13,7 +13,7 @@
 6. 非参数 CUSUM — 健康vs故障漂移检测
 """
 import sys
-sys.path.insert(0, 'd:\\code\\CNN\\cloud')
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
 
 import numpy as np
 import os
