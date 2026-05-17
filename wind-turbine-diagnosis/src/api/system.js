@@ -14,3 +14,10 @@ export const getTaskStatus = async (taskId) => {
   const res = await request.get(`/api/collect/tasks/${taskId}/status`)
   return res
 }
+
+export const getCollectionHistory = async (deviceId = null, limit = 20) => {
+  const params = { limit }
+  if (deviceId) params.device_id = deviceId
+  const res = await request.get('/api/collect/history', { params })
+  return res
+}

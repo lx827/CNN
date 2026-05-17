@@ -125,6 +125,15 @@ export const getRealtimeVibrationData = async (deviceId = 'WTG-001', preferSpeci
   }
 }
 
+// ==================== Monitor 历史数据 ====================
+
+export const getMonitorHistory = async (deviceId = 'WTG-001', channel = 1, batches = 16, includeSpecial = true) => {
+  const res = await request.get('/api/monitor/history', {
+    params: { device_id: deviceId, channel, batches, include_special: includeSpecial }
+  })
+  return res
+}
+
 // ==================== 子模块统一导出 ====================
 
 export * from './data'

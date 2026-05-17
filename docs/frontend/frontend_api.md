@@ -64,15 +64,17 @@ request.get('/api/dashboard/').then(res => { ... });
 |--------|------|--------|----------|----------|
 | `login(password)` | `password: string` | `{ token: string }` | `POST /api/auth/login` | `Login.vue` |
 | `getDeviceInfo()` | 无 | 设备总览数据对象 | `GET /api/dashboard/` | `Dashboard.vue` |
-| `getRealtimeVibrationData(device_id, prefer_special, limit)` | `device_id: string`<br>`prefer_special?: boolean`（默认 `true`）<br>`limit?: number`（默认 `1024`） | 实时振动数据数组 | `GET /api/monitor/latest?device_id=...&prefer_special=...&limit=...` | `Monitor.vue` |
+| `getRealtimeVibrationData(device_id, prefer_special)` | `device_id: string`<br>`prefer_special?: boolean`（默认 `false`） | 实时振动数据数组 | `GET /api/monitor/latest?device_id=...&prefer_special=...` | `Monitor.vue` |
+| `getMonitorHistory(device_id, channel, batches, include_special)` | `device_id: string`<br>`channel?: number`（默认 `1`）<br>`batches?: number`（默认 `16`）<br>`include_special?: boolean`（默认 `true`） | `{ device_id, channel, items: [{batch_index, ...}] }` | `GET /api/monitor/history?device_id=...&channel=...&batches=...&include_special=...` | `Monitor.vue` |
 
 ```javascript
 // 使用示例
-import { login, getDeviceInfo, getRealtimeVibrationData } from '@/api';
+import { login, getDeviceInfo, getRealtimeVibrationData, getMonitorHistory } from '@/api';
 
 await login('admin123');
 const info = await getDeviceInfo();
-const data = await getRealtimeVibrationData('WTG-001', true, 2048);
+const data = await getRealtimeVibrationData('WTG-001', true);
+const history = await getMonitorHistory('WTG-001', 1, 16, true);
 ```
 
 ---
@@ -177,14 +179,16 @@ await deleteAlarm(42);
 | `getSystemLogs(lines)` | `lines?: number`（默认 `100`） | 日志文本数组 | `GET /api/logs/?lines=...` | `Logs.vue` |
 | `requestCollection(deviceId, sample_rate, duration)` | `deviceId: string`<br>`sample_rate?: number`<br>`duration?: number` | 任务对象 `{ task_id }` | `POST /api/collect/request` | `Monitor.vue` |
 | `getTaskStatus(taskId)` | `taskId: string` | 任务状态对象 | `GET /api/collect/tasks/{taskId}/status` | `Monitor.vue` |
+| `getCollectionHistory(deviceId, limit)` | `deviceId?: string`（默认 `null`，不传则查所有设备）<br>`limit?: number`（默认 `20`） | `{ code, data: [{task_id, device_id, status, ...}] }` | `GET /api/collect/history?device_id=...&limit=...` | 待接入页面 |
 
 ```javascript
 // 使用示例
-import { getSystemLogs, requestCollection, getTaskStatus } from '@/api/system';
+import { getSystemLogs, requestCollection, getTaskStatus, getCollectionHistory } from '@/api/system';
 
 const logs = await getSystemLogs(200);
 const task = await requestCollection('WTG-001', 25600, 10);
 const status = await getTaskStatus(task.task_id);
+const collectionHistory = await getCollectionHistory('WTG-001', 20);
 ```
 
 ---

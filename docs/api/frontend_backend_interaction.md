@@ -3,6 +3,7 @@
 > **文档用途**：建立前端 Vue 组件与后端 FastAPI 端点之间的完整映射关系，让 AI Agent 在修改 API 时能同步知道哪些前端组件会受影响。
 >
 > **维护提醒**：
+>
 > - 新增或修改 API 端点时，必须同步更新本文档
 > - 修改 `async` 状态或请求/响应结构时，需检查前端对应调用点
 > - 本文档按功能模块分组，便于快速定位影响范围
@@ -85,8 +86,10 @@
 | 前端调用点 | API 函数 | HTTP 方法 + URL | 后端处理函数 | 说明 |
 |-----------|---------|----------------|-------------|------|
 | `Monitor.vue::loadLatestData()` | `api/index.js::getRealtimeVibrationData()` | `GET /api/monitor/latest` | `monitor.py::get_latest_monitor` | 获取最新监测数据 |
+| `Monitor.vue::loadHistory()` | `api/index.js::getMonitorHistory()` | `GET /api/monitor/history` | `monitor.py::get_monitor_history` | 获取某通道最近N批次历史数据 |
 | `Monitor.vue::requestCollect()` | `api/system.js::requestCollection()` | `POST /api/collect/request` | `collect.py::request_collection` | 发起手动采集任务 |
 | `Monitor.vue::startPolling()` | `api/system.js::getTaskStatus()` | `GET /api/collect/tasks/{id}/status` | `collect.py::get_task_status` | 轮询采集任务状态 |
+| 待接入页面 | `api/system.js::getCollectionHistory()` | `GET /api/collect/history` | `collect.py::get_collection_history` | 查询采集历史记录 |
 | `Monitor.vue` → WebSocket | — | `WS /ws/monitor` | `main.py` WebSocket 端点 | 🌐 WebSocket 推送：`sensor_update`, `diagnosis_update` |
 
 > **⚠️ 影响前端**：`Monitor.vue` 同时依赖 HTTP 轮询和 WebSocket 推送，修改推送消息格式需同步前端 WebSocket 处理器。
