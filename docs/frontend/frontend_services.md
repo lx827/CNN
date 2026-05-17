@@ -89,6 +89,7 @@ request.post('/api/auth/login', { password: 'xxx' }).then(res => { ... });
 |-----------|------|------|
 | `ws` | `WebSocket \| null` | WebSocket 实例 |
 | `wsConnected` | `ref<boolean>` | 连接状态 |
+| `getWebSocketClient` | `() -> WebSocketClient` | 获取单例 WebSocket 客户端实例 |
 | `connect()` | `Function` | 建立 WebSocket 连接 |
 | `disconnect()` | `Function` | 断开连接 |
 | `send(data)` | `Function` | 发送消息 |
@@ -122,6 +123,8 @@ send({ type: 'ping' });
 |------|------|------|
 | `getBaseUrl` | `getBaseUrl() -> string` | 获取后端基础 URL |
 | `buildUrl` | `buildUrl(path: string, params?: object) -> string` | 构建完整 URL（带查询参数） |
+| `getApiBaseURL` | `getApiBaseURL() -> string` | 获取 API 基础 URL（优先使用配置/存储的值，其次自动判断同源，最后回退到默认地址） |
+| `getWebSocketURL` | `getWebSocketURL(path?: string) -> string` | 获取 WebSocket 完整 URL（自动拼接 `ws://`/`wss://` 协议和 Token 查询参数） |
 
 ### 2.4 常量定义 (`constants.js`)
 
@@ -135,6 +138,12 @@ send({ type: 'ping' });
 | `DENOISE_METHODS` | `Array` | 可用去噪方法列表 |
 | `BEARING_METHODS` | `Array` | 可用轴承分析方法列表 |
 | `GEAR_METHODS` | `Array` | 可用齿轮分析方法列表 |
+| `HEALTH_THRESHOLD_WARNING` | `number` | `60` — 健康度预警阈值 |
+| `HEALTH_THRESHOLD_NORMAL` | `number` | `80` — 健康度正常阈值 |
+| `DEFAULT_SAMPLE_RATE` | `number` | `25600` — 默认采样率 Hz |
+| `DEFAULT_DURATION` | `number` | `10` — 默认采集时长秒 |
+| `COLORS` | `object` | Element Plus 主题色常量 `{primary, success, warning, danger, info}` |
+| `DEFAULT_CHANNEL_NAMES` | `object` | 默认通道名称映射 `{1: '通道1-轴承附近', 2: '通道2-驱动端', 3: '通道3-风扇端'}` |
 
 ### 2.5 格式化工具 (`format.js`)
 
@@ -142,8 +151,10 @@ send({ type: 'ping' });
 
 | 函数 | 签名 | 说明 |
 |------|------|------|
-| `formatTime` | `formatTime(timestamp: string) -> string` | 格式化时间戳 |
+| `formatDateTime` | `formatDateTime(dt: string \| Date) -> string` | 格式化完整日期时间（`YYYY-MM-DD HH:mm:ss`） |
+| `formatTime` | `formatTime(dt: string \| Date) -> string` | 格式化短日期时间（`MM-DD HH:mm`） |
 | `formatNumber` | `formatNumber(num: number, decimals: number = 2) -> string` | 格式化数字 |
+| `formatPercent` | `formatPercent(value: number, digits: number = 0) -> string` | 格式化为百分比（如 `85%`） |
 | `formatHealthScore` | `formatHealthScore(score: number) -> string` | 格式化健康度（带状态颜色） |
 | `formatFileSize` | `formatFileSize(bytes: number) -> string` | 格式化文件大小 |
 
@@ -155,6 +166,8 @@ send({ type: 'ping' });
 |------|------|------|
 | `linearInterpolate` | `linearInterpolate(x: number, x0: number, x1: number, y0: number, y1: number) -> number` | 线性插值 |
 | `clamp` | `clamp(value: number, min: number, max: number) -> number` | 限制值范围 |
+| `calcRms` | `calcRms(arr: number[]) -> number` | 计算数组 RMS 均方根值 |
+| `calcPeak` | `calcPeak(arr: number[]) -> number` | 计算数组峰值（最大绝对值） |
 
 ### 2.7 状态处理工具 (`status.js`)
 
@@ -165,6 +178,11 @@ send({ type: 'ping' });
 | `getDeviceStatusText` | `getDeviceStatusText(status: string) -> string` | 获取设备状态文本 |
 | `getDeviceStatusColor` | `getDeviceStatusColor(status: string) -> string` | 获取设备状态颜色 |
 | `getAlarmLevelColor` | `getAlarmLevelColor(level: string) -> string` | 获取告警级别颜色 |
+| `getStatusType` | `getStatusType(status: string) -> string` | 获取状态 Element Plus 标签类型（`success`/`warning`/`danger`/`info`） |
+| `getStatusText` | `getStatusText(status: string) -> string` | 获取状态中文文本（正常/预警/故障/离线/未知） |
+| `getStatusColor` | `getStatusColor(status: string) -> string` | 获取状态十六进制颜色 |
+| `getHealthLevel` | `getHealthLevel(score: number) -> string` | 根据健康度分数返回级别（`normal`/`warning`/`fault`/`unknown`） |
+| `getHealthColor` | `getHealthColor(score: number) -> string` | 根据健康度分数返回十六进制颜色 |
 
 ---
 

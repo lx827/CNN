@@ -599,6 +599,16 @@ import {
 |--------|------|
 | （通常纯展示组件） | — |
 
+**内部方法**
+
+| 方法名 | 说明 |
+|--------|------|
+| `faultLabelText` | 故障类型中文标签映射 |
+| `statusTagType` | 状态转 Element Plus 标签类型 |
+| `scoreClass` | 健康度分数 CSS 类名映射 |
+| `statusText` | 状态文本映射（含空值保护） |
+| `fmtVal` | 数值格式化（保留小数 + 空值显示 `-`） |
+
 ---
 
 ### 4.4 DetailHeader.vue
