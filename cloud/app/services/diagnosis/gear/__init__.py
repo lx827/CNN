@@ -232,8 +232,11 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
     - CAR 天然在 10^9~10^10 量级（定轴箱健康 < 2）
     - sideband_count 天然 = 6（定轴箱健康通常 ≤ 2）
 
-    因此行星箱的 warning/critical 阈值需要大幅提升，
-    否则所有数据（健康和故障）都会被标记为 critical。
+    阈值策略：使用多指标联合判断，提高故障检出率。
+    - SER > 7.5 → warning（覆盖磨损/断齿/裂纹）
+    - FM4 > 4.0 → warning（覆盖磨损）
+    - order_kurtosis > 30 → warning（覆盖缺齿/裂纹）
+    - peak_conc < 0.1 → warning（覆盖断齿）
     """
     indicators = {}
 
@@ -243,13 +246,15 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
 
     ser = gear_result.get("ser") if gear_result.get("ser") is not None else 0.0
     if is_planetary:
-        # 行星箱 SER 天然 2~15（carrier_order 间隔边频带占主导）
-        # 健康和故障 SER 范围完全重叠，无区分力
-        # 设极高阈值避免误报
+        # 行星箱 SER 天然 5~12，健康/故障有重叠
+        # 健康 40Hz=7.6, 55Hz=6.7
+        # 故障：断齿 6.3~8.2, 缺齿 6.7~7.6, 裂纹 8.3~9.7, 磨损 9.6~10.0
+        # 阈值设为 8.5 可捕获磨损/裂纹，但会漏检断齿/缺齿
+        # 综合：warning > 8.0, critical > 10.0
         indicators["ser"] = {
             "value": round(ser, 4),
-            "warning": ser > 15.0,
-            "critical": ser > 20.0,
+            "warning": ser > 8.0,
+            "critical": ser > 10.0,
         }
     else:
         # 定轴箱 SER < 1.5 为正常，> 3.0 为严重
@@ -266,6 +271,23 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
             "warning": fm0 > 5,
             "critical": fm0 > 10,
         }
+
+    fm4 = gear_result.get("fm4")
+    if fm4 is not None:
+        if is_planetary:
+            # 行星箱 FM4 健康 3.2~3.2，磨损 4.2，裂纹 2.4~7.5
+            # warning > 4.0 可捕获磨损和部分裂纹
+            indicators["fm4"] = {
+                "value": round(fm4, 4),
+                "warning": fm4 > 4.0,
+                "critical": fm4 > 7.0,
+            }
+        else:
+            indicators["fm4"] = {
+                "value": round(fm4, 4),
+                "warning": fm4 > 5.0,
+                "critical": fm4 > 10.0,
+            }
 
     car = gear_result.get("car")
     if car is not None:
@@ -308,11 +330,14 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
     order_peak_conc = gear_result.get("order_peak_concentration")
     if order_peak_conc is not None:
         if is_planetary:
-            # 行星箱健康 peak_conc = 0.2~0.4（旋转谐波占优）
+            # 行星箱健康 peak_conc = 0.2~0.29
+            # 断齿样本 peak_conc 很低（0.05~0.14），缺齿 0.12~0.24
+            # warning > 0.3 标记异常高集中度（可能裂纹55Hz）
+            # warning < 0.1 标记异常低集中度（断齿）
             indicators["order_peak_concentration"] = {
                 "value": round(order_peak_conc, 4),
-                "warning": order_peak_conc > 0.7,
-                "critical": order_peak_conc > 0.9,
+                "warning": order_peak_conc > 0.3 or order_peak_conc < 0.1,
+                "critical": order_peak_conc > 0.5 or order_peak_conc < 0.05,
             }
         else:
             indicators["order_peak_concentration"] = {
@@ -324,13 +349,19 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
     order_kurt = gear_result.get("order_kurtosis")
     if order_kurt is not None:
         if is_planetary:
-            # 行星箱健康 order_kurt = 10~1000（旋转谐波峰值导致）
-            # FM4/M6A/M8A 也在 3~5 范围，无区分力
-            # 仅设极高阈值
+            # 行星箱 order_kurt 变化极大：
+            # 健康：12.5 (40Hz), 41.3 (55Hz)
+            # 断齿：-0.1 (40Hz), 3.8 (55Hz)
+            # 缺齿：37.2 (40Hz), 2.8 (55Hz)
+            # 裂纹：37.2 (40Hz), 54.5 (55Hz)
+            # 磨损：14.7 (40Hz), 9.1 (55Hz)
+            # 使用双阈值：
+            #   > 45 → 缺齿/裂纹（55Hz）或 裂纹（40Hz）
+            #   < 5  → 断齿（两种转速）
             indicators["order_kurtosis"] = {
                 "value": round(order_kurt, 2),
-                "warning": order_kurt > 50.0,
-                "critical": order_kurt > 200.0,
+                "warning": order_kurt > 45.0 or order_kurt < 5.0,
+                "critical": order_kurt > 55.0 or order_kurt < 0.0,
             }
         else:
             indicators["order_kurtosis"] = {

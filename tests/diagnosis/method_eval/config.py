@@ -49,7 +49,7 @@ MAX_SAMPLES = SAMPLE_RATE * 5  # 截断到 5 秒（服务器限制）
 BEARING_PARAMS = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
 
 # WTgearbox 行星齿轮箱参数
-GEAR_PARAMS = {"input": 28, "ring": 100, "planet": 36, "num_planets": 4}
+GEAR_PARAMS = {"input": 28, "ring": 100, "planet": 36, "planet_count": 4}
 
 # 理论故障频率系数
 BEARING_FREQ_COEFFS = {"BPFI": 5.43, "BPFO": 3.57, "BSF": 4.71, "FTF": 0.40}
