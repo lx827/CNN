@@ -12,9 +12,9 @@ class RingBufferHandler(logging.Handler)
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `__init__` | `__init__(capacity=2000)` | 环形缓冲区，容量 2000 |
+| `__init__` | `__init__(capacity: int = 2000)` | 环形缓冲区，容量 2000 |
 | `emit` | `emit(record: LogRecord)` | 格式化并追加日志 |
-| `get_logs` | `get_logs(lines=200) -> str` | 获取最近 N 条日志 |
+| `get_logs` | `get_logs(lines: int = 200) -> str` | 获取最近 N 条日志 |
 | `clear` | `clear() -> None` | 清空缓冲区 |
 
 ## 函数

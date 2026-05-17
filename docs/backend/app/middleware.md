@@ -10,7 +10,12 @@
 def setup_cors(app) -> None
 ```
 
-- **说明**：配置 CORS 中间件
+| 参数 | 类型 | 描述 |
+|------|------|------|
+| `app` | `FastAPI` | FastAPI 应用实例 |
+
+- **返回值**：`None`
+- **说明**：配置 CORS 中间件，允许前端跨域访问（开发环境）
 
 ### `setup_static_files`
 
@@ -18,4 +23,9 @@ def setup_cors(app) -> None
 def setup_static_files(app) -> None
 ```
 
-- **说明**：静态文件挂载（预留）
+| 参数 | 类型 | 描述 |
+|------|------|------|
+| `app` | `FastAPI` | FastAPI 应用实例 |
+
+- **返回值**：`None`
+- **说明**：静态文件挂载（预留）。如需挂载静态文件，可在此配置。

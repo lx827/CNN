@@ -27,4 +27,6 @@ def get_db() -> Generator
 def init_db() -> None
 ```
 
-- **说明**：创建所有表 + ALTER TABLE 迁移（新增 gear_teeth、bearing_params、channel、engine_result、full_analysis、denoise_method、compression_enabled、downsample_ratio、is_online 等列）
+- **参数**：无
+- **返回值**：`None`
+- **说明**：创建所有表（若不存在）并执行 ALTER TABLE 迁移新增列。自动迁移的列包括：`gear_teeth`、`bearing_params`（Device 表）；`order_analysis`、`rot_freq`、`channel`、`engine_result`、`full_analysis`、`denoise_method`（Diagnosis 表）；`compression_enabled`、`downsample_ratio`、`is_online`（Device 表）。

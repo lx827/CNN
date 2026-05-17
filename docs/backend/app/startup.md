@@ -17,7 +17,9 @@
 def init_database() -> None
 ```
 
-- **说明**：初始化数据库表结构
+- **参数**：无
+- **返回值**：`None`
+- **说明**：初始化数据库表结构（调用 `init_db()`）
 
 ### `create_initial_devices`
 
@@ -25,4 +27,6 @@ def init_database() -> None
 def create_initial_devices() -> None
 ```
 
-- **说明**：插入 10 台默认设备（WTG-001~010），按数据集分配机械参数
+- **参数**：无
+- **返回值**：`None`
+- **说明**：插入 10 台默认设备（WTG-001~010），按数据集分配机械参数。若设备已存在，则仅补齐缺失的非机械参数字段（`alarm_thresholds`、`channel_names`、`compression_enabled`、`downsample_ratio`）。

@@ -1,5 +1,7 @@
 # `__init__.py` — 齿轮诊断公共接口
 
+
+> **算法原理**: 详见 [小波与模态分解算法文档](../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../ALGORITHMS.md)。
 **对应源码**：`cloud/app/services/diagnosis/gear/__init__.py`
 
 ## 函数
