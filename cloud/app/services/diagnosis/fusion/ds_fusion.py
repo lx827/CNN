@@ -28,6 +28,7 @@ DEFAULT_FAULT_TYPES: List[str] = [
     "齿轮磨损",
     "齿轮裂纹",
     "齿轮断齿",
+    "齿轮缺齿",
     "正常",
 ]
 
@@ -51,14 +52,19 @@ BEARING_FAULT_NAMES: Dict[str, List[str]] = {
 # 齿轮故障子集名称 → 对应的故障类型列表
 GEAR_FAULT_NAMES: Dict[str, List[str]] = {
     "ser":                ["齿轮磨损", "齿轮断齿"],
-    "sideband_count":     ["齿轮裂纹", "齿轮断齿"],
+    "sideband_count":     ["齿轮裂纹", "齿轮断齿", "齿轮缺齿"],
     "car":                ["齿轮磨损", "齿轮裂纹"],
-    "fm4":                ["齿轮断齿", "齿轮裂纹"],
+    "fm4":                ["齿轮断齿", "齿轮裂纹", "齿轮磨损"],
     "na4":                ["齿轮磨损"],
     "order_kurtosis":     ["齿轮断齿", "齿轮裂纹"],
     "order_peak_concentration": ["齿轮裂纹"],
     "fm0":                ["齿轮断齿"],
     "gear_mesh":          ["齿轮磨损"],
+    # 行星箱专用指标
+    "planetary_fullband_env_kurt": ["齿轮裂纹", "齿轮断齿"],
+    "planetary_sun_fault":         ["齿轮断齿", "齿轮裂纹", "齿轮缺齿"],
+    "planetary_vmd":               ["齿轮裂纹"],
+    "planetary_carrier":           ["齿轮缺齿"],
 }
 
 # 轴承方法标识关键词

@@ -14,9 +14,12 @@
   - `d`：滚动体直径 (mm)
   - `D`：轴承节径 (mm)
   - `alpha`：接触角 (°)
-- **齿轮参数** `gear_teeth`：`{input, output}`
-  - `input`：主动轮齿数
+- **齿轮参数** `gear_teeth`：`{input, output, ring, planet, planet_count}`
+  - `input`：主动轮/太阳轮齿数
   - `output`：从动轮齿数
+  - `ring`：内齿圈齿数（行星箱专用）
+  - `planet`：行星轮齿数（行星箱专用）
+  - `planet_count`：行星轮数量（≥3 时自动启用行星箱诊断逻辑）
 
 支持两种存储格式（后端自动兼容）：
 - **设备级**（旧格式）：`{input: 18, output: 27}`

@@ -295,8 +295,16 @@ def compute_continuous_deductions(
     except (TypeError, ValueError):
         has_gear = False
 
-    GEAR_KURT_THRESHOLD = 12.0
-    GEAR_CREST_THRESHOLD = 12.0
+    # 判断是否为行星齿轮箱（影响门控阈值）
+    is_planetary = bool(gear_teeth and int(gear_teeth.get("planet_count") or 0) >= 3)
+    if is_planetary:
+        # 行星箱时域特征重叠严重：健康 kurt=7~13, crest=7~11
+        # crack 时 kurt 显著降低（3.9~5.5），双向门控：高峭度 + 低峭度
+        GEAR_KURT_THRESHOLD = 10.0
+        GEAR_CREST_THRESHOLD = 10.0
+    else:
+        GEAR_KURT_THRESHOLD = 12.0
+        GEAR_CREST_THRESHOLD = 12.0
 
     # 从轴承或齿轮指标中判断旋转谐波主导
     low_freq_ind = bearing_ind.get("low_freq_ratio") if bearing_ind else None
@@ -308,7 +316,13 @@ def compute_continuous_deductions(
 
     if has_gear:
         gear_impulse = sigmoid_deduction(kurt, GEAR_KURT_THRESHOLD, 1.0, slope=2.0) + sigmoid_deduction(crest, GEAR_CREST_THRESHOLD, 1.0, slope=2.0)
+        # 行星箱 crack 时 kurt < 5.5，直接打开齿轮门控
+        if is_planetary and kurt < 5.5:
+            gear_impulse = max(gear_impulse, 1.0)
         gear_gate = min(1.0, gear_impulse) if not rotation_dominant else 0.0
+        # 行星箱：频域指标（FM4/FM0/全频带包络）有独立区分力，gear_gate 保底 0.5
+        if is_planetary:
+            gear_gate = max(gear_gate, 0.5)
         if gear_gate > 0.1:
             ser = gear_ind.get("ser", {}) if isinstance(gear_ind.get("ser"), dict) else {}
             if ser.get("critical"):
@@ -325,6 +339,41 @@ def compute_continuous_deductions(
             elif sb.get("warning"):
                 sb_ded = 4.0 * gear_gate
                 deductions.append(("gear_sb_warning", round(sb_ded, 2)))
+
+            # FM4 — 齿轮局部故障（裂纹/断齿/磨损）
+            fm4 = gear_ind.get("fm4", {}) if isinstance(gear_ind.get("fm4"), dict) else {}
+            if fm4.get("critical"):
+                fm4_ded = 20.0 * gear_gate
+                deductions.append(("gear_fm4_critical", round(fm4_ded, 2)))
+            elif fm4.get("warning"):
+                fm4_ded = 12.0 * gear_gate
+                deductions.append(("gear_fm4_warning", round(fm4_ded, 2)))
+
+            # FM0 — 粗故障检测（严重断齿）
+            fm0 = gear_ind.get("fm0", {}) if isinstance(gear_ind.get("fm0"), dict) else {}
+            if fm0.get("critical"):
+                fm0_ded = 12.0 * gear_gate
+                deductions.append(("gear_fm0_critical", round(fm0_ded, 2)))
+            elif fm0.get("warning"):
+                fm0_ded = 6.0 * gear_gate
+                deductions.append(("gear_fm0_warning", round(fm0_ded, 2)))
+
+            # 全频带包络峭度（行星箱 crack 专用指标）
+            pfek = gear_ind.get("planetary_fullband_env_kurt", {}) if isinstance(gear_ind.get("planetary_fullband_env_kurt"), dict) else {}
+            if pfek.get("critical"):
+                pfek_ded = 20.0 * gear_gate
+                deductions.append(("gear_planetary_fullband_env_kurt_critical", round(pfek_ded, 2)))
+            elif pfek.get("warning"):
+                pfek_ded = 12.0 * gear_gate
+                deductions.append(("gear_planetary_fullband_env_kurt_warning", round(pfek_ded, 2)))
+
+            # 阶次谱统计指标（有齿轮参数时同样有效）
+            order_peak = gear_ind.get("order_peak_concentration", {}) if isinstance(gear_ind.get("order_peak_concentration"), dict) else {}
+            order_kurt = gear_ind.get("order_kurtosis", {}) if isinstance(gear_ind.get("order_kurtosis"), dict) else {}
+            if order_peak.get("critical") or order_kurt.get("critical"):
+                deductions.append(("gear_order_stat_critical", round(8.0 * gear_gate, 2)))
+            elif order_peak.get("warning") or order_kurt.get("warning"):
+                deductions.append(("gear_order_stat_warning", round(4.0 * gear_gate, 2)))
 
     # TSA 残差峭度路径（独立门控）
     tsa_env_result = gear_result.get("planetary_tsa_demod") or {}

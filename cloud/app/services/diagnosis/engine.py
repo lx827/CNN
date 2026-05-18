@@ -375,6 +375,10 @@ class DiagnosisEngine:
         # 行星齿轮箱参数（供 _evaluate_gear_faults 使用）
         planet_count = int(self.gear_teeth.get("planet_count") or 0) if self.gear_teeth else 0
 
+        # 兼容：若配置了行星轮数但无 "sun" 键，将 "input" 视为太阳轮齿数
+        if planet_count >= 3 and z_sun <= 0 and z_in > 0:
+            z_sun = z_in
+
         # 啮合阶次计算（相对于输入轴转频）
         # 定轴齿轮箱: mesh_order = z_in（啮合频率 = 转频 × 齿数）
         # 行星齿轮箱(ring固定, sun输入): mesh_order = Z_ring×Z_sun/(Z_sun+Z_ring)
@@ -564,6 +568,17 @@ class DiagnosisEngine:
             # 合入主 indicators（行星箱专用指标以 planetary_ 前缀区分）
             for k, v in planetary_indicators.items():
                 indicators[k] = v
+
+            # 全频带包络峭度（crack 核心区分指标）
+            # 健康 fullband_env_kurt = 6.8~20.1，crack = 1.8~4.2，0 误报
+            if isinstance(fullband_result, dict) and "error" not in fullband_result:
+                fek = fullband_result.get("envelope_kurtosis")
+                if fek is not None:
+                    indicators["planetary_fullband_env_kurt"] = {
+                        "value": round(float(fek), 4),
+                        "warning": float(fek) < 5.0,
+                        "critical": float(fek) < 3.0,
+                    }
 
         result["fault_indicators"] = indicators
 

@@ -275,12 +275,12 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
     fm4 = gear_result.get("fm4")
     if fm4 is not None:
         if is_planetary:
-            # 行星箱 FM4 健康 3.2~3.2，磨损 4.2，裂纹 2.4~7.5
-            # warning > 4.0 可捕获磨损和部分裂纹
+            # 行星箱 FM4 健康 2.5~3.5，磨损 3.2~6.4，裂纹 2.4~7.5
+            # warning > 3.2 可捕获更多磨损样本，critical > 5.0 捕获严重故障
             indicators["fm4"] = {
                 "value": round(fm4, 4),
-                "warning": fm4 > 4.0,
-                "critical": fm4 > 7.0,
+                "warning": fm4 > 3.2,
+                "critical": fm4 > 5.0,
             }
         else:
             indicators["fm4"] = {
@@ -369,6 +369,25 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
                 "warning": order_kurt > 5.0,
                 "critical": order_kurt > 8.0,
             }
+
+    # 行星齿轮箱全频带包络峭度（crack 核心区分指标）
+    # 健康 fullband_env_kurt = 6.8~20.1，crack = 1.8~4.2，0 误报
+    fullband = gear_result.get("planetary_fullband_demod")
+    if isinstance(fullband, dict) and "error" not in fullband:
+        fek = fullband.get("envelope_kurtosis", 0.0)
+        if fek is not None:
+            if is_planetary:
+                indicators["planetary_fullband_env_kurt"] = {
+                    "value": round(float(fek), 4),
+                    "warning": float(fek) < 5.0,
+                    "critical": float(fek) < 3.0,
+                }
+            else:
+                indicators["planetary_fullband_env_kurt"] = {
+                    "value": round(float(fek), 4),
+                    "warning": float(fek) < 3.0,
+                    "critical": float(fek) < 2.0,
+                }
 
     # 小波包能量熵（齿轮频带能量重分布指标）
     wp_entropy = gear_result.get("wavelet_packet_entropy")
