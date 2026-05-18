@@ -25,7 +25,7 @@ from app.services.diagnosis.order_tracking import (
     _compute_order_spectrum_varying_speed,
 )
 from app.services.diagnosis.rule_based import _rule_based_analyze
-from app.services.diagnosis.features import _get_channel_params
+from app.services.diagnosis.features import _get_channel_params, has_bearing_params, has_gear_params
 from app.services.diagnosis.channel_consensus import cross_channel_consensus
 from app.core.config import DIAGNOSIS_WEIGHTS, ANALYZE_DENOISE_METHOD
 from app.services.diagnosis.probability_calibration import calibrate_fault_probabilities
@@ -39,27 +39,6 @@ def _safe_result(msg="分析失败", health=100):
         "imf_energy": {}, "order_analysis": None, "rot_freq": None,
         "_error": msg,
     }
-
-
-def _params_valid(params: Optional[Dict], kind: str) -> bool:
-    """判断轴承/齿轮参数是否有效（含通道级 None 值处理）"""
-    if not params or not isinstance(params, dict):
-        return False
-    if kind == "bearing":
-        try:
-            n = params.get("n")
-            d = params.get("d")
-            D = params.get("D")
-            return all(v is not None for v in [n, d, D]) and float(n or 0) > 0 and float(d or 0) > 0 and float(D or 0) > 0
-        except (TypeError, ValueError):
-            return False
-    if kind == "gear":
-        try:
-            z_in = params.get("input")
-            return z_in is not None and float(z_in) > 0
-        except (TypeError, ValueError):
-            return False
-    return False
 
 
 def analyze_device(
@@ -119,8 +98,8 @@ def analyze_device(
             ch_gt = _get_channel_params(device, ch_idx, "gear_teeth")
 
             # 判断该通道有效配置
-            has_bearing = _params_valid(ch_bp, "bearing")
-            has_gear = _params_valid(ch_gt, "gear")
+            has_bearing = has_bearing_params(ch_bp)
+            has_gear = has_gear_params(ch_gt)
 
             engine = DiagnosisEngine(
                 strategy=strategy, bearing_method=bearing_method,

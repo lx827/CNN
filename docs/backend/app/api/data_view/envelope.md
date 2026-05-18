@@ -1,6 +1,5 @@
 # `envelope.py` — 包络谱分析
 
-
 > **算法原理**: 详见 [小波与模态分解算法文档](../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../ALGORITHMS.md)。
 **对应源码**：`cloud/app/api/data_view/envelope.py`
 
@@ -35,14 +34,4 @@ async def get_channel_envelope(
 
 ## 内部辅助函数
 
-### `_extract_device_param`
-
-```python
-def _extract_device_param(params, device_keys)
-```
-
-- **参数**:
-  - `params` (`dict | None`): 设备参数字典
-  - `device_keys` (`list[str]`): 需要提取的键列表
-- **返回值**：`dict` — 从设备参数中提取的键值对字典，若 `params` 为 `None` 则返回空字典
-- **说明**：从设备配置参数中安全提取指定键值，用于 gear/bearing 参数解析
+> `_extract_device_param` 已统一到 `__init__.py`。本模块通过 `from . import _extract_device_param` 导入。

@@ -1,6 +1,5 @@
 # `analyzer.py` — 综合分析引擎
 
-
 > **算法原理**: 详见 [小波与模态分解算法文档](../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../ALGORITHMS.md)。
 **对应源码**：`cloud/app/services/analyzer.py`
 
@@ -13,15 +12,6 @@ def _safe_result(msg="分析失败", health=100) -> dict
 ```
 
 - **返回值**：`dict` — 崩溃安全默认结果
-
-### `_params_valid`
-
-```python
-def _params_valid(params: Optional[Dict], kind: str) -> bool
-```
-
-- **返回值**：`bool`
-- **说明**：判断轴承/齿轮参数有效性
 
 ### `analyze_device`
 

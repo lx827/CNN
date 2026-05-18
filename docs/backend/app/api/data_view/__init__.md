@@ -11,7 +11,23 @@ def prepare_signal(signal, detrend: bool = False) -> np.ndarray
 ```
 
 - **返回值**：`np.ndarray`
-- **说明**：信号预处理。`detrend=False` 去直流（零均值化），`detrend=True` 线性去趋势
+- **说明**：信号预处理。实际实现在 `app/services/diagnosis/signal_utils.py`，此处重导出以保持 data_view 子模块兼容。
+
+### `_extract_device_param`
+
+```python
+def _extract_device_param(params, device_keys)
+```
+
+- **说明**：兼容前端通道级格式 `{"1": {input: 18}}` 与后端设备级格式 `{input: 18}`。统一入口，消除 gear.py / envelope.py 中的重复。
+
+### `_sanitize_for_json`
+
+```python
+def _sanitize_for_json(obj) -> Any
+```
+
+- **说明**：递归将 numpy 类型转换为 Python 原生类型。统一入口，消除 diagnosis_ops.py 中的重复。
 
 ### `_compute_cepstrum`
 

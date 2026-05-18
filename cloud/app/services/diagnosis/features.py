@@ -372,6 +372,35 @@ def _get_channel_params(device, channel_index, field):
     return None
 
 
+def has_bearing_params(bearing_params: Optional[Dict]) -> bool:
+    """
+    轴承参数有效性（统一入口，消除 ensemble.py / gear.py 重复）。
+    需要 n(滚动体数), d(滚动体直径), D(节圆直径) 均存在且 >0。
+    注意：调用方应先将通道级格式转换为设备级格式再传入。
+    """
+    try:
+        if not bearing_params or not isinstance(bearing_params, dict):
+            return False
+        n = bearing_params.get("n")
+        d = bearing_params.get("d")
+        D = bearing_params.get("D")
+        return all(v is not None for v in [n, d, D]) and float(n or 0) > 0 and float(d or 0) > 0 and float(D or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def has_gear_params(gear_teeth: Optional[Dict]) -> bool:
+    """
+    齿轮参数有效性（统一入口，消除 ensemble.py / gear.py 重复）。
+    需要 input(主动轮齿数) 存在且 >0。
+    注意：调用方应先将通道级格式转换为设备级格式再传入。
+    """
+    try:
+        return bool(gear_teeth and float(gear_teeth.get("input") or 0) > 0)
+    except (TypeError, ValueError):
+        return False
+
+
 def _compute_bearing_fault_freqs(rot_freq: float, bearing_params: dict) -> dict:
     """
     计算轴承故障特征频率 (Hz)

@@ -1,6 +1,5 @@
 # `ensemble.py` — 多算法集成诊断
 
-
 > **算法原理**: 详见 [小波与模态分解算法文档](../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../ALGORITHMS.md)。
 **对应源码**：`cloud/app/services/diagnosis/ensemble.py`
 
@@ -31,28 +30,12 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]
 - **返回值**：`{denoise: list, bearing: list, gear: list}`
 - **说明**：返回 profile 对应的方法列表
 
-**profile 配置**：
-| profile | 去噪数 | 轴承方法 | 齿轮方法 |
-|---------|--------|---------|---------|
-| runtime | 1 | 4（envelope/kurtogram/cpw/teager） | 1（advanced） |
-| balanced | 1~2 | 8 | 1 |
-| exhaustive | 11（全部） | 13（全部） | 2 |
+**参数有效性判断已统一到 `features.py`**：
 
-### `_has_gear_params`
+- `has_bearing_params(bearing_params)` — 轴承参数有效性（n, d, D 均 >0）
+- `has_gear_params(gear_teeth)` — 齿轮参数有效性（input >0）
 
-```python
-def _has_gear_params(gear_teeth: Optional[Dict]) -> bool
-```
-
-- **说明**：`input>0`
-
-### `_has_bearing_params`
-
-```python
-def _has_bearing_params(bearing_params: Optional[Dict]) -> bool
-```
-
-- **说明**：`n,d,D` 均>0
+ensemble.py 通过 `from .features import has_bearing_params, has_gear_params` 导入统一版本，不再本地定义。
 
 ### `_bearing_confidence`
 
@@ -73,6 +56,7 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
 - **说明**：齿轮投票置信度
 
 **行星齿轮箱特殊处理**（2025-05）：
+
 - 当 `planet_count >= 3` 时，使用独立阈值：`kurt > 10` 或 `crest > 10` 或 `kurt < 5.5` 打开 impulse gate
 - warning hits 给 0.05~0.35 分（根据命中数量和类型），critical hits 给 0.20~0.60 分
 - `abnormal = confidence >= 0.55`
@@ -96,6 +80,7 @@ def _fault_label(best_bearing: Dict, best_gear: Dict, bearing_score: float, gear
 - **说明**：生成综合故障标签
 
 **逻辑**：
+
 1. `gear_score > bearing_score` 且 `gear_score >= 0.55` → 调用 `_infer_gear_subtype_from_indicators(best_gear)` 推断具体子类型
 2. `gear_score > bearing_score` 但 `< 0.55` → 仍尝试从 indicators 推断子类型（低 confidence 但有 indicators）
 3. 否则检查轴承 indicators → 返回轴承标签
@@ -120,6 +105,7 @@ def run_research_ensemble(
 - **说明**：集成诊断主入口
 
 **skip 逻辑**：
+
 - 仅配置轴承 → `skip_gear=True`
 - 仅配置齿轮 → `skip_bearing=True`
 - 都未配置 → 跑统计指标

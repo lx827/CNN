@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 
 from .engine import BearingMethod, DenoiseMethod, DiagnosisEngine, DiagnosisStrategy, GearMethod
-from .features import compute_time_features
+from .features import compute_time_features, has_bearing_params, has_gear_params
 from .health_score import _compute_health_score, CREST_EVIDENCE_THRESHOLD, get_ds_label, is_ds_conflict_high, _infer_gear_subtype_from_indicators
 from .recommendation import _generate_recommendation
 
@@ -89,26 +89,6 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
         ],
         "gear": [GearMethod.ADVANCED],
     }
-
-
-def _has_gear_params(gear_teeth: Optional[Dict]) -> bool:
-    try:
-        return bool(gear_teeth and float(gear_teeth.get("input") or 0) > 0)
-    except (TypeError, ValueError):
-        return False
-
-
-def _has_bearing_params(bearing_params: Optional[Dict]) -> bool:
-    """轴承参数有效性：需要 n(滚珠数), d(滚珠直径), D(节圆直径) 均有效"""
-    try:
-        if not bearing_params:
-            return False
-        n = bearing_params.get("n")
-        d = bearing_params.get("d")
-        D = bearing_params.get("D")
-        return all(v is not None for v in [n, d, D]) and float(n or 0) > 0 and float(d or 0) > 0 and float(D or 0) > 0
-    except (TypeError, ValueError):
-        return False
 
 
 def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
@@ -367,8 +347,8 @@ def run_research_ensemble(
             arr = arr[:max_samples]
 
     config = _profile_config(profile, denoise_method)
-    has_gear = _has_gear_params(gear_teeth)
-    has_bearing = _has_bearing_params(bearing_params)
+    has_gear = has_gear_params(gear_teeth)
+    has_bearing = has_bearing_params(bearing_params)
 
     # 参数有效性驱动的分析跳过逻辑：
     # - 仅配置轴承参数 → 只做轴承诊断，跳过齿轮（避免齿轮统计指标误报）

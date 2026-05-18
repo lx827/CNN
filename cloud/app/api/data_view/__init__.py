@@ -16,17 +16,49 @@ from scipy import signal as scipy_signal
 
 router = APIRouter(prefix="/api/data", tags=["振动数据查看"])
 
+# ── 公共工具函数（统一入口，消除重复） ──
+# prepare_signal 实际实现在 signal_utils.py，此处重导出以保持 data_view 子模块兼容
+from app.services.diagnosis.signal_utils import prepare_signal  # noqa: F401
 
-def prepare_signal(signal, detrend=False):
+
+def _extract_device_param(params, device_keys):
     """
-    信号预处理：零均值化或线性去趋势
-    detrend=False: 去直流（零均值化）
-    detrend=True:  线性去趋势（消除 y=kx+b 漂移）
+    兼容前端通道级格式与后端设备级格式。
+    前端 Settings.vue 保存的格式：{ "1": {input: 18, output: 27}, "2": {...} }
+    后端诊断引擎期望的格式：{input: 18, output: 27}
+
+    如果 params 已经是设备级，直接返回；
+    如果是通道级，提取第一个包含 device_keys 中任意 key 的有效通道参数。
+
+    注：此函数仅做格式转换，不涉及"默认诊断逻辑"。
+    默认参数的注入逻辑在各接口中显式处理，详见 DIAGNOSIS_LOGIC.md。
     """
-    arr = np.array(signal, dtype=np.float64)
-    if detrend:
-        return scipy_signal.detrend(arr, type='linear')
-    return arr - np.mean(arr)
+    if not params or not isinstance(params, dict):
+        return params
+    if any(k in params for k in device_keys):
+        return params
+    for key in sorted(params.keys()):
+        ch = params.get(key)
+        if ch and isinstance(ch, dict) and any(k in ch for k in device_keys):
+            return ch
+    return params
+
+
+def _sanitize_for_json(obj):
+    """递归将 numpy 类型转换为 Python 原生类型，确保 JSON 可序列化"""
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    if isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_for_json(v) for v in obj]
+    return obj
 
 
 def _compute_cepstrum(

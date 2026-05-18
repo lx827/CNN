@@ -1,18 +1,11 @@
 # `diagnosis_ops.py` — 诊断缓存操作+重新诊断
 
-
 > **算法原理**: 详见 [小波与模态分解算法文档](../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../ALGORITHMS.md)。
 **对应源码**：`cloud/app/api/data_view/diagnosis_ops.py`
 
 ## 函数
 
-### `_sanitize_for_json`
-
-```python
-def _sanitize_for_json(obj) -> Any
-```
-
-- **说明**：递归将 numpy 类型转换为 Python 原生类型，确保 JSON 可序列化
+> `_sanitize_for_json` 已统一到 `__init__.py`。本模块通过 `from . import _sanitize_for_json` 导入。
 
 ## 路由端点
 

@@ -389,8 +389,8 @@ cloud/app/services/diagnosis/ensemble.py
 - `_gear_confidence()`: 齿轮投票置信度
 - `_time_confidence()`: 时域冲击证据
 - **参数驱动的分析跳过逻辑**：
-  - `_has_bearing_params()`: 判断轴承参数有效性（n, d, D 均 >0）
-  - `_has_gear_params()`: 判断齿轮参数有效性（input 齿数 >0）
+  - `has_bearing_params()`: 轴承参数有效性（n, d, D 均 >0）— 统一在 `features.py`，被 `ensemble.py` / `analyzer.py` / `gear.py` 共用
+  - `has_gear_params()`: 齿轮参数有效性（input 齿数 >0）— 同上
   - 仅配置轴承 → 只做轴承诊断（`skip_gear=True`），避免齿轮统计指标误报
   - 仅配置齿轮 → 只做齿轮诊断（`skip_bearing=True`），避免轴承统计指标误报
   - 都未配置 → 跑轴承统计指标 + 齿轮统计指标（CAR/阶次峭度）
