@@ -26,7 +26,7 @@ async def get_channel_gear(
 
 - **async**：✅
 - **响应 data**：`{rot_freq_hz, mesh_freq_hz, mesh_order, ser, sidebands, fm0, fm4, car, m6a, m8a, fault_indicators}`
-- **说明**：齿轮诊断
+- **说明**：齿轮诊断。返回值通过 `_sanitize_for_json` 包裹，确保 numpy 类型可被 FastAPI 序列化。
 
 ### `GET /{device_id}/{batch_index}/{channel}/analyze`
 
@@ -45,7 +45,7 @@ async def get_channel_analyze(
 
 - **async**：✅
 - **strategy 映射**：standard→runtime, advanced→balanced, expert→exhaustive
-- **说明**：综合故障诊断统一入口。自动写入 `Diagnosis.engine_result`
+- **说明**：综合故障诊断统一入口。自动写入 `Diagnosis.engine_result`。返回值通过 `_sanitize_for_json` 包裹。
 
 ### `GET /{device_id}/{batch_index}/{channel}/full-analysis`
 
@@ -60,4 +60,4 @@ async def get_channel_full_analysis(
 ```
 
 - **async**：✅
-- **说明**：全算法对比分析。自动写入 `Diagnosis.full_analysis`
+- **说明**：全算法对比分析。自动写入 `Diagnosis.full_analysis`。返回值通过 `_sanitize_for_json` 包裹。
