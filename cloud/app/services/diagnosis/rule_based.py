@@ -128,7 +128,23 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
         values = [f.get(key, 0) for f in all_features if f.get(key) is not None]
         avg_features[key] = np.mean(values) if values else 0.0
 
-    # 3. 时域特征严重度
+    # 3. 获取设备参数（通道级兼容）& 估计转频
+    ch_gear_teeth = _get_channel_params(device, 1, "gear_teeth")
+    ch_bearing_params = _get_channel_params(device, 1, "bearing_params")
+
+    first_channel = list(channels_data.values())[0]
+    first_arr = np.array(first_channel, dtype=np.float64)
+
+    # 3b. 估计转频（与阶次追踪 /order 端点完全一致）
+    order_axis, spectrum, rot_freq, rot_std = _compute_order_spectrum_multi_frame(
+        first_arr, sample_rate, samples_per_rev=1024, max_order=50
+    )
+    if rot_freq > 0 and (rot_std / rot_freq) > 0.10:
+        order_axis, spectrum, rot_freq, rot_std = _compute_order_spectrum_varying_speed(
+            first_arr, sample_rate, samples_per_rev=1024, max_order=50
+        )
+
+    # 4. 时域特征严重度
     sev = {
         "rms": _feature_severity(avg_features["rms"], "rms", rot_freq),
         "peak": _feature_severity(avg_features["peak"], "peak", rot_freq),
@@ -137,22 +153,6 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
         "skewness": _feature_severity(abs(avg_features["skewness"]), "skewness", rot_freq),
         "impulse_factor": _feature_severity(avg_features["impulse_factor"], "impulse_factor", rot_freq),
     }
-
-    # 4. 获取设备参数（通道级兼容）& 估计转频
-    ch_gear_teeth = _get_channel_params(device, 1, "gear_teeth")
-    ch_bearing_params = _get_channel_params(device, 1, "bearing_params")
-
-    first_channel = list(channels_data.values())[0]
-    first_arr = np.array(first_channel, dtype=np.float64)
-
-    # 4. 估计转频（与阶次追踪 /order 端点完全一致）
-    order_axis, spectrum, rot_freq, rot_std = _compute_order_spectrum_multi_frame(
-        first_arr, sample_rate, samples_per_rev=1024, max_order=50
-    )
-    if rot_freq > 0 and (rot_std / rot_freq) > 0.10:
-        order_axis, spectrum, rot_freq, rot_std = _compute_order_spectrum_varying_speed(
-            first_arr, sample_rate, samples_per_rev=1024, max_order=50
-        )
 
     # 5. 频谱/包络/阶次特征提取
     xf, yf = compute_fft(first_channel, sample_rate)

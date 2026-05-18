@@ -233,9 +233,9 @@ async def reanalyze_batch(
         "data": {
             "health_score": result["health_score"],
             "status": result["status"],
-            "fault_probabilities": result["fault_probabilities"],
+            "fault_probabilities": _sanitize_for_json(result["fault_probabilities"]),
             "rot_freq": result.get("rot_freq"),
-            "order_analysis": result.get("order_analysis"),
+            "order_analysis": _sanitize_for_json(result.get("order_analysis")),
         },
     }
 

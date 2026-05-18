@@ -97,9 +97,9 @@ def analyze_device(
         pass
 
     try:
-        strategy = getattr(device, "diagnosis_strategy", "advanced") if device else "advanced"
-        bearing_method = getattr(device, "bearing_method", "kurtogram") if device else "kurtogram"
-        gear_method = getattr(device, "gear_method", "standard") if device else "standard"
+        strategy = (getattr(device, "diagnosis_strategy", None) or "advanced") if device else "advanced"
+        bearing_method = (getattr(device, "bearing_method", None) or "kurtogram") if device else "kurtogram"
+        gear_method = (getattr(device, "gear_method", None) or "standard") if device else "standard"
         # 去噪方法优先级：1) 调用方显式传入非空值 2) 设备属性 3) 全局配置默认
         if denoise_method:
             denoise = denoise_method
