@@ -18,7 +18,7 @@ import numpy as np
 
 from .engine import BearingMethod, DenoiseMethod, DiagnosisEngine, DiagnosisStrategy, GearMethod
 from .features import compute_time_features
-from .health_score import _compute_health_score, CREST_EVIDENCE_THRESHOLD, get_ds_label, is_ds_conflict_high
+from .health_score import _compute_health_score, CREST_EVIDENCE_THRESHOLD, get_ds_label, is_ds_conflict_high, _infer_gear_subtype_from_indicators
 from .recommendation import _generate_recommendation
 
 
@@ -204,17 +204,22 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
             warning_hits += 1
             hit_names.append(name)
 
-    # 齿轮置信度需要时域证据门控：
-    # 行星齿轮箱健康数据 kurtosis=8~10, crest=5~9，
-    # 但齿轮指标（SER/CAR/sideband/order_kurtosis）几乎全部标记为 critical。
-    # 没有时域冲击证据时，齿轮指标的 critical_hits 只是旋转谐波的统计假象。
-    # 齿轮专用证据阈值与 health_score.py 一致：
-    # kurtosis > 12 或 crest_factor > 12（统一为12，与health_score.py一致）
+    # 齿轮专用证据阈值
     kurt = _as_float(time_features.get("kurtosis") if time_features else None, 3.0)
     crest = _as_float(time_features.get("crest_factor") if time_features else None, 5.0)
-    GEAR_KURT_THRESHOLD = 12.0
-    GEAR_CREST_THRESHOLD = 12.0  # 与 health_score.py 统一
-    impulse_context = kurt > GEAR_KURT_THRESHOLD or crest > GEAR_CREST_THRESHOLD
+
+    # 行星齿轮箱时域特征与健康/故障严重重叠，需单独处理
+    is_planetary = bool(result.get("planet_count", 0) >= 3)
+    if is_planetary:
+        # 行星箱健康 kurt=7~13, crest=7~11；故障分布极宽
+        # crack 时 kurt 显著降低（3.9~5.5），双向门控：高峭度 + 低峭度
+        GEAR_KURT_THRESHOLD = 10.0
+        GEAR_CREST_THRESHOLD = 10.0
+        impulse_context = kurt > GEAR_KURT_THRESHOLD or crest > GEAR_CREST_THRESHOLD or kurt < 5.5
+    else:
+        GEAR_KURT_THRESHOLD = 12.0
+        GEAR_CREST_THRESHOLD = 12.0
+        impulse_context = kurt > GEAR_KURT_THRESHOLD or crest > GEAR_CREST_THRESHOLD
 
     # TSA 残差峭度证据：区分力=3.31，行星箱最有效的补充指标
     # TSA 消除同步啮合成分后残差峭度 > 2.5 时增加齿轮置信度
@@ -253,13 +258,26 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
             confidence = 0.35
         else:
             # 无时域冲击证据或旋转谐波主导：齿轮指标降权
-            # 旋转谐波的边频带/SER/CAR 都会触发指标，但不是真实齿轮故障
-            if critical_hits >= 3 and warning_hits >= 1:
-                confidence = 0.35  # 仅弱证据
-            elif critical_hits >= 2:
-                confidence = 0.25
+            if is_planetary:
+                # 行星箱频域指标有独立区分力，warning hits 也给予弱置信度
+                if critical_hits >= 1 and warning_hits >= 1:
+                    confidence = 0.35
+                elif critical_hits >= 1:
+                    confidence = 0.3
+                elif warning_hits >= 2:
+                    confidence = 0.25
+                elif warning_hits == 1:
+                    confidence = 0.15
+                else:
+                    confidence = 0.0
             else:
-                confidence = 0.0
+                # 旋转谐波的边频带/SER/CAR 都会触发指标，但不是真实齿轮故障
+                if critical_hits >= 3 and warning_hits >= 1:
+                    confidence = 0.35  # 仅弱证据
+                elif critical_hits >= 2:
+                    confidence = 0.25
+                else:
+                    confidence = 0.0
     else:
         # Without gear geometry, CAR/order statistics are weak evidence only.
         if impulse_context and not rotation_dominant:
@@ -311,8 +329,14 @@ def _time_confidence(time_features: Dict) -> float:
 
 
 def _fault_label(best_bearing: Dict, best_gear: Dict, bearing_score: float, gear_score: float) -> str:
-    if gear_score > bearing_score and gear_score >= 0.55:
-        return "gear_abnormal"
+    if gear_score > bearing_score:
+        if gear_score >= 0.55:
+            subtype = _infer_gear_subtype_from_indicators(best_gear)
+            return f"gear_{subtype}" if subtype else "gear_abnormal"
+        # 低 confidence 但有 indicators：尝试推断具体类型
+        subtype = _infer_gear_subtype_from_indicators(best_gear)
+        if subtype:
+            return f"gear_{subtype}"
 
     indicators = best_bearing.get("fault_indicators", {}) if best_bearing else {}
     param_hits = [

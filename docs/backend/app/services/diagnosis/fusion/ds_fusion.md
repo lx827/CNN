@@ -192,3 +192,37 @@ def compute_plausibility(bpa: BPA, focal: FrozenSet[str]) -> float
 
 - **返回值**：`float` — 似然值 Pl(A)
 - **说明**：计算 D-S 似然函数 `Pl(A) = Σ_{B∩A≠∅} m(B)`，表示对目标假设 A 的最高可能置信度
+
+## 故障类型映射表
+
+### `DEFAULT_FAULT_TYPES`
+
+识别框架默认包含 8 种故障类型：
+
+| 故障类型 | 说明 |
+|----------|------|
+| `轴承外圈故障` | BPFO |
+| `轴承内圈故障` | BPFI |
+| `轴承滚动体故障` | BSF |
+| `齿轮磨损` | Wear |
+| `齿轮裂纹` | Crack |
+| `齿轮断齿` | Break |
+| `齿轮缺齿` | Missing（2025-05 新增）|
+| `正常` | Healthy |
+
+### `GEAR_FAULT_NAMES`
+
+齿轮指标 → 故障类型映射（2025-05 更新）：
+
+| 指标名称 | 映射故障类型 |
+|----------|-------------|
+| `ser` | 齿轮磨损、齿轮断齿 |
+| `sideband_count` | 齿轮裂纹、齿轮断齿、**齿轮缺齿** |
+| `car` | 齿轮磨损、齿轮裂纹 |
+| `fm4` | 齿轮断齿、齿轮裂纹、**齿轮磨损** |
+| `fm0` | 齿轮断齿 |
+| `order_peak_concentration` | 齿轮裂纹 |
+| `planetary_fullband_env_kurt` | **齿轮裂纹、齿轮断齿**（新增）|
+| `planetary_sun_fault` | **齿轮断齿、齿轮裂纹、齿轮缺齿**（新增）|
+| `planetary_vmd` | **齿轮裂纹**（新增）|
+| `planetary_carrier` | **齿轮缺齿**（新增）|

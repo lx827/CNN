@@ -70,7 +70,12 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
 ```
 
 - **返回值**：`{confidence, warning_hits, critical_hits, hits, abnormal}`
-- **说明**：齿轮投票置信度（kurt>12 或 crest>12 门控）
+- **说明**：齿轮投票置信度
+
+**行星齿轮箱特殊处理**（2025-05）：
+- 当 `planet_count >= 3` 时，使用独立阈值：`kurt > 10` 或 `crest > 10` 或 `kurt < 5.5` 打开 impulse gate
+- warning hits 给 0.05~0.35 分（根据命中数量和类型），critical hits 给 0.20~0.60 分
+- `abnormal = confidence >= 0.55`
 
 ### `_time_confidence`
 
@@ -87,8 +92,14 @@ def _time_confidence(time_features: Dict) -> float
 def _fault_label(best_bearing: Dict, best_gear: Dict, bearing_score: float, gear_score: float) -> str
 ```
 
-- **返回值**：`str`
+- **返回值**：`str` — 如 `"gear_break"`、`"gear_crack"`、`"gear_wear"`、`"gear_missing"`、`"gear_abnormal"`、`"bearing_abnormal"`、`"unknown"`
 - **说明**：生成综合故障标签
+
+**逻辑**：
+1. `gear_score > bearing_score` 且 `gear_score >= 0.55` → 调用 `_infer_gear_subtype_from_indicators(best_gear)` 推断具体子类型
+2. `gear_score > bearing_score` 但 `< 0.55` → 仍尝试从 indicators 推断子类型（低 confidence 但有 indicators）
+3. 否则检查轴承 indicators → 返回轴承标签
+4. 无明确证据 → `"unknown"`
 
 ### `run_research_ensemble`
 

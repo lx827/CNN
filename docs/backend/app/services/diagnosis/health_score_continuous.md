@@ -64,10 +64,16 @@ def compute_continuous_deductions(
 1. 时域特征（kurtosis/crest_factor）
 2. 动态基线/趋势（rms_mad_z/kurtosis_mad_z/ewma_drift/cusum_score）
 3. 轴承故障（频率匹配 + 统计）
-4. 齿轮故障（SER/sideband/TSA残差峭度）
+4. 齿轮故障（SER/sideband/FM4/FM0/全频带包络峭度/阶次统计）
 5. SC/SCoh 循环平稳补充
 6. NA4/NB4 趋势指标
 7. 小波包能量熵
+
+**行星齿轮箱特殊处理**：
+- `gear_gate` 保底 0.5：即使没有强时域冲击（kurtosis/crest 不高），行星箱的频域指标（FM4、全频带包络峭度等）仍有独立区分力，确保扣分生效
+- `planetary_fullband_env_kurt`：critical 扣 20.0×gate，warning 扣 12.0×gate
+- `fm4`：critical 扣 20.0×gate，warning 扣 12.0×gate（2025-05 新增）
+- `fm0`：critical 扣 12.0×gate，warning 扣 6.0×gate（2025-05 新增）
 
 ### `_sf`
 

@@ -49,6 +49,28 @@ def is_ds_conflict_high(ds_fusion_result: Optional[Dict]) -> bool
 
 - **说明**：判断 D-S 冲突是否过高（conflict > 0.8）
 
+### `_infer_gear_subtype_from_indicators`
+
+```python
+def _infer_gear_subtype_from_indicators(gear_result: Dict) -> Optional[str]
+```
+
+- **参数**：`gear_result` — `analyze_gear()` 的返回结果，需包含 `fault_indicators`
+- **返回值**：`"break" | "crack" | "wear" | "missing" | None`
+- **说明**：从 gear fault_indicators 推断具体齿轮故障子类型（planetary gear 专用）。
+
+**判定规则**：
+
+| 故障类型 | 关键指标 | 判定条件 |
+|----------|----------|----------|
+| missing | `planetary_fullband_env_kurt` | `pfek > 10.0` 且 `ser < 12.0` |
+| wear | `fm4` + `pfek` | `fm4 > 3.5` (warning) 且 `pfek > 3.0` |
+| break | `fm0` / `ser` / `sideband_count` | `fm0 > 5.0` 或 `ser > 10.0` 或 `sideband_count` 异常 |
+| crack | `pfek` + `fm4` | `pfek < 3.0` 且 `fm4 < 4.0` |
+
+- 各类型按证据分累加，最高分 ≥ 1.5 时返回对应子类型
+- 用于 `_fault_label()` 和 `infer_gear_label_from_ensemble()` 的故障子类型推断
+
 ### `_sf`
 
 ```python
