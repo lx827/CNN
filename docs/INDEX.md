@@ -48,6 +48,15 @@
 
 ---
 
+### 🧪 测试与脚本文档
+
+| 文档 | 路径 | 用途 |
+|------|------|------|
+| [测试套件索引](./tests/INDEX.md) | `docs/tests/INDEX.md` | 回归测试、方法评估、专项测试的完整索引 |
+| [运维脚本索引](./scripts/INDEX.md) | `docs/scripts/INDEX.md` | 服务器运维调试脚本的完整索引 |
+
+---
+
 ## 文档使用指南
 
 ### 何时查阅哪个文档？
@@ -63,6 +72,8 @@
 | 修改前端组件/工具 | `docs/frontend/frontend_services.md` |
 | 定位前端代码位置 | `docs/frontend/INDEX.md` |
 | 部署到服务器 | `DEPLOY.md`, `OPERATION.md` |
+| 运行/编写测试 | `docs/tests/INDEX.md` |
+| 服务器运维调试 | `docs/scripts/INDEX.md` |
 
 ### 修改代码时的文档同步规则
 
@@ -96,6 +107,12 @@ docs/
     ├── INDEX.md                      # 前端目录索引
     ├── frontend_api.md               # 前端 API 封装文档
     └── frontend_services.md          # 前端服务层接口文档（Stores/Utils/Components）
+
+├── tests/                            # 测试文档
+│   └── INDEX.md                      # 测试套件索引（回归/评估/专项）
+
+└── scripts/                          # 脚本文档
+    └── INDEX.md                      # 运维调试脚本索引
 ```
 
 ---

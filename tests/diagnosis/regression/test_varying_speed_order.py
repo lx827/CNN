@@ -18,6 +18,9 @@ try:
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
+    # 保持中文格式
+    plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'WenQuanYi Micro Hei', 'Noto Sans CJK SC', 'DejaVu Sans']
+    plt.rcParams['axes.unicode_minus'] = False
 except ModuleNotFoundError:
     plt = None
 
@@ -28,7 +31,18 @@ from app.services.diagnosis.order_tracking import (
     _compute_order_spectrum_varying_speed,
 )
 
-DATA_PATH = r"E:\A-codehub\CNN\HUSTbear\down8192\0.5X_B_VS_0_40_0Hz-X.npy"
+# 自动检测数据集路径（兼容不同开发环境）
+def _find_data_path():
+    candidates = [
+        r"D:\code\wavelet_study\dataset\HUSTbear\down8192\0.5X_B_VS_0_40_0Hz-X.npy",
+        r"E:\A-codehub\CNN\HUSTbear\down8192\0.5X_B_VS_0_40_0Hz-X.npy",
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    raise FileNotFoundError(f"数据不存在，已尝试: {candidates}")
+
+DATA_PATH = _find_data_path()
 FS = 8192
 
 

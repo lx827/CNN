@@ -208,21 +208,56 @@ start.bat
 
 ## 5. 测试
 
+> **📋 完整测试文档**：`docs/tests/INDEX.md` — 包含所有测试文件的用途、运行方式和依赖。
+
+### 5.1 ⚠️ 回归测试（P0 — 每次修改后必须运行）
+
+> 对 `cloud/app/services/diagnosis/` 下任何文件的修改完成后，**必须**运行以下回归测试。
+> 这是防止"修一个 Bug 产生更多 Bug"的最后一道防线。
+
 ```bash
  cd /d/code/CNN/cloud
  . venv/Scripts/activate
 
-# 运行全部诊断回归测试
- python ../tests/diagnosis/test_none_params.py
- python ../tests/diagnosis/test_cpw_robustness.py
- python ../tests/diagnosis/test_varying_speed_order.py
+# P0 回归测试（无需数据集，使用合成信号）
+ python ../tests/diagnosis/regression/test_none_params.py
+ python ../tests/diagnosis/regression/test_cpw_robustness.py
+ python ../tests/diagnosis/regression/test_varying_speed_order.py
 
+# 一键运行
+ python ../tests/diagnosis/regression/test_none_params.py && python ../tests/diagnosis/regression/test_cpw_robustness.py && python ../tests/diagnosis/regression/test_varying_speed_order.py && echo "ALL REGRESSION TESTS PASSED"
+```
+
+### 5.2 修改后需运行的测试（按修改范围）
+
+| 修改范围 | 需运行的测试 |
+|---------|------------|
+| `features.py`, `engine.py`, `ensemble.py` | P0回归 + `algorithms/test_engine_regressions.py` |
+| `bearing.py` / 轴承相关 | P0回归 + `method_eval/test_bearing_hustbear.py` |
+| `gear/` / 齿轮相关 | P0回归 + `planetary/test_planetary_e2e.py` |
+| `health_score.py` | P0回归 + `effectiveness/test_effectiveness.py` |
+| `order_tracking.py` | `regression/test_varying_speed_order.py` |
+| `preprocessing.py` / 去噪 | P0回归 + `regression/test_cpw_robustness.py` |
+| API 路由 | P0回归 + 手动 API 调用验证 |
+
+### 5.3 其他测试命令
+
+```bash
 # 验证语法
  python -c "import ast; ast.parse(open('app/main.py', encoding='utf-8').read())"
  python -c "import ast; ast.parse(open('app/api/data_view/__init__.py', encoding='utf-8').read())"
 
 # 验证 FastAPI 可导入
  python -c "from app.main import app; print('OK')"
+
+# 端到端评估（需 WTgearbox 数据集，耗时 ~10min）
+ python ../tests/diagnosis/planetary/test_planetary_e2e.py
+
+# 方法级分类评估（需 HUSTbear 数据集）
+ python ../tests/diagnosis/method_eval/test_bearing_hustbear.py
+
+# 三数据集基准评估
+ python ../tests/diagnosis/benchmark/test_benchmark.py
 ```
 
 ---
