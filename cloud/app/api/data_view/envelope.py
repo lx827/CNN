@@ -108,7 +108,8 @@ async def get_channel_envelope(
         result = await asyncio.to_thread(engine.analyze_bearing, signal, sample_rate)
 
         # 兼容原有返回格式
-        return {
+        # _sanitize_for_json 确保 numpy 类型转换为 Python 原生类型，防止 FastAPI jsonable_encoder 崩溃
+        return _sanitize_for_json({
             "code": 200,
             "data": {
                 "device_id": record.device_id,
@@ -133,7 +134,7 @@ async def get_channel_envelope(
                 "features": result.get("features", {}),
                 "fault_indicators": result.get("fault_indicators", {}),
             }
-        }
+        })
     except Exception as e:
         logger.error(f"包络谱计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"包络谱计算失败: {e}")
