@@ -112,3 +112,4 @@ tests/diagnosis/planetary_e2e_results.json
 tests/diagnosis/output
 tests/output
 figures/
+tests/diagnosis/planetary/planetary_e2e_results.json

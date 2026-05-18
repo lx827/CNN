@@ -143,10 +143,26 @@ def infer_gear_label_from_ensemble(
         if mapped and mapped in valid_labels:
             return mapped
 
-    # ── 3. health_score ──
+    # ── 3. 从 gear indicators 推断具体子类型 ──
+    best_gear = result.get("gear", {})
+    if best_gear:
+        try:
+            from app.services.diagnosis.health_score import _infer_gear_subtype_from_indicators
+            subtype = _infer_gear_subtype_from_indicators(best_gear)
+            if subtype and subtype in valid_labels:
+                return subtype
+        except Exception:
+            pass
+
+    # ── 4. health_score ──
     hs = int(result.get("health_score", 100))
     if hs >= HEALTH_THRESHOLD:
         return "healthy"
+
+    # health_score < 阈值：无法推断具体类型 → 返回默认故障类型（而非 healthy）
+    for fallback in ["break", "wear", "crack", "missing"]:
+        if fallback in valid_labels:
+            return fallback
 
     return default
 

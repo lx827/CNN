@@ -152,6 +152,7 @@ DS_TO_GEAR = {
     "齿轮断齿": "break",
     "齿轮磨损": "wear",
     "齿轮裂纹": "crack",
+    "齿轮缺齿": "missing",
     "正常": "healthy",
     "轴承外圈故障": "missing",    # 齿轮实验中轴承异常归为缺齿
     "轴承内圈故障": "missing",
@@ -173,6 +174,10 @@ FAULT_LABEL_TO_BEARING = {
 # fault_label → 齿轮标签
 FAULT_LABEL_TO_GEAR = {
     "gear_abnormal": "break",
+    "gear_break": "break",
+    "gear_crack": "crack",
+    "gear_wear": "wear",
+    "gear_missing": "missing",
     "bearing_BPFO": "missing",
     "bearing_BPFI": "missing",
     "bearing_BSF": "missing",
