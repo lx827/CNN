@@ -4,30 +4,13 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
 from app.services.analyzer import analyze_device
-from . import router
+from . import router, _sanitize_for_json
 from datetime import datetime
 import logging
 import asyncio
 import numpy as np
 
 logger = logging.getLogger(__name__)
-
-
-def _sanitize_for_json(obj):
-    """递归将 numpy 类型转换为 Python 原生类型，确保 JSON 可序列化"""
-    if isinstance(obj, (np.integer,)):
-        return int(obj)
-    if isinstance(obj, (np.floating,)):
-        return float(obj)
-    if isinstance(obj, (np.bool_,)):
-        return bool(obj)
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    if isinstance(obj, dict):
-        return {k: _sanitize_for_json(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_sanitize_for_json(v) for v in obj]
-    return obj
 
 @router.put("/{device_id}/{batch_index}/diagnosis")
 async def update_batch_diagnosis(

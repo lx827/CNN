@@ -1,6 +1,5 @@
 # `features.py` — 特征提取
 
-
 > **算法原理**: 详见 [小波与模态分解算法文档](../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../ALGORITHMS.md)。
 **对应源码**：`cloud/app/services/diagnosis/features.py`
 
@@ -137,7 +136,6 @@ def compute_nonparam_cusum_features(signal: np.ndarray) -> Dict[str, float]
 - **返回值**：`{sign_cusum_positive, sign_cusum_negative, sign_cusum_alarm, mw_cusum_positive, mw_cusum_negative, mw_cusum_alarm}`
 - **说明**：非参数 CUSUM 特征
 
-
 ### `_get_channel_params`
 
 ```python
@@ -150,6 +148,22 @@ def _get_channel_params(device, channel_index, field)
   - `field` (`str`): 参数字段名（如 `"gear_teeth"` 或 `"bearing_params"`）
 - **返回值**：`dict | None` — 该通道对应的参数字典，若无则返回 None
 - **说明**：兼容旧格式（设备级共用字典，如 `{input:18, output:27}`）与新格式（通道级独立字典，如 `{"1":{input:18}, "2":{input:27}}`）。若字段值中不包含通道键但包含 `"input"`/`"n"`/`"output"` 等通用键，则返回整个字段值作为回退
+
+### `has_bearing_params`
+
+```python
+def has_bearing_params(bearing_params: Optional[Dict]) -> bool
+```
+
+- **说明**：轴承参数有效性统一入口（n, d, D 均 >0）。本函数取代了原先在 `ensemble.py` 和 `gear.py` 中的两处重复实现。
+
+### `has_gear_params`
+
+```python
+def has_gear_params(gear_teeth: Optional[Dict]) -> bool
+```
+
+- **说明**：齿轮参数有效性统一入口（input > 0）。本函数取代了原先在 `ensemble.py` 和 `gear.py` 中的两处重复实现。
 
 ### `robust_z`
 

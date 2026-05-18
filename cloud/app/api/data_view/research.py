@@ -9,9 +9,7 @@ from app.services.diagnosis import (
     DiagnosisEngine, DenoiseMethod, DiagnosisStrategy,
     BearingMethod, GearMethod,
 )
-from . import router, prepare_signal, _get_channel_name
-from .gear import _extract_device_param
-from .diagnosis_ops import _sanitize_for_json
+from . import router, prepare_signal, _get_channel_name, _extract_device_param, _sanitize_for_json
 
 logger = logging.getLogger(__name__)
 

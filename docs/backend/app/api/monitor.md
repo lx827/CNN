@@ -36,16 +36,4 @@ def get_monitor_history(
 
 ## 内部函数
 
-### `_get_channel_name`
-
-```python
-def _get_channel_name(device: Device, channel_num: int) -> str
-```
-
-| 参数 | 类型 | 描述 |
-|------|------|------|
-| `device` | `Device` | 设备实例（可为 `None`） |
-| `channel_num` | `int` | 通道编号 |
-
-- **返回值**：`str` — 通道显示名称
-- **说明**：从设备配置的 `channel_names` 中查找通道名称；未配置时返回默认名称（1→"通道1-轴承附近"、2→"通道2-驱动端"、3→"通道3-风扇端"，其余返回"通道{N}"）
+> `_get_channel_name` 已统一到 `app/api/data_view/__init__.py`。本模块通过 `from app.api.data_view import _get_channel_name` 导入。

@@ -17,6 +17,7 @@ from sqlalchemy import func
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
 from app.services.diagnosis.features import compute_fft
+from app.api.data_view import _get_channel_name
 from typing import List
 
 router = APIRouter(prefix="/api/monitor", tags=["实时监测"])
@@ -30,21 +31,6 @@ FFT_POINTS = 25600
 
 # FFT 返回的最高频率（风机故障主要集中在此范围）
 FFT_MAX_FREQ = 5000
-
-
-def _get_channel_name(device: Device, channel_num: int) -> str:
-    """从设备配置获取通道名称，没有则返回默认名称"""
-    if device and device.channel_names:
-        name = device.channel_names.get(str(channel_num))
-        if name:
-            return name
-    # 默认名称
-    defaults = {
-        1: "通道1-轴承附近",
-        2: "通道2-驱动端",
-        3: "通道3-风扇端",
-    }
-    return defaults.get(channel_num, f"通道{channel_num}")
 
 
 @router.get("/latest")

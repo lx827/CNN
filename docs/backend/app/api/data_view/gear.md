@@ -1,34 +1,13 @@
 # `gear.py` — 齿轮诊断+综合分析+全分析
 
-
 > **算法原理**: 详见 [小波与模态分解算法文档](../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../ALGORITHMS.md)。
 **对应源码**：`cloud/app/api/data_view/gear.py`
 
 ## 函数
 
-### `_extract_device_param`
-
-```python
-def _extract_device_param(params, device_keys) -> dict
-```
-
-- **说明**：兼容前端通道级格式与后端设备级格式转换
-
-### `_has_valid_bearing`
-
-```python
-def _has_valid_bearing(bp) -> bool
-```
-
-- **说明**：轴承参数有效性（n,d,D 均>0）
-
-### `_has_valid_gear`
-
-```python
-def _has_valid_gear(gt) -> bool
-```
-
-- **说明**：齿轮参数有效性（input>0）
+> `_extract_device_param` 已统一到 `__init__.py`。本模块通过 `from . import _extract_device_param` 导入。
+>
+> `_has_valid_bearing` 和 `_has_valid_gear` 现在先调用 `_extract_device_param` 做格式转换，再委托 `app/services/diagnosis/features.py` 中的 `has_bearing_params` / `has_gear_params` 做统一校验。
 
 ## 路由端点
 
