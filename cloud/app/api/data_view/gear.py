@@ -104,7 +104,7 @@ async def get_channel_gear(
         # CPU 密集型齿轮分析放入线程池
         result = await asyncio.to_thread(engine.analyze_gear, signal, sample_rate)
 
-        return {
+        return _sanitize_for_json({
             "code": 200,
             "data": {
                 "device_id": record.device_id,
@@ -126,7 +126,7 @@ async def get_channel_gear(
                 "m8a": result.get("m8a"),
                 "fault_indicators": result.get("fault_indicators", {}),
             }
-        }
+        })
     except Exception as e:
         logger.error(f"齿轮诊断失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"齿轮诊断失败: {e}")
@@ -276,10 +276,10 @@ async def get_channel_analyze(
             logger.warning(f"诊断结果写入数据库失败: {db_err}")
             db.rollback()
 
-        return {
+        return _sanitize_for_json({
             "code": 200,
             "data": response_data,
-        }
+        })
     except Exception as e:
         logger.error(f"综合分析失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"综合分析失败: {e}")
@@ -405,10 +405,10 @@ async def get_channel_full_analysis(
             logger.warning(f"全算法分析结果写入数据库失败: {db_err}")
             db.rollback()
 
-        return {
+        return _sanitize_for_json({
             "code": 200,
             "data": response_data,
-        }
+        })
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
