@@ -42,6 +42,9 @@ async def get_channel_envelope(
         sample_rate = record.sample_rate or 25600
         signal = prepare_signal(record.data, detrend=detrend)
 
+        if len(signal) < 64:
+            raise HTTPException(status_code=400, detail="信号长度不足（至少64点），无法计算包络谱")
+
         # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）
         max_samples = sample_rate * 5
         if len(signal) > max_samples:
@@ -79,6 +82,7 @@ async def get_channel_envelope(
             "med": BearingMethod.MED,
             "teager": BearingMethod.TEAGER,
             "spectral_kurtosis": BearingMethod.SPECTRAL_KURTOSIS,
+            "sc_scoh": BearingMethod.SC_SCOH,
             "mckd": BearingMethod.MCKD,
             "wp": BearingMethod.WP,
             "dwt": BearingMethod.DWT,

@@ -64,7 +64,14 @@ def envelope_analysis(
         # 频段非法，fallback
         low = max(100, fs * 0.15)
         high = min(fs / 2 - 100, fs * 0.85)
-    filtered = bandpass_filter(arr, fs, low, high)
+    # 极端低采样率二次守卫：若仍非法则跳过带通滤波
+    if low >= high or low <= 0 or high <= 0:
+        low = max(fs * 0.05, 1.0)
+        high = max(low + 1.0, fs * 0.45)
+    if low >= high:
+        filtered = arr  # 完全无法滤波时直接用原始信号
+    else:
+        filtered = bandpass_filter(arr, fs, low, high)
 
     # Step 2-3: 希尔伯特变换 → 包络
     analytic = hilbert(filtered)

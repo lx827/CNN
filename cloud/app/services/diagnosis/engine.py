@@ -193,9 +193,13 @@ class DiagnosisEngine:
                 method = "varying_speed"
             return float(rf), oa, os_, method, float(rsd)
         except Exception:
-            rf = float(_estimate_rot_freq_simple(signal, fs))
-            oa, os_ = _compute_order_spectrum(signal, fs, rf, samples_per_rev=1024)
-            return rf, oa, os_, "single_frame", 0.0
+            try:
+                rf = float(_estimate_rot_freq_simple(signal, fs))
+                oa, os_ = _compute_order_spectrum(signal, fs, rf, samples_per_rev=1024)
+                return rf, oa, os_, "single_frame", 0.0
+            except Exception:
+                # 信号过短等极端情况无法估计转频
+                return 10.0, np.array([]), np.array([]), "fallback", 0.0
 
     def analyze_bearing(
         self,
