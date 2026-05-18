@@ -30,8 +30,8 @@ async def get_channel_envelope(
   - `404`：数据不存在
   - `400`：信号长度不足（少于 64 采样点）
   - `500`：计算过程异常（已增强底层鲁棒性，极端场景下仍可能返回）
-- **说明**：包络谱分析（13 种轴承方法）。信号会先被截断到最多 5 秒长度，再进行计算。
+- **说明**：包络谱分析（13 种轴承方法）。信号会先被截断到最多 5 秒长度，再进行计算。返回值通过 `_sanitize_for_json` 将 numpy 类型转换为 Python 原生类型，确保 FastAPI 可序列化。
 
 ## 内部辅助函数
 
-> `_extract_device_param` 已统一到 `__init__.py`。本模块通过 `from . import _extract_device_param` 导入。
+> `_extract_device_param` 和 `_sanitize_for_json` 已统一到 `__init__.py`。本模块通过 `from . import _extract_device_param, _sanitize_for_json` 导入。返回值在 `return` 前包裹 `_sanitize_for_json()` 以转换 numpy 类型（如 `numpy.bool_`），防止 FastAPI `jsonable_encoder` 崩溃。
