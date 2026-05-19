@@ -1762,16 +1762,19 @@ def evaluate_planetary_demod_results(
 
     # === Level 2: 窄带包络阶次分析（核心诊断） ===
     # narrowband envelope_kurtosis: 健康 median=0.88, 故障 median=2.90
-    # threshold: warning > 2.0 (超过健康max约一半), critical > 5.0
+    # threshold: warning > 3.0 (单指标只保留对磨损/缺齿的灵敏度, 断齿/裂纹交给FM4/SER)
+    #   2.0→3.0: 健康He_N1 ek=2.2载波调制偏高导致误报, 断齿ek=1.2~2.1漏检正常
+    #   (断齿由FM4/TSA残差峭度检测, 裂纹由CAR检测)
+    #   critical > 5.0
     if env_kurtoses:
         max_env_kurt = max(env_kurtoses)
         indicators["planetary_sun_fault"] = {
             "value": round(max_env_kurt, 4),
             "envelope_kurtosis": round(max_env_kurt, 4),
-            "warning": max_env_kurt > 2.0,
+            "warning": max_env_kurt > 3.0,
             "critical": max_env_kurt > 5.0,
             "method": "narrowband_envelope_kurtosis",
-            "note": "行星箱诊断核心指标：窄带包络峭度（区分力3.28×）",
+            "note": "行星箱辅助指标：窄带包络峭度，仅对磨损/缺齿敏感（>3.0），断齿/裂纹由FM4/SER/CAR检测",
         }
     else:
         indicators["planetary_sun_fault"] = {
@@ -1826,7 +1829,7 @@ def evaluate_planetary_demod_results(
     if env_kurtoses:
         indicators["envelope_kurtosis"] = {
             "value": round(max(env_kurtoses), 4),
-            "warning": max(env_kurtoses) > 2.0,
+            "warning": max(env_kurtoses) > 3.0,
             "critical": max(env_kurtoses) > 5.0,
         }
 

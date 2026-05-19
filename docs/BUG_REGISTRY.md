@@ -2,28 +2,11 @@
 
 > 最后更新: 2026-05-20 | 详见 AGENTS.md §14
 
-## 未修复 (1)
+## 未修复 (0)
 
-| # | 文件 | 描述 |
-|---|------|------|
-| 9 | `planetary_demod.py:evaluate_planetary_demod_results` | WTG 健康 `planetary_sun_fault` 误报 warning |
+（暂无）
 
-**详细描述**：
-
-- `evaluate_planetary_demod_results` 从窄带解调结果读取 `envelope_kurtosis` 作为 `planetary_sun_fault` 的主判定值
-- WTG 健康文件 `He_N1_20-c1.npy` 的窄带 `envelope_kurtosis=2.2`，超过阈值 `2.0` → warning
-- 但同文件的 `sun_fault_snr` 和 `sun_modulation_depth` 均正常
-- 断齿文件 `Br_B1_20-c1.npy` 反而 `envelope_kurtosis=1.2` < 2.0 → 不报警
-- 指标与故障**反相关**，说明 `envelope_kurtosis` 在行星箱健康/故障间的区分力被高估（注释称"区分力 3.28×, 健康 median=0.88"，但实测健康可达 2.2）
-
-**可能解决方法**：
-
-1. 提高 warning 阈值 2.0→3.0（但可能漏检真实故障）
-2. 改用 `sun_modulation_depth`（调制深度比）替代 `envelope_kurtosis` 作为主判定——调制深度反映故障阶次相对啮合阶次的能量比，理论上对健康/故障更敏感
-3. 增加多文件统计校准：用 WTgearbox 全部 160 文件重新标定阈值
-4. 窄带频段选择优化：当前根据 `sun_fault_order` 选频段，但对某些健康文件可能选到非最优频段
-
-## 已修复 (8)
+## 已修复 (9)
 
 | # | 文件 | 描述 |
 |---|------|------|
@@ -35,3 +18,18 @@
 | 6 | engine.py:_evaluate_bearing_faults | 边带增强缺包络峭度门控 |
 | 7 | features.py:compute_fft | remove_dc 未导入 |
 | 8 | engine.py:_evaluate_bearing_faults | CW 健康统计误报 — 物理未检出抑制统计 |
+| 9 | `planetary_demod.py:evaluate_planetary_demod_results` | WTG 健康 `planetary_sun_fault` 误报 warning |
+
+**Bug #9 详细**：
+
+- `evaluate_planetary_demod_results` 用 `envelope_kurtosis > 2.0` 判定 `planetary_sun_fault.warning`
+- WTG 健康 `He_N1_20-c1.npy` 的 `env_kurt=2.2` → 误报
+- 分析 10 个 20Hz 文件后发现：`env_kurt` 仅对磨损(4.9~8.0)和缺齿(3.3~5.9)敏感，对断齿(1.2~2.1)和裂纹(1.0~1.3)几乎无区分力
+- 行星箱有 4 个行星轮同时啮合，断齿冲击被平均化，裂纹能量太弱
+- `sun_modulation_depth` 在健康/故障间完全重叠(35~57)，不可用作门控
+
+**修复**：`warning` 阈值 `2.0 → 3.0`，`planetary_sun_fault` 从"核心指标"降级为"辅助指标"
+
+- 磨损/缺齿仍能检出 ✅
+- 健康误报消除 ✅
+- 断齿/裂纹由 FM4/SER/CAR 等其他指标负责（符合行星箱诊断文献）
