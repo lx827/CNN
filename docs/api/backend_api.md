@@ -587,9 +587,41 @@ GET /api/data/{device_id}/{batch_index}/{channel}/diagnosis?denoise_method={deno
 
 **查询优先级**：
 
-1. 精确匹配 `device + batch + channel + denoise_method`
-2. 该通道最新结果（不限去噪方法）
-3. 批次级诊断记录（兼容旧数据）
+1. 精确匹配 `device + batch + channel + denoise_method` → 返回 `engine_result` 或 `full_analysis`
+2. 若以上两列为空 → 回退到 `order_analysis.channels[ch{N}]` 提取该通道完整诊断结果
+3. 该通道最新结果（不限去噪方法）→ 同上两步
+4. 批次级诊断记录 → 优先 `order_analysis.channels` → `order_analysis.engine_result` → 传统批次数据（兼容旧数据）
+
+**响应体 `data` 字段说明**（通道级 `full_analysis` 完整结构）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `health_score` | `int` | 健康度 0-100 |
+| `status` | `str` | normal/warning/critical |
+| `fault_likelihood` | `float` | 故障似然度 |
+| `fault_label` | `str` | 故障标签 |
+| `rot_freq_hz` | `float` | 估计转频 |
+| `time_features` | `dict` | 时域特征（rms/kurtosis/crest_factor/cusum/ewma 等） |
+| `bearing` | `dict` | 最佳轴承诊断结果（含 fault_indicators） |
+| `gear` | `dict` | 最佳齿轮诊断结果（含 fault_indicators） |
+| `ensemble` | `dict` | **集成诊断结果**（见下表） |
+| `recommendation` | `str` | 维护建议 |
+
+**`ensemble` 子字段**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `profile` | `str` | runtime/balanced/exhaustive |
+| `bearing_votes` | `dict` | 各轴承算法投票详情（method→{confidence, param_hits, stat_hits, hits}） |
+| `gear_votes` | `dict` | 各齿轮算法投票详情（method→{confidence, critical_hits, warning_hits, hits}） |
+| `bearing_vote_fraction` | `float` | 轴承投票一致率 |
+| `gear_vote_fraction` | `float` | 齿轮投票一致率 |
+| `bearing_confidence` | `float` | 轴承综合置信度 |
+| `gear_confidence` | `float` | 齿轮综合置信度 |
+| `time_confidence` | `float` | 时域冲击置信度 |
+| `best_bearing` | `str` | 最佳轴承算法键名 |
+| `best_gear` | `str` | 最佳齿轮算法键名 |
+| `ds_fusion` | `dict` | D-S 证据融合结果（fused_bpa/belief/plausibility/conflict/dominant_fault） |
 
 #### 6.6.2 更新批次诊断结果
 

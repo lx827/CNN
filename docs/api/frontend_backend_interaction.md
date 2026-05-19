@@ -75,7 +75,13 @@
 | `ResearchDiagnosis.vue::loadDevices()` | `api/data.js::getAllDeviceData()` | `GET /api/data/devices` | `data_view/core.py::get_all_device_data` | 加载设备列表（复用 DataView API） |
 | `ResearchDiagnosis.vue::loadMethodInfo()` | `api/data.js::getMethodInfo()` | `GET /api/data/method-info` | `data_view/research.py::get_method_info` | 获取可用分析方法列表 |
 | `ResearchDiagnosis.vue::runAnalysis()` | `api/data.js::getChannelMethodAnalysis()` | `GET /api/data/{id}/{batch}/{ch}/method-analysis` | `data_view/research.py` | ⏳ async：指定方法单分析 |
-| `ResearchDiagnosis.vue::runAnalysis()` | `api/data.js::getChannelResearchAnalysis()` | `GET /api/data/{id}/{batch}/{ch}/research-analysis` | `data_view/research.py` | ⏳ async：研究模式多方法对比分析 |
+| `ResearchDiagnosis.vue::runAnalysis()` | `api/data.js::getChannelResearchAnalysis()` | `GET /api/data/{id}/{batch}/{ch}/research-analysis` | `data_view/research.py` | ⏳ async：集成诊断（返回 ensemble 投票/置信度/D-S 融合） |
+
+**数据流说明**：
+
+- **实时分析**：`ResearchDiagnosis.vue` 点击"运行" → `GET /research-analysis` → `run_research_ensemble()` → 返回完整 ensemble 数据（含 bearing_votes/gear_votes/ds_fusion 等）
+- **缓存读取**：`DataView.vue` 查看诊断 → `GET /diagnosis` → 从 `diagnosis.full_analysis` 列读取（后台分析时 lifespan.py 已保存通道级 full_analysis），返回与 `/research-analysis` 相同结构的数据
+- **旧数据兼容**：若 `full_analysis` 为空，回退到 `order_analysis.channels` 或 `order_analysis.engine_result` 提取
 
 > **⚠️ 影响前端**：`ResearchDiagnosis.vue` 依赖 `method-info` 返回的方法元数据来动态渲染分析选项，修改方法列表结构需同步前端。
 

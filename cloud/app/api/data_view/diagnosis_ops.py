@@ -83,6 +83,21 @@ def get_channel_diagnosis(
             result["rot_freq"] = diag.rot_freq
             return {"code": 200, "data": _sanitize_for_json(result)}
 
+        # 1b. engine_result/full_analysis 为空 → 尝试从 order_analysis.channels 提取
+        if diag and diag.order_analysis:
+            oa = diag.order_analysis or {}
+            ch_key = f"ch{channel}"
+            ch_data = oa.get("channels", {}).get(ch_key)
+            if ch_data and isinstance(ch_data, dict):
+                ch_data = dict(ch_data)
+                ch_data["rot_freq"] = diag.rot_freq
+                return {"code": 200, "data": _sanitize_for_json(ch_data)}
+            engine_data = oa.get("engine_result")
+            if engine_data and isinstance(engine_data, dict):
+                engine_data = dict(engine_data)
+                engine_data["rot_freq"] = diag.rot_freq
+                return {"code": 200, "data": _sanitize_for_json(engine_data)}
+
     # 2. 查该通道的最新诊断结果（不限去噪方法）
     diag = db.query(Diagnosis).filter(
         Diagnosis.device_id == device_id,
@@ -95,6 +110,22 @@ def get_channel_diagnosis(
         result["rot_freq"] = diag.rot_freq
         return {"code": 200, "data": _sanitize_for_json(result)}
 
+    # 2b. 通道级记录存在但 engine_result/full_analysis 为空 → 尝试从 order_analysis.channels 提取
+    if diag and diag.order_analysis:
+        oa = diag.order_analysis or {}
+        ch_key = f"ch{channel}"
+        ch_data = oa.get("channels", {}).get(ch_key)
+        if ch_data and isinstance(ch_data, dict):
+            ch_data = dict(ch_data)
+            ch_data["rot_freq"] = diag.rot_freq
+            return {"code": 200, "data": _sanitize_for_json(ch_data)}
+        # 也尝试 engine_result（第一通道结果）
+        engine_data = oa.get("engine_result")
+        if engine_data and isinstance(engine_data, dict):
+            engine_data = dict(engine_data)
+            engine_data["rot_freq"] = diag.rot_freq
+            return {"code": 200, "data": _sanitize_for_json(engine_data)}
+
     # 3. 再查批次级诊断记录（兼容旧数据）
     diag_batch = db.query(Diagnosis).filter(
         Diagnosis.device_id == device_id,
@@ -102,6 +133,21 @@ def get_channel_diagnosis(
     ).order_by(Diagnosis.analyzed_at.desc()).first()
 
     if diag_batch:
+        # 3a. 优先尝试从 order_analysis.channels 提取通道级集成证据
+        oa = diag_batch.order_analysis or {}
+        ch_key = f"ch{channel}"
+        ch_data = oa.get("channels", {}).get(ch_key)
+        if ch_data and isinstance(ch_data, dict):
+            ch_data = dict(ch_data)
+            ch_data["rot_freq"] = diag_batch.rot_freq
+            return {"code": 200, "data": _sanitize_for_json(ch_data)}
+        # 3b. 回退到 engine_result
+        engine_data = oa.get("engine_result")
+        if engine_data and isinstance(engine_data, dict):
+            engine_data = dict(engine_data)
+            engine_data["rot_freq"] = diag_batch.rot_freq
+            return {"code": 200, "data": _sanitize_for_json(engine_data)}
+        # 3c. 传统批次级数据（无集成证据）
         return _sanitize_for_json({
             "code": 200,
             "data": {

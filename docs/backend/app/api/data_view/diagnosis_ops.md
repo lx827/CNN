@@ -35,7 +35,13 @@ def get_channel_diagnosis(
 ) -> dict
 ```
 
-- **说明**：查询诊断缓存（优先级：精确匹配 denoise_method → 通道最新 → 批次级）。所有返回值通过 `_sanitize_for_json` 包裹，确保数据库中的旧数据（含 numpy 类型）可被 FastAPI 序列化。
+- **说明**：查询诊断缓存。查询优先级（2025-05 更新，新增 `order_analysis` 回退）：
+  1. 精确匹配 `device + batch + channel + denoise_method` → 返回 `engine_result` 或 `full_analysis`
+  2. 同记录 `engine_result`/`full_analysis` 为空 → **回退到 `order_analysis.channels`** 提取该通道结果
+  3. 通道级记录（不限去噪）→ 同上两步
+  4. 批次级记录 → 优先 `order_analysis.channels` → `order_analysis.engine_result` → 传统批次数据
+  - 所有返回值通过 `_sanitize_for_json` 包裹，确保数据库中的旧数据（含 numpy 类型）可被 FastAPI 序列化。
+  - **`full_analysis` 字段结构**：包含完整 `run_research_ensemble()` 结果，含 `ensemble`（轴承/齿轮投票、置信度、D-S 融合）、`bearing`、`gear`、`time_features` 等。详见 `ensemble.py`。
 
 ### `POST /{device_id}/{batch_index}/reanalyze`
 

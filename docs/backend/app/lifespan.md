@@ -18,7 +18,9 @@ async def analysis_worker() -> None
 
 - **参数**：无
 - **返回值**：`None`
-- **说明**：后台协程：每 30s 扫描未分析批次 → `analyze_device` → 写诊断 → 生成告警 → WebSocket 推送
+- **说明**：后台协程：每 30s 扫描未分析批次 → `analyze_device` → 保存批次级诊断 + **通道级 `full_analysis`**（含集成证据/投票/最佳算法/D-S 融合） → 生成告警 → WebSocket 推送
+
+> **通道级 `full_analysis` 保存**（2025-05 新增）：后台分析完成后，遍历 `order_analysis.channels` 为每个通道创建独立的 `Diagnosis` 记录（`channel=ch_num`），将完整的 `run_research_ensemble()` 结果（含 `ensemble`、`bearing`、`gear`、`time_features` 等）存入 `full_analysis` 列。已有记录则覆盖更新。
 
 ### `lifespan`
 
