@@ -1,6 +1,6 @@
 # 诊断算法分层测试架构
 
-> 诊断功能由多层依赖组成。测试必须按依赖顺序：Layer 1 → Layer 2 → Layer 3。
+> 诊断功能由多层依赖组成。测试必须按依赖顺序：Layer 1 → Layer 2 → Layer 3 → Layer 4 → Layer 5。
 > Layer N 出错时，先查 Layer N-1 是否全部通过，以排除底层问题。
 
 ---
@@ -51,6 +51,11 @@ tests/diagnosis/foundation/
 │   ├── synthetic_signals.py          # 合成信号生成器（含 ground truth）
 │   ├── test_signal_utils_correctness.py
 │   ├── test_vmd_denoise_correctness.py
+│   ├── test_health_score_continuous.py
+│   ├── test_bearing_sideband.py
+│   ├── test_channel_consensus.py
+│   ├── test_recommendation.py
+│   ├── test_msb_correctness.py
 │   └── plot_results.py
 ├── layer2/                           # Layer 2 特征提取 & 信号处理
 │   ├── test_features_correctness.py
@@ -63,10 +68,23 @@ tests/diagnosis/foundation/
 │   ├── test_health_score_correctness.py
 │   ├── test_rule_based_correctness.py
 │   ├── test_planetary_demod_correctness.py
+│   ├── LAYER2_ISSUES.md
 │   └── plot_results.py
-├── output/                           # Layer 1+2 旧测试输出（兼容保留）
-│   └── plots/
-└── plot_results.py                   # 旧汇总绘图脚本
+├── layer3/                           # Layer 3 模块聚合 & 集成调度
+│   ├── test_engine_integration.py
+│   ├── test_ensemble_integration.py
+│   ├── test_analyzer_integration.py
+│   ├── LAYER3_ISSUES.md
+│   └── plot_results.py
+├── layer4/                           # Layer 4 中央调度器深层
+│   ├── test_engine_deep.py
+│   └── plot_results.py
+├── layer5/                           # Layer 5 应用入口辅助函数
+│   ├── test_ensemble_helpers.py
+│   ├── test_analyzer_helpers.py
+│   └── plot_results.py
+└── output/                           # 旧测试输出（兼容保留）
+    └── plots/
 ```
 
 ---
@@ -86,11 +104,11 @@ tests/diagnosis/foundation/
 | `signal_utils` | `parabolic_interpolation` | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `zoom_fft_analysis` | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `vmd_denoise` | `vmd_decompose` / `vmd_denoise` / `vmd_select_impact_mode` | `layer1/test_vmd_denoise_correctness.py` | ✅ |
-| `health_score_continuous` | 连续扣分函数 | `layer2/test_health_score_correctness.py` (集成) | ⚠️ |
-| `bearing_sideband` | 边带密度/不对称分析 | — | ❌ |
-| `channel_consensus` | 多通道投票 | — | ❌ |
-| `recommendation` | `_generate_recommendation` | — | ❌ |
-| `gear/msb` | MSB 残余边频带 | — | ❌ |
+| `health_score_continuous` | `sigmoid_deduction` / `multi_threshold_deduction` / `cascade_deduction` / `compute_continuous_deductions` | `layer1/test_health_score_continuous.py` | ✅ |
+| `bearing_sideband` | `compute_sideband_density` | `layer1/test_bearing_sideband.py` | ✅ |
+| `channel_consensus` | `cross_channel_consensus` | `layer1/test_channel_consensus.py` | ✅ |
+| `recommendation` | `_generate_recommendation` / `_match_suggestion` | `layer1/test_recommendation.py` | ✅ |
+| `gear/msb` | `msb_residual_sideband_analysis` | `layer1/test_msb_correctness.py` | ✅ |
 
 ### Layer 2 — 特征提取 & 信号处理（依赖 Layer 1）
 
@@ -124,25 +142,42 @@ tests/diagnosis/foundation/
 | `rule_based` | `_rule_based_analyze` | `layer2/test_rule_based_correctness.py` | ✅ |
 | `health_score` | `_compute_health_score` | `layer2/test_health_score_correctness.py` | ✅ |
 
-### Layer 3-5 — 调度 & 集成（依赖 Layer 1+2）
+### Layer 3 — 模块聚合 & 集成调度（依赖 Layer 1+2）
 
 | 模块 | 函数 | 测试 | 状态 |
 |------|------|------|:--:|
-| `engine` | `analyze_bearing` (分发 13 种轴承方法) | `layer3/test_engine_integration.py` + `evaluation/bearing_eval.py` | ✅ |
-| `engine` | `analyze_gear` (分发 2 种齿轮方法) | `layer3/test_engine_integration.py` + `algorithms/test_engine_regressions.py` | ✅ |
-| `engine` | `analyze_comprehensive` | `layer3/test_engine_integration.py` + `algorithms/test_engine_regressions.py` | ✅ |
-| `engine` | `analyze_all_methods` | `evaluation/bearing_eval.py` | ⚠️ 需数据集 |
-| `engine` | `analyze_research_ensemble` | `layer3/test_ensemble_integration.py` + `evaluation/comprehensive_eval.py` | ✅ |
-| `ensemble` | `run_research_ensemble` | `layer3/test_ensemble_integration.py` + `algorithms/test_research_ensemble.py` | ✅ |
-| `analyzer` | `analyze_device` | `layer3/test_analyzer_integration.py` + `planetary/test_planetary_e2e.py` | ✅ |
+| `engine` | `analyze_bearing` (分发 13 种轴承方法) | `layer3/test_engine_integration.py` | ✅ |
+| `engine` | `analyze_gear` (分发 2 种齿轮方法) | `layer3/test_engine_integration.py` | ✅ |
+| `engine` | `analyze_comprehensive` | `layer3/test_engine_integration.py` | ✅ |
+| `ensemble` | `run_research_ensemble` | `layer3/test_ensemble_integration.py` | ✅ |
+| `analyzer` | `analyze_device` | `layer3/test_analyzer_integration.py` | ✅ |
+
+### Layer 4 — 中央调度器深层（依赖 Layer 2+3）
+
+| 模块 | 函数 | 测试 | 状态 |
+|------|------|------|:--:|
+| `engine` | `preprocess` (多 denoise 方法分支) | `layer4/test_engine_deep.py` | ✅ |
+| `engine` | `_estimate_rot_freq` (转频估计 + 回退) | `layer4/test_engine_deep.py` | ✅ |
+| `engine` | `analyze_all_methods` | — | ⚠️ 需数据集 |
+
+### Layer 5 — 应用入口辅助函数（依赖 Layer 1-4）
+
+| 模块 | 函数 | 测试 | 状态 |
+|------|------|------|:--:|
+| `ensemble` | `_bearing_confidence` | `layer5/test_ensemble_helpers.py` | ✅ |
+| `ensemble` | `_gear_confidence` | `layer5/test_ensemble_helpers.py` | ✅ |
+| `ensemble` | `_time_confidence` | `layer5/test_ensemble_helpers.py` | ✅ |
+| `ensemble` | `_fault_label` | `layer5/test_ensemble_helpers.py` | ✅ |
+| `analyzer` | `calibrate_fault_probabilities` | `layer5/test_analyzer_helpers.py` | ✅ |
+| `analyzer` | `_safe_result` | `layer5/test_analyzer_helpers.py` | ✅ |
 
 ### 统计
 
 | 状态 | 数量 |
 |:--:|------|
-| ✅ 已覆盖 | 39 |
+| ✅ 已覆盖 | **60** |
 | ⚠️ 需数据集 | 1 |
-| ❌ 未覆盖 | **6** |
+| ❌ 未覆盖 | **0** |
 
 ---
 
@@ -155,6 +190,11 @@ cd /d/code/CNN/cloud
 # Layer 1
 python ../tests/diagnosis/foundation/layer1/test_signal_utils_correctness.py
 python ../tests/diagnosis/foundation/layer1/test_vmd_denoise_correctness.py
+python ../tests/diagnosis/foundation/layer1/test_health_score_continuous.py
+python ../tests/diagnosis/foundation/layer1/test_bearing_sideband.py
+python ../tests/diagnosis/foundation/layer1/test_channel_consensus.py
+python ../tests/diagnosis/foundation/layer1/test_recommendation.py
+python ../tests/diagnosis/foundation/layer1/test_msb_correctness.py
 
 # Layer 2
 python ../tests/diagnosis/foundation/layer2/test_features_correctness.py
@@ -168,7 +208,22 @@ python ../tests/diagnosis/foundation/layer2/test_health_score_correctness.py
 python ../tests/diagnosis/foundation/layer2/test_rule_based_correctness.py
 python ../tests/diagnosis/foundation/layer2/test_planetary_demod_correctness.py
 
+# Layer 3
+python ../tests/diagnosis/foundation/layer3/test_engine_integration.py
+python ../tests/diagnosis/foundation/layer3/test_ensemble_integration.py
+python ../tests/diagnosis/foundation/layer3/test_analyzer_integration.py
+
+# Layer 4
+python ../tests/diagnosis/foundation/layer4/test_engine_deep.py
+
+# Layer 5
+python ../tests/diagnosis/foundation/layer5/test_ensemble_helpers.py
+python ../tests/diagnosis/foundation/layer5/test_analyzer_helpers.py
+
 # 绘图（独立运行，不重跑分析）
 python ../tests/diagnosis/foundation/layer1/plot_results.py
 python ../tests/diagnosis/foundation/layer2/plot_results.py
+python ../tests/diagnosis/foundation/layer3/plot_results.py
+python ../tests/diagnosis/foundation/layer4/plot_results.py
+python ../tests/diagnosis/foundation/layer5/plot_results.py
 ```
