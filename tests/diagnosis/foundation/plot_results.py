@@ -124,22 +124,39 @@ def plot_envelope_correctness():
     plt.close(fig)
     print("  [OK] envelope_correctness.png")
 
-    # 真实数据 SNR 对比 (HUSTbear + CW)
-    fig2, ax2 = plt.subplots(figsize=(10, 5))
+    # 真实数据 SNR 对比 (HUSTbear + CW) —— 加入标注帮助理解
+    fig2, ax2 = plt.subplots(figsize=(12, 5))
     real_data = data.get("real_hustbear", []) + data.get("real_cw", [])
     if real_data:
-        labels = [f"{d.get('dataset','')}-{d['description']}" for d in real_data]
+        labels = [f"{d.get('dataset','')}\n{d['description']}" for d in real_data]
         bpfo_snrs = [d.get("snr", {}).get("BPFO", 0) for d in real_data]
         bpfi_snrs = [d.get("snr", {}).get("BPFI", 0) for d in real_data]
         x = np.arange(len(labels))
         w = 0.35
-        ax2.bar(x - w/2, bpfo_snrs, w, label='BPFO SNR', color='#165DFF')
-        ax2.bar(x + w/2, bpfi_snrs, w, label='BPFI SNR', color='#FAAD14')
-        ax2.axhline(y=3.0, color='red', linestyle='--', alpha=0.5, label='SNR=3')
+        b1 = ax2.bar(x - w/2, bpfo_snrs, w, label='BPFO SNR (外圈指标)', color='#165DFF')
+        b2 = ax2.bar(x + w/2, bpfi_snrs, w, label='BPFI SNR (内圈指标)', color='#FAAD14')
+
+        # 标注阈值线和说明
+        ax2.axhline(y=3.0, color='red', linestyle='--', alpha=0.5)
+        ax2.text(len(x)-0.5, 3.2, '← SNR>3 判定为"检出故障"', fontsize=9, color='red', ha='right')
+
+        # 在每个柱上标注是否通过
+        for i, (bpfo, bpfi) in enumerate(zip(bpfo_snrs, bpfi_snrs)):
+            d = real_data[i]
+            expect = d.get("expect_fault", "none")
+            if expect == "BPFO" and bpfo > 3:
+                ax2.annotate('✓ 外圈检出', (x[i], max(bpfo, bpfi)+2), ha='center', fontsize=8, color='green')
+            elif expect == "BPFI" and bpfi > 3:
+                ax2.annotate('✓ 内圈检出', (x[i], max(bpfo, bpfi)+2), ha='center', fontsize=8, color='green')
+            elif expect == "none" and bpfo < 3 and bpfi < 3:
+                ax2.annotate('✓ 正确(健康)', (x[i], max(bpfo, bpfi)+2), ha='center', fontsize=8, color='green')
+            elif expect != "none":
+                ax2.annotate('✗ 未检出', (x[i], max(bpfo, bpfi)+2), ha='center', fontsize=8, color='red')
+
         ax2.set_xticks(x)
         ax2.set_xticklabels(labels, fontsize=8)
-        ax2.set_ylabel("SNR")
-        ax2.set_title("真实数据 — BPFO/BPFI 检出 SNR")
+        ax2.set_ylabel("信噪比 SNR (越高越显著)")
+        ax2.set_title("真实数据 — 轴承故障频率检出\n✓=正确检出/未误报, ✗=漏检, 红色虚线=检出阈值")
         ax2.legend()
         plt.tight_layout()
         fig2.savefig(PLOT_DIR / "envelope_real_snr.png", dpi=150)
@@ -177,17 +194,41 @@ def plot_order_tracking():
     plt.close(fig)
     print("  [OK] order_tracking.png")
 
-    # 真实数据转频估计
-    fig2, ax2 = plt.subplots(figsize=(10, 4))
+    # 真实数据转频估计（含预期范围）
+    fig2, ax2 = plt.subplots(figsize=(12, 5))
     real_data = (data.get("real_hustbear", []) or []) + (data.get("real_cw", []) or [])
     if real_data:
-        labels = [f"{d.get('dataset','')}-{d['file'][:10]}" for d in real_data]
-        rfreqs = [d["estimated_rot_freq_Hz"] for d in real_data]
-        colors = ['#165DFF' if 'health' in d.get('description','').lower() or '健康' in d.get('description','')
-                  else '#F5222D' for d in real_data]
-        ax2.barh(labels, rfreqs, color=colors)
-        ax2.set_xlabel("估计转频 (Hz)")
-        ax2.set_title("真实数据 — 转频估计")
+        labels = [f"{d.get('dataset','')}\n{d.get('description','')[:12]}" for d in real_data]
+        y_pos = range(len(labels))
+
+        for i, d in enumerate(real_data):
+            est = d.get("estimated_rot_freq_Hz", 0)
+            # 绘制估计值点
+            ax2.scatter(est, i, color='#165DFF', s=80, zorder=3, edgecolors='white')
+            ax2.text(est + 1, i, f"{est:.1f}Hz", va='center', fontsize=8, color='#165DFF')
+
+            # 如果有预期范围，绘制灰色范围带
+            exp_range = d.get("expected_range_Hz")
+            if exp_range and len(exp_range) == 2 and exp_range[1] > 0:
+                ax2.barh(i, exp_range[1] - exp_range[0], left=exp_range[0], height=0.3,
+                         color='lightgray', alpha=0.6, zorder=1)
+                ax2.text(exp_range[1] + 1, i + 0.15, f"预期\n{exp_range[0]}-{exp_range[1]}Hz",
+                         fontsize=7, color='gray', va='bottom')
+
+            # 标记是否通过
+            in_range = d.get("in_expected_range")
+            if in_range is True:
+                ax2.annotate('✓', (est, i - 0.35), ha='center', color='green', fontsize=12, fontweight='bold')
+            elif in_range is False:
+                ax2.annotate('✗', (est, i - 0.35), ha='center', color='red', fontsize=12, fontweight='bold')
+            elif in_range is None:
+                ax2.text(est, i - 0.35, '?', ha='center', fontsize=10, color='gray')
+
+        ax2.set_yticks(list(y_pos))
+        ax2.set_yticklabels(labels, fontsize=8)
+        ax2.set_xlabel("转频 (Hz)")
+        ax2.set_title("真实数据 — 转频估计 vs 预期范围\n灰色带=预期转速范围, 蓝点=估计值, ✓=通过 ✗=偏离")
+        ax2.grid(axis='x', alpha=0.3)
         plt.tight_layout()
         fig2.savefig(PLOT_DIR / "order_real_rotfreq.png", dpi=150)
         plt.close(fig2)

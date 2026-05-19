@@ -130,9 +130,16 @@ def test_real_hustbear_order():
 
 
 def test_real_cw_order():
-    """真实 CW 变速数据：转频估计"""
+    """真实 CW 变速数据：变速阶次跟踪应检测转速变化并估计中位转频"""
     print("\n--- CW 变速数据阶次分析 ---")
     results = []
+
+    # 来自 AGENTS.md 的已知转速范围
+    CW_EXPECTED = {
+        "H-A-1.npy": {"range": (14.1, 23.8), "desc": "升速"},
+        "I-A-1.npy": {"range": (12.5, 27.8), "desc": "升速"},
+        "O-A-1.npy": {"range": (14.8, 27.1), "desc": "升速"},
+    }
 
     data_dir = Path(r"D:\code\CNN\CW\down8192_CW")
     test_files = [
@@ -148,16 +155,29 @@ def test_real_cw_order():
             continue
 
         sig = np.load(str(fpath)).astype(np.float64)[:FS * 5]
-        rot_freq = estimate_rot_freq_spectrum(sig, FS, freq_range=freq_range)
+
+        # 变速阶次跟踪：使用云端已有的 varying_speed 方法
+        orders_v, spec_v, median_rf, std_rf = _compute_order_spectrum_varying_speed(
+            sig, FS, freq_range=freq_range, samples_per_rev=512, max_order=20,
+        )
+
+        exp = CW_EXPECTED.get(fname, {})
+        exp_range = exp.get("range", (0, 0))
+        in_range = exp_range[0] <= median_rf <= exp_range[1] if exp_range[1] > 0 else None
 
         results.append({
             "dataset": "CW",
             "file": fname,
-            "description": desc,
-            "estimated_rot_freq_Hz": round(rot_freq, 2),
-            "estimated_rot_rpm": round(rot_freq * 60, 0),
+            "description": f"{desc} ({exp.get('desc','')})",
+            "estimated_rot_freq_Hz": round(median_rf, 2),
+            "estimated_rot_std_Hz": round(std_rf, 2),
+            "expected_range_Hz": list(exp_range),
+            "in_expected_range": in_range,
+            "estimated_rot_rpm": round(median_rf * 60, 0),
         })
-        print(f"  [{desc}] 转频={rot_freq:.1f}Hz ({rot_freq*60:.0f}RPM)")
+        status = "PASS" if in_range else ("WARN" if in_range is None else "FAIL")
+        print(f"  [{status}] {desc}: median={median_rf:.1f}Hz ±{std_rf:.1f}, "
+              f"expected {exp_range[0]:.1f}-{exp_range[1]:.1f}Hz")
 
     return results
 
