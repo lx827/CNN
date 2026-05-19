@@ -188,10 +188,10 @@ def plot_bearing():
 
     items = []
     for cat, vals in data.items():
-        if cat == "summary":
+        if cat in ("summary", "real_data_hustbear"):
             continue
         for it in vals:
-            if "target_freq" in it:
+            if "target_freq" in it and "test" in it:
                 items.append(it)
 
     if not items:
@@ -268,10 +268,10 @@ def plot_bearing_advanced():
 
     items = []
     for cat, vals in data.items():
-        if cat == "summary":
+        if cat in ("summary", "real_data_hustbear"):
             continue
         for it in vals:
-            if "target_freq" in it:
+            if "target_freq" in it and "test" in it:
                 items.append(it)
 
     if not items:
@@ -1074,8 +1074,10 @@ def main():
     plot_planetary()                    # 09
     plot_rule_based()                   # 10
     plot_summary()                      # 11
+    plot_bearing_family()               # 12 (新增)
+    plot_gear_separation()              # 13 (新增)
 
-    print(f"\n共 11 张图表 → {PLOT_DIR}")
+    print(f"\n共 13 张图表 → {PLOT_DIR}")
 
 
 if __name__ == "__main__":
