@@ -490,6 +490,54 @@ def test_analyzer_hustgearbox():
 
 
 # ═══════════════════════════════════════════════════════════
+# 5. gear/__init__ 聚合函数
+# ═══════════════════════════════════════════════════════════
+
+def test_gear_init_functions():
+    """compute_er / _evaluate_gear_faults"""
+    print("\n--- gear/__init__ 聚合函数 ---")
+    results = []
+    from app.services.diagnosis.gear import compute_er, _evaluate_gear_faults
+
+    # compute_er: 需要 differential_signal + tsa_signal
+    sig = load_npy(WTGEARBOX_DIR, "Br_B1_20-c1.npy")
+    if sig is not None:
+        try:
+            # 构造 TSA 信号和差分信号
+            from app.services.diagnosis.signal_utils import compute_fft_spectrum
+            tsa = sig[:len(sig)//2].copy()
+            diff_sig = np.diff(tsa, prepend=tsa[0])
+            er = compute_er(diff_sig, tsa, mesh_freq=21.875*20, fs=FS)
+            er_ok = er >= 0
+            results.append({"test": "compute_er", "er_value": round(float(er), 4), "passed": er_ok})
+            print(f"  [{'PASS' if er_ok else 'FAIL'}] compute_er: ER={er:.4f}")
+        except Exception as e:
+            results.append({"test": "compute_er", "passed": False, "error": str(e)[:100]})
+            print(f"  [FAIL] compute_er: {str(e)[:80]}")
+
+    # _evaluate_gear_faults: 需要 gear_result dict
+    gear_result = {
+        "planet_count": 4,
+        "ser": 8.5,
+        "car": 1.5e9,
+        "fm4": 3.2,
+        "order_kurtosis": 25.0,
+        "order_peak_concentration": 0.15,
+        "sideband_count": 8,
+    }
+    try:
+        ev = _evaluate_gear_faults(gear_result)
+        has_warning = any(v.get("warning") or v.get("critical") for v in ev.values() if isinstance(v, dict))
+        results.append({"test": "evaluate_gear_faults", "keys": list(ev.keys()), "has_warning": has_warning, "passed": len(ev) > 0})
+        print(f"  [{'PASS' if len(ev) > 0 else 'FAIL'}] _evaluate_gear_faults: keys={list(ev.keys())}, has_warning={has_warning}")
+    except Exception as e:
+        results.append({"test": "evaluate_gear_faults", "passed": False, "error": str(e)[:100]})
+        print(f"  [FAIL] _evaluate_gear_faults: {str(e)[:80]}")
+
+    return results
+
+
+# ═══════════════════════════════════════════════════════════
 # main
 # ═══════════════════════════════════════════════════════════
 
@@ -511,6 +559,7 @@ def main():
         "analyzer_cw": test_analyzer_cw(),
         "analyzer_wtgearbox": test_analyzer_wtgearbox(),
         "analyzer_hustgearbox": test_analyzer_hustgearbox(),
+        "gear_init_functions": test_gear_init_functions(),
     }
 
     total = passed = 0

@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 from app.services.diagnosis.engine import (
     DiagnosisEngine, DenoiseMethod, _evaluate_bearing_faults_statistical,
+    _evaluate_bearing_faults,
 )
 from tests.diagnosis.foundation.layer1.synthetic_signals import NumpyEncoder
 
@@ -266,6 +267,45 @@ def test_evaluate_bearing():
 
 
 # ═══════════════════════════════════════════════════════════
+# 3b. _evaluate_bearing_faults — 物理参数路径
+# ═══════════════════════════════════════════════════════════
+
+def test_evaluate_bearing_physical():
+    """_evaluate_bearing_faults: 物理参数路径"""
+    print("\n--- _evaluate_bearing_faults ---")
+    results = []
+
+    sig = load_npy(HUSTBEAR_DIR, "O_20Hz-X.npy")
+    if sig is not None:
+        from app.services.diagnosis.bearing import envelope_analysis
+        try:
+            env_res = envelope_analysis(sig, FS)
+            ef = env_res.get("envelope_freq", [])
+            ea = env_res.get("envelope_amp", [])
+            if len(ef) > 0:
+                bearing_params = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
+                ev = _evaluate_bearing_faults(bearing_params, ef, ea, rot_freq=20.0)
+                has_bpfo = "BPFO" in ev
+                has_bpfi = "BPFI" in ev
+                passed = has_bpfo or has_bpfi  # 至少检出一种
+                results.append({
+                    "test": "eval_bearing_physical",
+                    "has_BPFO": has_bpfo,
+                    "has_BPFI": has_bpfi,
+                    "faults_found": list(ev.keys()),
+                    "passed": passed,
+                })
+                print(f"  [{'PASS' if passed else 'FAIL'}] 物理评估: faults={list(ev.keys())}")
+        except Exception as e:
+            results.append({"test": "eval_bearing_physical", "passed": False, "error": str(e)[:100]})
+            print(f"  [FAIL] 物理评估: {str(e)[:80]}")
+    else:
+        results.append({"test": "eval_bearing_skip", "passed": True, "skip": "no data"})
+        print("  [SKIP] 无数据集")
+    return results
+
+
+# ═══════════════════════════════════════════════════════════
 # 4. analyze_research_ensemble — 委托 ensemble
 # ═══════════════════════════════════════════════════════════
 
@@ -353,6 +393,7 @@ def main():
         "rot_freq_real": test_rot_freq_real(),
         "rot_freq_gearbox": test_rot_freq_gearbox(),
         "evaluate_bearing": test_evaluate_bearing(),
+        "evaluate_bearing_physical": test_evaluate_bearing_physical(),
         "analyze_research_ensemble": test_analyze_research_ensemble(),
         "ensemble_gearbox": test_ensemble_gearbox(),
     }
