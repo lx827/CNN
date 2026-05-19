@@ -174,25 +174,7 @@
                 <el-option label="CEEMDAN包络" value="ceemdan_envelope" />
                 <el-option label="VMD包络" value="vmd_envelope" />
               </el-select>
-              <el-select
-                v-if="!computedEnvelope"
-                v-model="envelopeDenoise"
-                size="small"
-                style="width: 130px"
-              >
-                <el-option label="无预处理" value="none" />
-                <el-option label="小波去噪" value="wavelet" />
-                <el-option label="VMD降噪" value="vmd" />
-                <el-option label="小波+VMD" value="wavelet_vmd" />
-                <el-option label="小波+LMS" value="wavelet_lms" />
-                <el-option label="EMD降噪" value="emd" />
-                <el-option label="CEEMDAN降噪" value="ceemdan" />
-                <el-option label="WP降噪" value="wavelet_packet" />
-                <el-option label="CEEMDAN+WP降噪" value="ceemdan_wp" />
-                <el-option label="EEMD降噪" value="eemd" />
-                <el-option label="S-G平滑" value="savgol" />
-              </el-select>
-              <el-tag v-else type="success" size="small" effect="plain">{{ envelopeMethodLabel }}</el-tag>
+              <el-tag v-if="computedEnvelope" type="success" size="small" effect="plain">{{ envelopeMethodLabel }}</el-tag>
               <el-button
                 v-if="!computedEnvelope"
                 type="primary"
@@ -788,7 +770,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import VibrationChart from '../components/charts/VibrationChart.vue'
 import DeviceTable from '../components/dataview/DeviceTable.vue'
@@ -1360,12 +1342,10 @@ const onChannelChange = () => {
   })
 }
 
-const onDetrendChange = () => {
-  // 去趋势开关切换时，重新加载当前已显示的内容
+watch(enableDetrend, () => {
+  if (!selectedDevice.value || !selectedBatch.value) return
   timeOption.value = null
-  nextTick(() => {
-    loadTimeDomain()
-  })
+  nextTick(() => loadTimeDomain())
   if (computedFFT.value) computeFFT()
   if (computedSTFT.value) computeSTFT()
   if (computedEnvelope.value) computeEnvelope()
@@ -1374,18 +1354,19 @@ const onDetrendChange = () => {
   if (computedStats.value) { windowedOption.value = null; computeStats() }
   if (computedGear.value) computeGear()
   if (computedFullAnalysis.value) computeFullAnalysis()
-}
+})
 
-const onMaxFreqChange = () => {
-  // 频率范围改变时，如果已计算 FFT/STFT/包络/阶次，重新计算
+watch(maxFreq, () => {
   if (computedFFT.value) computeFFT()
   if (computedSTFT.value) computeSTFT()
   if (computedEnvelope.value) computeEnvelope()
   if (computedOrder.value) computeOrder()
-}
+})
 
-const onDenoiseChange = () => {
-  // 预处理方法改变时，重新计算所有已展开的分析
+watch(denoiseMethod, () => {
+  if (!selectedDevice.value || !selectedBatch.value) return
+  timeOption.value = null
+  nextTick(() => loadTimeDomain())
   if (computedFFT.value) computeFFT()
   if (computedSTFT.value) computeSTFT()
   if (computedEnvelope.value) computeEnvelope()
@@ -1393,8 +1374,7 @@ const onDenoiseChange = () => {
   if (computedCepstrum.value) computeCepstrum()
   if (computedStats.value) computeStats()
   if (computedGear.value) computeGear()
-  if (computedFullAnalysis.value) computeFullAnalysis()
-}
+})
 
 // ========== 时域波形（始终自动加载） ==========
 const loadTimeDomain = async () => {
@@ -1403,7 +1383,8 @@ const loadTimeDomain = async () => {
       selectedDevice.value.device_id,
       selectedBatch.value.batch_index,
       selectedChannel.value,
-      enableDetrend.value
+      enableDetrend.value,
+      denoiseMethod.value
     )
     const d = res.data
     if (!d) return
@@ -1440,7 +1421,8 @@ const computeFFT = async () => {
       selectedBatch.value.batch_index,
       selectedChannel.value,
       maxFreq.value,
-      enableDetrend.value
+      enableDetrend.value,
+      denoiseMethod.value
     )
     const d = res.data
     if (!d) return
@@ -1488,7 +1470,8 @@ const computeSTFT = async () => {
       maxFreq.value,
       stftNperseg.value,
       stftNoverlap.value,
-      enableDetrend.value
+      enableDetrend.value,
+      denoiseMethod.value
     )
     const d = res.data
     if (!d) return
@@ -1560,7 +1543,7 @@ const computeEnvelope = async () => {
       1000,
       enableDetrend.value,
       envelopeMethod.value,
-      envelopeDenoise.value
+      denoiseMethod.value
     )
     const d = res.data
     if (!d) return
@@ -1609,7 +1592,8 @@ const computeOrder = async () => {
       orderFreqMax.value,
       orderSamplesPerRev.value,
       50,
-      enableDetrend.value
+      enableDetrend.value,
+      denoiseMethod.value
     )
     const d = res.data
     if (!d) return
@@ -1701,7 +1685,8 @@ const computeCepstrum = async () => {
       selectedBatch.value.batch_index,
       selectedChannel.value,
       cepstrumMaxQuefrency.value,
-      enableDetrend.value
+      enableDetrend.value,
+      denoiseMethod.value
     )
     const d = res.data
     if (!d) return
@@ -1889,7 +1874,8 @@ const computeStats = async () => {
       selectedChannel.value,
       statsWindowSize.value,
       statsStep.value,
-      enableDetrend.value
+      enableDetrend.value,
+      denoiseMethod.value
     )
     statsData.value = res.data
     computedStats.value = true
@@ -1999,7 +1985,8 @@ const onExportCSV = () => {
     selectedDevice.value.device_id,
     selectedBatch.value.batch_index,
     selectedChannel.value,
-    enableDetrend.value
+    enableDetrend.value,
+    denoiseMethod.value
   )
 }
 
