@@ -277,7 +277,7 @@ peak_amp = found["amp"] if found else 0.0
 | 频带能量计算 | `signal_utils.py:280` `_band_energy` | `rule_based.py:307` `_band_energy` | ✅ 已修复 (2026-05-19) |
 | 阶次带能量计算 | `signal_utils.py:290` `_order_band_energy` | `rule_based.py:45` `_order_band_energy` | ✅ 已修复 (2026-05-19) |
 | 去直流 | `signal_utils.py:91` `remove_dc` | `features.py:276` `remove_dc` (实际是线性去趋势) | ✅ 已修复 (2026-05-19) — 改为 `prepare_signal(detrend=True)` |
-| Excess 峭度 | `emd_denoise.py:605` `_excess_kurtosis` | `sensitive_selector.py:58` `compute_excess_kurtosis` | ⬜ 待修复 |
+| Excess 峭度 | `emd_denoise.py:605` `_excess_kurtosis` | `sensitive_selector.py:58` `compute_excess_kurtosis` | ✅ 已修复 (2026-05-19) — 统一为 `kurtosis(x, fisher=True)` |
 
 ### 5.3 待修复 —— 内联计算（应调用已有原子函数）
 
