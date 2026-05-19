@@ -148,7 +148,7 @@ def test_fm4(tsa_res):
 # ═══════════════════════════════════════════════════════════
 
 def test_car():
-    """CAR：合成含周期性成分的信号验证"""
+    """CAR：合成含周期性成分的信号验证 + 噪声区分力"""
     print("\n--- compute_car ---")
     results = []
 
@@ -160,26 +160,27 @@ def test_car():
 
     car_val = compute_car(sig, FS, rot_freq=25.0, n_harmonics=3, tolerance_hz=500.0)
 
-    # CAR > 1 表示倒频谱中周期性成分显著高于背景
-    car_ok = car_val > 1.0
+    # 含周期性成分的信号 CAR 应显著 > 1
+    car_ok = car_val > 4.0
     results.append({
         "test": "car_periodic_signal",
         "car": round(car_val, 4),
         "passed": car_ok,
     })
-    print(f"  [{'PASS' if car_ok else 'FAIL'}] CAR(周期性信号): {car_val:.3f}")
+    print(f"  [{'PASS' if car_ok else 'FAIL'}] CAR(周期性信号): {car_val:.3f} (期望>4.0)")
 
-    # 纯噪声：CAR 不应为 nan/inf，且峰值区域未检出时应返回 0
+    # 纯噪声：CAR 应接近 1 或略低（无明显周期性成分）
     np.random.seed(42)
     noise = np.random.randn(int(4.0 * FS))
     car_noise = compute_car(noise, FS, rot_freq=25.0, n_harmonics=3)
-    noise_ok = np.isfinite(car_noise)  # 噪声没有强周期性，但算法可能返回极大值（背景极小的边界情况）
+    # 噪声无周期性 → CAR 不应远大于 1；同时不能是 nan/inf
+    noise_ok = np.isfinite(car_noise) and car_noise < 5.0
     results.append({
         "test": "car_noise",
         "car": round(car_noise, 4) if np.isfinite(car_noise) else str(car_noise),
         "passed": noise_ok,
     })
-    print(f"  [{'PASS' if noise_ok else 'FAIL'}] CAR(噪声): {car_noise:.3f}")
+    print(f"  [{'PASS' if noise_ok else 'FAIL'}] CAR(噪声): {car_noise:.3f} (期望<5.0, isfinite)")
 
     return results
 

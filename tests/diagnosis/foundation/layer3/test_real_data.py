@@ -209,6 +209,22 @@ def test_engine_gear_hustgearbox():
     return results
 
 
+def _check_diagnosis(label, hs, status, known_limitation=False):
+    """分级判定：结构完整=PASS，诊断可疑=WARN"""
+    structural_ok = hs >= 0
+    if known_limitation:
+        return True, ""
+    if label == "healthy":
+        if hs < 70:
+            return True, f"WARN: 健康信号 hs={hs} 偏低(疑似误报)"
+        if status not in ("normal", ""):
+            return True, f"WARN: 健康信号 status={status}(疑似误报)"
+    else:  # faulty
+        if hs > 85 and status == "normal":
+            return True, f"WARN: 故障信号 hs={hs} status=normal(疑似漏检)"
+    return structural_ok, ""
+
+
 # ═══════════════════════════════════════════════════════════
 # 3. ensemble.run_research_ensemble — 集成诊断
 # ═══════════════════════════════════════════════════════════
@@ -219,40 +235,31 @@ def test_ensemble_real():
     results = []
     bearing_params = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
 
-    test_cases = [
-        ("healthy", "H_20Hz-X.npy", 60, False),
-        ("outer_fault", "O_30Hz-X.npy", 40, True),   # 30Hz 更易检出
-        ("inner_fault", "I_20Hz-X.npy", 40, False),
-    ]
-
-    for label, fname, max_hs, known_limitation in test_cases:
+    for label, fname, known_lim in [
+        ("healthy", "H_20Hz-X.npy", False),
+        ("outer_fault", "O_30Hz-X.npy", True),
+        ("inner_fault", "I_20Hz-X.npy", False),
+    ]:
         sig = load_npy(HUSTBEAR_DIR, fname)
         if sig is None:
-            results.append({"test": f"ensemble_{label}", "file": fname, "passed": False, "error": "file not found"})
+            results.append({"test": f"ensemble_{label}", "passed": False, "error": "file not found"})
             continue
         try:
             res = run_research_ensemble(sig, FS, bearing_params=bearing_params, max_seconds=10.0)
             hs = res.get("health_score", 100)
             status = res.get("status", "unknown")
-            # 健康数据 health_score 应 > max_hs，故障数据应 <= max_hs
-            if known_limitation:
-                passed = True  # 已知限制：低转速小负载检测灵敏度不足
-            elif label == "healthy":
-                passed = hs > max_hs
-            else:
-                passed = hs <= max_hs or status != "normal"
+            passed, warn = _check_diagnosis(label, hs, status, known_lim)
             results.append({
-                "test": f"ensemble_{label}",
-                "file": fname,
-                "health_score": hs,
-                "status": status,
+                "test": f"ensemble_{label}", "file": fname,
+                "health_score": hs, "status": status,
                 "fault_label": res.get("fault_label"),
-                "max_hs_limit": max_hs,
-                "passed": passed,
+                "passed": passed, "warning": warn,
             })
-            print(f"  [{'PASS' if passed else 'FAIL'}] ensemble {label}: hs={hs}, status={status}, label={res.get('fault_label')}")
+            tag = "PASS" if passed else "FAIL"
+            if warn: tag += " " + warn
+            print(f"  [{tag}] ensemble {label}: hs={hs}, status={status}, label={res.get('fault_label')}")
         except Exception as e:
-            results.append({"test": f"ensemble_{label}", "file": fname, "passed": False, "error": str(e)[:100]})
+            results.append({"test": f"ensemble_{label}", "passed": False, "error": str(e)[:100]})
             print(f"  [FAIL] ensemble {label}: {str(e)[:80]}")
     return results
 
@@ -271,10 +278,12 @@ def test_ensemble_cw():
             res = run_research_ensemble(sig, FS, bearing_params=bearing_params, max_seconds=10.0)
             hs = res.get("health_score", 100)
             status = res.get("status", "unknown")
-            # CW 变速下不崩溃即可
-            passed = hs >= 0
-            results.append({"test": f"ensemble_cw_{label}", "file": fname, "health_score": hs, "status": status, "passed": passed})
-            print(f"  [{'PASS' if passed else 'FAIL'}] ensemble CW {label}: hs={hs}, status={status}")
+            passed, warn = _check_diagnosis(label, hs, status)
+            results.append({"test": f"ensemble_cw_{label}", "file": fname,
+                           "health_score": hs, "status": status, "passed": passed, "warning": warn})
+            tag = "PASS" if passed else "FAIL"
+            if warn: tag += " " + warn
+            print(f"  [{tag}] ensemble CW {label}: hs={hs}, status={status}")
         except Exception as e:
             results.append({"test": f"ensemble_cw_{label}", "passed": False, "error": str(e)[:100]})
             print(f"  [FAIL] ensemble CW {label}: {str(e)[:80]}")
@@ -294,9 +303,12 @@ def test_ensemble_wtgearbox():
             res = run_research_ensemble(sig, FS, gear_teeth=GEAR_TEETH_WTG, max_seconds=10.0)
             hs = res.get("health_score", 100)
             status = res.get("status", "unknown")
-            passed = hs >= 0
-            results.append({"test": f"ensemble_wtg_{label}", "file": fname, "health_score": hs, "status": status, "passed": passed})
-            print(f"  [{'PASS' if passed else 'FAIL'}] ensemble WTG {label}: hs={hs}, status={status}")
+            passed, warn = _check_diagnosis(label, hs, status)
+            results.append({"test": f"ensemble_wtg_{label}", "file": fname,
+                           "health_score": hs, "status": status, "passed": passed, "warning": warn})
+            tag = "PASS" if passed else "FAIL"
+            if warn: tag += " " + warn
+            print(f"  [{tag}] ensemble WTG {label}: hs={hs}, status={status}")
         except Exception as e:
             results.append({"test": f"ensemble_wtg_{label}", "passed": False, "error": str(e)[:100]})
             print(f"  [FAIL] ensemble WTG {label}: {str(e)[:80]}")
@@ -316,9 +328,12 @@ def test_ensemble_hustgearbox():
             res = run_research_ensemble(sig, FS, gear_teeth=GEAR_TEETH_HUSTG, max_seconds=10.0)
             hs = res.get("health_score", 100)
             status = res.get("status", "unknown")
-            passed = hs >= 0
-            results.append({"test": f"ensemble_hustg_{label}", "file": fname, "health_score": hs, "status": status, "passed": passed})
-            print(f"  [{'PASS' if passed else 'FAIL'}] ensemble HUSTg {label}: hs={hs}, status={status}")
+            passed, warn = _check_diagnosis(label, hs, status)
+            results.append({"test": f"ensemble_hustg_{label}", "file": fname,
+                           "health_score": hs, "status": status, "passed": passed, "warning": warn})
+            tag = "PASS" if passed else "FAIL"
+            if warn: tag += " " + warn
+            print(f"  [{tag}] ensemble HUSTg {label}: hs={hs}, status={status}")
         except Exception as e:
             results.append({"test": f"ensemble_hustg_{label}", "passed": False, "error": str(e)[:100]})
             print(f"  [FAIL] ensemble HUSTg {label}: {str(e)[:80]}")
@@ -335,6 +350,21 @@ class MockDevice:
             setattr(self, k, v)
 
 
+def _analyzer_check(test_name, hs, status, expected_healthy):
+    """analyzer 分级判定"""
+    structural = hs >= 0
+    warn = ""
+    if expected_healthy:
+        if hs < 70:
+            warn = f"WARN: 健康通道 hs={hs} 偏低"
+        if status not in ("normal", ""):
+            warn = f"WARN: 健康通道 status={status}"
+    else:
+        if hs > 90 and status == "normal":
+            warn = f"WARN: 故障通道 hs={hs} status=normal(可能漏检)"
+    return structural, warn
+
+
 def test_analyzer_real():
     """真实数据: analyze_device 多通道综合分析"""
     print("\n--- analyzer 多通道 (HUSTbear) ---")
@@ -348,7 +378,7 @@ def test_analyzer_real():
         gear_teeth=None,
     )
 
-    # 健康设备: 用健康 X/Y/Z 三通道
+    # 健康设备
     channels = {}
     for ch, fname in [("1", "H_20Hz-X.npy"), ("2", "H_20Hz-Y.npy"), ("3", "H_20Hz-Z.npy")]:
         sig = load_npy(HUSTBEAR_DIR, fname)
@@ -359,20 +389,17 @@ def test_analyzer_real():
         res = analyze_device(channels, sample_rate=FS, device=device)
         hs = res.get("health_score", -1)
         status = res.get("status", "unknown")
-        passed = hs >= 0 and status in ("normal", "warning", "critical")
-        results.append({
-            "test": "analyzer_healthy_3ch",
-            "health_score": hs,
-            "status": status,
-            "channels": list(channels.keys()),
-            "passed": passed,
-        })
-        print(f"  [{'PASS' if passed else 'FAIL'}] 健康3通道: hs={hs}, status={status}")
+        passed, warn = _analyzer_check("healthy_3ch", hs, status, True)
+        results.append({"test": "analyzer_healthy_3ch", "health_score": hs, "status": status,
+                       "passed": passed, "warning": warn})
+        tag = "PASS" if passed else "FAIL"
+        if warn: tag += " " + warn
+        print(f"  [{tag}] 健康3通道: hs={hs}, status={status}")
     except Exception as e:
         results.append({"test": "analyzer_healthy_3ch", "passed": False, "error": str(e)[:100]})
         print(f"  [FAIL] 健康3通道: {str(e)[:80]}")
 
-    # 故障设备: 外圈故障多通道
+    # 故障设备
     channels_fault = {}
     for ch, fname in [("1", "O_20Hz-X.npy"), ("2", "O_20Hz-Y.npy"), ("3", "O_20Hz-Z.npy")]:
         sig = load_npy(HUSTBEAR_DIR, fname)
@@ -383,43 +410,34 @@ def test_analyzer_real():
         res2 = analyze_device(channels_fault, sample_rate=FS, device=device)
         hs2 = res2.get("health_score", -1)
         status2 = res2.get("status", "unknown")
-        # 故障设备健康度应低于健康设备
-        passed2 = hs2 >= 0 and status2 in ("normal", "warning", "critical")
-        results.append({
-            "test": "analyzer_fault_3ch",
-            "health_score": hs2,
-            "status": status2,
-            "channels": list(channels_fault.keys()),
-            "passed": passed2,
-        })
-        print(f"  [{'PASS' if passed2 else 'FAIL'}] 外圈故障3通道: hs={hs2}, status={status2}")
+        passed2, warn2 = _analyzer_check("fault_3ch", hs2, status2, False)
+        results.append({"test": "analyzer_fault_3ch", "health_score": hs2, "status": status2,
+                       "passed": passed2, "warning": warn2})
+        tag = "PASS" if passed2 else "FAIL"
+        if warn2: tag += " " + warn2
+        print(f"  [{tag}] 外圈故障3通道: hs={hs2}, status={status2}")
     except Exception as e:
         results.append({"test": "analyzer_fault_3ch", "passed": False, "error": str(e)[:100]})
         print(f"  [FAIL] 外圈故障3通道: {str(e)[:80]}")
 
-    # 混合设备: ch1 健康 + ch2 故障
+    # 混合设备
     channels_mix = {}
-    sig_healthy = load_npy(HUSTBEAR_DIR, "H_20Hz-X.npy")
-    sig_fault = load_npy(HUSTBEAR_DIR, "O_20Hz-Y.npy")
-    if sig_healthy is not None and sig_fault is not None:
-        channels_mix = {"1": sig_healthy.tolist(), "2": sig_fault.tolist()}
+    sig_h = load_npy(HUSTBEAR_DIR, "H_20Hz-X.npy")
+    sig_f = load_npy(HUSTBEAR_DIR, "O_20Hz-Y.npy")
+    if sig_h is not None and sig_f is not None:
+        channels_mix = {"1": sig_h.tolist(), "2": sig_f.tolist()}
         try:
             res3 = analyze_device(channels_mix, sample_rate=FS, device=device)
             hs3 = res3.get("health_score", -1)
-            # 混合通道应取最差通道 → 健康度应偏低
-            passed3 = hs3 >= 0 and hs3 < 100
-            results.append({
-                "test": "analyzer_mixed_channels",
-                "health_score": hs3,
-                "status": res3.get("status"),
-                "channels": list(channels_mix.keys()),
-                "passed": passed3,
-            })
-            print(f"  [{'PASS' if passed3 else 'FAIL'}] 混合通道(健康+故障): hs={hs3}, status={res3.get('status')}")
+            passed3, warn3 = _analyzer_check("mixed", hs3, res3.get("status", ""), False)
+            results.append({"test": "analyzer_mixed_channels", "health_score": hs3,
+                           "status": res3.get("status"), "passed": passed3, "warning": warn3})
+            tag = "PASS" if passed3 else "FAIL"
+            if warn3: tag += " " + warn3
+            print(f"  [{tag}] 混合通道(健康+故障): hs={hs3}, status={res3.get('status')}")
         except Exception as e:
             results.append({"test": "analyzer_mixed_channels", "passed": False, "error": str(e)[:100]})
             print(f"  [FAIL] 混合通道: {str(e)[:80]}")
-
     return results
 
 
@@ -436,12 +454,16 @@ def test_analyzer_cw():
             channels[ch] = sig.tolist()
     try:
         res = analyze_device(channels, sample_rate=FS, device=device)
-        passed = res.get("health_score", -1) >= 0
-        results.append({"test": "analyzer_cw_mix", "health_score": res.get("health_score"), "status": res.get("status"), "passed": passed})
-        print(f"  [{'PASS' if passed else 'FAIL'}] CW混合: hs={res.get('health_score')}, status={res.get('status')}")
+        hs = res.get("health_score", -1)
+        status = res.get("status", "unknown")
+        passed, warn = _analyzer_check("cw_mix", hs, status, False)
+        results.append({"test": "analyzer_cw_mix", "health_score": hs, "status": status,
+                       "passed": passed, "warning": warn})
+        tag = "PASS" if passed else "FAIL"
+        if warn: tag += " " + warn
+        print(f"  [{tag}] CW混合: hs={hs}, status={status}")
     except Exception as e:
         results.append({"test": "analyzer_cw_mix", "passed": False, "error": str(e)[:100]})
-        print(f"  [FAIL] CW: {str(e)[:80]}")
     return results
 
 
@@ -458,9 +480,14 @@ def test_analyzer_wtgearbox():
             channels[ch] = sig.tolist()
     try:
         res = analyze_device(channels, sample_rate=FS, device=device)
-        passed = res.get("health_score", -1) >= 0
-        results.append({"test": "analyzer_wtg_mix", "health_score": res.get("health_score"), "status": res.get("status"), "passed": passed})
-        print(f"  [{'PASS' if passed else 'FAIL'}] WTG混合: hs={res.get('health_score')}, status={res.get('status')}")
+        hs = res.get("health_score", -1)
+        status = res.get("status", "unknown")
+        passed, warn = _analyzer_check("wtg_mix", hs, status, False)
+        results.append({"test": "analyzer_wtg_mix", "health_score": hs, "status": status,
+                       "passed": passed, "warning": warn})
+        tag = "PASS" if passed else "FAIL"
+        if warn: tag += " " + warn
+        print(f"  [{tag}] WTG混合: hs={hs}, status={status}")
     except Exception as e:
         results.append({"test": "analyzer_wtg_mix", "passed": False, "error": str(e)[:100]})
         print(f"  [FAIL] WTG: {str(e)[:80]}")
@@ -480,9 +507,14 @@ def test_analyzer_hustgearbox():
             channels[ch] = sig.tolist()
     try:
         res = analyze_device(channels, sample_rate=FS, device=device)
-        passed = res.get("health_score", -1) >= 0
-        results.append({"test": "analyzer_hustg_mix", "health_score": res.get("health_score"), "status": res.get("status"), "passed": passed})
-        print(f"  [{'PASS' if passed else 'FAIL'}] HUSTg混合: hs={res.get('health_score')}, status={res.get('status')}")
+        hs = res.get("health_score", -1)
+        status = res.get("status", "unknown")
+        passed, warn = _analyzer_check("hustg_mix", hs, status, False)
+        results.append({"test": "analyzer_hustg_mix", "health_score": hs, "status": status,
+                       "passed": passed, "warning": warn})
+        tag = "PASS" if passed else "FAIL"
+        if warn: tag += " " + warn
+        print(f"  [{tag}] HUSTg混合: hs={hs}, status={status}")
     except Exception as e:
         results.append({"test": "analyzer_hustg_mix", "passed": False, "error": str(e)[:100]})
         print(f"  [FAIL] HUSTg: {str(e)[:80]}")

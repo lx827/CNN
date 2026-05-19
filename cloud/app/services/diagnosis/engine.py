@@ -239,7 +239,7 @@ class DiagnosisEngine:
             comb_freqs = []
             if self.gear_teeth:
                 z_in = (self.gear_teeth.get("input") or 0) if self.gear_teeth else 0
-                planet_count = (self.gear_teeth.get("planet_count") or 0) if self.gear_teeth else 0
+                planet_count = (self.gear_teeth.get("planet_count") or self.gear_teeth.get("n_planets") or 0) if self.gear_teeth else 0
                 z_sun = (self.gear_teeth.get("sun") or 0) if self.gear_teeth else 0
                 z_ring = (self.gear_teeth.get("ring") or 0) if self.gear_teeth else 0
                 if z_in > 0 and rot_freq is not None and rot_freq > 0:
@@ -377,7 +377,7 @@ class DiagnosisEngine:
         z_planet = int(float(self.gear_teeth.get("planet") or 0)) if self.gear_teeth else 0
 
         # 行星齿轮箱参数（供 _evaluate_gear_faults 使用）
-        planet_count = int(self.gear_teeth.get("planet_count") or 0) if self.gear_teeth else 0
+        planet_count = int(self.gear_teeth.get("planet_count") or self.gear_teeth.get("n_planets") or 0) if self.gear_teeth else 0
 
         # 兼容：若配置了行星轮数但无 "sun" 键，将 "input" 视为太阳轮齿数
         if planet_count >= 3 and z_sun <= 0 and z_in > 0:
