@@ -1009,6 +1009,15 @@ def _evaluate_bearing_faults(
                 }
 
         # 合并：物理参数路径 + 统计路径（以 _stat 后缀区分）
+        # 有物理参数时，若 BPFO/BPFI/BSF 全部未检出，统计指标不独立报警
+        # （变速工况下统计 SNR 可能被转速调制主导，反而高于故障信号）
+        if has_params:
+            phys_any = any(v.get("significant") for k, v in param_indicators.items()
+                          if k in ("BPFO", "BPFI", "BSF"))
+            if not phys_any:
+                for v in stat_indicators.values():
+                    if isinstance(v, dict):
+                        v["significant"] = False
         return {**param_indicators, **{f"{k}_stat": v for k, v in stat_indicators.items()}}
 
     # 无物理参数时，纯粹统计诊断
