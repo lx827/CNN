@@ -88,7 +88,6 @@ tests/
 │   │   └── output/                          # JSON 结果 + PNG 图表
 │   ├── debug/                             # 调试脚本（临时）
 │   │   └── debug_cw_fp.py                 # CW 健康数据误判诊断
-│   ├── algorithm_evaluation_framework.py  # 算法评估框架（独立）
 │   └── output/                            # 测试输出（图表等）
 └── output/                                # 顶层测试输出
 ```
@@ -277,17 +276,9 @@ python ../tests/diagnosis/evaluation/main.py
 | 文件 | 用途 |
 |------|------|
 | `test_effectiveness.py` | 参数驱动跳过逻辑测试：仅轴承/仅齿轮/都有/都无 四种场景 |
-| `test_core_algorithms.py` | 核心算法在真实数据上的有效性验证 |
 | `test_dataset_effectiveness.py` | 数据集本身的诊断可行性评估 |
 
-### 7.2 基准评估 (`benchmark/`)
-
-| 文件 | 用途 |
-|------|------|
-| `test_benchmark.py` | 三个数据集（HUSTbear/CW/WTgearbox）批量评估，输出检出率/误报率/分离度 |
-| `test_rot_freq_estimation.py` | 转频估计算法准确性测试 |
-
-### 7.3 竞赛实验 (`contest/`)
+### 7.2 竞赛实验 (`contest/`)
 
 > 大创/答辩用实验脚本，一键生成图表。
 
@@ -297,7 +288,7 @@ cd /d/code/CNN/cloud
 python ../tests/diagnosis/contest/main.py
 ```
 
-### 7.4 调试 (`debug/`)
+### 7.3 调试 (`debug/`)
 
 | 文件 | 用途 |
 |------|------|
