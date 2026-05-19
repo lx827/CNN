@@ -45,7 +45,7 @@ Layer 1: 信号基元 (signal_utils, vmd_denoise — 零内部依赖)
 
 不按层测的话，你永远不知道 bug 在哪一层。
 
-**现有层覆盖速查**：见 `tests/diagnosis/foundation/TEST_ARCHITECTURE.md`。
+**现有层覆盖速查**：见 `tests/diagnosis/TEST_ARCHITECTURE.md`。
 
 ---
 
