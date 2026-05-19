@@ -115,4 +115,4 @@ figures/
 tests/diagnosis/planetary/planetary_e2e_results.json
 .githubtests/diagnosis/foundation/output/	
 tests/diagnosis/foundation/output/
-
+tests/diagnosis/foundation/layer1/output/
