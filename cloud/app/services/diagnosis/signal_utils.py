@@ -7,6 +7,87 @@ from scipy.fft import rfft, rfftfreq
 from typing import Tuple, Optional, List, Dict
 
 
+# ══════════════════════════════════════════════════════════
+# Layer 0: 原子函数（不可再分的基本操作）
+# ══════════════════════════════════════════════════════════
+
+def _search_peak_in_band(
+    axis: np.ndarray,
+    spectrum: np.ndarray,
+    target: float,
+    tolerance: float,
+) -> Optional[dict]:
+    """
+    原子函数：在目标值附近的频带内搜索峰值。
+
+    Args:
+        axis: 频率/阶次轴 (1D np.ndarray)
+        spectrum: 幅值谱 (1D np.ndarray，长度与 axis 一致)
+        target: 目标搜索中心值 (float)
+        tolerance: 搜索容差 (float, 与 axis 同单位)
+
+    Returns:
+        {"freq": float, "amp": float}  或  None (未找到)
+    """
+    axis = np.asarray(axis)
+    spectrum = np.asarray(spectrum)
+    mask = np.abs(axis - target) <= tolerance
+    if not np.any(mask):
+        return None
+    idx = int(np.argmax(spectrum[mask]))
+    abs_idx = int(np.where(mask)[0][idx])
+    return {"freq": float(axis[abs_idx]), "amp": float(spectrum[abs_idx])}
+
+
+def _estimate_background(
+    spectrum: np.ndarray,
+    method: str = "median",
+) -> float:
+    """
+    原子函数：估计频谱背景水平。
+
+    Args:
+        spectrum: 频谱幅值数组 (1D np.ndarray)
+        method: "median" | "mean" | "q75"
+
+    Returns:
+        float: 背景估计值（保证 > 0）
+    """
+    if method == "median":
+        bg = np.median(spectrum)
+    elif method == "mean":
+        bg = np.mean(spectrum)
+    elif method == "q75":
+        bg = np.percentile(spectrum, 75)
+    else:
+        bg = np.median(spectrum)
+    return max(float(bg), 1e-12)
+
+
+def _compute_peak_snr(
+    peak_amp: float,
+    spectrum: np.ndarray,
+    method: str = "median",
+) -> float:
+    """
+    原子函数：计算峰值信噪比 SNR = peak / background。
+
+    Args:
+        peak_amp: 峰值幅值 (float)
+        spectrum: 完整频谱（用于估计背景）(np.ndarray)
+        method: 背景估计方法 ("median" | "mean" | "q75")
+
+    Returns:
+        float: SNR
+    """
+    bg = _estimate_background(spectrum, method)
+    return peak_amp / bg
+
+
+# ══════════════════════════════════════════════════════════
+# Layer 1: 信号预处理
+# ══════════════════════════════════════════════════════════
+
 def remove_dc(signal: np.ndarray) -> np.ndarray:
     """去除直流分量（零均值化）"""
     return signal - np.mean(signal)
@@ -121,32 +202,29 @@ def find_peaks_in_spectrum(
         "harmonics": [],
         "sidebands": [],
     }
-    df = freqs[1] - freqs[0] if len(freqs) > 1 else 1.0
-    background = np.median(amps)
+    freqs = np.asarray(freqs)
+    amps = np.asarray(amps)
 
-    # 搜索基频
-    mask = np.abs(freqs - target_freq) <= tolerance_hz
-    if np.any(mask):
-        idx = np.argmax(amps[mask])
-        abs_idx = np.where(mask)[0][idx]
+    # 搜索基频 → 调用原子函数
+    peak = _search_peak_in_band(freqs, amps, target_freq, tolerance_hz)
+    if peak:
+        snr = _compute_peak_snr(peak["amp"], amps)
         result["fundamental"] = {
-            "freq": float(freqs[abs_idx]),
-            "amp": float(amps[abs_idx]),
-            "snr": float(amps[abs_idx] / background) if background > 0 else 0.0,
+            "freq": peak["freq"],
+            "amp": peak["amp"],
+            "snr": snr,
         }
 
-    # 搜索谐波
+    # 搜索谐波 → 复用原子函数
     for h in range(2, n_harmonics + 1):
         hf = target_freq * h
         if hf > freqs[-1]:
             break
-        hmask = np.abs(freqs - hf) <= tolerance_hz
-        if np.any(hmask):
-            idx = np.argmax(amps[hmask])
-            abs_idx = np.where(hmask)[0][idx]
+        peak_h = _search_peak_in_band(freqs, amps, hf, tolerance_hz)
+        if peak_h:
             result["harmonics"].append({
-                "freq": float(freqs[abs_idx]),
-                "amp": float(amps[abs_idx]),
+                "freq": peak_h["freq"],
+                "amp": peak_h["amp"],
                 "order": h,
             })
 
@@ -155,15 +233,7 @@ def find_peaks_in_spectrum(
 
 def compute_snr(peak_amp: float, spectrum: np.ndarray, method: str = "median") -> float:
     """计算峰值信噪比"""
-    if method == "median":
-        background = np.median(spectrum)
-    elif method == "mean":
-        background = np.mean(spectrum)
-    else:
-        background = np.percentile(spectrum, 75)
-    if background <= 0:
-        background = 1e-12
-    return peak_amp / background
+    return _compute_peak_snr(peak_amp, spectrum, method)
 
 
 def kurtosis(signal: np.ndarray, fisher: bool = False) -> float:
@@ -242,11 +312,9 @@ def estimate_rot_freq_envelope(
     envelope = envelope - np.mean(envelope)
     env_spec = np.abs(rfft(envelope))
     env_freqs = rfftfreq(len(envelope), d=1.0 / fs)
-    mask = (env_freqs >= freq_range[0]) & (env_freqs <= freq_range[1])
-    if not np.any(mask):
-        return None
-    peak_idx = np.argmax(env_spec[mask])
-    return float(env_freqs[mask][peak_idx])
+    peak = _search_peak_in_band(env_freqs, env_spec, (freq_range[0]+freq_range[1])/2,
+                                (freq_range[1]-freq_range[0])/2)
+    return peak["freq"] if peak else None
 
 
 def estimate_rot_freq_autocorr(
@@ -437,28 +505,26 @@ def estimate_rot_freq_spectrum(
     candidates = [(best_freq_spec, "spectrum")]
 
     # 中频带（200~500Hz）：常见啮合频率区域
-    mid_mask = (freqs >= 200) & (freqs <= 500)
-    if np.any(mid_mask):
-        mid_peak = freqs[mid_mask][np.argmax(spectrum[mid_mask])]
-        env_est = estimate_rot_freq_envelope(sig, fs, mid_peak, freq_range=freq_range)
+    mid_peak_info = _search_peak_in_band(freqs, spectrum, 350, 150)
+    if mid_peak_info:
+        env_est = estimate_rot_freq_envelope(sig, fs, mid_peak_info["freq"], freq_range=freq_range)
         if env_est:
             candidates.append((env_est, "envelope_mesh"))
 
     # 全局高频最强峰（100Hz ~ fs/4）
-    high_mask = (freqs >= 100) & (freqs <= fs / 4)
-    if np.any(high_mask):
-        top_idx = np.argmax(spectrum[high_mask])
-        high_peak = freqs[high_mask][top_idx]
-        env_est = estimate_rot_freq_envelope(sig, fs, high_peak, freq_range=freq_range)
+    high_peak_info = _search_peak_in_band(freqs, spectrum, (100+fs/4)/2, (fs/4-100)/2)
+    if high_peak_info:
+        env_est = estimate_rot_freq_envelope(sig, fs, high_peak_info["freq"], freq_range=freq_range)
         if env_est:
             candidates.append((env_est, "envelope_high"))
 
     try:
         nperseg = min(len(sig), max(256, int(fs)))
         wf, wp = scipy_signal.welch(sig, fs=fs, nperseg=nperseg)
-        wmask = (wf >= freq_range[0]) & (wf <= freq_range[1])
-        if np.any(wmask):
-            candidates.append((float(wf[wmask][np.argmax(wp[wmask])]), "welch"))
+        welch_peak = _search_peak_in_band(wf, wp, (freq_range[0]+freq_range[1])/2,
+                                          (freq_range[1]-freq_range[0])/2)
+        if welch_peak:
+            candidates.append((welch_peak["freq"], "welch"))
     except Exception:
         pass
 
@@ -484,9 +550,9 @@ def estimate_rot_freq_spectrum(
 
             # 1) 齿数整数验证
             if method == "envelope_mesh":
-                f_center = freqs[mid_mask][np.argmax(spectrum[mid_mask])]
+                f_center = mid_peak_info["freq"] if mid_peak_info else 0
             else:
-                f_center = freqs[high_mask][np.argmax(spectrum[high_mask])]
+                f_center = high_peak_info["freq"] if high_peak_info else 0
             teeth = f_center / f_est
             teeth_rounded = round(teeth)
             if abs(teeth - teeth_rounded) < 0.30 and 10 <= teeth_rounded <= 50:

@@ -21,7 +21,7 @@ from app.services.diagnosis.order_tracking import (
     _compute_order_spectrum, _compute_order_spectrum_multi_frame,
     _compute_order_spectrum_varying_speed,
 )
-from app.services.diagnosis.signal_utils import compute_fft_spectrum
+from app.services.diagnosis.signal_utils import compute_fft_spectrum, _search_peak_in_band
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
     NumpyEncoder, gear_mesh, sinusoidal, chirp_rotating,
 )
@@ -31,14 +31,12 @@ FS = 8192
 
 
 def _find_order_peak(order_axis, spectrum, target_order, tol=0.5):
-    """在目标阶次附近找谱峰"""
-    order_axis = np.array(order_axis)
-    spectrum = np.array(spectrum)
-    mask = np.abs(order_axis - target_order) <= tol
-    if not np.any(mask):
-        return 0.0, 0.0
-    peak_idx = np.argmax(spectrum[mask])
-    return float(order_axis[mask][peak_idx]), float(spectrum[mask][peak_idx])
+    """委托云端原子函数搜索阶次谱峰"""
+    peak = _search_peak_in_band(np.array(order_axis), np.array(spectrum),
+                                target_order, tol)
+    if peak:
+        return peak["freq"], peak["amp"]
+    return 0.0, 0.0
 
 
 # ═══════════════════════════════════════════════════════════

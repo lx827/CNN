@@ -11,6 +11,8 @@ from .signal_utils import (
     prepare_signal,
     compute_fft_spectrum,
     estimate_rot_freq_spectrum as _estimate_rot_freq_simple,
+    _search_peak_in_band,
+    _compute_peak_snr,
 )
 from .order_tracking import (
     _compute_order_spectrum_multi_frame,
@@ -959,10 +961,9 @@ def _evaluate_bearing_faults(
                     harmonic_snrs.append(h_snr)
 
             if np.any(mask):
-                peak_idx = int(np.argmax(amp_arr[mask]))
-                actual_idx = int(np.where(mask)[0][peak_idx])
-                peak_amp = float(amp_arr[actual_idx])
-                snr = peak_amp / background if background > 0 else 0.0
+                peak = _search_peak_in_band(freq_arr, amp_arr, f_hz, tol)
+                peak_amp = peak["amp"] if peak else 0.0
+                snr = _compute_peak_snr(peak_amp, amp_arr) if peak else 0.0
 
                 # 频率路径判定：仅用于故障类型标注，不用于"是否故障"判断
                 # 健康轴承也有低 SNR 的频率峰值（随机波动），所以阈值不能太低
@@ -976,10 +977,9 @@ def _evaluate_bearing_faults(
                         if sb_f <= 0 or sb_f > freq_arr[-1]:
                             continue
                         sb_tol = max(sb_f * 0.05, df * 2, sb_f * rot_freq_uncertainty * 0.5)
-                        sb_mask = np.abs(freq_arr - sb_f) <= sb_tol
-                        if np.any(sb_mask):
-                            sb_peak = float(np.max(amp_arr[sb_mask]))
-                            sb_snr = sb_peak / background if background > 0 else 0.0
+                        sb_peak_info = _search_peak_in_band(freq_arr, amp_arr, sb_f, sb_tol)
+                        if sb_peak_info:
+                            sb_snr = _compute_peak_snr(sb_peak_info["amp"], amp_arr)
                             sideband_snrs.append(sb_snr)
                     strong_sb = sum(1 for s in sideband_snrs if s > 3.0)
                     if strong_sb >= 2 and snr > 4.0 and not significant:
@@ -987,7 +987,7 @@ def _evaluate_bearing_faults(
 
                 param_indicators[name] = {
                     "theory_hz": round(f_hz, 2),
-                    "detected_hz": round(float(freq_arr[actual_idx]), 2),
+                    "detected_hz": round(peak["freq"], 2) if peak else None,
                     "peak_amp": round(peak_amp, 6),
                     "snr": round(snr, 2),
                     "significant": significant,

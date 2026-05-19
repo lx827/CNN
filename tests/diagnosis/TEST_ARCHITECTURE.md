@@ -117,6 +117,9 @@ tests/diagnosis/foundation/
 | `signal_utils` | `bandpass_filter`, `highpass_filter`, `lowpass_filter` | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `parabolic_interpolation` | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `zoom_fft_analysis` | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `_search_peak_in_band` (原子函数) | `layer1/test_signal_utils_correctness.py` (通过 find_peaks 间接) | ✅ |
+| `signal_utils` | `_estimate_background` (原子函数) | `layer1/test_signal_utils_correctness.py` (通过 compute_snr 间接) | ✅ |
+| `signal_utils` | `_compute_peak_snr` (原子函数) | `layer1/test_signal_utils_correctness.py` (通过 compute_snr 间接) | ✅ |
 | `vmd_denoise` | `vmd_decompose` / `vmd_denoise` / `vmd_select_impact_mode` | `layer1/test_vmd_denoise_correctness.py` | ✅ |
 | `health_score_continuous` | `sigmoid_deduction` / `multi_threshold_deduction` / `cascade_deduction` / `compute_continuous_deductions` | `layer1/test_health_score_continuous.py` | ✅ |
 | `bearing_sideband` | `compute_sideband_density` | `layer1/test_bearing_sideband.py` | ✅ |
@@ -195,7 +198,7 @@ tests/diagnosis/foundation/
 
 | 状态 | 数量 |
 |:--:|------|
-| ✅ 已覆盖 | **66** |
+| ✅ 已覆盖 | **69** |
 | ⚠️ 需数据集 | 1 |
 | ❌ 未覆盖 | **0** |
 
@@ -283,7 +286,7 @@ MARK_WARN = '△ WARN'       # 警告 / 边界 —— 用橙色
 - **必须并排对比**：期望值（灰色柱） vs 实际值（蓝色柱）。
 - **必须在每个柱子上方标注**：相对误差百分比 + ✓/✗。
 - **必须画参考线**：峭度理论=3（橙色虚线 + `"高斯信号峭度=3"`）；偏度理论=0。
-- ** crest_factor 正弦信号**：理论值≈√2，图上必须标注 `"理论≈1.414"`。
+- **crest_factor 正弦信号**：理论值≈√2，图上必须标注 `"理论≈1.414"`。
 
 #### 1.3 去噪类算法（VMD, wavelet, S-G, EMD...）
 
@@ -307,6 +310,7 @@ MARK_WARN = '△ WARN'       # 警告 / 边界 —— 用橙色
 ```
 
 **必须包含的量化指标（至少 2 个）：**
+
 - SNR 提升（dB）
 - 与纯净信号的相关系数
 - 特征频率保留精度（如主峰频率偏差）
@@ -354,6 +358,7 @@ MARK_WARN = '△ WARN'       # 警告 / 边界 —— 用橙色
 ```
 
 **每张轴承诊断图必须包含：**
+
 1. **理论故障频率线**：BPFO/BPFI/BSF/FTF 用橙色虚线标出，并写 `"BPFO=3.57×fr=89.3Hz"`。
 2. **检出峰值标注**：最高峰频率 + 幅值 + SNR 数值，直接写在峰值上方。
 3. **SNR 阈值线**：画一条水平橙色虚线 `"SNR=3 阈值"`，峰值超过此线才算通过。
@@ -554,6 +559,7 @@ engine.preprocess() — 分支覆盖验证
 ```
 
 **必须展示：**
+
 - 每个触发过的分支路径（用粗线连接）。
 - 每个分支的输入条件（如 `"峭度=6.5"`）。
 - 每个分支的输出结果。
@@ -705,6 +711,7 @@ Layer 2 的 3 个失败测试分析：
 - [ ] **标题自解释？** 图标题是否包含"怎样算对"（如 `"频率检出 — 误差<5%为通过"`）？
 
 **进阶项（Layer 2+ 推荐）：**
+
 - [ ] **失败可定位？** 如果这张图有红色 ✗，能否不看代码就知道是哪个输入/参数导致的？
 - [ ] **边界被覆盖？** 是否展示了空信号、极短信号、None 参数等边界情况的结果？
 - [ ] **跨方法一致性？** 对于集成类功能，是否展示了多种方法的结果对比？
