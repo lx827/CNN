@@ -457,6 +457,22 @@ async def get_channel_research_analysis(
             max_seconds,
         )
 
+        # 诊断日志：检查 ensemble 数据完整性
+        ensemble = result.get("ensemble", {})
+        logger.info(
+            "[research-analysis] device=%s batch=%s ch=%s profile=%s | "
+            "ensemble_keys=%s bearing_votes=%d gear_votes=%d "
+            "bearing_fi=%d gear_fi=%d best_bearing=%s best_gear=%s",
+            device_id, batch_index, channel, profile,
+            list(ensemble.keys()) if ensemble else "MISSING",
+            len(ensemble.get("bearing_votes", {})),
+            len(ensemble.get("gear_votes", {})),
+            len(result.get("bearing", {}).get("fault_indicators", {})),
+            len(result.get("gear", {}).get("fault_indicators", {})),
+            ensemble.get("best_bearing", "N/A"),
+            ensemble.get("best_gear", "N/A"),
+        )
+
         response_data = {
             "device_id": record.device_id,
             "batch_index": record.batch_index,
