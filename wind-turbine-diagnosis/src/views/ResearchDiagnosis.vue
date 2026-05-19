@@ -184,7 +184,7 @@
         </el-descriptions>
       </section>
 
-      <section class="panel">
+      <section v-if="result.ensemble" class="panel">
         <div class="panel-title">
           <span>集成证据</span>
           <el-tag effect="plain">{{ result.ensemble?.profile }}</el-tag>
@@ -228,7 +228,7 @@
         </el-table>
       </section>
 
-      <section class="panel wide">
+      <section v-if="result.ensemble" class="panel wide">
         <div class="panel-title">轴承算法投票</div>
         <el-table :data="bearingVoteRows" border size="small" max-height="320">
           <el-table-column prop="method" label="算法" min-width="180" />
@@ -242,7 +242,7 @@
         </el-table>
       </section>
 
-      <section class="panel wide">
+      <section v-if="result.ensemble" class="panel wide">
         <div class="panel-title">齿轮算法投票</div>
         <el-table :data="gearVoteRows" border size="small" max-height="260">
           <el-table-column prop="method" label="算法" min-width="180" />
@@ -255,7 +255,7 @@
         </el-table>
       </section>
 
-      <section class="panel wide">
+      <section v-if="result.ensemble" class="panel wide">
         <div class="panel-title">最佳算法指标</div>
         <el-table :data="bestIndicatorRows" border size="small" max-height="320">
           <el-table-column prop="source" label="来源" width="90" />
