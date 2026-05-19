@@ -20,6 +20,7 @@ from .order_tracking import (
     _compute_order_spectrum_multi_frame,
     _compute_order_spectrum_varying_speed,
     _compute_order_spectrum,
+    _order_tracking,
 )
 from .bearing import (
     envelope_analysis,
@@ -257,7 +258,15 @@ class DiagnosisEngine:
         elif self.bearing_method == BearingMethod.MED:
             result = med_envelope_analysis(arr, fs)
         elif self.bearing_method == BearingMethod.TEAGER:
-            result = teager_envelope_analysis(arr, fs)
+            # Teager 对变速敏感：先阶次跟踪角域重采样，消除转速调制后再分析
+            if rot_freq and rot_freq > 0:
+                arr_order, _ = _order_tracking(arr, fs, rot_freq, samples_per_rev=1024)
+                arr_order = arr_order - arr_order.mean()
+                # 角域重采样后等效采样率 = samples_per_rev × rot_freq
+                fs_order = 1024 * rot_freq
+                result = teager_envelope_analysis(arr_order, fs_order)
+            else:
+                result = teager_envelope_analysis(arr, fs)
         elif self.bearing_method == BearingMethod.SPECTRAL_KURTOSIS:
             result = spectral_kurtosis_envelope_analysis(arr, fs)
         elif self.bearing_method == BearingMethod.SC_SCOH:
@@ -302,7 +311,6 @@ class DiagnosisEngine:
             result.get("envelope_amp", []),
             rot_freq,
             rot_freq_std=rot_std,
-            method=self.bearing_method.value,
         )
 
         return {
@@ -886,7 +894,6 @@ def _evaluate_bearing_faults(
     env_amp: List[float],
     rot_freq: float,
     rot_freq_std: float = 0.0,
-    method: str = "",
 ) -> Dict[str, Any]:
     """
     评估轴承故障指示器 — 双路并行：
@@ -974,9 +981,7 @@ def _evaluate_bearing_faults(
 
                 # 频率路径判定：仅用于故障类型标注，不用于"是否故障"判断
                 # 健康轴承也有低 SNR 的频率峰值（随机波动），所以阈值不能太低
-                # Teager/谱峭度等方法放大瞬态能量，变速数据需更高阈值防误报
-                snr_threshold = 6.0 if method in ("teager", "spectral_kurtosis") else 4.5
-                significant = snr > snr_threshold
+                significant = snr > 4.5
 
                 # BPFI 内圈专项：边频带验证（至少 2 个边带 SNR>3）
                 sideband_snrs = []
@@ -991,7 +996,9 @@ def _evaluate_bearing_faults(
                             sb_snr = _compute_peak_snr(sb_peak_info["amp"], amp_arr)
                             sideband_snrs.append(sb_snr)
                     strong_sb = sum(1 for s in sideband_snrs if s > 3.0)
-                    if strong_sb >= 2 and snr > 4.0 and not significant:
+                    # 边带增强：需主峰 > 4.3 且包络峭度 > 5（确认冲击性，防变速调制误报）
+                    env_kurt = float(np.mean(amp_arr ** 4) / (np.mean(amp_arr ** 2) ** 2 + 1e-12))
+                    if strong_sb >= 2 and snr > 4.3 and env_kurt > 5.0 and not significant:
                         significant = True
 
                 param_indicators[name] = {
