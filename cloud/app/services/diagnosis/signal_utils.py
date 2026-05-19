@@ -84,6 +84,51 @@ def _compute_peak_snr(
     return peak_amp / bg
 
 
+def _estimate_noise_mad(arr: np.ndarray) -> float:
+    """
+    原子函数：MAD法噪声标准差估计
+
+    σ̂ = median(|arr - median(arr)|) / 0.6745
+
+    用于小波去噪等场景的鲁棒噪声水平估计。
+
+    Args:
+        arr: 一维信号数组
+
+    Returns:
+        float: 噪声标准差估计值（≥ 1e-12）
+    """
+    arr = np.asarray(arr, dtype=np.float64)
+    if len(arr) < 4:
+        return 1e-12
+    median_val = np.median(arr)
+    mad = np.median(np.abs(arr - median_val))
+    return max(float(mad / 0.6745), 1e-12)
+
+
+def _snr_by_residual_std(original: np.ndarray, denoised: np.ndarray) -> float:
+    """
+    原子函数：基于残差标准差的 SNR 改善比
+
+    SNR_imp = std(original) / std(original - denoised)
+
+    Args:
+        original: 原始信号
+        denoised: 降噪后信号（长度需与 original 一致）
+
+    Returns:
+        float: SNR 改善比（≥ 0）
+    """
+    orig = np.asarray(original, dtype=np.float64)
+    den = np.asarray(denoised, dtype=np.float64)
+    n = min(len(orig), len(den))
+    resid_std = float(np.std(orig[:n] - den[:n]))
+    orig_std = float(np.std(orig[:n]))
+    if resid_std < 1e-12:
+        return 1e12
+    return orig_std / resid_std
+
+
 # ══════════════════════════════════════════════════════════
 # Layer 1: 信号预处理
 # ══════════════════════════════════════════════════════════

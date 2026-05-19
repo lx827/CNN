@@ -13,7 +13,7 @@ from scipy.fft import rfft, irfft
 from typing import Tuple, Optional, Literal, Dict
 import pywt
 
-from .signal_utils import prepare_signal, bandpass_filter, lowpass_filter
+from .signal_utils import prepare_signal, bandpass_filter, lowpass_filter, _estimate_noise_mad
 from .vmd_denoise import vmd_denoise, vmd_select_impact_mode
 
 
@@ -49,9 +49,7 @@ def wavelet_denoise(
 
     # 用最后一层细节系数估计噪声标准差（鲁棒估计）
     detail = coeffs[-1]
-    sigma = np.median(np.abs(detail)) / 0.6745
-    if sigma < 1e-12:
-        sigma = 1e-12
+    sigma = _estimate_noise_mad(detail)
 
     # 通用阈值
     threshold = threshold_scale * sigma * np.sqrt(2 * np.log(N))
