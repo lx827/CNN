@@ -35,7 +35,7 @@ def get_channel_diagnosis(
 ) -> dict
 ```
 
-- **说明**：查询诊断缓存（优先级：精确匹配 denoise_method → 通道最新 → 批次级）
+- **说明**：查询诊断缓存（优先级：精确匹配 denoise_method → 通道最新 → 批次级）。所有返回值通过 `_sanitize_for_json` 包裹，确保数据库中的旧数据（含 numpy 类型）可被 FastAPI 序列化。
 
 ### `POST /{device_id}/{batch_index}/reanalyze`
 
