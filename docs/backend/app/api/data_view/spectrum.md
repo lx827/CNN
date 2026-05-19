@@ -16,6 +16,7 @@ def get_channel_fft(
     channel: int,
     max_freq: Optional[int] = 5000,
     detrend: bool = Query(default=False),
+    denoise: str = Query(default="none"),
     db: Session = Depends(get_db)
 ) -> dict
 ```
@@ -35,6 +36,7 @@ async def get_channel_stft(
     nperseg: int = Query(default=512, ge=64, le=4096),
     noverlap: int = Query(default=256, ge=0, le=4095),
     detrend: bool = Query(default=False),
+    denoise: str = Query(default="none"),
     db: Session = Depends(get_db)
 ) -> dict
 ```
@@ -54,6 +56,7 @@ def get_channel_stats(
     window_size: int = Query(default=1024, ge=64, le=8192),
     step: int = Query(default=None, ge=1, le=4096),
     detrend: bool = Query(default=False),
+    denoise: str = Query(default="none"),
     db: Session = Depends(get_db)
 ) -> dict
 ```

@@ -11,6 +11,7 @@
 def export_channel_csv(
     device_id: str, batch_index: int, channel: int,
     detrend: bool = Query(default=False),
+    denoise: str = Query(default="none"),
     db: Session = Depends(get_db)
 ) -> StreamingResponse
 ```

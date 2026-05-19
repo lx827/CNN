@@ -37,6 +37,7 @@ def get_channel_data(
     batch_index: int,
     channel: int,
     detrend: bool = Query(default=False),
+    denoise: str = Query(default="none"),
     db: Session = Depends(get_db)
 ) -> dict
 ```

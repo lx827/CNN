@@ -389,10 +389,15 @@ GET /api/data/{device_id}/batches?include_special={include_special}
 #### 6.1.3 获取某通道原始时域数据
 
 ```
-GET /api/data/{device_id}/{batch_index}/{channel}?detrend={detrend}
+GET /api/data/{device_id}/{batch_index}/{channel}?detrend={detrend}&denoise={denoise}
 ```
 
-**参数**：`detrend: bool = False`
+**参数**：
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `detrend` | `bool` | `False` | 线性去趋势 |
+| `denoise` | `str` | `"none"` | 预处理方法 |
 
 #### 6.1.4 删除某设备所有特殊批次
 
@@ -413,38 +418,43 @@ DELETE /api/data/{device_id}/{batch_index}
 #### 6.2.1 FFT 频谱
 
 ```
-GET /api/data/{device_id}/{batch_index}/{channel}/fft?max_freq={max_freq}&detrend={detrend}
+GET /api/data/{device_id}/{batch_index}/{channel}/fft?max_freq={max_freq}&detrend={detrend}&denoise={denoise}
 ```
 
-| 参数 | 类型 | 默认值 | 约束 |
-|------|------|--------|------|
-| `max_freq` | `Optional[int]` | `5000` | — |
-| `detrend` | `bool` | `False` | — |
+| 参数 | 类型 | 默认值 | 约束 | 说明 |
+|------|------|--------|------|------|
+| `max_freq` | `Optional[int]` | `5000` | — | 最大频率 |
+| `detrend` | `bool` | `False` | — | 线性去趋势 |
+| `denoise` | `str` | `"none"` | — | 预处理方法 |
 
 #### 6.2.2 STFT 时频谱
 
 ```
-GET /api/data/{device_id}/{batch_index}/{channel}/stft?max_freq={max_freq}&nperseg={nperseg}&noverlap={noverlap}&detrend={detrend}
+GET /api/data/{device_id}/{batch_index}/{channel}/stft?max_freq={max_freq}&nperseg={nperseg}&noverlap={noverlap}&detrend={detrend}&denoise={denoise}
 ```
 
-| 参数 | 类型 | 默认值 | 约束 |
-|------|------|--------|------|
-| `max_freq` | `Optional[int]` | `5000` | — |
-| `nperseg` | `int` | `512` | `ge=64, le=4096` |
-| `noverlap` | `int` | `256` | `ge=0, le=4095` |
+| 参数 | 类型 | 默认值 | 约束 | 说明 |
+|------|------|--------|------|------|
+| `max_freq` | `Optional[int]` | `5000` | — | 最大频率 |
+| `nperseg` | `int` | `512` | `ge=64, le=4096` | 窗口长度 |
+| `noverlap` | `int` | `256` | `ge=0, le=4095` | 重叠长度 |
+| `detrend` | `bool` | `False` | — | 线性去趋势 |
+| `denoise` | `str` | `"none"` | — | 预处理方法 |
 
 **注意**：该端点为 `async def`，核心计算放入线程池
 
 #### 6.2.3 统计特征指标
 
 ```
-GET /api/data/{device_id}/{batch_index}/{channel}/stats?window_size={window_size}&step={step}&detrend={detrend}
+GET /api/data/{device_id}/{batch_index}/{channel}/stats?window_size={window_size}&step={step}&detrend={detrend}&denoise={denoise}
 ```
 
-| 参数 | 类型 | 默认值 | 约束 |
-|------|------|--------|------|
-| `window_size` | `int` | `1024` | `ge=64, le=8192` |
-| `step` | `Optional[int]` | `None` | `ge=1, le=4096` |
+| 参数 | 类型 | 默认值 | 约束 | 说明 |
+|------|------|--------|------|------|
+| `window_size` | `int` | `1024` | `ge=64, le=8192` | 窗口大小 |
+| `step` | `Optional[int]` | `None` | `ge=1, le=4096` | 滑动步长 |
+| `detrend` | `bool` | `False` | — | 线性去趋势 |
+| `denoise` | `str` | `"none"` | — | 预处理方法 |
 
 ---
 
@@ -468,7 +478,7 @@ GET /api/data/{device_id}/{batch_index}/{channel}/envelope?max_freq={max_freq}&d
 #### 6.3.2 阶次跟踪
 
 ```
-GET /api/data/{device_id}/{batch_index}/{channel}/order?freq_min={freq_min}&freq_max={freq_max}&samples_per_rev={samples_per_rev}&max_order={max_order}&rot_freq={rot_freq}&detrend={detrend}
+GET /api/data/{device_id}/{batch_index}/{channel}/order?freq_min={freq_min}&freq_max={freq_max}&samples_per_rev={samples_per_rev}&max_order={max_order}&rot_freq={rot_freq}&detrend={detrend}&denoise={denoise}
 ```
 
 | 参数 | 类型 | 默认值 | 约束 | 说明 |
@@ -479,18 +489,21 @@ GET /api/data/{device_id}/{batch_index}/{channel}/order?freq_min={freq_min}&freq
 | `max_order` | `int` | `50` | `ge=5, le=200` | 最大阶次 |
 | `rot_freq` | `Optional[float]` | `None` | `ge=1.0, le=500.0` | 已知转频（可选） |
 | `detrend` | `bool` | `False` | — | 去趋势 |
+| `denoise` | `str` | `"none"` | — | 预处理方法 |
 
 **注意**：该端点为 `async def`
 
 #### 6.3.3 倒谱分析
 
 ```
-GET /api/data/{device_id}/{batch_index}/{channel}/cepstrum?max_quefrency={max_quefrency}&detrend={detrend}
+GET /api/data/{device_id}/{batch_index}/{channel}/cepstrum?max_quefrency={max_quefrency}&detrend={detrend}&denoise={denoise}
 ```
 
-| 参数 | 类型 | 默认值 | 约束 |
-|------|------|--------|------|
-| `max_quefrency` | `float` | `500.0` | `ge=10.0, le=2000.0` |
+| 参数 | 类型 | 默认值 | 约束 | 说明 |
+|------|------|--------|------|------|
+| `max_quefrency` | `float` | `500.0` | `ge=10.0, le=2000.0` | 最大倒频率 |
+| `detrend` | `bool` | `False` | — | 线性去趋势 |
+| `denoise` | `str` | `"none"` | — | 预处理方法 |
 
 **注意**：该端点为 `async def`
 
@@ -657,7 +670,7 @@ POST /api/data/{device_id}/reanalyze-all
 ### 6.7 CSV 导出
 
 ```
-GET /api/data/{device_id}/{batch_index}/{channel}/export?detrend={detrend}
+GET /api/data/{device_id}/{batch_index}/{channel}/export?detrend={detrend}&denoise={denoise}
 ```
 
 **响应**：`StreamingResponse`（`text/csv; charset=utf-8-sig`，带 `Content-Disposition` 附件头）

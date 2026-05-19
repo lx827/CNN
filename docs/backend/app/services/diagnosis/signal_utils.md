@@ -11,6 +11,7 @@
 | `remove_dc` | `remove_dc(signal) -> np.ndarray` | 去直流 |
 | `linear_detrend` | `linear_detrend(signal) -> np.ndarray` | 线性去趋势 |
 | `prepare_signal` | `prepare_signal(signal, detrend=False) -> np.ndarray` | 信号预处理 |
+| `denoise_signal` | `denoise_signal(signal, method) -> np.ndarray` | 通用信号去噪，method 可选 `none`/`wavelet`/`vmd`/`wavelet_vmd`/`wavelet_lms`/`emd`/`ceemdan`/`savgol`/`wavelet_packet`/`ceemdan_wp`/`eemd` |
 | `bandpass_filter` | `bandpass_filter(signal, fs, low, high, order=4) -> np.ndarray` | Butterworth 带通 |
 | `lowpass_filter` | `lowpass_filter(signal, fs, cutoff, order=4) -> np.ndarray` | Butterworth 低通 |
 | `highpass_filter` | `highpass_filter(signal, fs, cutoff, order=4) -> np.ndarray` | Butterworth 高通 |

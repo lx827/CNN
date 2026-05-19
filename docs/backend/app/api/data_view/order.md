@@ -20,6 +20,7 @@ async def get_channel_order(
     max_order: int = Query(default=50, ge=5, le=200),
     rot_freq: Optional[float] = Query(default=None, ge=1.0, le=500.0),
     detrend: bool = Query(default=False),
+    denoise: str = Query(default="none"),
     db: Session = Depends(get_db)
 ) -> dict
 ```

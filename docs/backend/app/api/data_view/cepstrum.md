@@ -16,6 +16,7 @@ async def get_channel_cepstrum(
     channel: int,
     max_quefrency: float = Query(default=500.0, ge=10.0, le=2000.0),
     detrend: bool = Query(default=False),
+    denoise: str = Query(default="none"),
     db: Session = Depends(get_db)
 ) -> dict
 ```
