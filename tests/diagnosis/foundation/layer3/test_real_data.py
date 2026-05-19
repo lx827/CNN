@@ -21,11 +21,14 @@ FS = 8192
 HUSTBEAR_DIR = Path("D:/code/wavelet_study/dataset/HUSTbear/down8192")
 CW_DIR = Path("D:/code/CNN/CW/down8192_CW")
 WTGEARBOX_DIR = Path("D:/code/wavelet_study/dataset/WTgearbox/down8192")
+HUSTGEARBOX_DIR = Path("D:/code/wavelet_study/dataset/HUSTgearbox/down8192")
 
 # ER-16K 轴承参数 (HUSTbear & CW 共用)
 BEARING_PARAMS = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0, "BPFI": 5.43, "BPFO": 3.57}
 # WTgearbox 行星齿轮参数
 GEAR_TEETH_WTG = {"sun": 28, "ring": 100, "planet": 36, "n_planets": 4}
+# HUSTgearbox 定轴齿轮参数 (Hub City M2, 18:27)
+GEAR_TEETH_HUSTG = {"input": 18, "output": 27, "ratio": 1.5}
 
 HUSTBEAR_FILES = {
     "healthy": ["H_20Hz-X.npy", "H_30Hz-X.npy"],
@@ -47,6 +50,12 @@ WTGEARBOX_FILES = {
     "missing": ["Mi_M1_20-c1.npy", "Mi_M2_30-c1.npy"],
     "crack": ["Rc_R1_20-c1.npy", "Rc_R2_30-c1.npy"],
     "wear": ["We_W1_20-c1.npy", "We_W2_30-c1.npy"],
+}
+
+HUSTGEARBOX_FILES = {
+    "healthy": ["H_20_1-X.npy", "H_30_3-X.npy"],
+    "break": ["B_20_1-X.npy", "B_30_3-X.npy"],
+    "missing": ["M_20_1-X.npy", "M_30_3-X.npy"],
 }
 
 
@@ -169,6 +178,37 @@ def test_engine_gear_wtgearbox():
     return results
 
 
+def test_engine_gear_hustgearbox():
+    """HUSTgearbox: engine.analyze_gear 对定轴齿轮箱故障判别"""
+    print("\n--- engine HUSTgearbox 定轴齿轮诊断 ---")
+    results = []
+    engine = DiagnosisEngine(gear_teeth=GEAR_TEETH_HUSTG)
+
+    for label, files in HUSTGEARBOX_FILES.items():
+        for fname in files:
+            sig = load_npy(HUSTGEARBOX_DIR, fname)
+            if sig is None:
+                results.append({"test": f"hustg_{label}", "file": fname, "passed": False, "error": "file not found"})
+                continue
+            try:
+                res = engine.analyze_gear(sig, FS)
+                indicators = res.get("fault_indicators", {})
+                has_any = len(indicators) > 0
+                passed = has_any
+                results.append({
+                    "test": f"hustg_{label}",
+                    "file": fname,
+                    "method": res.get("method"),
+                    "indicators_keys": list(indicators.keys())[:5],
+                    "passed": passed,
+                })
+                print(f"  [{'PASS' if passed else 'FAIL'}] HUSTg {label}/{fname}: method={res.get('method')}, keys={list(indicators.keys())[:5]}")
+            except Exception as e:
+                results.append({"test": f"hustg_{label}", "file": fname, "passed": False, "error": str(e)[:100]})
+                print(f"  [FAIL] HUSTg {label}/{fname}: {str(e)[:80]}")
+    return results
+
+
 # ═══════════════════════════════════════════════════════════
 # 3. ensemble.run_research_ensemble — 集成诊断
 # ═══════════════════════════════════════════════════════════
@@ -214,6 +254,74 @@ def test_ensemble_real():
         except Exception as e:
             results.append({"test": f"ensemble_{label}", "file": fname, "passed": False, "error": str(e)[:100]})
             print(f"  [FAIL] ensemble {label}: {str(e)[:80]}")
+    return results
+
+
+def test_ensemble_cw():
+    """CW 变速: run_research_ensemble 集成诊断"""
+    print("\n--- ensemble CW 变速 ---")
+    results = []
+    bearing_params = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
+    for label, fname in [("healthy", "H-A-1.npy"), ("inner", "I-A-1.npy"), ("outer", "O-A-1.npy")]:
+        sig = load_npy(CW_DIR, fname)
+        if sig is None:
+            results.append({"test": f"ensemble_cw_{label}", "passed": False, "error": "file not found"})
+            continue
+        try:
+            res = run_research_ensemble(sig, FS, bearing_params=bearing_params, max_seconds=10.0)
+            hs = res.get("health_score", 100)
+            status = res.get("status", "unknown")
+            # CW 变速下不崩溃即可
+            passed = hs >= 0
+            results.append({"test": f"ensemble_cw_{label}", "file": fname, "health_score": hs, "status": status, "passed": passed})
+            print(f"  [{'PASS' if passed else 'FAIL'}] ensemble CW {label}: hs={hs}, status={status}")
+        except Exception as e:
+            results.append({"test": f"ensemble_cw_{label}", "passed": False, "error": str(e)[:100]})
+            print(f"  [FAIL] ensemble CW {label}: {str(e)[:80]}")
+    return results
+
+
+def test_ensemble_wtgearbox():
+    """WTgearbox: run_research_ensemble 行星齿轮箱集成诊断"""
+    print("\n--- ensemble WTgearbox ---")
+    results = []
+    for label, fname in [("healthy", "He_N1_20-c1.npy"), ("break", "Br_B1_20-c1.npy"), ("wear", "We_W1_20-c1.npy")]:
+        sig = load_npy(WTGEARBOX_DIR, fname)
+        if sig is None:
+            results.append({"test": f"ensemble_wtg_{label}", "passed": False, "error": "file not found"})
+            continue
+        try:
+            res = run_research_ensemble(sig, FS, gear_teeth=GEAR_TEETH_WTG, max_seconds=10.0)
+            hs = res.get("health_score", 100)
+            status = res.get("status", "unknown")
+            passed = hs >= 0
+            results.append({"test": f"ensemble_wtg_{label}", "file": fname, "health_score": hs, "status": status, "passed": passed})
+            print(f"  [{'PASS' if passed else 'FAIL'}] ensemble WTG {label}: hs={hs}, status={status}")
+        except Exception as e:
+            results.append({"test": f"ensemble_wtg_{label}", "passed": False, "error": str(e)[:100]})
+            print(f"  [FAIL] ensemble WTG {label}: {str(e)[:80]}")
+    return results
+
+
+def test_ensemble_hustgearbox():
+    """HUSTgearbox: run_research_ensemble 定轴齿轮箱集成诊断"""
+    print("\n--- ensemble HUSTgearbox ---")
+    results = []
+    for label, fname in [("healthy", "H_20_1-X.npy"), ("break", "B_20_1-X.npy"), ("missing", "M_20_1-X.npy")]:
+        sig = load_npy(HUSTGEARBOX_DIR, fname)
+        if sig is None:
+            results.append({"test": f"ensemble_hustg_{label}", "passed": False, "error": "file not found"})
+            continue
+        try:
+            res = run_research_ensemble(sig, FS, gear_teeth=GEAR_TEETH_HUSTG, max_seconds=10.0)
+            hs = res.get("health_score", 100)
+            status = res.get("status", "unknown")
+            passed = hs >= 0
+            results.append({"test": f"ensemble_hustg_{label}", "file": fname, "health_score": hs, "status": status, "passed": passed})
+            print(f"  [{'PASS' if passed else 'FAIL'}] ensemble HUSTg {label}: hs={hs}, status={status}")
+        except Exception as e:
+            results.append({"test": f"ensemble_hustg_{label}", "passed": False, "error": str(e)[:100]})
+            print(f"  [FAIL] ensemble HUSTg {label}: {str(e)[:80]}")
     return results
 
 
@@ -315,6 +423,72 @@ def test_analyzer_real():
     return results
 
 
+def test_analyzer_cw():
+    """CW 变速: analyze_device 多通道"""
+    print("\n--- analyzer CW 变速 ---")
+    results = []
+    device = MockDevice(diagnosis_strategy="advanced", bearing_method="kurtogram",
+                        bearing_params={"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}, gear_teeth=None)
+    channels = {}
+    for ch, fname in [("1", "H-A-1.npy"), ("2", "O-A-1.npy")]:
+        sig = load_npy(CW_DIR, fname)
+        if sig is not None:
+            channels[ch] = sig.tolist()
+    try:
+        res = analyze_device(channels, sample_rate=FS, device=device)
+        passed = res.get("health_score", -1) >= 0
+        results.append({"test": "analyzer_cw_mix", "health_score": res.get("health_score"), "status": res.get("status"), "passed": passed})
+        print(f"  [{'PASS' if passed else 'FAIL'}] CW混合: hs={res.get('health_score')}, status={res.get('status')}")
+    except Exception as e:
+        results.append({"test": "analyzer_cw_mix", "passed": False, "error": str(e)[:100]})
+        print(f"  [FAIL] CW: {str(e)[:80]}")
+    return results
+
+
+def test_analyzer_wtgearbox():
+    """WTgearbox: analyze_device 行星齿轮箱多通道"""
+    print("\n--- analyzer WTgearbox ---")
+    results = []
+    device = MockDevice(diagnosis_strategy="advanced", gear_method="advanced",
+                        bearing_params=None, gear_teeth=GEAR_TEETH_WTG)
+    channels = {}
+    for ch, fname in [("1", "He_N1_20-c1.npy"), ("2", "Br_B1_20-c1.npy")]:
+        sig = load_npy(WTGEARBOX_DIR, fname)
+        if sig is not None:
+            channels[ch] = sig.tolist()
+    try:
+        res = analyze_device(channels, sample_rate=FS, device=device)
+        passed = res.get("health_score", -1) >= 0
+        results.append({"test": "analyzer_wtg_mix", "health_score": res.get("health_score"), "status": res.get("status"), "passed": passed})
+        print(f"  [{'PASS' if passed else 'FAIL'}] WTG混合: hs={res.get('health_score')}, status={res.get('status')}")
+    except Exception as e:
+        results.append({"test": "analyzer_wtg_mix", "passed": False, "error": str(e)[:100]})
+        print(f"  [FAIL] WTG: {str(e)[:80]}")
+    return results
+
+
+def test_analyzer_hustgearbox():
+    """HUSTgearbox: analyze_device 定轴齿轮箱多通道"""
+    print("\n--- analyzer HUSTgearbox ---")
+    results = []
+    device = MockDevice(diagnosis_strategy="advanced", gear_method="standard",
+                        bearing_params=None, gear_teeth=GEAR_TEETH_HUSTG)
+    channels = {}
+    for ch, fname in [("1", "H_20_1-X.npy"), ("2", "B_20_1-X.npy")]:
+        sig = load_npy(HUSTGEARBOX_DIR, fname)
+        if sig is not None:
+            channels[ch] = sig.tolist()
+    try:
+        res = analyze_device(channels, sample_rate=FS, device=device)
+        passed = res.get("health_score", -1) >= 0
+        results.append({"test": "analyzer_hustg_mix", "health_score": res.get("health_score"), "status": res.get("status"), "passed": passed})
+        print(f"  [{'PASS' if passed else 'FAIL'}] HUSTg混合: hs={res.get('health_score')}, status={res.get('status')}")
+    except Exception as e:
+        results.append({"test": "analyzer_hustg_mix", "passed": False, "error": str(e)[:100]})
+        print(f"  [FAIL] HUSTg: {str(e)[:80]}")
+    return results
+
+
 # ═══════════════════════════════════════════════════════════
 # main
 # ═══════════════════════════════════════════════════════════
@@ -328,8 +502,15 @@ def main():
         "engine_bearing_hustbear": test_engine_bearing_hustbear(),
         "engine_bearing_cw": test_engine_bearing_cw(),
         "engine_gear_wtgearbox": test_engine_gear_wtgearbox(),
-        "ensemble_real": test_ensemble_real(),
-        "analyzer_real": test_analyzer_real(),
+        "engine_gear_hustgearbox": test_engine_gear_hustgearbox(),
+        "ensemble_hustbear": test_ensemble_real(),
+        "ensemble_cw": test_ensemble_cw(),
+        "ensemble_wtgearbox": test_ensemble_wtgearbox(),
+        "ensemble_hustgearbox": test_ensemble_hustgearbox(),
+        "analyzer_hustbear": test_analyzer_real(),
+        "analyzer_cw": test_analyzer_cw(),
+        "analyzer_wtgearbox": test_analyzer_wtgearbox(),
+        "analyzer_hustgearbox": test_analyzer_hustgearbox(),
     }
 
     total = passed = 0

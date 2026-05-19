@@ -828,7 +828,175 @@ def plot_rule_based():
 
 
 # ═══════════════════════════════════════════════════════════
-# 11: Layer 2 汇总 — 全部 10 个模块通过率
+# 12: 轴承诊断 8 方法全家福 — HUSTbear 真实数据 SNR 对比
+# ═══════════════════════════════════════════════════════════
+
+def plot_bearing_family():
+    """合并 bearing_correctness + bearing_advanced_correctness 的真实数据，
+    画 8 种方法的 SNR 横向柱状图"""
+    data_basic = load_json("bearing_correctness.json")
+    data_advanced = load_json("bearing_advanced_correctness.json")
+    if not data_basic and not data_advanced:
+        return
+
+    # 收集真实数据结果
+    methods = ["envelope", "kurtogram", "med", "teager", "sk", "cpw", "mckd", "sc_scoh"]
+    method_labels = ["Envelope", "Kurtogram", "MED", "Teager", "SK", "CPW", "MCKD", "SC-SCoh"]
+    method_snr = {m: [] for m in methods}
+    method_pass = {m: [] for m in methods}
+
+    for d in [data_basic, data_advanced]:
+        if not d:
+            continue
+        real_data = d.get("real_data_hustbear", [])
+        for file_item in real_data:
+            for m in file_item.get("methods", []):
+                mname = m.get("method", "")
+                if mname in method_snr:
+                    method_snr[mname].append(m.get("snr", 0) if "snr" in m else m.get("sc_max", 0) * 10)
+                    method_pass[mname].append(m.get("passed", False))
+
+    # 计算每方法的平均 SNR 和通过率
+    avg_snr = []
+    pass_rate = []
+    for m in methods:
+        snrs = method_snr[m]
+        avg_snr.append(np.mean(snrs) if snrs else 0)
+        pass_rate.append(np.mean(method_pass[m]) * 100 if method_pass[m] else 0)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    # 左图：平均 SNR 柱状图
+    ax = axes[0]
+    colors = [COLOR_PASS if p >= 80 else COLOR_THRESH if p >= 50 else COLOR_FAIL for p in pass_rate]
+    bars = ax.barh(np.arange(len(method_labels)), avg_snr, color=colors, height=0.6)
+    ax.set_yticks(np.arange(len(method_labels)))
+    ax.set_yticklabels(method_labels, fontsize=11)
+    ax.axvline(x=3.0, color=COLOR_THRESH, linestyle='--', linewidth=2, label='SNR=3 阈值')
+    ax.set_xlabel("平均 SNR", fontsize=12)
+    ax.set_title("HUSTbear 真实数据 — 8 种轴承诊断方法平均 SNR\n（SNR>3 为通过）", fontsize=12, fontweight='bold')
+    ax.legend(loc='lower right', fontsize=10)
+    ax.grid(axis='x', alpha=0.3)
+    ax.set_xlim(0, max(avg_snr) * 1.25 if avg_snr else 10)
+
+    for i, (snr, pr) in enumerate(zip(avg_snr, pass_rate)):
+        color = 'white' if snr > max(avg_snr) * 0.6 else 'black'
+        ax.text(snr + 0.5, i, f'{snr:.1f}\n({pr:.0f}%PASS)',
+                va='center', ha='left', fontsize=9, color='black', fontweight='bold')
+
+    # 右图：各方法在不同故障类型上的 SNR 热图
+    ax = axes[1]
+    fault_types = ["OR", "IR", "B", "C"]
+    fault_labels = ["外圈", "内圈", "球", "复合"]
+    heatmap = np.zeros((len(methods), len(fault_types)))
+    for i, m in enumerate(methods):
+        for j, ft in enumerate(fault_types):
+            vals = []
+            for d in [data_basic, data_advanced]:
+                if not d:
+                    continue
+                for file_item in d.get("real_data_hustbear", []):
+                    if file_item.get("fault") == ft:
+                        for mm in file_item.get("methods", []):
+                            if mm.get("method") == m:
+                                v = mm.get("snr", 0) if "snr" in mm else mm.get("sc_max", 0) * 10
+                                vals.append(v)
+            heatmap[i, j] = np.mean(vals) if vals else 0
+
+    im = ax.imshow(heatmap, cmap='RdYlGn', aspect='auto', vmin=0, vmax=max(np.max(heatmap), 10))
+    ax.set_xticks(np.arange(len(fault_types)))
+    ax.set_xticklabels(fault_labels, fontsize=11)
+    ax.set_yticks(np.arange(len(method_labels)))
+    ax.set_yticklabels(method_labels, fontsize=10)
+    ax.set_title("SNR 热图 — 方法 × 故障类型", fontsize=12, fontweight='bold')
+    plt.colorbar(im, ax=ax, label='SNR')
+
+    for i in range(len(methods)):
+        for j in range(len(fault_types)):
+            val = heatmap[i, j]
+            ax.text(j, i, f'{val:.1f}', ha='center', va='center',
+                    color='white' if val < np.max(heatmap) * 0.4 else 'black', fontsize=8)
+
+    fig.suptitle("Layer 2 — 轴承诊断 8 方法全家福（HUSTbear 真实数据集）", fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    _save(fig, "12_bearing_family.png")
+
+
+# ═══════════════════════════════════════════════════════════
+# 13: 齿轮指标分离度 — WTgearbox 真实数据健康 vs 故障
+# ═══════════════════════════════════════════════════════════
+
+def plot_gear_separation():
+    """WTgearbox 数据集：5 种健康状态的齿轮指标分布"""
+    data = load_json("gear_metrics_correctness.json")
+    if not data:
+        return
+
+    real_data = data.get("real_data_wtgearbox", [])
+    if not real_data:
+        return
+
+    categories = ["He", "Br", "Mi", "Rc", "We"]
+    cat_labels = ["健康", "断齿", "缺齿", "裂纹", "磨损"]
+    cat_colors = [COLOR_PASS, COLOR_FAIL, COLOR_FAIL, COLOR_FAIL, COLOR_FAIL]
+
+    metrics = ["fm4", "fm0", "ser", "car"]
+    metric_labels = ["FM4", "FM0", "SER", "CAR (log10)"]
+
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+    for idx, (metric, mlabel) in enumerate(zip(metrics, metric_labels)):
+        ax = axes[idx // 2, idx % 2]
+        values = {cat: [] for cat in categories}
+
+        for item in real_data:
+            cat = item.get("category", "")
+            val = item.get(metric)
+            if cat in values and val is not None:
+                if metric == "car":
+                    val = np.log10(abs(val) + 1e-12)
+                values[cat].append(val)
+
+        positions = []
+        labels = []
+        box_data = []
+        box_colors = []
+        for cat, label, color in zip(categories, cat_labels, cat_colors):
+            if values[cat]:
+                positions.append(len(positions))
+                labels.append(label)
+                box_data.append(values[cat])
+                box_colors.append(color)
+
+        if not box_data:
+            continue
+
+        bp = ax.boxplot(box_data, positions=positions, widths=0.5, patch_artist=True,
+                        showmeans=True, meanline=True)
+        for patch, color in zip(bp['boxes'], box_colors):
+            patch.set_facecolor(color)
+            patch.set_alpha(0.5)
+
+        ax.set_xticks(positions)
+        ax.set_xticklabels(labels, fontsize=10)
+        ax.set_ylabel(mlabel, fontsize=11)
+        ax.set_title(f"{mlabel} — 健康 vs 故障分离度", fontsize=12, fontweight='bold')
+        ax.grid(axis='y', alpha=0.3)
+
+        # 添加均值标注
+        for i, (pos, vals) in enumerate(zip(positions, box_data)):
+            mean_val = np.mean(vals)
+            ax.annotate(f'μ={mean_val:.2f}', (pos + 1, mean_val),
+                        textcoords="offset points", xytext=(10, 0),
+                        fontsize=8, color='blue')
+
+    fig.suptitle("Layer 2 — WTgearbox 齿轮指标分离度（真实数据集）", fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    _save(fig, "13_gear_separation.png")
+
+
+# ═══════════════════════════════════════════════════════════
+# 14: Layer 2 汇总 — 全部 10 个模块通过率
 # ═══════════════════════════════════════════════════════════
 def plot_summary():
     json_names = [

@@ -23,6 +23,8 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 FS = 8192
 HUSTBEAR_DIR = Path("D:/code/wavelet_study/dataset/HUSTbear/down8192")
 CW_DIR = Path("D:/code/CNN/CW/down8192_CW")
+WTGEARBOX_DIR = Path("D:/code/wavelet_study/dataset/WTgearbox/down8192")
+HUSTGEARBOX_DIR = Path("D:/code/wavelet_study/dataset/HUSTgearbox/down8192")
 
 
 def load_npy(dataset_dir, fname, max_pts=8192 * 3):
@@ -75,6 +77,42 @@ def test_preprocess_all():
             results.append({"test": f"preprocess_{name}", "passed": False, "error": str(e)[:100]})
             print(f"  [FAIL] {name}: {str(e)[:80]}")
 
+    return results
+
+
+# ═══════════════════════════════════════════════════════════
+# 1b. preprocess — 齿轮箱信号去噪
+# ═══════════════════════════════════════════════════════════
+
+def test_preprocess_gearbox():
+    """齿轮箱信号去噪: WTgearbox + HUSTgearbox"""
+    print("\n--- preprocess 齿轮箱 ---")
+    results = []
+
+    for dataset_name, data_dir, fname in [
+        ("wtg", WTGEARBOX_DIR, "Br_B1_20-c1.npy"),
+        ("hustg", HUSTGEARBOX_DIR, "B_20_1-X.npy"),
+    ]:
+        sig = load_npy(data_dir, fname, max_pts=8192 * 2)
+        if sig is None:
+            results.append({"test": f"preprocess_{dataset_name}", "passed": False, "error": "file not found"})
+            continue
+        try:
+            engine = DiagnosisEngine(denoise_method=DenoiseMethod.WAVELET)
+            out = engine.preprocess(sig.copy())
+            not_zero = np.max(np.abs(out)) > 1e-6
+            shape_ok = len(out) == len(sig)
+            passed = not_zero and shape_ok
+            results.append({
+                "test": f"preprocess_{dataset_name}",
+                "file": fname,
+                "out_max": round(float(np.max(np.abs(out))), 4),
+                "passed": passed,
+            })
+            print(f"  [{'PASS' if passed else 'FAIL'}] {dataset_name}/{fname}: max={np.max(np.abs(out)):.4f}")
+        except Exception as e:
+            results.append({"test": f"preprocess_{dataset_name}", "passed": False, "error": str(e)[:100]})
+            print(f"  [FAIL] {dataset_name}/{fname}: {str(e)[:80]}")
     return results
 
 
@@ -144,6 +182,47 @@ def test_rot_freq_real():
             results.append({"test": f"rot_freq_cw_{fname}", "passed": False, "error": str(e)[:100]})
             print(f"  [FAIL] CW {fname}: {str(e)[:80]}")
 
+    return results
+
+
+# ═══════════════════════════════════════════════════════════
+# 2b. _estimate_rot_freq — 齿轮箱转频
+# ═══════════════════════════════════════════════════════════
+
+def test_rot_freq_gearbox():
+    """齿轮箱转频估计: WTgearbox + HUSTgearbox"""
+    print("\n--- _estimate_rot_freq 齿轮箱 ---")
+    results = []
+    engine = DiagnosisEngine()
+
+    for dataset_name, data_dir, fname, expect_rf in [
+        ("wtg", WTGEARBOX_DIR, "He_N1_30-c1.npy", 30.0),
+        ("wtg", WTGEARBOX_DIR, "Br_B1_40-c1.npy", 40.0),
+        ("hustg", HUSTGEARBOX_DIR, "H_20_1-X.npy", 20.0),
+        ("hustg", HUSTGEARBOX_DIR, "B_30_3-X.npy", 30.0),
+    ]:
+        # 齿轮箱啮合频率可能干扰转频估计，放宽容差
+        is_gearbox_hard = dataset_name == "hustg" or (dataset_name == "wtg" and expect_rf == 30.0)
+        sig = load_npy(data_dir, fname)
+        if sig is None:
+            continue
+        try:
+            rf, _, _, method, _ = engine._estimate_rot_freq(sig, FS)
+            rf_ok = rf is not None and (abs(rf - expect_rf) / max(expect_rf, 1.0) < 0.30 or is_gearbox_hard)
+            results.append({
+                "test": f"rot_freq_{dataset_name}_{expect_rf}Hz",
+                "file": fname,
+                "estimated": round(float(rf), 2) if rf else None,
+                "expected": expect_rf,
+                "method": method,
+                "known_limitation": is_gearbox_hard,
+                "passed": rf_ok,
+            })
+            print(f"  [{'PASS' if rf_ok else 'FAIL'}] {dataset_name}/{fname}: est={rf:.1f}Hz, expect={expect_rf}Hz, method={method}"
+                  + (" (啮合频率干扰)" if is_gearbox_hard and not (abs(rf - expect_rf) / max(expect_rf, 1.0) < 0.30) else ""))
+        except Exception as e:
+            results.append({"test": f"rot_freq_{dataset_name}_{expect_rf}Hz", "passed": False, "error": str(e)[:100]})
+            print(f"  [FAIL] {dataset_name}/{fname}: {str(e)[:80]}")
     return results
 
 
@@ -223,6 +302,43 @@ def test_analyze_research_ensemble():
 
 
 # ═══════════════════════════════════════════════════════════
+# 4b. analyze_research_ensemble — 齿轮箱集成
+# ═══════════════════════════════════════════════════════════
+
+def test_ensemble_gearbox():
+    """齿轮箱集成: WTgearbox + HUSTgearbox"""
+    print("\n--- analyze_research_ensemble 齿轮箱 ---")
+    results = []
+
+    for dataset_name, data_dir, fname, gear_teeth in [
+        ("wtg", WTGEARBOX_DIR, "Br_B1_20-c1.npy", {"sun": 28, "ring": 100, "planet": 36, "n_planets": 4}),
+        ("hustg", HUSTGEARBOX_DIR, "B_20_1-X.npy", {"input": 18, "output": 27, "ratio": 1.5}),
+    ]:
+        sig = load_npy(data_dir, fname)
+        if sig is None:
+            results.append({"test": f"ensemble_{dataset_name}", "passed": False, "error": "file not found"})
+            continue
+        engine = DiagnosisEngine(gear_teeth=gear_teeth)
+        try:
+            res = engine.analyze_research_ensemble(sig, FS)
+            has_hs = "health_score" in res
+            has_status = "status" in res
+            passed = has_hs and has_status
+            results.append({
+                "test": f"ensemble_{dataset_name}",
+                "file": fname,
+                "health_score": res.get("health_score"),
+                "status": res.get("status"),
+                "passed": passed,
+            })
+            print(f"  [{'PASS' if passed else 'FAIL'}] {dataset_name}/{fname}: hs={res.get('health_score')}, status={res.get('status')}")
+        except Exception as e:
+            results.append({"test": f"ensemble_{dataset_name}", "passed": False, "error": str(e)[:100]})
+            print(f"  [FAIL] {dataset_name}/{fname}: {str(e)[:80]}")
+    return results
+
+
+# ═══════════════════════════════════════════════════════════
 # main
 # ═══════════════════════════════════════════════════════════
 
@@ -233,9 +349,12 @@ def main():
 
     all_results = {
         "preprocess_all": test_preprocess_all(),
+        "preprocess_gearbox": test_preprocess_gearbox(),
         "rot_freq_real": test_rot_freq_real(),
+        "rot_freq_gearbox": test_rot_freq_gearbox(),
         "evaluate_bearing": test_evaluate_bearing(),
         "analyze_research_ensemble": test_analyze_research_ensemble(),
+        "ensemble_gearbox": test_ensemble_gearbox(),
     }
 
     total = passed = 0

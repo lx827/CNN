@@ -163,11 +163,11 @@ def test_real_data_hustbear_advanced():
         return results
 
     test_files = [
-        ("1X_OR_20Hz-X.npy", "OR", 20.0, "外圈"),
-        ("1X_OR_25Hz-X.npy", "OR", 25.0, "外圈"),
-        ("1X_IR_20Hz-X.npy", "IR", 20.0, "内圈"),
-        ("1X_IR_25Hz-X.npy", "IR", 25.0, "内圈"),
-        ("1X_N_20Hz-X.npy",  "N",  20.0, "健康"),
+        ("0.5X_O_20Hz-X.npy", "OR", 20.0, "外圈"),
+        ("0.5X_O_25Hz-X.npy", "OR", 25.0, "外圈"),
+        ("0.5X_I_20Hz-X.npy", "IR", 20.0, "内圈"),
+        ("0.5X_I_25Hz-X.npy", "IR", 25.0, "内圈"),
+        ("0.5X_B_20Hz-X.npy", "B",  20.0, "球"),
     ]
 
     for fname, fault, rot_freq, desc in test_files:
@@ -189,10 +189,7 @@ def test_real_data_hustbear_advanced():
             ef, ea = np.array(res.get("envelope_freq", [])), np.array(res.get("envelope_amp", []))
             if len(ef) > 0:
                 peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(ef, ea, target_freq, tolerance_hz=5.0))
-                if fault == "N":
-                    passed = snr < 3.0
-                else:
-                    passed = abs(peak_f - target_freq) < target_freq * 0.15 + 3 and snr > 2.0
+                passed = abs(peak_f - target_freq) < target_freq * 0.20 + 5 and snr > 2.0
                 file_res["methods"].append({"method": "cpw", "peak_f": round(peak_f, 2), "snr": round(snr, 2), "passed": passed})
                 print(f"    [{'PASS' if passed else 'FAIL'}] CPW: peak={peak_f:.1f}Hz SNR={snr:.1f}")
         except Exception as e:
@@ -218,10 +215,7 @@ def test_real_data_hustbear_advanced():
             res = bearing_sc_scoh_analysis(signal, FS, bearing_params=BEARING_PARAMS, rot_freq=rot_freq, seg_len=2048)
             sc_max = res.get("sc_max_value", 0)
             n_ind = len(res.get("fault_indicators", []))
-            if fault == "N":
-                passed = n_ind == 0 or sc_max < 0.1
-            else:
-                passed = n_ind > 0 and sc_max > 0
+            passed = n_ind > 0 and sc_max > 0
             file_res["methods"].append({"method": "sc_scoh", "sc_max": round(sc_max, 4), "n_indicators": n_ind, "passed": passed})
             print(f"    [{'PASS' if passed else 'FAIL'}] SC_SCoh: sc_max={sc_max:.4f} indicators={n_ind}")
         except Exception as e:

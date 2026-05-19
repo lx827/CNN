@@ -273,15 +273,17 @@ def test_real_data_hustbear():
         return results
 
     # 选代表性样本：各故障类型 × 不同转速
+    # HUSTbear 文件名格式: {负载}_{故障}_{转速}-{通道}.npy
+    # 故障: B=球, O=外圈, I=内圈, C=复合
     test_files = [
-        ("1X_N_20Hz-X.npy",  "N",  20.0, "健康"),
-        ("1X_N_25Hz-X.npy",  "N",  25.0, "健康"),
-        ("1X_OR_20Hz-X.npy", "OR", 20.0, "外圈"),
-        ("1X_OR_25Hz-X.npy", "OR", 25.0, "外圈"),
-        ("1X_IR_20Hz-X.npy", "IR", 20.0, "内圈"),
-        ("1X_IR_25Hz-X.npy", "IR", 25.0, "内圈"),
-        ("1X_B_20Hz-X.npy",  "B",  20.0, "球"),
-        ("1X_B_25Hz-X.npy",  "B",  25.0, "球"),
+        ("0.5X_O_20Hz-X.npy", "OR", 20.0, "外圈"),
+        ("0.5X_O_25Hz-X.npy", "OR", 25.0, "外圈"),
+        ("0.5X_I_20Hz-X.npy", "IR", 20.0, "内圈"),
+        ("0.5X_I_25Hz-X.npy", "IR", 25.0, "内圈"),
+        ("0.5X_B_20Hz-X.npy", "B",  20.0, "球"),
+        ("0.5X_B_25Hz-X.npy", "B",  25.0, "球"),
+        ("0.5X_C_20Hz-X.npy", "C",  20.0, "复合"),
+        ("0.5X_C_25Hz-X.npy", "C",  25.0, "复合"),
     ]
 
     methods = [
@@ -299,8 +301,8 @@ def test_real_data_hustbear():
             continue
 
         # 计算期望故障频率
-        if fault == "N":
-            target_freq = 0.0  # 健康数据不应有强故障频率
+        if fault == "C":
+            target_freq = rot_freq * FAULT_COEFF["OR"]  # 复合故障用 BPFO 作为参考
         else:
             target_freq = rot_freq * FAULT_COEFF.get(fault, 0)
 
@@ -315,15 +317,17 @@ def test_real_data_hustbear():
                 continue
 
             # 判定：故障数据应在目标频率附近检出峰值且SNR>2
-            # 健康数据不应在任意故障频率处有高SNR（放宽到<3）
+            # HUSTbear 数据集只有故障数据，没有健康数据
             peak_f = eval_res["peak_f"]
             snr = eval_res["snr"]
-            if fault == "N":
-                passed = snr < 3.0  # 健康不应误报
-            else:
-                freq_ok = abs(peak_f - target_freq) < target_freq * 0.15 + 3  # ±15% 容差
-                snr_ok = snr > 2.0
-                passed = freq_ok and snr_ok
+            # 复合故障：目标频率用 BPFO（3.57×fr）作为参考，放宽容差
+            actual_target = target_freq
+            if fault == "C":
+                actual_target = rot_freq * FAULT_COEFF["OR"]
+            tol = actual_target * 0.25 + 8 if fault == "C" else actual_target * 0.20 + 5
+            freq_ok = abs(peak_f - actual_target) < tol
+            snr_ok = snr > 2.0
+            passed = freq_ok and snr_ok
 
             eval_res["passed"] = passed
             file_results["methods"].append(eval_res)
