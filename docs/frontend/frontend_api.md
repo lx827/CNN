@@ -64,6 +64,8 @@ request.get('/api/dashboard/').then(res => { ... });
 |--------|------|--------|----------|----------|
 | `login(password)` | `password: string` | `{ token: string }` | `POST /api/auth/login` | `Login.vue` |
 | `getDeviceInfo()` | 无 | 设备总览数据对象 | `GET /api/dashboard/` | `Dashboard.vue` |
+
+> **2026-05-19 修复**：离线设备的 `health` 和 `components[].health` 不再设为 `null`，始终从诊断数据计算。离线仅标记 `status: 'offline'`。
 | `getRealtimeVibrationData(device_id, prefer_special)` | `device_id: string`<br>`prefer_special?: boolean`（默认 `false`） | 实时振动数据数组 | `GET /api/monitor/latest?device_id=...&prefer_special=...` | `Monitor.vue` |
 | `getMonitorHistory(device_id, channel, batches, include_special)` | `device_id: string`<br>`channel?: number`（默认 `1`）<br>`batches?: number`（默认 `16`）<br>`include_special?: boolean`（默认 `true`） | `{ device_id, channel, items: [{batch_index, ...}] }` | `GET /api/monitor/history?device_id=...&channel=...&batches=...&include_special=...` | `Monitor.vue` |
 

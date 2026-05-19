@@ -105,8 +105,11 @@ GET /api/dashboard/
 | `data.alarm_stats` | `dict` | 告警统计（按级别分组） |
 
 **内部常量**：
+
 - `VALID_FAULT_TYPES`：17 种有效故障类型白名单
 - `BEARING_FAULT_MAP`：轴承频率指示器 → 中文故障名映射
+
+> **2026-05-19 修复**：`health_score` 不再因设备离线而返回 `None`。离线仅影响 `status` 标签（显示 "offline"），已存储的诊断数据正常返回。
 
 **调用方**：`views/Dashboard.vue` → `api/index.js::getDeviceInfo()`
 
@@ -266,6 +269,7 @@ GET /api/monitor/latest?device_id={device_id}&prefer_special={prefer_special}&li
 **响应**：每条含 `data`（时域）、`fft_freq`、`fft_amp`、`channel_name` 等
 
 **内部常量**：
+
 - `TIME_DOMAIN_POINTS = 2560`（时域返回点数）
 - `FFT_POINTS = 25600`（FFT用1秒数据）
 - `FFT_MAX_FREQ = 5000`（FFT最高返回频率）
@@ -367,29 +371,37 @@ GET /api/collect/history?device_id={device_id}&limit={limit}
 ### 6.1 设备与批次查询
 
 #### 6.1.1 获取所有设备批次列表
+
 ```
 GET /api/data/devices
 ```
+
 **响应**：设备列表及其批次、诊断概要
 
 #### 6.1.2 获取某设备批次
+
 ```
 GET /api/data/{device_id}/batches?include_special={include_special}
 ```
+
 **参数**：`include_special: bool = True`
 
 #### 6.1.3 获取某通道原始时域数据
+
 ```
 GET /api/data/{device_id}/{batch_index}/{channel}?detrend={detrend}
 ```
+
 **参数**：`detrend: bool = False`
 
 #### 6.1.4 删除某设备所有特殊批次
+
 ```
 DELETE /api/data/{device_id}/special
 ```
 
 #### 6.1.5 删除某批次
+
 ```
 DELETE /api/data/{device_id}/{batch_index}
 ```
@@ -399,18 +411,22 @@ DELETE /api/data/{device_id}/{batch_index}
 ### 6.2 频谱分析
 
 #### 6.2.1 FFT 频谱
+
 ```
 GET /api/data/{device_id}/{batch_index}/{channel}/fft?max_freq={max_freq}&detrend={detrend}
 ```
+
 | 参数 | 类型 | 默认值 | 约束 |
 |------|------|--------|------|
 | `max_freq` | `Optional[int]` | `5000` | — |
 | `detrend` | `bool` | `False` | — |
 
 #### 6.2.2 STFT 时频谱
+
 ```
 GET /api/data/{device_id}/{batch_index}/{channel}/stft?max_freq={max_freq}&nperseg={nperseg}&noverlap={noverlap}&detrend={detrend}
 ```
+
 | 参数 | 类型 | 默认值 | 约束 |
 |------|------|--------|------|
 | `max_freq` | `Optional[int]` | `5000` | — |
@@ -420,9 +436,11 @@ GET /api/data/{device_id}/{batch_index}/{channel}/stft?max_freq={max_freq}&npers
 **注意**：该端点为 `async def`，核心计算放入线程池
 
 #### 6.2.3 统计特征指标
+
 ```
 GET /api/data/{device_id}/{batch_index}/{channel}/stats?window_size={window_size}&step={step}&detrend={detrend}
 ```
+
 | 参数 | 类型 | 默认值 | 约束 |
 |------|------|--------|------|
 | `window_size` | `int` | `1024` | `ge=64, le=8192` |
@@ -433,9 +451,11 @@ GET /api/data/{device_id}/{batch_index}/{channel}/stats?window_size={window_size
 ### 6.3 包络与阶次分析
 
 #### 6.3.1 包络谱分析
+
 ```
 GET /api/data/{device_id}/{batch_index}/{channel}/envelope?max_freq={max_freq}&detrend={detrend}&method={method}&denoise={denoise}
 ```
+
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `max_freq` | `Optional[int]` | `1000` | 最大包络频率 |
@@ -446,9 +466,11 @@ GET /api/data/{device_id}/{batch_index}/{channel}/envelope?max_freq={max_freq}&d
 **注意**：该端点为 `async def`
 
 #### 6.3.2 阶次跟踪
+
 ```
 GET /api/data/{device_id}/{batch_index}/{channel}/order?freq_min={freq_min}&freq_max={freq_max}&samples_per_rev={samples_per_rev}&max_order={max_order}&rot_freq={rot_freq}&detrend={detrend}
 ```
+
 | 参数 | 类型 | 默认值 | 约束 | 说明 |
 |------|------|--------|------|------|
 | `freq_min` | `float` | `10.0` | `ge=1.0, le=500.0` | 转频搜索下限 |
@@ -461,9 +483,11 @@ GET /api/data/{device_id}/{batch_index}/{channel}/order?freq_min={freq_min}&freq
 **注意**：该端点为 `async def`
 
 #### 6.3.3 倒谱分析
+
 ```
 GET /api/data/{device_id}/{batch_index}/{channel}/cepstrum?max_quefrency={max_quefrency}&detrend={detrend}
 ```
+
 | 参数 | 类型 | 默认值 | 约束 |
 |------|------|--------|------|
 | `max_quefrency` | `float` | `500.0` | `ge=10.0, le=2000.0` |
@@ -475,9 +499,11 @@ GET /api/data/{device_id}/{batch_index}/{channel}/cepstrum?max_quefrency={max_qu
 ### 6.4 齿轮与综合诊断
 
 #### 6.4.1 齿轮诊断分析
+
 ```
 GET /api/data/{device_id}/{batch_index}/{channel}/gear?detrend={detrend}&method={method}&denoise={denoise}
 ```
+
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `method` | `str` | `"standard"` | 齿轮分析方法 |
@@ -486,9 +512,11 @@ GET /api/data/{device_id}/{batch_index}/{channel}/gear?detrend={detrend}&method=
 **注意**：该端点为 `async def`
 
 #### 6.4.2 综合故障诊断分析（统一入口）
+
 ```
 GET /api/data/{device_id}/{batch_index}/{channel}/analyze?detrend={detrend}&strategy={strategy}&bearing_method={bearing_method}&gear_method={gear_method}&denoise={denoise}
 ```
+
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `strategy` | `str` | `"standard"` | 诊断策略 |
@@ -499,6 +527,7 @@ GET /api/data/{device_id}/{batch_index}/{channel}/analyze?detrend={detrend}&stra
 **注意**：该端点为 `async def`
 
 #### 6.4.3 全算法对比分析
+
 ```
 GET /api/data/{device_id}/{batch_index}/{channel}/full-analysis?detrend={detrend}&denoise={denoise}
 ```
@@ -510,15 +539,19 @@ GET /api/data/{device_id}/{batch_index}/{channel}/full-analysis?detrend={detrend
 ### 6.5 研究方法元数据与独立分析
 
 #### 6.5.1 获取分析方法元数据
+
 ```
 GET /api/data/method-info
 ```
+
 **响应**：15 种分析方法的分类、名称和详细说明
 
 #### 6.5.2 独立运行单个/全部分析方法
+
 ```
 GET /api/data/{device_id}/{batch_index}/{channel}/method-analysis?method={method}&denoise={denoise}&detrend={detrend}
 ```
+
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `method` | `str` | `"all"` | 方法标识或 `"all"` |
@@ -526,9 +559,11 @@ GET /api/data/{device_id}/{batch_index}/{channel}/method-analysis?method={method
 **注意**：该端点为 `async def`
 
 #### 6.5.3 研究级多算法集成诊断
+
 ```
 GET /api/data/{device_id}/{batch_index}/{channel}/research-analysis?detrend={detrend}&profile={profile}&denoise={denoise}&max_seconds={max_seconds}
 ```
+
 | 参数 | 类型 | 默认值 | 约束 | 说明 |
 |------|------|--------|------|------|
 | `profile` | `str` | `"balanced"` | — | 诊断配置：balanced/exhaustive |
@@ -541,38 +576,48 @@ GET /api/data/{device_id}/{batch_index}/{channel}/research-analysis?detrend={det
 ### 6.6 诊断结果操作
 
 #### 6.6.1 查询通道诊断结果
+
 ```
 GET /api/data/{device_id}/{batch_index}/{channel}/diagnosis?denoise_method={denoise_method}
 ```
+
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `denoise_method` | `Optional[str]` | `None` | 指定去噪方法查询缓存 |
 
 **查询优先级**：
+
 1. 精确匹配 `device + batch + channel + denoise_method`
 2. 该通道最新结果（不限去噪方法）
 3. 批次级诊断记录（兼容旧数据）
 
 #### 6.6.2 更新批次诊断结果
+
 ```
 PUT /api/data/{device_id}/{batch_index}/diagnosis
 ```
+
 **请求体**：
+
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `order_analysis` | `Optional[dict]` | 阶次分析结果 |
 | `rot_freq` | `Optional[float]` | 估计转频 |
 
 #### 6.6.3 单批次重新诊断
+
 ```
 POST /api/data/{device_id}/{batch_index}/reanalyze
 ```
+
 **说明**：覆盖更新数据库中的 Diagnosis 记录，要求设备在线
 
 #### 6.6.4 全部批次重新诊断
+
 ```
 POST /api/data/{device_id}/reanalyze-all
 ```
+
 **说明**：逐批次串行执行以避免 OOM，返回 `{total, updated, errors, results}`
 
 ---
@@ -668,6 +713,7 @@ POST /api/ingest/
 | `is_special` | `Optional[int]` | 是否特殊采集 |
 
 **内部辅助函数**：
+
 - `_decompress_channels(payload)`：支持 `compressed_data`（base64+zlib+msgpack/json）和原图模式
 - `_get_next_batch_index(db, device_id, is_special)`：普通数据 1~16 循环覆盖，特殊数据从 101 起自增永不覆盖
 
@@ -684,6 +730,7 @@ WS /ws/monitor?token={token}
 ```
 
 **连接流程**：
+
 1. 前端连接 WebSocket，携带 `token` 查询参数
 2. 后端校验 `token`，通过后 `manager.connect(websocket)`
 3. 心跳机制：前端发送 `{"type":"ping"}`，后端回复 `{"type":"pong"}`
