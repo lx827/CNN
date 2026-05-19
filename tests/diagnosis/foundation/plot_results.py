@@ -85,10 +85,6 @@ def plot_bearing_fault_freqs():
     fig.savefig(PLOT_DIR / "bearing_fault_freqs.png", dpi=150)
     plt.close(fig)
     print("  [OK] bearing_fault_freqs.png")
-    plt.tight_layout()
-    fig.savefig(PLOT_DIR / "bearing_fault_freqs.png", dpi=150)
-    plt.close(fig)
-    print("  [OK] bearing_fault_freqs.png")
 
 
 def plot_envelope_correctness():
@@ -128,6 +124,28 @@ def plot_envelope_correctness():
     plt.close(fig)
     print("  [OK] envelope_correctness.png")
 
+    # 真实数据 SNR 对比 (HUSTbear + CW)
+    fig2, ax2 = plt.subplots(figsize=(10, 5))
+    real_data = data.get("real_hustbear", []) + data.get("real_cw", [])
+    if real_data:
+        labels = [f"{d.get('dataset','')}-{d['description']}" for d in real_data]
+        bpfo_snrs = [d.get("snr", {}).get("BPFO", 0) for d in real_data]
+        bpfi_snrs = [d.get("snr", {}).get("BPFI", 0) for d in real_data]
+        x = np.arange(len(labels))
+        w = 0.35
+        ax2.bar(x - w/2, bpfo_snrs, w, label='BPFO SNR', color='#165DFF')
+        ax2.bar(x + w/2, bpfi_snrs, w, label='BPFI SNR', color='#FAAD14')
+        ax2.axhline(y=3.0, color='red', linestyle='--', alpha=0.5, label='SNR=3')
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(labels, fontsize=8)
+        ax2.set_ylabel("SNR")
+        ax2.set_title("真实数据 — BPFO/BPFI 检出 SNR")
+        ax2.legend()
+        plt.tight_layout()
+        fig2.savefig(PLOT_DIR / "envelope_real_snr.png", dpi=150)
+        plt.close(fig2)
+        print("  [OK] envelope_real_snr.png")
+
 
 def plot_order_tracking():
     """阶次跟踪：转频估计误差"""
@@ -159,6 +177,22 @@ def plot_order_tracking():
     plt.close(fig)
     print("  [OK] order_tracking.png")
 
+    # 真实数据转频估计
+    fig2, ax2 = plt.subplots(figsize=(10, 4))
+    real_data = (data.get("real_hustbear", []) or []) + (data.get("real_cw", []) or [])
+    if real_data:
+        labels = [f"{d.get('dataset','')}-{d['file'][:10]}" for d in real_data]
+        rfreqs = [d["estimated_rot_freq_Hz"] for d in real_data]
+        colors = ['#165DFF' if 'health' in d.get('description','').lower() or '健康' in d.get('description','')
+                  else '#F5222D' for d in real_data]
+        ax2.barh(labels, rfreqs, color=colors)
+        ax2.set_xlabel("估计转频 (Hz)")
+        ax2.set_title("真实数据 — 转频估计")
+        plt.tight_layout()
+        fig2.savefig(PLOT_DIR / "order_real_rotfreq.png", dpi=150)
+        plt.close(fig2)
+        print("  [OK] order_real_rotfreq.png")
+
 
 def plot_cepstrum():
     """倒谱：峰值检测结果"""
@@ -166,7 +200,7 @@ def plot_cepstrum():
     if not data:
         return
 
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(8, 6))
     all_tests = data.get("gear_mesh", []) + data.get("harmonic", [])
     labels = []
     values = []
@@ -188,10 +222,47 @@ def plot_cepstrum():
     print("  [OK] cepstrum.png")
 
 
+def plot_gear_metrics():
+    """齿轮指标：SER/FM4 在各数据集上的分布"""
+    data = load_json("gear_metrics_correctness.json")
+    if not data:
+        return
+
+    # SER 对比
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    for ax, ds_name in [(axes[0], "wtgearbox"), (axes[1], "hustgearbox")]:
+        ds_data = data.get(ds_name, [])
+        if not ds_data:
+            continue
+        labels = [d["label"] for d in ds_data]
+        ser_vals = [d["ser"] for d in ds_data]
+        fm4_vals = [d["fm4"] for d in ds_data]
+        kurt_vals = [d["kurtosis"] for d in ds_data]
+
+        x = np.arange(len(labels))
+        w = 0.25
+        ax.bar(x - w, ser_vals, w, label='SER', color='#165DFF')
+        # Normalize FM4 and kurtosis to similar scale
+        fm4_norm = [v / max(fm4_vals) * max(ser_vals) * 0.8 if max(fm4_vals) > 0 else 0 for v in fm4_vals]
+        kurt_norm = [v / max(kurt_vals) * max(ser_vals) * 0.8 if max(kurt_vals) > 0 else 0 for v in kurt_vals]
+        ax.bar(x, fm4_norm, w, label=f'FM4 (×{max(ser_vals)*0.8/max(fm4_vals):.0f})', color='#FAAD14', alpha=0.7)
+        ax.bar(x + w, kurt_norm, w, label=f'Kurt (×{max(ser_vals)*0.8/max(kurt_vals):.0f})', color='#52C41A', alpha=0.7)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels)
+        ax.set_title(f"{ds_name} — SER / FM4 / Kurtosis")
+        ax.legend(fontsize=7)
+
+    plt.tight_layout()
+    fig.savefig(PLOT_DIR / "gear_metrics.png", dpi=150)
+    plt.close(fig)
+    print("  [OK] gear_metrics.png")
+
+
 def plot_summary():
     """汇总所有测试的通过率"""
     summary_data = {}
-    for json_name in ["bearing_fault_freqs", "envelope_correctness", "order_tracking_correctness", "cepstrum_correctness"]:
+    for json_name in ["bearing_fault_freqs", "envelope_correctness", "order_tracking_correctness", "cepstrum_correctness", "gear_metrics_correctness"]:
         data = load_json(f"{json_name}.json")
         if data and "summary" in data:
             summary_data[json_name] = data["summary"]
@@ -199,7 +270,7 @@ def plot_summary():
     if not summary_data:
         return
 
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(8, 6))
     labels = [k.replace("_", "\n") for k in summary_data.keys()]
     totals = [v.get("total", 0) for v in summary_data.values()]
     passed = [v.get("passed", 0) for v in summary_data.values()]
@@ -212,6 +283,7 @@ def plot_summary():
     ax.set_xticklabels(labels)
     ax.set_ylabel("测试数")
     ax.set_title("基础算法正确性 — 测试通过率汇总")
+    ax.set_ylim(0, 10)
     ax.legend()
 
     for i, (t, p) in enumerate(zip(totals, passed)):
@@ -236,6 +308,7 @@ def main():
     plot_envelope_correctness()
     plot_order_tracking()
     plot_cepstrum()
+    plot_gear_metrics()
     plot_summary()
 
     print(f"\n图表保存在: {PLOT_DIR}")

@@ -129,6 +129,39 @@ def test_real_hustbear_order():
     return results
 
 
+def test_real_cw_order():
+    """真实 CW 变速数据：转频估计"""
+    print("\n--- CW 变速数据阶次分析 ---")
+    results = []
+
+    data_dir = Path(r"D:\code\CNN\CW\down8192_CW")
+    test_files = [
+        ("H-A-1.npy", "健康升速", (5, 40)),
+        ("I-A-1.npy", "内圈故障升速", (5, 40)),
+        ("O-A-1.npy", "外圈故障升速", (5, 40)),
+    ]
+
+    for fname, desc, freq_range in test_files:
+        fpath = data_dir / fname
+        if not fpath.exists():
+            print(f"  [SKIP] {fname} 不存在")
+            continue
+
+        sig = np.load(str(fpath)).astype(np.float64)[:FS * 5]
+        rot_freq = estimate_rot_freq_spectrum(sig, FS, freq_range=freq_range)
+
+        results.append({
+            "dataset": "CW",
+            "file": fname,
+            "description": desc,
+            "estimated_rot_freq_Hz": round(rot_freq, 2),
+            "estimated_rot_rpm": round(rot_freq * 60, 0),
+        })
+        print(f"  [{desc}] 转频={rot_freq:.1f}Hz ({rot_freq*60:.0f}RPM)")
+
+    return results
+
+
 def main():
     print("=" * 60)
     print("阶次跟踪 — 正确性验证")
@@ -138,6 +171,7 @@ def main():
         "rot_freq_estimation": test_rot_freq_estimation(),
         "chirp_order_tracking": test_chirp_order_tracking(),
         "real_hustbear": test_real_hustbear_order(),
+        "real_cw": test_real_cw_order(),
     }
 
     total = 0

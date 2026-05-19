@@ -84,6 +84,7 @@ tests/
 │   │   ├── test_envelope_correctness.py     # 包络谱正确性
 │   │   ├── test_order_tracking_correctness.py # 阶次跟踪正确性
 │   │   ├── test_cepstrum_correctness.py     # 倒谱正确性
+│   │   ├── test_gear_metrics_correctness.py  # 齿轮指标(SER/FM4/CAR)正确性
 │   │   ├── plot_results.py                  # [独立绘图] 读 JSON 生成对比图
 │   │   └── output/                          # JSON 结果 + PNG 图表
 │   ├── debug/                             # 调试脚本（临时）
@@ -102,9 +103,10 @@ tests/
 | 文件 | 验证内容 | 测试方式 |
 |------|---------|---------|
 | `test_bearing_fault_freqs.py` | BPFO/BPFI/BSF/FTF 公式计算 | 与手动理论值对比，相对误差 < 0.001% |
-| `test_envelope_correctness.py` | 包络谱峰值 SNR 检测 | 合成冲击信号（50/100/150Hz）+ 合成轴承信号 + 真实 HUSTbear 数据 |
-| `test_order_tracking_correctness.py` | 转频估计 + 变速跟踪 | 合成正弦信号（10/25/50/80Hz）+ 扫频信号 + 真实 HUSTbear 数据 |
+| `test_envelope_correctness.py` | 包络谱峰值 SNR 检测 | 合成冲击信号（50/100/150Hz）+ 合成轴承信号 + HUSTbear + CW 真实数据 |
+| `test_order_tracking_correctness.py` | 转频估计 + 变速跟踪 | 合成正弦信号（10/25/50/80Hz）+ 扫频信号 + HUSTbear + CW 真实数据 |
 | `test_cepstrum_correctness.py` | 倒谱峰值检测 | 合成齿轮啮合信号（mesh=450Hz）+ 合成谐波信号 |
+| `test_gear_metrics_correctness.py` | 齿轮 SER/FM4/CAR 指标 | 合成齿轮信号 + WTgearbox 行星箱 + HUSTgearbox 定轴箱 |
 
 **一键运行**：
 

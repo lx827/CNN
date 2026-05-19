@@ -178,6 +178,55 @@ def test_real_hustbear():
     return results
 
 
+def test_real_cw():
+    """真实 CW 变速数据：内圈/外圈故障应被检出"""
+    print("\n--- 真实 CW 变速数据 ---")
+    results = []
+
+    ER16K = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
+    data_dir = Path(r"D:\code\CNN\CW\down8192_CW")
+
+    test_files = [
+        ("H-A-1.npy", "健康升速", "none"),
+        ("I-A-1.npy", "内圈故障升速", "BPFI"),
+        ("O-A-1.npy", "外圈故障升速", "BPFO"),
+    ]
+
+    for fname, desc, expect_fault in test_files:
+        fpath = data_dir / fname
+        if not fpath.exists():
+            print(f"  [SKIP] {fname} 不存在")
+            continue
+
+        sig = np.load(str(fpath)).astype(np.float64)
+        if len(sig) > FS * 5:
+            sig = sig[:FS * 5]
+
+        rot_freq = estimate_rot_freq_spectrum(sig, FS, freq_range=(5, 40))
+        fault_freqs = _compute_bearing_fault_freqs(rot_freq, ER16K)
+
+        env = envelope_analysis(sig, FS, max_freq=500)
+        snr_dict = {}
+        for key in ["BPFO", "BPFI", "BSF"]:
+            if key in fault_freqs and fault_freqs[key] > 0:
+                snr, _ = peak_snr(env["envelope_freq"], env["envelope_amp"], fault_freqs[key])
+                snr_dict[key] = round(snr, 2)
+
+        results.append({
+            "dataset": "CW",
+            "file": fname,
+            "description": desc,
+            "estimated_rot_freq": round(rot_freq, 2),
+            "expected_fault_freqs": {k: round(v, 2) for k, v in fault_freqs.items()},
+            "snr": snr_dict,
+            "expect_fault": expect_fault,
+        })
+        print(f"  [{desc}] rot={rot_freq:.1f}Hz, BPFO={fault_freqs.get('BPFO',0):.1f}Hz, "
+              f"SNR: BPFO={snr_dict.get('BPFO',0):.1f}, BPFI={snr_dict.get('BPFI',0):.1f}")
+
+    return results
+
+
 def test_no_crash():
     """regression: 极端参数不崩溃"""
     print("\n--- 鲁棒性 ---")
@@ -213,6 +262,7 @@ def main():
         "synthetic_impulse": test_synthetic_impulse(),
         "synthetic_bearing": test_synthetic_bearing(),
         "real_hustbear": test_real_hustbear(),
+        "real_cw": test_real_cw(),
         "robustness": test_no_crash(),
     }
 
