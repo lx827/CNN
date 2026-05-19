@@ -20,7 +20,7 @@ from tests.diagnosis.foundation.synthetic_signals import (
     NumpyEncoder,
     bearing_outer_race, bearing_inner_race, impulse_train, sinusoidal,
 )
-from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
+from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum, find_peaks_in_spectrum
 from app.services.diagnosis.features import _compute_bearing_fault_freqs
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -28,17 +28,15 @@ FS = 8192
 
 
 def peak_snr(freqs, amps, target_freq, tol_pct=5.0):
-    """在 target_freq ± tol_pct% 范围内搜索峰值 SNR"""
-    arr_f = np.array(freqs)
-    arr_a = np.array(amps)
-    tol = target_freq * tol_pct / 100
-    mask = np.abs(arr_f - target_freq) <= tol
-    if not np.any(mask):
-        return 0.0, None
-    peak = float(np.max(arr_a[mask]))
-    median = float(np.median(arr_a))
-    snr = peak / median if median > 0 else 0.0
-    return snr, peak
+    """委托云端 find_peaks_in_spectrum 搜索目标频率 SNR"""
+    result = find_peaks_in_spectrum(
+        np.array(freqs), np.array(amps), target_freq,
+        tolerance_hz=target_freq * tol_pct / 100,
+    )
+    fund = result.get("fundamental")
+    if fund:
+        return fund["snr"], fund["amp"]
+    return 0.0, None
 
 
 def find_peak_freq(freqs, amps, search_range=(10, 500)):

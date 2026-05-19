@@ -15,44 +15,22 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 from tests.diagnosis.foundation.synthetic_signals import NumpyEncoder,  gear_mesh, sinusoidal
+from app.api.data_view import _compute_cepstrum as _cloud_cepstrum
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 FS = 8192
 
 
 def _compute_cepstrum_simple(sig, fs, max_quefrency_ms=200.0):
-    """简化倒谱计算（避免依赖 data_view/__init__.py）"""
-    N = len(sig)
-    window = np.hanning(N)
-    spectrum = np.fft.fft(sig * window)
-    log_spec = np.log(np.abs(spectrum) + 1e-10) - np.mean(np.log(np.abs(spectrum) + 1e-10))
-    cepstrum = np.real(np.fft.ifft(log_spec))
-    quefrency = np.arange(N) / fs * 1000  # ms
-    half = N // 2
-    mask = quefrency[:half] <= max_quefrency_ms
-    return quefrency[:half][mask], cepstrum[:half][mask]
+    """委托云端 _compute_cepstrum 计算倒谱，返回 (quefrency_ms, cepstrum, peaks)"""
+    quef_ms, cep, peaks = _cloud_cepstrum(sig, fs, max_quefrency_ms=max_quefrency_ms)
+    return quef_ms, cep, peaks
 
 
-def find_quefrency_peaks(quef_ms, cep, top_n=3, min_ms=2.0):
-    """找倒频谱中的显著峰值"""
-    mask = quef_ms >= min_ms
-    q = quef_ms[mask]
-    c = cep[mask]
-
-    if len(c) < 10:
-        return []
-
-    from scipy.signal import find_peaks
-    peaks_idx, _ = find_peaks(c, distance=max(5, len(c)//50))
-    sorted_idx = sorted(peaks_idx, key=lambda i: c[i], reverse=True)
-
-    peaks = []
-    for idx in sorted_idx[:top_n]:
-        q_ms = float(q[idx])
-        freq_hz = 1000.0 / q_ms if q_ms > 0 else 0
-        peaks.append({"quefrency_ms": round(q_ms, 2), "freq_hz": round(freq_hz, 2),
-                       "amplitude": round(float(c[idx]), 4)})
-    return peaks
+def find_quefrency_peaks(peaks_list, top_n=3, min_ms=2.0):
+    """从云端 _compute_cepstrum 返回的 peaks 列表中取前 N 个（过滤 min_ms）"""
+    filtered = [p for p in peaks_list if p.get("quefrency_ms", 0) >= min_ms]
+    return sorted(filtered, key=lambda p: p.get("amplitude", 0), reverse=True)[:top_n]
 
 
 def test_gear_mesh_cepstrum():
@@ -61,29 +39,29 @@ def test_gear_mesh_cepstrum():
     results = []
 
     sig, fs, gt = gear_mesh(mesh_freq=450.0, rot_freq=25.0, duration=3.0, snr_db=50)
-    quef_ms, cep = _compute_cepstrum_simple(sig, fs)
-    peaks = find_quefrency_peaks(quef_ms, cep, top_n=5, min_ms=0.5)
+    quef_ms, cep, peaks = _compute_cepstrum_simple(sig, fs)
+    top_peaks = find_quefrency_peaks(peaks, top_n=5, min_ms=0.5)
 
     # ground truth: quefrency = 1 / mesh_freq * 1000 ms
     expected_mesh_quef = 1000.0 / 450.0  # ≈ 2.22 ms
     expected_rot_quef = 1000.0 / 25.0    # = 40 ms
 
     # 检查是否有峰值接近预期
-    mesh_found = any(abs(p["freq_hz"] - 450.0) / 450.0 < 0.1 for p in peaks)
-    rot_found = any(abs(p["quefrency_ms"] - 40.0) / 40.0 < 0.2 for p in peaks)
+    mesh_found = any(abs(p["freq_hz"] - 450.0) / 450.0 < 0.1 for p in top_peaks)
+    rot_found = any(abs(p["quefrency_ms"] - 40.0) / 40.0 < 0.2 for p in top_peaks)
 
     results.append({
         "test": "gear_mesh_450Hz_25rps",
         "expected_mesh_quef_ms": round(expected_mesh_quef, 2),
         "expected_rot_quef_ms": round(expected_rot_quef, 2),
-        "detected_peaks": peaks,
+        "detected_peaks": top_peaks,
         "mesh_found": mesh_found,
         "rot_found": rot_found,
         "passed": mesh_found or rot_found,
     })
     status = "PASS" if results[-1]["passed"] else "FAIL"
     print(f"  [{status}] 啮合450Hz: mesh_found={mesh_found}, rot_found={rot_found}")
-    print(f"    检测到峰值: {[(p['freq_hz'], p['quefrency_ms']) for p in peaks]}")
+    print(f"    检测到峰值: {[(p['freq_hz'], p['quefrency_ms']) for p in top_peaks]}")
     return results
 
 
@@ -98,8 +76,8 @@ def test_harmonic_cepstrum():
         for h in [2, 3, 5]:
             sig += 0.5 * np.sin(2 * np.pi * f0 * h * np.arange(len(sig)) / fs)
 
-        quef_ms, cep = _compute_cepstrum_simple(sig, fs)
-        peaks = find_quefrency_peaks(quef_ms, cep, top_n=3)
+        quef_ms, cep, cloud_peaks = _compute_cepstrum_simple(sig, fs)
+        peaks = find_quefrency_peaks(cloud_peaks, top_n=3)
         expected_quef = 1000.0 / f0
         found = any(abs(p["freq_hz"] - f0) / f0 < 0.1 for p in peaks)
         results.append({
