@@ -73,8 +73,8 @@
       </div>
       <div class="metric"><span class="label">健康度</span><strong>{{ result.health_score }}</strong></div>
       <div class="metric"><span class="label">故障概率</span><strong>{{ percent(result.fault_likelihood) }}</strong></div>
-      <div class="metric"><span class="label">故障标签</span><strong>{{ result.fault_label || '-' }}</strong></div>
       <div class="metric"><span class="label">转频</span><strong>{{ result.rot_freq_hz ?? '-' }} Hz</strong></div>
+      <div class="metric fault-label-metric"><span class="label">故障标签</span><strong class="fault-label-text">{{ result.fault_label || '-' }}</strong></div>
     </div>
 
     <!-- 单方法结果摘要 -->
@@ -731,6 +731,15 @@ const gotoDataView = () => {
 
 .label { color: #6b7280; font-size: 13px; }
 .metric strong { font-size: 20px; color: #111827; }
+
+.fault-label-metric {
+  grid-column: 1 / -1;
+  min-height: auto;
+}
+.fault-label-text {
+  font-size: 16px !important;
+  word-break: break-all;
+}
 
 .result-grid {
   display: grid;
