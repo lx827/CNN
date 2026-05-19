@@ -36,28 +36,55 @@ def load_json(name):
 
 
 def plot_bearing_fault_freqs():
-    """轴承故障频率：理论 vs 计算差异"""
+    """轴承故障频率：理论值 vs 计算值 并排对比"""
     data = load_json("bearing_fault_freqs.json")
     if not data:
         return
 
-    fig, ax = plt.subplots(figsize=(10, 5))
-    labels = []
-    errors = []
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # 按 (测试用例, freq_type) 排列
+    groups = []
+    group_labels = []
     for tc in data["test_cases"]:
         for key in ["BPFO", "BPFI", "BSF", "FTF"]:
             e = tc["errors"].get(key, {})
-            if e:
-                labels.append(f"{tc['name']}\n{key}")
-                errors.append(e["rel_error"] * 100)
+            if e and e["expected"] > 0:
+                groups.append({
+                    "label": f"{tc['name']}\n{key}",
+                    "expected": e["expected"],
+                    "computed": e["computed"],
+                    "diff_hz": e["abs_error"],
+                })
+                group_labels.append(f"{tc['name']}\n{key}")
 
-    colors = ['green' if e < 0.1 else 'orange' if e < 1.0 else 'red' for e in errors]
-    ax.barh(labels, errors, color=colors)
-    ax.set_xlabel("相对误差 (%)")
-    ax.set_title("轴承故障频率 — 理论值 vs 计算值")
-    ax.axvline(x=0.1, color='green', linestyle='--', alpha=0.5, label='0.1% 容差')
-    ax.axvline(x=1.0, color='orange', linestyle='--', alpha=0.5, label='1% 容差')
+    x = np.arange(len(groups))
+    width = 0.35
+
+    expected_vals = [g["expected"] for g in groups]
+    computed_vals = [g["computed"] for g in groups]
+    diffs = [g["diff_hz"] for g in groups]
+
+    bars1 = ax.bar(x - width/2, expected_vals, width, label='理论值', color='#165DFF', alpha=0.85)
+    bars2 = ax.bar(x + width/2, computed_vals, width, label='计算值', color='#FAAD14', alpha=0.85)
+
+    # 标注差异
+    for i, d in enumerate(diffs):
+        if d > 0.001:
+            ax.annotate(f'Δ={d:.2e}Hz', (x[i], max(expected_vals[i], computed_vals[i])),
+                        ha='center', fontsize=7, color='red')
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(group_labels, fontsize=8)
+    ax.set_ylabel("频率 (Hz)")
+    ax.set_title(f"轴承故障频率 — 理论值 vs 计算值  (最大误差={max(diffs):.2e} Hz)")
     ax.legend()
+    ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    fig.savefig(PLOT_DIR / "bearing_fault_freqs.png", dpi=150)
+    plt.close(fig)
+    print("  [OK] bearing_fault_freqs.png")
     plt.tight_layout()
     fig.savefig(PLOT_DIR / "bearing_fault_freqs.png", dpi=150)
     plt.close(fig)
