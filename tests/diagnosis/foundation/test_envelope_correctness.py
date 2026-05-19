@@ -22,6 +22,7 @@ from tests.diagnosis.foundation.synthetic_signals import (
 )
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum, find_peaks_in_spectrum
 from app.services.diagnosis.features import _compute_bearing_fault_freqs
+from app.services.diagnosis.order_tracking import _compute_order_spectrum_varying_speed
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 FS = 8192
@@ -191,6 +192,13 @@ def test_real_cw():
     ER16K = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
     data_dir = Path(r"D:\code\CNN\CW\down8192_CW")
 
+    # 来自 AGENTS.md 的已知转速范围
+    CW_EXPECTED = {
+        "H-A-1.npy": (14.1, 23.8),
+        "I-A-1.npy": (12.5, 27.8),
+        "O-A-1.npy": (14.8, 27.1),
+    }
+
     test_files = [
         ("H-A-1.npy", "健康升速", "none"),
         ("I-A-1.npy", "内圈故障升速", "BPFI"),
@@ -207,8 +215,11 @@ def test_real_cw():
         if len(sig) > FS * 5:
             sig = sig[:FS * 5]
 
-        rot_freq = estimate_rot_freq_spectrum(sig, FS, freq_range=(5, 40))
-        fault_freqs = _compute_bearing_fault_freqs(rot_freq, ER16K)
+        # CW 变速数据：用变速阶次跟踪获取中位转频（比 estimate_rot_freq_spectrum 更准确）
+        _, _, median_rf, std_rf = _compute_order_spectrum_varying_speed(
+            sig, FS, freq_range=(5, 40), samples_per_rev=512, max_order=20,
+        )
+        fault_freqs = _compute_bearing_fault_freqs(median_rf, ER16K)
 
         env = envelope_analysis(sig, FS, max_freq=500)
         snr_dict = {}
@@ -217,13 +228,16 @@ def test_real_cw():
                 snr, _ = peak_snr(env["envelope_freq"], env["envelope_amp"], fault_freqs[key])
                 snr_dict[key] = round(snr, 2)
 
-        # 判定通过/失败
+        # 判定通过/失败：转频必须在预期范围 + 故障频率 SNR 达标
+        exp_range = CW_EXPECTED.get(fname, (0, 0))
+        rf_ok = exp_range[0] <= median_rf <= exp_range[1] if exp_range[1] > 0 else True
+
         if expect_fault == "BPFO":
-            passed = snr_dict.get("BPFO", 0) > 3.0
+            passed = rf_ok and snr_dict.get("BPFO", 0) > 3.0
         elif expect_fault == "BPFI":
-            passed = snr_dict.get("BPFI", 0) > 3.0
+            passed = rf_ok and snr_dict.get("BPFI", 0) > 3.0
         elif expect_fault == "none":
-            passed = all(v < 3.0 for v in snr_dict.values())
+            passed = rf_ok and all(v < 3.0 for v in snr_dict.values())
         else:
             passed = True
 
@@ -232,12 +246,13 @@ def test_real_cw():
             "file": fname,
             "description": desc,
             "passed": passed,
-            "estimated_rot_freq": round(rot_freq, 2),
+            "estimated_rot_freq": round(median_rf, 2),
+            "estimated_rot_std": round(std_rf, 2),
             "expected_fault_freqs": {k: round(v, 2) for k, v in fault_freqs.items()},
             "snr": snr_dict,
             "expect_fault": expect_fault,
         })
-        print(f"  [{desc}] rot={rot_freq:.1f}Hz, BPFO={fault_freqs.get('BPFO',0):.1f}Hz, "
+        print(f"  [{desc}] median_rot={median_rf:.1f}Hz ±{std_rf:.1f}, BPFO={fault_freqs.get('BPFO',0):.1f}Hz, "
               f"SNR: BPFO={snr_dict.get('BPFO',0):.1f}, BPFI={snr_dict.get('BPFI',0):.1f}")
 
     return results
