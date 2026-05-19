@@ -552,23 +552,39 @@ def plot_vmd_real():
     if not items:
         return
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    labels = [f"{it['description']}\n({it['file'][:20]}...)" for it in items]
-    orig_kurts = [it["original_kurtosis"] for it in items]
-    best_kurts = [it["best_imf_kurtosis"] for it in items]
+    # 分组：HUSTbear 和 CW 分开
+    hb_items = [it for it in items if it.get("dataset") == "HUSTbear"]
+    cw_items = [it for it in items if it.get("dataset") == "CW"]
 
-    x = np.arange(len(labels)); w = 0.35
-    ax.bar(x - w/2, orig_kurts, w, color='#D9D9D9', edgecolor='#999', label='原始信号峭度')
-    ax.bar(x + w/2, best_kurts, w, color='#165DFF', alpha=0.85, label='最佳IMF峭度')
-    ax.axhline(y=3.0, color='red', linestyle='--', alpha=0.5, label='高斯噪声峭度≈3')
+    fig, axes = plt.subplots(1, 2 if cw_items else 1, figsize=(14, 6))
+    if not isinstance(axes, np.ndarray):
+        axes = [axes]
 
-    for i, (o, b) in enumerate(zip(orig_kurts, best_kurts)):
-        ax.annotate(f'{o:.1f}→{b:.1f}', (i, max(o, b) + 0.3), ha='center', fontsize=8)
+    for ax, ds_items, ds_name in [
+        (axes[0], hb_items, "HUSTbear 恒速"),
+        (axes[1], cw_items, "CW 变速"),
+    ] if cw_items else [(axes[0], hb_items, "HUSTbear")]:
+        if not ds_items:
+            continue
+        labels = [f"{it['description']}" for it in ds_items]
+        y = np.arange(len(labels))
+        h = 0.3
 
-    ax.set_xticks(x); ax.set_xticklabels(labels, fontsize=8)
-    ax.set_ylabel("峭度"); ax.set_title("真实 HUSTbear 数据 — VMD 冲击模态峭度对比")
-    ax.legend(fontsize=8); ax.grid(axis='y', alpha=0.3)
+        orig_k = [it["original_kurtosis"] for it in ds_items]
+        best_k = [it["best_imf_kurtosis"] for it in ds_items]
 
+        ax.barh(y + h/2, orig_k, h, color='#D9D9D9', edgecolor='#999', label='原始峭度')
+        ax.barh(y - h/2, best_k, h, color='#165DFF', alpha=0.85, label='最佳IMF峭度')
+        ax.axvline(x=3.0, color='red', linestyle='--', alpha=0.5, label='高斯≈3')
+
+        for i, (o, b) in enumerate(zip(orig_k, best_k)):
+            ax.annotate(f'{o:.1f}→{b:.1f}', (max(o, b) + 0.2, i), va='center', fontsize=7)
+
+        ax.set_yticks(y); ax.set_yticklabels(labels, fontsize=8)
+        ax.set_xlabel("峭度"); ax.set_title(f"{ds_name} — VMD 冲击模态")
+        ax.legend(fontsize=7, loc='lower right'); ax.grid(axis='x', alpha=0.3)
+
+    fig.suptitle("真实数据 — VMD 冲击模态峭度对比", fontsize=12)
     plt.tight_layout()
     fig.savefig(PLOT_DIR / "15_real_vmd.png", dpi=150); plt.close(fig)
     print("  [OK] 15_real_vmd.png")
