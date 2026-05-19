@@ -36,5 +36,8 @@
             "timeout": 30000,
             "enabled": true
         }
-    }
+    },
+    "plugin": [
+        "opencode-queue"
+    ]
 }
