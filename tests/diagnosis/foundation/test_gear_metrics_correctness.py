@@ -99,6 +99,7 @@ def test_wtgearbox():
             "file": fname,
             "label": label,
             "description": desc,
+            "passed": True,  # 观察性测试，仅记录指标值
             "est_rot_freq": round(rot_freq, 2),
             "mesh_freq_hz": result.get("mesh_freq_hz"),
             "ser": round(result.get("ser", 0), 4),
@@ -150,6 +151,7 @@ def test_hustgearbox():
             "file": fname,
             "label": label,
             "description": desc,
+            "passed": True,  # 观察性测试，仅记录指标值
             "est_rot_freq": round(rot_freq, 2),
             "mesh_freq_hz": result.get("mesh_freq_hz"),
             "ser": round(result.get("ser", 0), 4),
@@ -177,7 +179,7 @@ def main():
     }
 
     total = sum(len(v) for v in all_results.values())
-    passed = sum(1 for cat in all_results.values() for item in cat if item.get("passed", True))
+    passed = sum(1 for cat in all_results.values() for item in cat if item.get("passed", False))
     all_results["summary"] = {"total": total, "passed": passed, "failed": total - passed}
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

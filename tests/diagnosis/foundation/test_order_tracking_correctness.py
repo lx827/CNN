@@ -199,7 +199,7 @@ def main():
     for cat, items in all_results.items():
         for item in items:
             total += 1
-            if item.get("passed", True):
+            if item.get("passed", False):
                 passed += 1
     all_results["summary"] = {"total": total, "passed": passed, "failed": total - passed}
 
