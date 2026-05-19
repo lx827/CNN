@@ -11,6 +11,10 @@ from .signal_utils import (
     prepare_signal,
     compute_fft_spectrum,
     estimate_rot_freq_spectrum as _estimate_rot_freq_simple,
+    _search_peak_in_band,
+    _compute_peak_snr,
+    rms,
+    crest_factor,
 )
 from .order_tracking import (
     _compute_order_spectrum_multi_frame,
@@ -235,7 +239,7 @@ class DiagnosisEngine:
             comb_freqs = []
             if self.gear_teeth:
                 z_in = (self.gear_teeth.get("input") or 0) if self.gear_teeth else 0
-                planet_count = (self.gear_teeth.get("planet_count") or 0) if self.gear_teeth else 0
+                planet_count = (self.gear_teeth.get("planet_count") or self.gear_teeth.get("n_planets") or 0) if self.gear_teeth else 0
                 z_sun = (self.gear_teeth.get("sun") or 0) if self.gear_teeth else 0
                 z_ring = (self.gear_teeth.get("ring") or 0) if self.gear_teeth else 0
                 if z_in > 0 and rot_freq is not None and rot_freq > 0:
@@ -373,7 +377,7 @@ class DiagnosisEngine:
         z_planet = int(float(self.gear_teeth.get("planet") or 0)) if self.gear_teeth else 0
 
         # 行星齿轮箱参数（供 _evaluate_gear_faults 使用）
-        planet_count = int(self.gear_teeth.get("planet_count") or 0) if self.gear_teeth else 0
+        planet_count = int(self.gear_teeth.get("planet_count") or self.gear_teeth.get("n_planets") or 0) if self.gear_teeth else 0
 
         # 兼容：若配置了行星轮数但无 "sun" 键，将 "input" 视为太阳轮齿数
         if planet_count >= 3 and z_sun <= 0 and z_in > 0:
@@ -861,7 +865,7 @@ def _evaluate_bearing_faults_statistical(
     # 6. 包络谱峰值因子（crest_factor_in_spectrum）
     #    外圈故障：包络谱分布较均匀（多个中等峰），峰值因子偏低
     #    内圈故障：包络谱分布极不均匀（少数超强峰），峰值因子偏高
-    env_rms = float(np.sqrt(np.mean(amp_arr ** 2)))
+    env_rms = rms(amp_arr)
     env_cf = float(peak_amp / env_rms) if env_rms > 1e-12 else 0.0
     indicators["envelope_crest_factor"] = {
         "value": float(round(env_cf, 2)),
@@ -959,10 +963,9 @@ def _evaluate_bearing_faults(
                     harmonic_snrs.append(h_snr)
 
             if np.any(mask):
-                peak_idx = int(np.argmax(amp_arr[mask]))
-                actual_idx = int(np.where(mask)[0][peak_idx])
-                peak_amp = float(amp_arr[actual_idx])
-                snr = peak_amp / background if background > 0 else 0.0
+                peak = _search_peak_in_band(freq_arr, amp_arr, f_hz, tol)
+                peak_amp = peak["amp"] if peak else 0.0
+                snr = _compute_peak_snr(peak_amp, amp_arr) if peak else 0.0
 
                 # 频率路径判定：仅用于故障类型标注，不用于"是否故障"判断
                 # 健康轴承也有低 SNR 的频率峰值（随机波动），所以阈值不能太低
@@ -976,10 +979,9 @@ def _evaluate_bearing_faults(
                         if sb_f <= 0 or sb_f > freq_arr[-1]:
                             continue
                         sb_tol = max(sb_f * 0.05, df * 2, sb_f * rot_freq_uncertainty * 0.5)
-                        sb_mask = np.abs(freq_arr - sb_f) <= sb_tol
-                        if np.any(sb_mask):
-                            sb_peak = float(np.max(amp_arr[sb_mask]))
-                            sb_snr = sb_peak / background if background > 0 else 0.0
+                        sb_peak_info = _search_peak_in_band(freq_arr, amp_arr, sb_f, sb_tol)
+                        if sb_peak_info:
+                            sb_snr = _compute_peak_snr(sb_peak_info["amp"], amp_arr)
                             sideband_snrs.append(sb_snr)
                     strong_sb = sum(1 for s in sideband_snrs if s > 3.0)
                     if strong_sb >= 2 and snr > 4.0 and not significant:
@@ -987,7 +989,7 @@ def _evaluate_bearing_faults(
 
                 param_indicators[name] = {
                     "theory_hz": round(f_hz, 2),
-                    "detected_hz": round(float(freq_arr[actual_idx]), 2),
+                    "detected_hz": round(peak["freq"], 2) if peak else None,
                     "peak_amp": round(peak_amp, 6),
                     "snr": round(snr, 2),
                     "significant": significant,

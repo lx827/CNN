@@ -18,16 +18,8 @@ tests/
 │   │   └── test_varying_speed_order.py    # 变速阶次跟踪测试
 │   ├── algorithms/                        # 新增算法单元测试
 │   │   ├── test_engine_regressions.py     # 诊断引擎回归（无参数/TSA/转频）
-│   │   ├── test_research_ensemble.py      # 多算法集成诊断测试
 │   │   ├── test_new_algorithms.py         # 新算法（EMD/MCKD/小波包/SG）测试
-│   │   ├── test_emd_denoise.py            # EMD/CEEMDAN 降噪测试
-│   │   └── test_scoh_fix.py               # SC/SCoh 循环平稳修复验证
-│   ├── gear/                              # 齿轮诊断专项测试
-│   │   ├── test_time_features.py          # 行星箱时域特征明细
-│   │   ├── test_fm4.py                    # FM4 指标测试
-│   │   ├── test_gear_detail.py            # 齿轮诊断细节调试
-│   │   ├── test_gear_values.py            # 齿轮指标数值验证
-│   │   └── test_c2_features.py            # C2 通道特征测试
+│   │   └── test_emd_denoise.py            # EMD/CEEMDAN 降噪测试
 │   ├── planetary/                         # 行星齿轮箱专项测试
 │   │   ├── test_planetary_e2e.py          # 端到端评估（160文件检出率/误报率）
 │   │   └── test_planetary_demod.py        # VMD/SC/SCoh/CVS 解调方法测试
@@ -78,14 +70,14 @@ tests/
 │   │   ├── experiment_d_robustness.py     # 实验D：鲁棒性
 │   │   ├── experiment_e_fusion.py         # 实验E：融合方法
 │   │   └── experiment_f_health.py         # 实验F：健康度评分
-│   ├── foundation/                         # [P0+] 基础算法正确性测试
+│   ├── foundation/                         # [P0+] 分层正确性测试 → 详见 TEST_ARCHITECTURE.md
 │   │   ├── synthetic_signals.py             # 合成信号生成器（含 ground truth）
-│   │   ├── test_bearing_fault_freqs.py      # 轴承故障频率计算
-│   │   ├── test_envelope_correctness.py     # 包络谱正确性
-│   │   ├── test_order_tracking_correctness.py # 阶次跟踪正确性
-│   │   ├── test_cepstrum_correctness.py     # 倒谱正确性
-│   │   ├── test_gear_metrics_correctness.py  # 齿轮指标(SER/FM4/CAR)正确性
-│   │   ├── plot_results.py                  # [独立绘图] 读 JSON 生成对比图
+│   │   ├── layer1/                          # 信号基元 (14模块, 158测试)
+│   │   ├── layer2/                          # 特征提取 & 信号处理 (10模块)
+│   │   ├── layer3/                          # 模块聚合 & 集成调度 (4模块)
+│   │   ├── layer4/                          # 中央调度器深层 (2模块)
+│   │   ├── layer5/                          # 应用入口辅助函数 (3模块)
+│   │   └── output/                          # JSON 结果 + PNG 图表
 │   │   └── output/                          # JSON 结果 + PNG 图表
 │   ├── debug/                             # 调试脚本（临时）
 │   │   └── debug_cw_fp.py                 # CW 健康数据误判诊断
@@ -95,34 +87,11 @@ tests/
 
 ---
 
-## 0. 基础算法正确性测试（P0+ — 验证算法计算是否正确）
+## 0. 分层正确性测试（详见 `TEST_ARCHITECTURE.md`）
 
-> **用途**：使用合成信号（含已知 ground truth）+ 真实数据集，验证基础算法（轴承频率/包络/阶次/倒谱）的计算结果是否正确。
-> **数据输出**：测试结果以 JSON 存入 `output/`，独立绘图脚本 `plot_results.py` 读取 JSON 生成对比图，无需重跑分析。
-
-| 文件 | 验证内容 | 测试方式 |
-|------|---------|---------|
-| `test_bearing_fault_freqs.py` | BPFO/BPFI/BSF/FTF 公式计算 | 与手动理论值对比，相对误差 < 0.001% |
-| `test_envelope_correctness.py` | 包络谱峰值 SNR 检测 | 合成冲击信号（50/100/150Hz）+ 合成轴承信号 + HUSTbear + CW 真实数据 |
-| `test_order_tracking_correctness.py` | 转频估计 + 变速跟踪 | 合成正弦信号（10/25/50/80Hz）+ 扫频信号 + HUSTbear + CW 真实数据 |
-| `test_cepstrum_correctness.py` | 倒谱峰值检测 | 合成齿轮啮合信号（mesh=450Hz）+ 合成谐波信号 |
-| `test_gear_metrics_correctness.py` | 齿轮 SER/FM4/CAR 指标 | 合成齿轮信号 + WTgearbox 行星箱 + HUSTgearbox 定轴箱 |
-
-**一键运行**：
-
-```bash
-cd /d/code/CNN
-d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\foundation\test_bearing_fault_freqs.py
-d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\foundation\test_envelope_correctness.py
-d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\foundation\test_order_tracking_correctness.py
-d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\foundation\test_cepstrum_correctness.py
-```
-
-**独立绘图**（不重跑分析）：
-
-```bash
-d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\foundation\plot_results.py
-```
+> **用途**：按依赖层从下往上（Layer 1→5）验证诊断算法全链路，使用合成信号 + 4 个真实数据集。
+> **完整文档**：`tests/diagnosis/TEST_ARCHITECTURE.md` — 含覆盖矩阵、测试列表、运行方式。
+> **运行**：参见 `TEST_ARCHITECTURE.md` 底部运行方式。
 
 ---
 
@@ -190,26 +159,12 @@ python ../tests/diagnosis/regression/test_none_params.py && python ../tests/diag
 | 文件 | 用途 | 需要数据集 | 运行方式 |
 |------|------|-----------|---------|
 | `test_engine_regressions.py` | 诊断引擎核心回归（无参数/TSA/转频/健康区分） | HUSTbear/CW（可选） | `python ../tests/diagnosis/algorithms/test_engine_regressions.py` |
-| `test_research_ensemble.py` | 多算法集成诊断（ensemble）正确性 | 无 | 同上 |
 | `test_new_algorithms.py` | EMD/MCKD/小波包/SG 等新算法功能验证 | 无 | 同上 |
 | `test_emd_denoise.py` | EMD/CEEMDAN 降噪模块测试 | 无 | 同上 |
-| `test_scoh_fix.py` | SC/SCoh 循环平稳分析修复验证 | 无 | 同上 |
 
 ---
 
-## 3. 齿轮诊断专项测试
-
-| 文件 | 用途 | 需要数据集 | 说明 |
-|------|------|-----------|------|
-| `test_time_features.py` | 行星齿轮箱时域特征明细（kurt/crest/rms/skew） | WTgearbox | 查看 He_N1/N2 各转速下时域特征分布 |
-| `test_fm4.py` | FM4 指标测试 | WTgearbox | 验证 FM4 对齿轮故障的区分力 |
-| `test_gear_detail.py` | 齿轮诊断细节调试 | WTgearbox | 逐项打印诊断结果 |
-| `test_gear_values.py` | 齿轮指标数值验证 | WTgearbox | 验证 SER/CAR/阶次峭度等指标数值 |
-| `test_c2_features.py` | C2 通道特征测试 | WTgearbox | 与 C1 通道对比 |
-
----
-
-## 4. 行星齿轮箱专项测试
+## 3. 行星齿轮箱专项测试
 
 | 文件 | 用途 | 数据集 | 运行时间 |
 |------|------|--------|---------|
@@ -225,7 +180,7 @@ python ../tests/diagnosis/planetary/test_planetary_e2e.py
 
 ---
 
-## 5. 方法级分类评估框架 (`method_eval/`)
+## 4. 方法级分类评估框架 (`method_eval/`)
 
 > 对每种诊断方法独立评估二分类/多分类性能，生成 ROC 曲线、混淆矩阵等。
 
@@ -245,7 +200,7 @@ python ../tests/diagnosis/method_eval/test_bearing_hustbear.py
 
 ---
 
-## 6. 多维度评价框架 (`evaluation/`)
+## 5. 多维度评价框架 (`evaluation/`)
 
 > 系统性地评估去噪、轴承、齿轮、综合诊断、鲁棒性等各维度。
 
@@ -271,7 +226,7 @@ python ../tests/diagnosis/evaluation/main.py
 
 ---
 
-## 7. 其他测试
+## 6. 其他测试
 
 ### 7.1 有效性测试 (`effectiveness/`)
 
@@ -298,7 +253,7 @@ python ../tests/diagnosis/contest/main.py
 
 ---
 
-## 8. 测试运行环境要求
+## 7. 测试运行环境要求
 
 | 数据集 | 路径 | 用途 |
 |--------|------|------|
@@ -310,7 +265,7 @@ python ../tests/diagnosis/contest/main.py
 
 ---
 
-## 9. 何时运行哪些测试
+## 8. 何时运行哪些测试
 
 | 修改范围 | 最小测试集 |
 |---------|-----------|

@@ -271,7 +271,7 @@ cd /d D:\code\CNN\cloud
 . venv\Scripts\activate
 
 # 运行齿轮指标对比测试
-PYTHONPATH=D:\code\CNN\cloud python ../tests/diagnosis/test_gear_detail.py
+PYTHONPATH=D:\code\CNN\cloud python ../tests/diagnosis/planetary/test_planetary_e2e.py
 
 # 运行有效性测试
 PYTHONPATH=D:\code\CNN\cloud python ../tests/diagnosis/test_effectiveness.py
@@ -313,6 +313,7 @@ ssh root@8.137.96.104 "cd /opt/CNN && bash deploy.sh"
 > **v6 关键改进**：通过 `fm4` 指标（磨损区分）和 `planetary_fullband_env_kurt`（裂纹/断齿区分）的组合，配合子类型推断逻辑，五类准确率从 17.5% 提升到 48.75%。主要剩余问题是健康 N2 子类的系统性误报（pfek 过低导致）。
 >
 > **各类型准确率（v6）**：
+>
 > | 类型 | 正确数/总数 | 准确率 |
 > |------|------------|--------|
 > | Missing | 12/16 | 75% |

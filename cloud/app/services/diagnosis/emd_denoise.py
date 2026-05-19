@@ -20,6 +20,7 @@ EMD / CEEMDAN 经验模态分解降噪模块
 import numpy as np
 from scipy.interpolate import PchipInterpolator
 from typing import Tuple, List, Dict
+from .signal_utils import kurtosis as _kurtosis
 
 
 # ═══════════════════════════════════════════════════════════
@@ -602,18 +603,6 @@ def compute_imf_energy_entropy(imfs: List[np.ndarray]) -> Dict:
 # 峭度计算（统一为 excess kurtosis）
 # ═══════════════════════════════════════════════════════════
 
-def _excess_kurtosis(x: np.ndarray) -> float:
-    """Excess kurtosis（正态分布 = 0），与 scipy.stats.kurtosis 一致"""
-    arr = np.asarray(x, dtype=np.float64)
-    if len(arr) < 4:
-        return 0.0
-    mu = np.mean(arr)
-    sigma2 = np.var(arr)
-    if sigma2 < 1e-18:
-        return 0.0
-    return float(np.mean((arr - mu) ** 4) / (sigma2 ** 2) - 3.0)
-
-
 # ═══════════════════════════════════════════════════════════
 # EMD 降噪统一入口
 # ═══════════════════════════════════════════════════════════
@@ -669,7 +658,7 @@ def emd_denoise(
             np.abs(np.corrcoef(imf_z, arr_z)[0, 1])
             if np.std(imf_z) > 0 and np.std(arr_z) > 0 else 0.0
         )
-        kurt = _excess_kurtosis(imf_z)
+        kurt = _kurtosis(imf_z, fisher=True)
         info.append({
             "index": i,
             "corr": round(corr, 4),
@@ -685,7 +674,7 @@ def emd_denoise(
     if not selected:
         mid_imfs = [(i, imf) for i, imf in enumerate(imfs) if 0 < i < len(imfs) - 1]
         if mid_imfs:
-            best = max(mid_imfs, key=lambda t: _excess_kurtosis(t[1]))
+            best = max(mid_imfs, key=lambda t: _kurtosis(t[1], fisher=True))
             selected = [best[1]]
             info[best[0]]["selected"] = True
 
@@ -695,8 +684,8 @@ def emd_denoise(
         out[:len(reconstructed)] = reconstructed
         reconstructed = out
 
-    kurt_before = _excess_kurtosis(arr)
-    kurt_after = _excess_kurtosis(reconstructed)
+    kurt_before = _kurtosis(arr, fisher=True)
+    kurt_after = _kurtosis(reconstructed, fisher=True)
 
     return reconstructed, {
         "method": method,

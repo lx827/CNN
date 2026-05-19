@@ -14,6 +14,7 @@ from typing import Dict, Optional, Tuple
 
 from ..signal_utils import (
     bandpass_filter,
+    kurtosis,
     lowpass_filter,
     prepare_signal,
 )
@@ -160,7 +161,7 @@ def planetary_envelope_order_analysis(
     if len(envelope) > 4:
         e_mean = np.mean(envelope)
         e_var = np.var(envelope)
-        envelope_kurtosis = float(np.mean((envelope - e_mean) ** 4) / (e_var ** 2 + 1e-12) - 3)
+        envelope_kurtosis = float(kurtosis(envelope, fisher=True))
     else:
         envelope_kurtosis = 0.0
 
@@ -309,7 +310,7 @@ def planetary_fullband_envelope_order_analysis(
     if len(envelope) > 4:
         e_mean = np.mean(envelope)
         e_var = np.var(envelope)
-        envelope_kurtosis = float(np.mean((envelope - e_mean) ** 4) / (e_var ** 2 + 1e-12) - 3)
+        envelope_kurtosis = float(kurtosis(envelope, fisher=True))
     else:
         envelope_kurtosis = 0.0
 
@@ -683,7 +684,7 @@ def planetary_hp_envelope_order_analysis(
     if len(envelope) > 4:
         e_mean = np.mean(envelope)
         e_var = np.var(envelope)
-        envelope_kurtosis = float(np.mean((envelope - e_mean) ** 4) / (e_var ** 2 + 1e-12) - 3)
+        envelope_kurtosis = float(kurtosis(envelope, fisher=True))
     else:
         envelope_kurtosis = 0.0
 
@@ -1589,7 +1590,7 @@ def planetary_cvs_med_analysis(
         a_var = np.var(analysis_signal)
         if a_var > 1e-12:
             analysis_kurt_before = float(
-                np.mean((analysis_signal - a_mean) ** 4) / (a_var ** 2) - 3
+                kurtosis(analysis_signal, fisher=True)
             )
 
     # MED 滤波器长度不能超过信号长度的 1/4
@@ -1611,7 +1612,7 @@ def planetary_cvs_med_analysis(
         m_var = np.var(med_signal)
         if m_var > 1e-12:
             med_kurtosis = float(
-                np.mean((med_signal - m_mean) ** 4) / (m_var ** 2) - 3
+                kurtosis(med_signal, fisher=True)
             )
 
     # 峭度增强比：MED后 / MED前（>1 表示 MED 成功增强了冲击成分）
@@ -1629,7 +1630,7 @@ def planetary_cvs_med_analysis(
         e_var = np.var(envelope)
         if e_var > 1e-12:
             envelope_kurtosis = float(
-                np.mean((envelope - e_mean) ** 4) / (e_var ** 2) - 3
+                kurtosis(envelope, fisher=True)
             )
 
     # 包络阶次谱 → 搜索故障特征阶次

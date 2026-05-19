@@ -8,8 +8,9 @@ from scipy.signal import hilbert
 from typing import Dict, List
 from .features import (
     compute_channel_features, compute_fft, compute_imf_energy,
-    _get_channel_params, remove_dc, _compute_bearing_fault_freqs, _compute_bearing_fault_orders,
+    _get_channel_params, _compute_bearing_fault_freqs, _compute_bearing_fault_orders,
 )
+from .signal_utils import prepare_signal, _band_energy, _order_band_energy
 from .order_tracking import _compute_order_spectrum_multi_frame, _compute_order_spectrum_varying_speed
 
 logger = logging.getLogger(__name__)
@@ -40,16 +41,6 @@ def adaptive_rms_baseline(rot_freq_hz: float) -> float:
     if rot_freq_hz <= 0:
         return FEATURE_THRESHOLDS["rms"]["baseline"]
     return max(1.0, 0.05 * rot_freq_hz + 1.0)
-
-
-def _order_band_energy(order_axis, spectrum, center_order: float, bandwidth: float) -> float:
-    """计算指定阶次带能量（阶次域版 _band_energy）"""
-    order_axis = np.asarray(order_axis)
-    spectrum = np.asarray(spectrum)
-    mask = (order_axis >= center_order - bandwidth) & (order_axis <= center_order + bandwidth)
-    if not np.any(mask):
-        return 0.0
-    return float(np.sum(spectrum[mask] ** 2))
 
 
 def _feature_severity(value: float, metric: str, rot_freq: float = 0.0) -> float:
@@ -276,7 +267,7 @@ def compute_envelope_spectrum(signal: List[float], sample_rate: int = 25600, max
         freq: 频率数组 (Hz)
         amp: 包络谱幅值数组
     """
-    arr = remove_dc(signal)
+    arr = prepare_signal(signal, detrend=True)
 
     # 1. 带通滤波（保留 1kHz~5kHz 的共振频带，可选）
     # 简化版本：直接用原始信号做希尔伯特变换

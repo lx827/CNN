@@ -9,6 +9,8 @@ import numpy as np
 from scipy.signal import savgol_filter
 from typing import Tuple, Dict
 
+from .signal_utils import _estimate_noise_mad, _snr_by_residual_std
+
 
 def sg_denoise(
     signal: np.ndarray,
@@ -42,8 +44,8 @@ def sg_denoise(
     polyorder = min(polyorder, window_length - 1)
     smoothed = savgol_filter(arr, window_length=window_length, polyorder=polyorder, deriv=deriv)
 
-    noise_est = np.median(np.abs(arr - smoothed)) / 0.6745
-    snr_imp = float(np.std(arr) / (np.std(arr - smoothed) + 1e-12))
+    noise_est = _estimate_noise_mad(arr - smoothed)
+    snr_imp = _snr_by_residual_std(arr, smoothed)
 
     return smoothed, {
         "method": "savgol",

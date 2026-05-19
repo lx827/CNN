@@ -182,17 +182,18 @@ def compute_car(
     if not peak_amps:
         return 0.0
 
-    # 背景：高倒频率区域（> 2 * max(tau_k)）
+    # 背景：用中位数绝对值替代均值（零均值倒频谱均值≈0，导致 CAR 爆炸）
     bg_threshold = 2.0 * n_harmonics / rot_freq
     bg_mask = quef > bg_threshold
     if not np.any(bg_mask):
         bg_mask = quef > quef[-1] * 0.5
 
-    bg_mean = float(np.mean(cep[bg_mask])) if np.any(bg_mask) else 1e-12
-    if bg_mean < 1e-12:
-        bg_mean = 1e-12
+    bg_abs = np.abs(cep[bg_mask])
+    bg_median = float(np.median(bg_abs)) if np.any(bg_mask) else 1e-12
+    if bg_median < 1e-12:
+        bg_median = 1e-12
 
-    return float(np.mean(peak_amps) / bg_mean)
+    return float(np.mean(peak_amps) / bg_median)
 
 
 def compute_ser_order(

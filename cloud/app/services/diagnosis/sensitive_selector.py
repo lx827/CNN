@@ -15,6 +15,7 @@
 """
 import numpy as np
 from typing import Dict, List, Tuple, Optional
+from .signal_utils import kurtosis as _kurtosis
 
 
 # ──────────────────────────────────────────────────────────
@@ -53,18 +54,6 @@ def compute_correlation(component: np.ndarray, original: np.ndarray) -> float:
     if sc < 1e-12 or so < 1e-12:
         return 0.0
     return float(np.abs(np.corrcoef(c_z, o_z)[0, 1]))
-
-
-def compute_excess_kurtosis(component: np.ndarray) -> float:
-    """Excess kurtosis（正态=0）"""
-    arr = np.asarray(component, dtype=np.float64)
-    if len(arr) < 4:
-        return 0.0
-    mu = np.mean(arr)
-    s2 = np.var(arr)
-    if s2 < 1e-18:
-        return 0.0
-    return float(np.mean((arr - mu) ** 4) / (s2 ** 2) - 3.0)
 
 
 def compute_envelope_entropy(component: np.ndarray) -> float:
@@ -163,7 +152,7 @@ def score_components(
     total_energy = float(np.sum(np.asarray(original, dtype=np.float64) ** 2))
 
     raw_corr = [compute_correlation(c, original) for c in components]
-    raw_kurt = [compute_excess_kurtosis(c) for c in components]
+    raw_kurt = [_kurtosis(c, fisher=True) for c in components]
     raw_env_ent = [compute_envelope_entropy(c) for c in components]
     raw_energy = [compute_energy_ratio(c, total_energy) for c in components]
     raw_center = [compute_center_freq(c, fs) for c in components]
