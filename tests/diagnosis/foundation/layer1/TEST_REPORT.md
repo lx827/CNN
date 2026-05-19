@@ -115,7 +115,7 @@
 
 ```bash
 cd d:\code\CNN
-
+# 请进入虚拟环境
 # 全部 Layer 1 测试
 python tests/diagnosis/foundation/layer1/test_signal_utils_correctness.py
 python tests/diagnosis/foundation/layer1/test_vmd_denoise_correctness.py
