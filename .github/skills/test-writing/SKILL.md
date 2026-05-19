@@ -129,7 +129,7 @@ def plot_xxx():
 每个诊断算法至少覆盖：
 
 - [ ] 合成信号正确性（已知 ground truth，验证计算误差）
-- [ ] 真实数据集效果（至少 1 个健康 + 1 个故障样本）
+- [ ] 真实数据集效果（全部都要有）
 - [ ] 边界条件（空信号、极短信号、None 参数）
 - [ ] 每个测试 item 显式设置 `"passed": True/False`
 - [ ] JSON 输出含 `summary.total/passed/failed`，统计用 `get("passed", False)`
