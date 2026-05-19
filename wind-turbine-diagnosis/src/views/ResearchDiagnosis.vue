@@ -228,9 +228,10 @@
         </el-table>
       </section>
 
-      <section v-if="result.ensemble" class="panel wide">
+      <section v-if="result.ensemble || hasAllResults" class="panel wide">
         <div class="panel-title">轴承算法投票</div>
-        <el-table :data="bearingVoteRows" border size="small" max-height="320">
+        <!-- 集成诊断模式：投票数据 -->
+        <el-table v-if="result.ensemble" :data="bearingVoteRows" border size="small" max-height="320">
           <el-table-column prop="method" label="算法" min-width="180" />
           <el-table-column prop="confidence" label="置信度" width="110">
             <template #default="{ row }">{{ percent(row.confidence) }}</template>
@@ -240,11 +241,30 @@
           <el-table-column prop="strongest_snr" label="最强SNR" width="100" />
           <el-table-column prop="hits" label="证据" min-width="220" />
         </el-table>
+        <!-- 全部方法模式：各方法检出摘要 -->
+        <el-table v-else :data="allBearingRows" border size="small" max-height="320">
+          <el-table-column prop="method" label="诊断方法" width="160" />
+          <el-table-column prop="faults" label="检出故障">
+            <template #default="{ row }">
+              <el-tag v-for="(f, idx) in row.faults" :key="idx" :type="(f.snr > 5 || f.snr === '?') ? 'danger' : 'warning'" size="small" style="margin-right:6px;margin-bottom:4px">
+                {{ f.fault_type }} (SNR={{ f.snr }})
+              </el-tag>
+              <el-text v-if="row.faults.length === 0 && !row._error" type="info" size="small">未检出显著故障</el-text>
+              <el-text v-if="row._error" type="danger" size="small">{{ row.params }}</el-text>
+            </template>
+          </el-table-column>
+          <el-table-column prop="params" label="关键参数" min-width="200">
+            <template #default="{ row }">
+              <el-text v-if="!row._error" type="info" size="small">{{ row.params }}</el-text>
+            </template>
+          </el-table-column>
+        </el-table>
       </section>
 
-      <section v-if="result.ensemble" class="panel wide">
+      <section v-if="result.ensemble || hasAllResults" class="panel wide">
         <div class="panel-title">齿轮算法投票</div>
-        <el-table :data="gearVoteRows" border size="small" max-height="260">
+        <!-- 集成诊断模式：投票数据 -->
+        <el-table v-if="result.ensemble" :data="gearVoteRows" border size="small" max-height="260">
           <el-table-column prop="method" label="算法" min-width="180" />
           <el-table-column prop="confidence" label="置信度" width="110">
             <template #default="{ row }">{{ percent(row.confidence) }}</template>
@@ -253,12 +273,62 @@
           <el-table-column prop="warning_hits" label="预警命中" width="100" />
           <el-table-column prop="hits" label="证据" min-width="220" />
         </el-table>
+        <!-- 全部方法模式：各方法指标 -->
+        <el-table v-else :data="allGearRows" border size="small" max-height="260">
+          <el-table-column prop="method" label="诊断方法" width="140" />
+          <el-table-column prop="ser" label="SER" width="100">
+            <template #default="{ row }">
+              <el-tag v-if="row._error" type="danger" size="small">{{ row._errMsg?.substring(0,20) }}</el-tag>
+              <el-tag v-else-if="row.ser != null" :type="row.ser > 3 ? 'danger' : row.ser > 1.5 ? 'warning' : 'success'" size="small">{{ row.ser?.toFixed(3) }}</el-tag>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="car" label="CAR" width="90">
+            <template #default="{ row }">
+              <span v-if="!row._error && row.car != null" :class="row.car > 2 ? 'text-danger' : row.car > 1.2 ? 'text-warning' : ''">{{ row.car?.toFixed(2) }}</span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="fm0" label="FM0" width="90">
+            <template #default="{ row }">
+              <span v-if="!row._error && row.fm0 != null" :class="row.fm0 > 10 ? 'text-danger' : row.fm0 > 5 ? 'text-warning' : ''">{{ row.fm0?.toFixed(2) }}</span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="fm4" label="FM4" width="90">
+            <template #default="{ row }">
+              <span v-if="!row._error && row.fm4 != null" :class="row.fm4 > 10 ? 'text-danger' : row.fm4 > 5 ? 'text-warning' : ''">{{ row.fm4?.toFixed(2) }}</span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="sideband_count" label="显著边频数" width="110" />
+          <el-table-column prop="alerts" label="阈值告警">
+            <template #default="{ row }">
+              <el-tag v-for="(a, idx) in row.alerts" :key="idx" :type="a.level === 'critical' ? 'danger' : 'warning'" size="small" style="margin-right:6px;margin-bottom:4px">
+                {{ a.indicator }}
+              </el-tag>
+              <el-text v-if="row.alerts.length === 0 && !row._error" type="info" size="small">无告警</el-text>
+            </template>
+          </el-table-column>
+        </el-table>
       </section>
 
-      <section v-if="result.ensemble" class="panel wide">
+      <section v-if="result.ensemble || hasAllResults" class="panel wide">
         <div class="panel-title">最佳算法指标</div>
-        <el-table :data="bestIndicatorRows" border size="small" max-height="320">
+        <!-- 集成诊断模式 -->
+        <el-table v-if="result.ensemble" :data="bestIndicatorRows" border size="small" max-height="320">
           <el-table-column prop="source" label="来源" width="90" />
+          <el-table-column prop="name" label="指标" min-width="160" />
+          <el-table-column prop="value" label="数值" min-width="140" />
+          <el-table-column prop="state" label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag :type="row.type" size="small">{{ row.state }}</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+        <!-- 全部方法模式：所有方法故障指示器汇总 -->
+        <el-table v-else :data="allBestIndicatorRows" border size="small" max-height="320">
+          <el-table-column prop="source" label="方法" width="160" />
           <el-table-column prop="name" label="指标" min-width="160" />
           <el-table-column prop="value" label="数值" min-width="140" />
           <el-table-column prop="state" label="状态" width="100">
@@ -383,6 +453,67 @@ const dsFaultProbRows = computed(() => {
       plausibility: plaus?.[fault] ?? 0,
     }))
     .sort((a, b) => b.bpa - a.bpa)
+})
+
+// ── 全部方法模式：从 bearing_results / gear_results 提取表格数据 ──
+const isAllMode = computed(() => runMode.value === 'all')
+const hasAllResults = computed(() => result.value?.bearing_results || result.value?.gear_results)
+
+// 全部方法-轴承方法摘要行
+const allBearingRows = computed(() => {
+  const br = result.value?.bearing_results
+  if (!br || isAllMode.value === false) return []
+  return Object.entries(br).map(([method, r]) => {
+    if (!r || r.error) return { method, faults: [], params: r?.error || '执行失败', _error: true }
+    const fi = r.fault_indicators || {}
+    const faults = Object.entries(fi)
+      .filter(([, v]) => v && typeof v === 'object' && (v.significant || v.critical))
+      .map(([name, v]) => ({ fault_type: name, snr: v.snr?.toFixed?.(1) ?? v.value ?? '?' }))
+    const params = [
+      r.rot_freq_hz != null ? `${r.rot_freq_hz?.toFixed?.(2) ?? r.rot_freq_hz}Hz` : '',
+      r.band_center != null ? `频带${r.band_center?.toFixed?.(0) ?? r.band_center}Hz` : '',
+    ].filter(Boolean).join(', ')
+    return { method, faults, params: params || '-' }
+  })
+})
+
+// 全部方法-齿轮方法摘要行
+const allGearRows = computed(() => {
+  const gr = result.value?.gear_results
+  if (!gr || isAllMode.value === false) return []
+  return Object.entries(gr).map(([method, r]) => {
+    if (!r || r.error) return { method, ser: '-', car: '-', fm0: '-', fm4: '-', sideband_count: '-', alerts: [], _error: true, _errMsg: r?.error }
+    const fi = r.fault_indicators || {}
+    const alerts = Object.entries(fi)
+      .filter(([, v]) => v && typeof v === 'object' && (v.critical || v.warning))
+      .map(([name, v]) => ({ indicator: name, level: v.critical ? 'critical' : 'warning' }))
+    return {
+      method,
+      ser: r.ser != null ? Number(r.ser) : null,
+      car: r.car != null ? Number(r.car) : null,
+      fm0: r.fm0 != null ? Number(r.fm0) : null,
+      fm4: r.fm4 != null ? Number(r.fm4) : null,
+      sideband_count: r.sidebands?.length ?? (r.sideband_count ?? 0),
+      alerts,
+    }
+  })
+})
+
+// 全部方法-最佳算法指标（从所有方法中提取故障指示器）
+const allBestIndicatorRows = computed(() => {
+  if (isAllMode.value === false) return []
+  const rows = []
+  const bearingResults = result.value?.bearing_results || {}
+  const gearResults = result.value?.gear_results || {}
+  for (const [method, r] of Object.entries(bearingResults)) {
+    if (!r || r.error) continue
+    appendIndicators(rows, method, r.fault_indicators)
+  }
+  for (const [method, r] of Object.entries(gearResults)) {
+    if (!r || r.error) continue
+    appendIndicators(rows, method, r.fault_indicators)
+  }
+  return rows
 })
 
 watch(selectedDeviceId, () => {
