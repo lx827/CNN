@@ -586,14 +586,18 @@ class DiagnosisEngine:
                 indicators[k] = v
 
             # 全频带包络峭度（crack 核心区分指标）
-            # 健康 fullband_env_kurt = 6.8~20.1，crack = 1.8~4.2，0 误报
+            # 健康 fullband_env_kurt = 6.8~20.1，crack = 1.8~4.2
+            # 方向：越低越严重（crack使包络冲击减弱），warning<5.0, critical<3.0
+            # 合理性门控：fek<1.0 时不做判定（非齿轮数据或信号异常，防止轴承数据误触发）
             if isinstance(fullband_result, dict) and "error" not in fullband_result:
                 fek = fullband_result.get("envelope_kurtosis")
                 if fek is not None:
+                    fek_f = float(fek)
+                    valid_planetary = fek_f >= 1.0  # 最低合理值（crack下限1.8）
                     indicators["planetary_fullband_env_kurt"] = {
-                        "value": round(float(fek), 4),
-                        "warning": float(fek) < 5.0,
-                        "critical": float(fek) < 3.0,
+                        "value": round(fek_f, 4),
+                        "warning": valid_planetary and fek_f < 5.0,
+                        "critical": valid_planetary and fek_f < 3.0,
                     }
 
         result["fault_indicators"] = indicators

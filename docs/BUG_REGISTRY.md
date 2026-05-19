@@ -6,7 +6,7 @@
 
 （暂无）
 
-## 已修复 (9)
+## 已修复 (10)
 
 | # | 文件 | 描述 |
 |---|------|------|
@@ -18,7 +18,8 @@
 | 6 | engine.py:_evaluate_bearing_faults | 边带增强缺包络峭度门控 |
 | 7 | features.py:compute_fft | remove_dc 未导入 |
 | 8 | engine.py:_evaluate_bearing_faults | CW 健康统计误报 — 物理未检出抑制统计 |
-| 9 | `planetary_demod.py:evaluate_planetary_demod_results` | WTG 健康 `planetary_sun_fault` 误报 warning |
+| 9 | `planetary_demod.py` | WTG 健康 `planetary_sun_fault` 误报 — 阈值 2.0→3.0 |
+| 10 | `engine.py` | `planetary_fullband_env_kurt` 对非齿轮数据误报 critical |
 
 **Bug #9 详细**：
 
@@ -33,3 +34,14 @@
 - 磨损/缺齿仍能检出 ✅
 - 健康误报消除 ✅
 - 断齿/裂纹由 FM4/SER/CAR 等其他指标负责（符合行星箱诊断文献）
+
+**Bug #10 详细**：
+
+- `planetary_fullband_env_kurt` 用于裂纹检测：健康=6.8~20.1，裂纹=1.8~4.2（越低越严重）
+- 缺少合理性门控：非齿轮数据（如 HUSTbear 轴承数据）的全频带包络峭度仅 0.6~0.9
+- 轴承数据被误送进行星齿轮分析时，`fek=0.6<3.0` → 直接触发 critical
+- 导致 `gear_conf=0.87` → hs=77 → status=warning
+
+**修复**：添加 `fek >= 1.0` 合理性门控（最低合理值为裂纹下限 1.8）
+
+- 非齿轮数据不再误触发 ✅
