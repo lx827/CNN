@@ -339,6 +339,187 @@ def run_expD_robustness():
     return results
 
 
+# ═══════════════════════════════════════════════════════════
+# 实验A2: 轴承五分类 (HUSTbear + Ensemble)
+# ═══════════════════════════════════════════════════════════
+def run_expA2_bearing_multiclass():
+    print("\n" + "=" * 60)
+    print("实验A2: 轴承五分类 HUSTbear (Ensemble)")
+    print("=" * 60)
+
+    # 收集文件按类别分组
+    classes = {"H": "健康", "B": "球故障", "I": "内圈", "O": "外圈", "C": "复合"}
+    class_files = {k: [] for k in classes}
+    for f in sorted(HUSTBEAR_DIR.glob("*-X.npy")):
+        fc = _fault_code(f.name)
+        if fc in class_files:
+            class_files[fc].append(f.name)
+
+    for k, v in class_files.items():
+        class_files[k] = v[:6]  # 每类最多6个
+        print(f"  {classes[k]}: {len(class_files[k])} 文件")
+
+    y_true, y_pred = [], []
+    all_files = [(f, c) for c in classes for f in class_files[c]]
+    t0 = time.time()
+
+    for fname, true_cls in all_files:
+        sig = load_npy(HUSTBEAR_DIR, fname)
+        if sig is None:
+            continue
+        try:
+            res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S)
+            fl = res.get("fault_label", "unknown")
+            # 映射 fault_label 到标准类别
+            pred = _map_bearing_label(fl)
+            y_true.append(classes[true_cls])
+            y_pred.append(pred)
+        except Exception:
+            pass
+
+    elapsed = time.time() - t0
+    cm = _compute_cm(y_true, y_pred, list(classes.values()))
+    metrics = _classification_metrics(y_true, y_pred)
+
+    results = {
+        "confusion_matrix": cm,
+        "class_names": list(classes.values()),
+        "metrics": metrics,
+        "time_s": round(elapsed, 1),
+    }
+    for k, v in metrics.items():
+        print(f"  {k}: {v}")
+    print(f"  耗时: {elapsed:.1f}s")
+
+    save_json(results, "expA2_multiclass.json")
+    return results
+
+
+def _map_bearing_label(fl):
+    """映射 ensemble fault_label → 标准中文类别"""
+    fl_lower = str(fl).lower()
+    if "bpfo" in fl_lower or "outer" in fl_lower:
+        return "外圈"
+    if "bpfi" in fl_lower or "inner" in fl_lower:
+        return "内圈"
+    if "bsf" in fl_lower or "ball" in fl_lower:
+        return "球故障"
+    if "compound" in fl_lower or fl_lower.startswith("bearing_bpfo_bpfi"):
+        return "复合"
+    if "healthy" in fl_lower or "normal" in fl_lower or "unknown" in fl_lower:
+        return "健康"
+    if "abnormal" in fl_lower:
+        return "复合"  # 兜底
+    return "健康"
+
+
+def _compute_cm(y_true, y_pred, class_names):
+    """计算混淆矩阵"""
+    n = len(class_names)
+    cm = [[0] * n for _ in range(n)]
+    name_to_idx = {name: i for i, name in enumerate(class_names)}
+    for t, p in zip(y_true, y_pred):
+        ti = name_to_idx.get(t, 0)
+        pi = name_to_idx.get(p, 0)
+        cm[ti][pi] += 1
+    return cm
+
+
+def _classification_metrics(y_true, y_pred):
+    """计算多分类指标"""
+    n = len(y_true)
+    if n == 0:
+        return {}
+    correct = sum(1 for t, p in zip(y_true, y_pred) if t == p)
+    classes = sorted(set(y_true))
+    per_class = {}
+    macro_f1 = 0.0
+    for c in classes:
+        tp = sum(1 for t, p in zip(y_true, y_pred) if t == c and p == c)
+        fp = sum(1 for t, p in zip(y_true, y_pred) if t != c and p == c)
+        fn = sum(1 for t, p in zip(y_true, y_pred) if t == c and p != c)
+        prec = tp / max(tp + fp, 1)
+        rec = tp / max(tp + fn, 1)
+        f1 = 2 * prec * rec / max(prec + rec, 0.001)
+        per_class[c] = {"precision": round(prec, 3), "recall": round(rec, 3), "f1": round(f1, 3), "tp": tp}
+        macro_f1 += f1
+    macro_f1 /= max(len(classes), 1)
+    return {
+        "accuracy": round(correct / n * 100, 1),
+        "macro_f1": round(macro_f1, 3),
+        "total": n,
+        "per_class": per_class,
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# 实验B2: 齿轮五分类 (WTgearbox + Ensemble)
+# ═══════════════════════════════════════════════════════════
+def run_expB2_gear_multiclass():
+    print("\n" + "=" * 60)
+    print("实验B2: 齿轮五分类 WTgearbox (Ensemble)")
+    print("=" * 60)
+
+    class_map = {"He": "健康", "Br": "断齿", "Mi": "缺齿", "Rc": "裂纹", "We": "磨损"}
+    class_files = {k: sorted(f.name for f in WTGEAR_DIR.glob(f"{k}_*-c1.npy"))[:6] for k in class_map}
+    for k, v in class_files.items():
+        print(f"  {class_map[k]}: {len(v)}")
+
+    y_true, y_pred = [], []
+    t0 = time.time()
+    for cat, files in class_files.items():
+        for fname in files:
+            sig = load_npy(WTGEAR_DIR, fname)
+            if sig is None:
+                continue
+            try:
+                res = run_research_ensemble(sig, FS, gear_teeth=GEAR_PARAMS, max_seconds=MAX_S)
+                fl = res.get("fault_label", "unknown")
+                pred = _map_gear_label(fl)
+                y_true.append(class_map[cat])
+                y_pred.append(pred)
+            except Exception:
+                pass
+
+    elapsed = time.time() - t0
+    cm = _compute_cm(y_true, y_pred, list(class_map.values()))
+    metrics = _classification_metrics(y_true, y_pred)
+    results = {
+        "confusion_matrix": cm,
+        "class_names": list(class_map.values()),
+        "metrics": metrics,
+        "time_s": round(elapsed, 1),
+    }
+    for k, v in metrics.items():
+        if k == "per_class":
+            for cls, m in v.items():
+                print(f"  {cls}: P={m['precision']} R={m['recall']} F1={m['f1']}")
+        else:
+            print(f"  {k}: {v}")
+    print(f"  耗时: {elapsed:.1f}s")
+
+    save_json(results, "expB2_multiclass.json")
+    return results
+
+
+def _map_gear_label(fl):
+    """映射 ensemble gear fault_label → 标准中文类别"""
+    fl_l = str(fl).lower()
+    if "break" in fl_l or "broken" in fl_l:
+        return "断齿"
+    if "missing" in fl_l:
+        return "缺齿"
+    if "crack" in fl_l:
+        return "裂纹"
+    if "wear" in fl_l:
+        return "磨损"
+    if "healthy" in fl_l or "normal" in fl_l or "unknown" in fl_l:
+        return "健康"
+    if "abnormal" in fl_l:
+        return "缺齿"
+    return "健康"
+
+
 def main():
     print("=" * 60)
     print("评估数据采集 joblib x%d" % N_JOBS)
@@ -346,10 +527,12 @@ def main():
     print("=" * 60)
     t0 = time.time()
     for name, func in [
-        ("A-轴承分类", run_expA_bearing),
-        ("B-齿轮诊断", run_expB_gear),
+        ("A-轴承二分类", run_expA_bearing),
+        ("B-齿轮二分类", run_expB_gear),
         ("C-去噪效果", run_expC_denoise),
         ("D-噪声鲁棒性", run_expD_robustness),
+        ("A2-轴承五分类", run_expA2_bearing_multiclass),
+        ("B2-齿轮五分类", run_expB2_gear_multiclass),
     ]:
         try:
             func()

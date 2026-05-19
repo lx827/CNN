@@ -277,6 +277,52 @@ def plot_cross_dataset():
     print("  [OK] cross_dataset")
 
 
+# ═══════════════════════════════════════════════════════════
+# 多分类混淆矩阵
+# ═══════════════════════════════════════════════════════════
+
+def plot_confusion_matrix(data, class_names, title, filename):
+    cm = np.array(data["confusion_matrix"])
+    n = len(class_names)
+    fig, ax = plt.subplots(figsize=(7, 6))
+    im = ax.imshow(cm, cmap="Blues", vmin=0)
+    for i in range(n):
+        for j in range(n):
+            val = cm[i, j]
+            color = "white" if val > cm.max() * 0.5 else C["dark"]
+            ax.text(j, i, str(val), ha="center", va="center", fontsize=13,
+                    fontweight="bold", color=color)
+    ax.set_xticks(range(n)); ax.set_yticks(range(n))
+    ax.set_xticklabels(class_names, fontsize=10, rotation=25, ha="right")
+    ax.set_yticklabels(class_names, fontsize=11)
+    ax.set_xlabel("预测", fontsize=13); ax.set_ylabel("真实", fontsize=13)
+    ax.set_title(title, fontsize=14, fontweight="bold", pad=15)
+    cbar = fig.colorbar(im, ax=ax, shrink=0.85)
+    metrics = data.get("metrics", {})
+    acc = metrics.get("accuracy", 0)
+    mf1 = metrics.get("macro_f1", 0)
+    ax.text(0.5, -0.15, f"Accuracy: {acc:.1f}%  |  Macro-F1: {mf1:.3f}",
+            transform=ax.transAxes, ha="center", fontsize=10, color=C["dark"])
+    fig.tight_layout()
+    for fmt in ["svg", "png"]:
+        fig.savefig(OUTPUT_DIR / filename.format(fmt), dpi=150)
+    plt.close(fig)
+    print(f"  [OK] {filename.format('svg')}")
+
+
+def plot_multiclass():
+    for exp, json_name, title in [
+        ("A2", "expA2_multiclass.json", "HUSTbear 轴承五分类混淆矩阵 (Ensemble)"),
+        ("B2", "expB2_multiclass.json", "WTgearbox 齿轮五分类混淆矩阵 (Ensemble)"),
+    ]:
+        path = OUTPUT_DIR / json_name
+        if not path.exists():
+            print(f"  [SKIP] {json_name}")
+            continue
+        data = load_json(json_name)
+        plot_confusion_matrix(data, data["class_names"], title, f"exp{exp}_confusion.{{}}")
+
+
 def main():
     print("=" * 60)
     print("生成答辩图表")
@@ -288,6 +334,7 @@ def main():
     plot_expC_denoise()
     plot_expD_robustness()
     plot_cross_dataset()
+    plot_multiclass()
 
     print(f"\n全部图表已保存到 {OUTPUT_DIR}")
 
