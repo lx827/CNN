@@ -9,6 +9,7 @@
                 "@modelcontextprotocol/server-filesystem",
                 "D:\\code\\CNN"
             ],
+            "timeout": 100000,
             "enabled": true
         },
         "server-git": {
@@ -19,15 +20,7 @@
                 "@modelcontextprotocol/server-git",
                 "D:\\code\\CNN"
             ],
-            "enabled": true
-        },
-        "server-command": {
-            "type": "local",
-            "command": [
-                "npx",
-                "-y",
-                "@modelcontextprotocol/server-command"
-            ],
+            "timeout": 10000,
             "enabled": true
         },
         "server-puppeteer": {
@@ -37,6 +30,10 @@
                 "-y",
                 "@modelcontextprotocol/server-puppeteer"
             ],
+            "environment": {
+                "PUPPETEER_DOWNLOAD_HOST": "https://npmmirror.com/mirrors"
+            },
+            "timeout": 30000,
             "enabled": true
         }
     }
