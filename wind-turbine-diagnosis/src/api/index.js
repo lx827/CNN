@@ -24,7 +24,7 @@ export const getDeviceInfo = async () => {
   const deviceList = devices.map((device, idx) => {
     const isOffline = device.status === 'offline'
     const dDiag = diag[device.device_id] || {}
-    const health = isOffline ? null : (dDiag.health_score || device.health_score || 87)
+    const health = dDiag.health_score || device.health_score || 87
     const status = isOffline ? 'offline' : (dDiag.status || device.status || 'normal')
 
     const getComponentInfo = (channelName) => {
@@ -44,11 +44,13 @@ export const getDeviceInfo = async () => {
       const chName = channelNames[String(i)] || `通道${i}`
       const compInfo = getComponentInfo(chName)
       if (isOffline) {
+        const compHealth = Math.min(100, Math.max(0, health + compInfo.offset))
+        const compStatus = compHealth > 80 ? 'normal' : compHealth > 60 ? 'warning' : 'fault'
         components.push({
           id: i,
           name: `${compInfo.type}（${chName}）`,
-          status: 'offline',
-          health: null
+          status: compStatus,
+          health: compHealth
         })
       } else {
         const compHealth = Math.min(100, Math.max(0, health + compInfo.offset))

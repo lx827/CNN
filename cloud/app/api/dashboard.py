@@ -44,7 +44,7 @@ def get_dashboard(db: Session = Depends(get_db)):
         device_list.append({
             "device_id": d.device_id,
             "name": d.name,
-            "health_score": None if is_offline else d.health_score,
+            "health_score": d.health_score,
             "status": effective_status,
             "original_status": d.status,
             "is_offline": is_offline,
