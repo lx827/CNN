@@ -34,6 +34,7 @@ async def analysis_worker():
     后台协程：扫描所有设备的未检测批次，执行分析，标记为已检测
     """
     from app.models import SensorData, Diagnosis
+    from app.api.data_view import _sanitize_for_json
 
     while True:
         try:
@@ -114,6 +115,38 @@ async def analysis_worker():
                         if device:
                             device.health_score = result["health_score"]
                             device.status = result["status"]
+
+                        # 保存通道级诊断结果（含集成证据、投票数据、最佳算法指标）
+                        # 每个通道独立保存 full_analysis，供 DataView 高级诊断查询
+                        channel_results = result.get("order_analysis", {}).get("channels", {})
+                        for ch_key, ch_result in channel_results.items():
+                            try:
+                                ch_num = int(ch_key.replace("ch", ""))
+                            except (ValueError, AttributeError):
+                                continue
+                            # 检查是否已有该通道的诊断记录
+                            existing_ch = db.query(Diagnosis).filter(
+                                Diagnosis.device_id == device_id,
+                                Diagnosis.batch_index == batch_index,
+                                Diagnosis.channel == ch_num,
+                            ).first()
+                            ch_full = _sanitize_for_json(ch_result)
+                            if existing_ch:
+                                existing_ch.full_analysis = ch_full
+                                existing_ch.health_score = ch_result.get("health_score")
+                                existing_ch.status = ch_result.get("status", "normal")
+                                existing_ch.rot_freq = ch_result.get("rot_freq_hz")
+                                existing_ch.analyzed_at = datetime.utcnow()
+                            else:
+                                db.add(Diagnosis(
+                                    device_id=device_id, batch_index=batch_index,
+                                    channel=ch_num,
+                                    full_analysis=ch_full,
+                                    health_score=ch_result.get("health_score"),
+                                    status=ch_result.get("status", "normal"),
+                                    rot_freq=ch_result.get("rot_freq_hz"),
+                                    analyzed_at=datetime.utcnow(),
+                                ))
 
                         db.commit()
 
