@@ -81,7 +81,7 @@ def get_channel_diagnosis(
         if diag and (diag.engine_result or diag.full_analysis):
             result = dict(diag.engine_result or diag.full_analysis)
             result["rot_freq"] = diag.rot_freq
-            return {"code": 200, "data": result}
+            return {"code": 200, "data": _sanitize_for_json(result)}
 
     # 2. 查该通道的最新诊断结果（不限去噪方法）
     diag = db.query(Diagnosis).filter(
@@ -93,7 +93,7 @@ def get_channel_diagnosis(
     if diag and (diag.engine_result or diag.full_analysis):
         result = dict(diag.engine_result or diag.full_analysis)
         result["rot_freq"] = diag.rot_freq
-        return {"code": 200, "data": result}
+        return {"code": 200, "data": _sanitize_for_json(result)}
 
     # 3. 再查批次级诊断记录（兼容旧数据）
     diag_batch = db.query(Diagnosis).filter(
@@ -102,7 +102,7 @@ def get_channel_diagnosis(
     ).order_by(Diagnosis.analyzed_at.desc()).first()
 
     if diag_batch:
-        return {
+        return _sanitize_for_json({
             "code": 200,
             "data": {
                 "health_score": diag_batch.health_score,
@@ -112,7 +112,7 @@ def get_channel_diagnosis(
                 "order_analysis": diag_batch.order_analysis,
                 "rot_freq": diag_batch.rot_freq,
             }
-        }
+        })
 
     raise HTTPException(status_code=404, detail="诊断数据不存在")
 
