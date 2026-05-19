@@ -12,17 +12,17 @@ from typing import Dict, Any, Optional
 # 键: (deduction_name1, deduction_name2, ...) 排序后的元组
 # 值: 精确建议字符串
 SUGGESTION_MAP = {
-    # 轴承复合故障：冲击 + 多频率匹配
-    ("kurtosis_high", "bearing_multi_freq"):
+    # 轴承复合故障：冲击 + 多频率匹配（键必须按字母顺序排序以匹配 _match_suggestion 的 sorted()）
+    ("bearing_multi_freq", "kurtosis_high"):
         "检测到强冲击信号及多频率匹配异常，疑似轴承复合故障，建议安排精密诊断并准备备件。",
-    # 轴承内圈故障：冲击 + BPFI 频率匹配
+    # 轴承内圈故障：冲击 + BPFI 频率匹配（键必须按字母顺序排序）
     ("bearing_multi_freq", "kurtosis_mild"):
         "检测到轴承多频率异常及轻度冲击特征，建议检查润滑状态并安排精密诊断。",
-    # 齿轮断齿：边频带 + TSA 残差严重超标
+    # 齿轮断齿：边频带 + TSA 残差严重超标（键必须按字母顺序排序）
     ("gear_ser_critical", "gear_tsa_residual_kurtosis_critical"):
         "齿轮边频带及TSA残差均严重超标，疑似断齿故障，建议立即停机检查。",
-    # 齿轮磨损：边频带 + CAR 异常
-    ("gear_ser_warning", "gear_car_warning"):
+    # 齿轮磨损：边频带 + CAR 异常（键必须按字母顺序排序）
+    ("gear_car_warning", "gear_ser_warning"):
         "齿轮边频带和倒频谱指标均异常，疑似齿面磨损，建议关注啮合状态及载荷波动。",
     # 轴承 SC/SCoh 循环平稳证据
     ("bearing_sc_scoh_evidence",):
@@ -30,7 +30,7 @@ SUGGESTION_MAP = {
     # D-S 融合高冲突
     ("ds_conflict_penalty",):
         "多种诊断方法结果不一致（D-S冲突系数>0.8），建议人工复核确认真实故障类型。",
-    # 轴承统计异常 + 冲击
+    # 轴承统计异常 + 冲击（键必须按字母顺序排序）
     ("bearing_statistical_abnormal", "kurtosis_mild"):
         "检测到轴承统计指标异常及冲击特征，建议配置轴承参数后重新诊断以精确定位故障。",
 }
