@@ -30,13 +30,20 @@ Layer 2: 特征提取 & 复杂信号处理（依赖 Layer 1）
   rule_based.py ──→ features, order_tracking
   │
 Layer 1: 信号处理基元（零内部依赖）
-  signal_utils.py        (prepare_signal, FFT, 转频估计, 谱峰搜索)
-  vmd_denoise.py         (VMD分解)
-  health_score_continuous.py (连续扣分)
-  bearing_sideband.py    (边带分析)
-  channel_consensus.py   (通道一致性)
-  recommendation.py      (建议生成)
-  gear/msb.py            (调制双谱)
+  signal_utils.py             (prepare_signal, FFT, 转频估计, 谱峰搜索)
+  vmd_denoise.py              (VMD分解)
+  health_score_continuous.py  (连续扣分)
+  bearing_sideband.py         (边带分析)
+  channel_consensus.py        (通道一致性)
+  recommendation.py           (建议生成)
+  gear/msb.py                 (调制双谱)
+  savgol_denoise.py           (S-G多项式平滑)
+  wavelet_packet.py           (小波包能量熵)
+  bearing_cyclostationary.py  (谱相关/谱相干)
+  modality_bearing.py         (EMD/CEEMDAN/VMD轴承诊断)
+  sensitive_selector.py       (敏感分量评分选择)
+  trend_prediction.py         (Holt-Winters/Kalman趋势预测)
+  probability_calibration.py  (概率校准/SNR→概率)
 ```
 
 **每个 import 箭头代表"如果被依赖模块出错，依赖它的模块必然出错"。**
@@ -56,6 +63,13 @@ tests/diagnosis/foundation/
 │   ├── test_channel_consensus.py
 │   ├── test_recommendation.py
 │   ├── test_msb_correctness.py
+│   ├── test_savgol_denoise_correctness.py
+│   ├── test_wavelet_packet_correctness.py
+│   ├── test_bearing_cyclostationary_correctness.py
+│   ├── test_modality_bearing_correctness.py
+│   ├── test_sensitive_selector_correctness.py
+│   ├── test_trend_prediction_correctness.py
+│   ├── test_probability_calibration_correctness.py
 │   └── plot_results.py
 ├── layer2/                           # Layer 2 特征提取 & 信号处理
 │   ├── test_features_correctness.py
@@ -109,6 +123,13 @@ tests/diagnosis/foundation/
 | `channel_consensus` | `cross_channel_consensus` | `layer1/test_channel_consensus.py` | ✅ |
 | `recommendation` | `_generate_recommendation` / `_match_suggestion` | `layer1/test_recommendation.py` | ✅ |
 | `gear/msb` | `msb_residual_sideband_analysis` | `layer1/test_msb_correctness.py` | ✅ |
+| `savgol_denoise` | `sg_denoise` / `sg_trend_residual` | `layer1/test_savgol_denoise_correctness.py` | ✅ |
+| `wavelet_packet` | `wavelet_packet_decompose` / `compute_wavelet_packet_energy_entropy` / `wavelet_packet_denoise` / `compute_mswpee` | `layer1/test_wavelet_packet_correctness.py` | ✅ |
+| `bearing_cyclostationary` | `_compute_sc_scoh_bearing` / `bearing_sc_scoh_analysis` | `layer1/test_bearing_cyclostationary_correctness.py` | ✅ |
+| `modality_bearing` | `emd_bearing_analysis` / `ceemdan_bearing_analysis` / `vmd_bearing_analysis` | `layer1/test_modality_bearing_correctness.py` | ✅ |
+| `sensitive_selector` | `score_components` / `select_top_components` / `select_emd_sensitive_imfs` / `select_vmd_sensitive_modes` | `layer1/test_sensitive_selector_correctness.py` | ✅ |
+| `trend_prediction` | `holt_winters_forecast` / `kalman_smooth_health_scores` | `layer1/test_trend_prediction_correctness.py` | ✅ |
+| `probability_calibration` | `calibrate_fault_probabilities` / `_sigmoid_prob` / `calibrate_snr_to_prob` | `layer1/test_probability_calibration_correctness.py` | ✅ |
 
 ### Layer 2 — 特征提取 & 信号处理（依赖 Layer 1）
 
@@ -168,14 +189,13 @@ tests/diagnosis/foundation/
 | `ensemble` | `_gear_confidence` | `layer5/test_ensemble_helpers.py` | ✅ |
 | `ensemble` | `_time_confidence` | `layer5/test_ensemble_helpers.py` | ✅ |
 | `ensemble` | `_fault_label` | `layer5/test_ensemble_helpers.py` | ✅ |
-| `analyzer` | `calibrate_fault_probabilities` | `layer5/test_analyzer_helpers.py` | ✅ |
 | `analyzer` | `_safe_result` | `layer5/test_analyzer_helpers.py` | ✅ |
 
 ### 统计
 
 | 状态 | 数量 |
 |:--:|------|
-| ✅ 已覆盖 | **60** |
+| ✅ 已覆盖 | **66** |
 | ⚠️ 需数据集 | 1 |
 | ❌ 未覆盖 | **0** |
 
@@ -195,6 +215,13 @@ python ../tests/diagnosis/foundation/layer1/test_bearing_sideband.py
 python ../tests/diagnosis/foundation/layer1/test_channel_consensus.py
 python ../tests/diagnosis/foundation/layer1/test_recommendation.py
 python ../tests/diagnosis/foundation/layer1/test_msb_correctness.py
+python ../tests/diagnosis/foundation/layer1/test_savgol_denoise_correctness.py
+python ../tests/diagnosis/foundation/layer1/test_wavelet_packet_correctness.py
+python ../tests/diagnosis/foundation/layer1/test_bearing_cyclostationary_correctness.py
+python ../tests/diagnosis/foundation/layer1/test_modality_bearing_correctness.py
+python ../tests/diagnosis/foundation/layer1/test_sensitive_selector_correctness.py
+python ../tests/diagnosis/foundation/layer1/test_trend_prediction_correctness.py
+python ../tests/diagnosis/foundation/layer1/test_probability_calibration_correctness.py
 
 # Layer 2
 python ../tests/diagnosis/foundation/layer2/test_features_correctness.py

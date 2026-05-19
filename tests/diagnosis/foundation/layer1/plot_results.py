@@ -680,11 +680,67 @@ def plot_cw_variable():
 
 
 # ═══════════════════════════════════════════════════════════
+# 图18-25: 新增 Layer 1 模块（只读 JSON 汇总图）
+# ═══════════════════════════════════════════════════════════
+
+def _plot_simple_summary(json_name, title, filename):
+    """通用：从 JSON 读取 summary 画简单通过率图"""
+    data = load_json(json_name)
+    if not data or "summary" not in data:
+        print(f"  [SKIP] {json_name} 不存在")
+        return
+    s = data["summary"]
+    fig, ax = plt.subplots(figsize=(6, 3))
+    ax.barh(["通过", "失败"], [s["passed"], s["failed"]], color=['#52C41A', '#FF4D4F'])
+    ax.set_title(f"{title} ({s['total']}测试)")
+    for i, v in enumerate([s["passed"], s["failed"]]):
+        ax.text(v + 0.1, i, str(v), va='center', fontsize=12)
+    ax.set_xlim(0, max(s["total"] * 1.3, 5))
+    plt.tight_layout()
+    fig.savefig(PLOT_DIR / filename, dpi=150); plt.close(fig)
+    print(f"  [OK] {filename}")
+
+
+def plot_savgol():
+    _plot_simple_summary("savgol_denoise.json", "savgol_denoise", "18_savgol.png")
+
+def plot_wavelet_packet():
+    _plot_simple_summary("wavelet_packet.json", "wavelet_packet", "19_wavelet_packet.png")
+
+def plot_msb():
+    _plot_simple_summary("msb_correctness.json", "gear/msb MSB", "20_msb.png")
+
+def plot_cyclostationary():
+    _plot_simple_summary("bearing_cyclostationary.json", "bearing_cyclostationary", "21_cyclostationary.png")
+
+def plot_modality_bearing():
+    _plot_simple_summary("modality_bearing.json", "modality_bearing", "22_modality_bearing.png")
+
+def plot_sensitive_selector():
+    _plot_simple_summary("sensitive_selector.json", "sensitive_selector", "23_sensitive_selector.png")
+
+def plot_trend_prediction():
+    _plot_simple_summary("trend_prediction.json", "trend_prediction", "24_trend_prediction.png")
+
+def plot_probability_calibration():
+    _plot_simple_summary("probability_calibration.json", "probability_calibration", "25_probability_calibration.png")
+
+
+# ═══════════════════════════════════════════════════════════
 # 图13: 汇总 — 全部测试通过率
 # ═══════════════════════════════════════════════════════════
 def plot_summary():
     summary_data = {}
-    for json_name in ["signal_utils_correctness", "vmd_denoise_correctness"]:
+    all_jsons = [
+        "signal_utils_correctness", "vmd_denoise_correctness",
+        "health_score_continuous", "bearing_sideband",
+        "channel_consensus", "recommendation",
+        "savgol_denoise", "wavelet_packet",
+        "msb_correctness", "bearing_cyclostationary",
+        "modality_bearing", "sensitive_selector",
+        "trend_prediction", "probability_calibration",
+    ]
+    for json_name in all_jsons:
         data = load_json(f"{json_name}.json")
         if data and "summary" in data:
             label = json_name.replace("_correctness", "").replace("_", " ")
@@ -756,9 +812,17 @@ def main():
     plot_vmd_real()            # 15
     plot_all_synthetic()       # 16
     plot_cw_variable()         # 17
+    plot_savgol()              # 18
+    plot_wavelet_packet()      # 19
+    plot_msb()                 # 20
+    plot_cyclostationary()     # 21
+    plot_modality_bearing()    # 22
+    plot_sensitive_selector()  # 23
+    plot_trend_prediction()    # 24
+    plot_probability_calibration() # 25
     plot_summary()             # 13
 
-    print(f"\n共 17 张图表 → {PLOT_DIR}")
+    print(f"\n共 25 张图表 → {PLOT_DIR}")
 
 
 if __name__ == "__main__":

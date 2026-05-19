@@ -1,6 +1,7 @@
 # Layer 1 信号基元 — 测试报告
 
 > 生成时间：2026-05-19 | 分支：`fix/nodata-v2`
+> 图表：25 张 PNG → `layer1/output/plots/`
 
 ---
 
@@ -8,106 +9,75 @@
 
 | 指标 | 数值 |
 |------|------|
-| 测试文件 | 6 |
-| 总测试数 | **104** |
-| 通过 | **104** |
+| 测试模块 | **14** |
+| 总测试数 | **151** |
+| 通过 | **151** |
 | 失败 | 0 |
 | 通过率 | **100%** |
-| 图表 | 17 张 |
-| 已标注已知限制 | 6 项 |
 
 ---
 
-## 测试覆盖矩阵
+## 模块覆盖清单
 
-### signal_utils（60 测试）
-
-| 类别 | 测试数 | 内容 |
-|------|:--:|------|
-| `prepare_signal` | 3 | 零均值化、线性去趋势、list 输入 |
-| 滤波器 | 4 | 带通/低通/高通 + 极短信号安全 |
-| FFT 频谱 | 3 | 25/50/200Hz 正弦频率+幅值精度 |
-| `find_peaks_in_spectrum` | 2 | 谐波族搜索（正弦+齿轮啮合） |
-| 统计指标 | 5 | 高斯峭度/偏度、正弦RMS/峰值因子/峰值 |
-| `parabolic_interpolation` | 1 | 100.3Hz 亚 bin 插值精度 |
-| SNR & 频带能量 | 3 | SNR、_band_energy、_order_band_energy |
-| 转频估计（合成） | 3 | spectrum/autocorr/envelope 三方法 |
-| ZOOM-FFT | 2 | 200Hz 细化谱 + 无效输入安全 |
-| 全部合成信号 | 8 | 6种信号×8变体→FFT+统计+峰值 |
-| 转频估计（WTgearbox） | 8 | 20~55Hz 全部8种转速 |
-| 转频估计（HUSTbear） | 7 | 5健康+球故障+复合故障 |
-| 滤波&峰值（HUSTbear） | 5 | 20~40Hz 带通滤波+FFT验证 |
-| CW 变速 | 6 | 3状态×2变体 转频估计 |
-
-**已知限制：**
-
-- WTgearbox ≥45Hz：行星齿轮箱啮合频率强干扰基频，`estimate_rot_freq_spectrum` 无法准确估计
-- HUSTbear 25/35Hz：频谱法不稳定，检出谐波而非基频
-- HUSTbear 复合故障：故障频率杂散干扰
-
-### vmd_denoise（19 测试）
-
-| 类别 | 测试数 | 内容 |
-|------|:--:|------|
-| `vmd_decompose` | 5 | 三频合成信号→3 IMFs + 频率验证 |
-| `vmd_denoise` | 1 | 加噪正弦 SNR 改善 |
-| `vmd_select_impact_mode` | 1 | 轴承冲击→最佳IMF选择 |
-| 真实 HUSTbear | 6 | 3转速×2状态(健康/球故障) |
-| 真实 CW 变速 | 6 | 3状态×升速/降速 |
-
-### health_score_continuous（11 测试）
-
-| 类别 | 测试数 | 内容 |
-|------|:--:|------|
-| `sigmoid_deduction` | 4 | 远低于/远高于/等于阈值 + 单调性 |
-| `multi_threshold_deduction` | 3 | 低于所有/超过所有/中间值 |
-| `cascade_deduction` | 2 | 中间值级联 + 低于所有阈值 |
-| `compute_continuous_deductions` | 2 | 正常指标 + 高峭度指标 |
-
-### bearing_sideband（2 测试）
-
-| 类别 | 测试数 | 内容 |
-|------|:--:|------|
-| 合成有调制 | 1 | BPFO±fr 强边频带，density=1.0 |
-| 合成无调制 | 1 | 仅BPFO峰无调制，density=0.0 |
-
-### channel_consensus（4 测试）
-
-| 类别 | 测试数 | 内容 |
-|------|:--:|------|
-| 3通道全BPFO | 1 | 形成一致→标签=轴承外圈故障, boost=1.05 |
-| 仅1通道BPFO | 1 | 无一致性→label=unknown |
-| 空输入 | 1 | 安全兜底 |
-| 混合故障 | 1 | 3通道3种故障→无一致 |
-
-### recommendation（8 测试）
-
-| 类别 | 测试数 | 内容 |
-|------|:--:|------|
-| `_match_suggestion` | 3 | SCoh证据匹配 + 键序问题(已知限制) + 未知组合 |
-| `_generate_recommendation` | 3 | normal/DS冲突/gear SER critical |
-| `SUGGESTION_MAP` | 2 | 映射表条目数 + 键类型验证 |
-
-**已知限制：** `SUGGESTION_MAP` 中部分键未按字母序排列，与 `_match_suggestion` 内部的 `sorted()` 不一致，导致部分多键组合无法匹配。例如 `("kurtosis_high", "bearing_multi_freq")` 排序后为 `("bearing_multi_freq", "kurtosis_high")` 无法匹配原键。
+| # | 模块 | 测试文件 | 测试数 | 图表 |
+|---|------|---------|:--:|:--:|
+| 1 | `signal_utils` | `test_signal_utils_correctness.py` | 60 | 01~09, 14, 16~17 |
+| 2 | `vmd_denoise` | `test_vmd_denoise_correctness.py` | 19 | 10~12, 15 |
+| 3 | `health_score_continuous` | `test_health_score_continuous.py` | 11 | — |
+| 4 | `bearing_sideband` | `test_bearing_sideband.py` | 2 | — |
+| 5 | `channel_consensus` | `test_channel_consensus.py` | 4 | — |
+| 6 | `recommendation` | `test_recommendation.py` | 8 | — |
+| 7 | `gear/msb` | `test_msb_correctness.py` | 7 | 20 |
+| 8 | `savgol_denoise` | `test_savgol_denoise_correctness.py` | 5 | 18 |
+| 9 | `wavelet_packet` | `test_wavelet_packet_correctness.py` | 8 | 19 |
+| 10 | `bearing_cyclostationary` | `test_bearing_cyclostationary_correctness.py` | 5 | 21 |
+| 11 | `modality_bearing` | `test_modality_bearing_correctness.py` | 3 | 22 |
+| 12 | `sensitive_selector` | `test_sensitive_selector_correctness.py` | 6 | 23 |
+| 13 | `trend_prediction` | `test_trend_prediction_correctness.py` | 6 | 24 |
+| 14 | `probability_calibration` | `test_probability_calibration_correctness.py` | 7 | 25 |
 
 ---
 
-## 数据集覆盖
+## 图表清单
 
-| 数据集 | 类型 | 用途 | 样本数 |
-|--------|------|------|:--:|
-| 合成信号 | 6种 | FFT/统计/峰值/边频带 | 8 |
-| WTgearbox | 行星齿轮箱 | 转频估计 | 8 |
-| HUSTbear | 轴承 | 转频/滤波/VMD | 18 |
-| CW | 变速轴承 | 转频/VMD | 12 |
+| 编号 | 文件名 | 内容 |
+|:--:|------|------|
+| 01 | `01_prepare_signal.png` | DC去除 + 线性去趋势(y=kx+b) 前后对比 |
+| 02 | `02_filters.png` | 带通/低通/高通频谱四宫格 |
+| 03 | `03_fft_spectrum.png` | 25/50/200Hz FFT频率检出 |
+| 04 | `04_find_peaks.png` | 谐波族搜索 |
+| 05 | `05_statistics.png` | 5项统计指标期望vs实际 |
+| 06 | `06_parabolic_interp.png` | 抛物线插值亚bin精度 |
+| 07 | `07_snr_energy.png` | SNR+频带能量 |
+| 08 | `08_rot_freq.png` | 三方法转频估计对比 |
+| 09 | `09_zoom_fft.png` | ZOOM-FFT vs 标准FFT |
+| 10 | `10_vmd_decompose.png` | VMD三分量分解 |
+| 11 | `11_vmd_denoise.png` | VMD降噪时域+频域6宫格 |
+| 12 | `12_vmd_impact.png` | VMD冲击模态选择 |
+| 13 | `13_summary.png` | 全部14模块通过率汇总 |
+| 14 | `14_real_rotfreq.png` | WTgearbox+HUSTbear转频估计 |
+| 15 | `15_real_vmd.png` | HUSTbear+CW VMD峭度对比 |
+| 16 | `16_all_synthetic.png` | 8种合成信号统计指标 |
+| 17 | `17_cw_variable.png` | CW变速转频估计 |
+| 18 | `18_savgol.png` | S-G平滑通过率 |
+| 19 | `19_wavelet_packet.png` | 小波包通过率 |
+| 20 | `20_msb.png` | MSB通过率 |
+| 21 | `21_cyclostationary.png` | 循环平稳通过率 |
+| 22 | `22_modality_bearing.png` | 模态分解轴承诊断通过率 |
+| 23 | `23_sensitive_selector.png` | 敏感分量选择通过率 |
+| 24 | `24_trend_prediction.png` | 趋势预测通过率 |
+| 25 | `25_probability_calibration.png` | 概率校准通过率 |
 
 ---
 
-## 未覆盖模块
+## 已知限制
 
-| 模块 | 原因 |
-|------|------|
-| `gear/msb.py` | 计算量大，需后续单独处理 |
+| 限制 | 模块 | 详情 |
+|------|------|------|
+| WTgearbox ≥45Hz 转频不准 | `signal_utils` | 行星齿轮箱啮合频率强干扰基频 |
+| HUSTbear 25/35Hz 转频不准 | `signal_utils` | 频谱法检出谐波而非基频 |
+| HUSTbear 复合故障转频不准 | `signal_utils` | 故障频率杂散干扰 |
+| SUGGESTION_MAP 键序问题 | `recommendation` | 部分键未按字母序排列，与 `sorted()` 不一致 |
 
 ---
 
@@ -115,14 +85,22 @@
 
 ```bash
 cd d:\code\CNN
-# 请进入虚拟环境
-# 全部 Layer 1 测试
+
+# 全部 14 个 Layer 1 测试
 python tests/diagnosis/foundation/layer1/test_signal_utils_correctness.py
 python tests/diagnosis/foundation/layer1/test_vmd_denoise_correctness.py
 python tests/diagnosis/foundation/layer1/test_health_score_continuous.py
 python tests/diagnosis/foundation/layer1/test_bearing_sideband.py
 python tests/diagnosis/foundation/layer1/test_channel_consensus.py
 python tests/diagnosis/foundation/layer1/test_recommendation.py
+python tests/diagnosis/foundation/layer1/test_msb_correctness.py
+python tests/diagnosis/foundation/layer1/test_savgol_denoise_correctness.py
+python tests/diagnosis/foundation/layer1/test_wavelet_packet_correctness.py
+python tests/diagnosis/foundation/layer1/test_bearing_cyclostationary_correctness.py
+python tests/diagnosis/foundation/layer1/test_modality_bearing_correctness.py
+python tests/diagnosis/foundation/layer1/test_sensitive_selector_correctness.py
+python tests/diagnosis/foundation/layer1/test_trend_prediction_correctness.py
+python tests/diagnosis/foundation/layer1/test_probability_calibration_correctness.py
 
 # 绘图
 python tests/diagnosis/foundation/layer1/plot_results.py
