@@ -15,6 +15,7 @@
 | [AGENTS](../AGENTS.md) | `AGENTS.md` | AI Agent 环境配置、开发命令、关键代码路径 |
 | [架构设计](../architecture.md) | `architecture.md` | 系统架构设计 |
 | [算法说明](../ALGORITHMS.md) | `ALGORITHMS.md` | 诊断算法说明 |
+| [诊断算法体系全景](./DIAGNOSIS_SYSTEM_OVERVIEW.md) | `docs/DIAGNOSIS_SYSTEM_OVERVIEW.md` | 5 子系统串联：方法公式、投票逻辑、评分机制 |
 | [部署指南](../DEPLOY.md) | `DEPLOY.md` | 服务器部署指南 |
 | [运维手册](../OPERATION.md) | `OPERATION.md` | 运维操作手册 |
 
@@ -64,6 +65,7 @@
 | 场景 | 查阅文档 |
 |------|----------|
 | 了解项目整体架构 | `README.md`, `architecture.md` |
+| 了解诊断算法数学公式与系统交互 | `ALGORITHMS.md`, `docs/DIAGNOSIS_SYSTEM_OVERVIEW.md` |
 | 配置开发环境 | `AGENTS.md` |
 | 修改后端 API 端点 | `docs/api/backend_api.md` → `docs/api/frontend_backend_interaction.md` |
 | 修改后端服务函数 | `docs/backend/services.md` |
@@ -94,6 +96,7 @@
 ```
 docs/
 ├── INDEX.md                          # 本文档（文档索引）
+├── DIAGNOSIS_SYSTEM_OVERVIEW.md      # 诊断算法体系全景
 │
 ├── api/                              # API 相关文档
 │   ├── backend_api.md                # 后端 REST API + WebSocket 文档

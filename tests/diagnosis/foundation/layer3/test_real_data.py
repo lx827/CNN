@@ -163,15 +163,37 @@ def test_engine_gear_wtgearbox():
                 res = engine.analyze_gear(sig, FS)
                 indicators = res.get("fault_indicators", {})
                 has_any = len(indicators) > 0
-                passed = has_any
+                # 检查是否有 warning/critical 指标
+                has_warn = any(
+                    v.get("warning") or v.get("critical")
+                    for v in indicators.values() if isinstance(v, dict)
+                )
+                # crack/healthy 允许无 warning；break/missing/wear 期望有 warning
+                if label in ("crack",):
+                    # 裂纹是已知难例：允许无 warning
+                    passed = has_any
+                    if not has_warn:
+                        print(f"  [PASS] {label}/{fname}: method={res.get('method')}, indicators OK, 无warning(已知限制)")
+                    else:
+                        print(f"  [PASS] {label}/{fname}: method={res.get('method')}, warning detected (bonus)")
+                elif label == "healthy":
+                    passed = has_any
+                    print(f"  [{'PASS' if passed else 'FAIL'}] {label}/{fname}: method={res.get('method')}, keys={list(indicators.keys())[:5]}")
+                else:
+                    passed = has_any
+                    tag = "PASS" if passed else "FAIL"
+                    extra = ""
+                    if passed and not has_warn:
+                        extra = " [WARN: 无warning指标-疑似漏检]"
+                    print(f"  [{tag}]{extra} {label}/{fname}: method={res.get('method')}, keys={list(indicators.keys())[:5]}")
                 results.append({
                     "test": f"wtg_{label}",
                     "file": fname,
                     "method": res.get("method"),
                     "indicators_keys": list(indicators.keys())[:5],
+                    "has_warning": has_warn,
                     "passed": passed,
                 })
-                print(f"  [{'PASS' if passed else 'FAIL'}] {label}/{fname}: method={res.get('method')}, keys={list(indicators.keys())[:5]}")
             except Exception as e:
                 results.append({"test": f"wtg_{label}", "file": fname, "passed": False, "error": str(e)[:100]})
                 print(f"  [FAIL] {label}/{fname}: {str(e)[:80]}")
@@ -210,10 +232,16 @@ def test_engine_gear_hustgearbox():
 
 
 def _check_diagnosis(label, hs, status, known_limitation=False):
-    """分级判定：结构完整=PASS，诊断可疑=WARN"""
+    """分级判定：结构完整=PASS，诊断可疑=WARN
+
+    known_limitation=True: 已知算法限制（如裂纹早期损伤），仅验证结构完整性
+    """
     structural_ok = hs >= 0
     if known_limitation:
-        return True, ""
+        # 已知难例：仅确保不崩溃，漏检不视为测试失败
+        if hs > 85 and status == "normal":
+            return True, f"KNOWN: {label}漏检(已知算法限制)"
+        return structural_ok, ""
     if label == "healthy":
         if hs < 70:
             return True, f"WARN: 健康信号 hs={hs} 偏低(疑似误报)"
@@ -294,7 +322,14 @@ def test_ensemble_wtgearbox():
     """WTgearbox: run_research_ensemble 行星齿轮箱集成诊断"""
     print("\n--- ensemble WTgearbox ---")
     results = []
-    for label, fname in [("healthy", "He_N1_20-c1.npy"), ("break", "Br_B1_20-c1.npy"), ("wear", "We_W1_20-c1.npy")]:
+    # crack 是已知难例（早期损伤，冲击能量弱，4行星轮平均化后淹没）
+    for label, fname, known_lim in [
+        ("healthy", "He_N1_20-c1.npy", False),
+        ("break", "Br_B1_20-c1.npy", False),
+        ("wear", "We_W1_20-c1.npy", False),
+        ("missing", "Mi_M1_20-c1.npy", False),
+        ("crack", "Rc_R1_20-c1.npy", True),   # 已知难例：FM4/SER/CAR均低于阈值
+    ]:
         sig = load_npy(WTGEARBOX_DIR, fname)
         if sig is None:
             results.append({"test": f"ensemble_wtg_{label}", "passed": False, "error": "file not found"})
@@ -303,7 +338,7 @@ def test_ensemble_wtgearbox():
             res = run_research_ensemble(sig, FS, gear_teeth=GEAR_TEETH_WTG, max_seconds=10.0)
             hs = res.get("health_score", 100)
             status = res.get("status", "unknown")
-            passed, warn = _check_diagnosis(label, hs, status)
+            passed, warn = _check_diagnosis(label, hs, status, known_lim)
             results.append({"test": f"ensemble_wtg_{label}", "file": fname,
                            "health_score": hs, "status": status, "passed": passed, "warning": warn})
             tag = "PASS" if passed else "FAIL"
