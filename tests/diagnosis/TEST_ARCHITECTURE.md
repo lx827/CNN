@@ -128,45 +128,21 @@ tests/diagnosis/foundation/
 
 | 模块 | 函数 | 测试 | 状态 |
 |------|------|------|:--:|
-| `engine` | `analyze_bearing` (分发 13 种轴承方法) | `test_envelope_correctness.py` (真实) | ⚠️ 仅 1 种 |
-| `engine` | `analyze_gear` (分发 2 种齿轮方法) | `test_gear_metrics_correctness.py` | ✅ |
-| `engine` | `analyze_comprehensive` | — | ❌ |
-| `engine` | `analyze_all_methods` | — | ❌ |
-| `engine` | `analyze_research_ensemble` | — | ❌ |
-| `ensemble` | `run_research_ensemble` | — | ❌ |
-| `analyzer` | `analyze_device` | — | ❌ |
+| `engine` | `analyze_bearing` (分发 13 种轴承方法) | `layer3/test_engine_integration.py` + `evaluation/bearing_eval.py` | ✅ |
+| `engine` | `analyze_gear` (分发 2 种齿轮方法) | `layer3/test_engine_integration.py` + `algorithms/test_engine_regressions.py` | ✅ |
+| `engine` | `analyze_comprehensive` | `layer3/test_engine_integration.py` + `algorithms/test_engine_regressions.py` | ✅ |
+| `engine` | `analyze_all_methods` | `evaluation/bearing_eval.py` | ⚠️ 需数据集 |
+| `engine` | `analyze_research_ensemble` | `layer3/test_ensemble_integration.py` + `evaluation/comprehensive_eval.py` | ✅ |
+| `ensemble` | `run_research_ensemble` | `layer3/test_ensemble_integration.py` + `algorithms/test_research_ensemble.py` | ✅ |
+| `analyzer` | `analyze_device` | `layer3/test_analyzer_integration.py` + `planetary/test_planetary_e2e.py` | ✅ |
 
 ### 统计
 
 | 状态 | 数量 |
 |:--:|------|
-| ✅ 已覆盖 | 30 |
-| ⚠️ 部分/鲁棒 | 3 |
-| ❌ 未覆盖 | **13** |
-
----
-
-## 测试拆分方案（按优先级）
-
-```
-Priority 0 (L1 — 底层阻塞): 必须最先完成
-  layer1/test_signal_utils_correctness.py    ← prepare_signal, FFT, rms/kurt, bandpass, find_peaks
-  layer1/test_vmd_denoise_correctness.py     ← VMD 分解对合成信号的模态分离
-
-Priority 1 (L2 — 特征正确性):
-  layer2/test_features_correctness.py        ← kurt/crest/rms/skew 公式 + 轴承频率 + FFT特征
-  layer2/test_bearing_correctness.py         ← envelope/kurtogram/med/teager/sk 合成验证
-  layer2/test_bearing_advanced_correctness.py ← cpw/mckd/sc-scoh 合成验证
-  layer2/test_gear_metrics_correctness.py    ← FM0/FM4/SER/CAR/TSA 独立验(不经过 engine)
-  layer2/test_preprocessing_correctness.py   ← wavelet/MED/CPW 去噪效果
-  layer2/test_preprocessing_cascade_correctness.py ← cascade_wavelet_vmd/lms
-  layer2/test_order_tracking_correctness.py  ← 恒定/缓变/变速阶次跟踪
-
-Priority 2 (L2-L3 — 集成):
-  layer2/test_health_score_correctness.py    ← 不同故障组合的健康度输出
-  layer2/test_rule_based_correctness.py      ← 规则诊断分类能力
-  layer2/test_planetary_demod_correctness.py ← 行星齿轮箱解调
-```
+| ✅ 已覆盖 | 39 |
+| ⚠️ 需数据集 | 1 |
+| ❌ 未覆盖 | **6** |
 
 ---
 
