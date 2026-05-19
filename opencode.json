@@ -1,4 +1,43 @@
 {
     "$schema": "https://opencode.ai/config.json",
-    "mcp": {}
+    "mcp": {
+        "server-filesystem": {
+            "type": "local",
+            "command": [
+                "npx",
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "D:\\code\\CNN"
+            ],
+            "enabled": true
+        },
+        "server-git": {
+            "type": "local",
+            "command": [
+                "npx",
+                "-y",
+                "@modelcontextprotocol/server-git",
+                "D:\\code\\CNN"
+            ],
+            "enabled": true
+        },
+        "server-command": {
+            "type": "local",
+            "command": [
+                "npx",
+                "-y",
+                "@modelcontextprotocol/server-command"
+            ],
+            "enabled": true
+        },
+        "server-puppeteer": {
+            "type": "local",
+            "command": [
+                "npx",
+                "-y",
+                "@modelcontextprotocol/server-puppeteer"
+            ],
+            "enabled": true
+        }
+    }
 }
