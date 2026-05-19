@@ -197,9 +197,17 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
         GEAR_CREST_THRESHOLD = 10.0
         impulse_context = kurt > GEAR_KURT_THRESHOLD or crest > GEAR_CREST_THRESHOLD or kurt < 5.5
     else:
-        GEAR_KURT_THRESHOLD = 12.0
-        GEAR_CREST_THRESHOLD = 12.0
+        # 定轴齿轮箱：齿轮故障主要表现为频域调制边带，时域冲击不一定明显
+        # 降低阈值 + 频域指标强时放宽门控
+        GEAR_KURT_THRESHOLD = 8.0
+        GEAR_CREST_THRESHOLD = 8.0
         impulse_context = kurt > GEAR_KURT_THRESHOLD or crest > GEAR_CREST_THRESHOLD
+        # 频域指标强时即使时域证据弱也打开门控
+        if not impulse_context:
+            critical_count = sum(1 for v in indicators.values() if isinstance(v, dict) and v.get("critical"))
+            warning_count = sum(1 for v in indicators.values() if isinstance(v, dict) and v.get("warning"))
+            if critical_count >= 2 or (critical_count >= 1 and warning_count >= 2):
+                impulse_context = True
 
     # TSA 残差峭度证据：区分力=3.31，行星箱最有效的补充指标
     # TSA 消除同步啮合成分后残差峭度 > 2.5 时增加齿轮置信度

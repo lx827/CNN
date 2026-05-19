@@ -172,7 +172,7 @@ def compute_continuous_deductions(
     CREST_EVIDENCE_THRESHOLD = 10.0
 
     try:
-        is_gear_device = bool(gear_teeth and float(gear_teeth.get("input") or 0) > 0)
+        is_gear_device = bool(gear_teeth and (float(gear_teeth.get("input") or 0) > 0 or float(gear_teeth.get("sun") or 0) > 0))
     except (TypeError, ValueError):
         is_gear_device = False
 
@@ -291,12 +291,12 @@ def compute_continuous_deductions(
     # ═══════ 齿轮故障扣分 ═══════
     gear_ind = gear_result.get("fault_indicators", {})
     try:
-        has_gear = bool(gear_teeth and float(gear_teeth.get("input") or 0) > 0)
+        has_gear = bool(gear_teeth and (float(gear_teeth.get("input") or 0) > 0 or float(gear_teeth.get("sun") or 0) > 0))
     except (TypeError, ValueError):
         has_gear = False
 
     # 判断是否为行星齿轮箱（影响门控阈值）
-    is_planetary = bool(gear_teeth and int(gear_teeth.get("planet_count") or 0) >= 3)
+    is_planetary = bool(gear_teeth and int(gear_teeth.get("planet_count") or gear_teeth.get("n_planets") or 0) >= 3)
     if is_planetary:
         # 行星箱时域特征重叠严重：健康 kurt=7~13, crest=7~11
         # crack 时 kurt 显著降低（3.9~5.5），双向门控：高峭度 + 低峭度
