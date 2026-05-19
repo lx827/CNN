@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Any
 
 from .signal_utils import (
-    prepare_signal,
+    prepare_signal, linear_detrend,
     compute_fft_spectrum,
     estimate_rot_freq_spectrum as _estimate_rot_freq_simple,
     _search_peak_in_band,
@@ -137,9 +137,8 @@ class DiagnosisEngine:
         self.gear_teeth = gear_teeth or {}
 
     def preprocess(self, signal: np.ndarray) -> np.ndarray:
-        """去直流 + 可选去噪，与 /order 端点的 prepare_signal 行为一致"""
-        arr = np.array(signal, dtype=np.float64)
-        arr = arr - np.mean(arr)  # 统一去直流（零均值化）
+        """去直流 + 线性去趋势 + 可选去噪（所有诊断路径统一入口）"""
+        arr = prepare_signal(np.array(signal, dtype=np.float64), detrend=True)
         if self.denoise_method == DenoiseMethod.WAVELET:
             return wavelet_denoise(arr, wavelet="db8")
         elif self.denoise_method == DenoiseMethod.VMD:
@@ -230,6 +229,10 @@ class DiagnosisEngine:
             rot_freq, _, _, _, rot_std = self._estimate_rot_freq(arr, fs)
         else:
             rot_std = 0.0  # 外部指定转频时不携带不确定度
+
+        # 变速工况：转速变异 > 10% 时对信号线性去趋势
+        if rot_freq > 0 and rot_std / rot_freq > 0.10:
+            arr = linear_detrend(arr)
 
         # 选择轴承诊断方法
         if self.bearing_method == BearingMethod.KURTOGRAM:
