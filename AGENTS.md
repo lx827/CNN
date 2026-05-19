@@ -600,6 +600,42 @@ cloud/app/services/analyzer.py
 
 ---
 
+**HUSTgearbox 定轴齿轮箱数据集：**
+
+> 来源：Chao Zhao, Enrico Zio, Weiming Shen, _Domain Generalization for Cross-Domain Fault Diagnosis_, Reliability Engineering and System Safety (2024).
+> 原始采样率 25.6 kHz，已降采样至 8192 Hz 存放在 `down8192` 目录。
+
+- 路径：`D:\code\wavelet_study\dataset\HUSTgearbox\down8192`
+- 采样率：8192 Hz（原始 25.6 kHz → 降采样）
+- 文件格式：`.npy`（NumPy 一维数组）
+- 文件命名规则：`{健康状态}_{转速}_{负载倍数}-{通道}.npy`
+  - 健康状态：`H`（健康 Healthy）/ `B`（断齿 Broken tooth）/ `M`（缺齿 Missing tooth）
+  - 转速：`20` / `25` / `30` / `35`（Hz）
+  - 负载倍数：`1`（1×0.113 Nm）/ `2`（2×0.113 Nm）/ `3`（3×0.113 Nm）/ `4`（4×0.113 Nm）
+  - 通道：`X` / `Y` / `Z`（三轴加速度计，用户处理后的通道）
+- 数据示例：`B_20_1-X.npy` = 断齿，20 Hz，1 倍负载，X 方向通道
+- 数据量：36 个 .npy 文件（3 类 × 4 工况 × 3 通道）
+- 数据长度：每文件约 10.2 秒振动信号（原始 262144 点 @ 25.6kHz，降采样后约 83558 点 @ 8192Hz）
+
+**HUSTgearbox 齿轮箱机械参数：**
+
+| 参数 | 值 |
+|------|-----|
+| 齿轮箱型号 | Hub City M2 |
+| 传动比 | 1.5:1 |
+| 主动轮（小齿轮）齿数 | 18 |
+| 从动轮（大齿轮）齿数 | 27 |
+| 主动轮节圆直径 | 1.125 in（28.575 mm） |
+| 从动轮节圆直径 | 1.6875 in（42.8625 mm） |
+| 啮合频率 | 18 × fr |
+| 主动轮轴承 | NSK 6202（1 个） |
+| 从动轮轴承 | （2 个） |
+| 采样率 | 8192 Hz |
+
+> **HUSTgearbox 数据集特点：** 定轴齿轮箱（非行星），4 种恒速工况（20~35 Hz）+ 4 级负载，3 通道。故障类型仅含健康(H)、断齿(B)、缺齿(M)，共 3 种状态。与 WTgearbox（行星箱）互补，用于验证定轴齿轮箱诊断算法。
+
+---
+
 ## 10. 数据库表
 
 | 表名 | 用途 |
