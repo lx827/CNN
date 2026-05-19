@@ -3,7 +3,7 @@
 负责数据库初始化和默认设备创建
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.database import init_db, SessionLocal
 from app.models import Device
@@ -194,7 +194,7 @@ def create_initial_devices():
                     gear_teeth=dev_info.get("gear_teeth"),
                     # 离线设备初始设为离线，其余设为在线
                     is_online=0 if dev_info["device_id"] == "WTG-010" else 1,
-                    last_seen_at=None if dev_info["device_id"] == "WTG-010" else datetime.utcnow(),
+                    last_seen_at=None if dev_info["device_id"] == "WTG-010" else datetime.now(timezone.utc),
                 )
                 db.add(device)
                 bp_str = "有轴承参数" if dev_info.get("bearing_params") else "无轴承参数"

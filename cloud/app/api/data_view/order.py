@@ -11,7 +11,7 @@ from app.services.diagnosis.order_tracking import (
     _order_tracking,
 )
 from . import router, prepare_signal, _get_channel_name
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import numpy as np
 import asyncio
@@ -126,7 +126,7 @@ async def get_channel_order(
                 existing_order["rot_rpm"] = round(rot_freq_val * 60.0, 1)
                 diag.order_analysis = existing_order
                 diag.rot_freq = round(rot_freq_val, 3)
-                diag.analyzed_at = datetime.utcnow()
+                diag.analyzed_at = datetime.now(timezone.utc)
             else:
                 db.add(Diagnosis(
                     device_id=device_id,
@@ -140,7 +140,7 @@ async def get_channel_order(
                     },
                     rot_freq=round(rot_freq_val, 3),
                     status="normal",
-                    analyzed_at=datetime.utcnow(),
+                    analyzed_at=datetime.now(timezone.utc),
                 ))
             db.commit()
         except Exception as db_err:

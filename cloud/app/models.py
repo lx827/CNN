@@ -12,7 +12,7 @@
 """
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, JSON, UniqueConstraint
 from app.database import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class Device(Base):
@@ -39,7 +39,7 @@ class Device(Base):
     downsample_ratio = Column(Integer, default=8, comment="边端降采样压缩比")
     is_online = Column(Integer, default=1, comment="是否在线 1=在线 0=离线，由离线监测器维护")
     last_seen_at = Column(DateTime, nullable=True, comment="设备最后一次数据上传时间")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class SensorData(Base):
@@ -63,7 +63,7 @@ class SensorData(Base):
     is_analyzed = Column(Integer, default=0, comment="是否已检测 0/1")
     is_special = Column(Integer, default=0, comment="是否特殊采集 0=普通 1=特殊")
     analyzed_at = Column(DateTime, nullable=True, comment="检测完成时间")
-    created_at = Column(DateTime, default=datetime.utcnow, index=True, comment="采样时间")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True, comment="采样时间")
 
     # 联合索引：快速查询某设备某批次的所有通道
     __table_args__ = (
@@ -88,7 +88,7 @@ class Diagnosis(Base):
     engine_result = Column(JSON, nullable=True, comment="analyze_comprehensive 完整结果（通道级）")
     full_analysis = Column(JSON, nullable=True, comment="analyze_all_methods 完整结果（通道级）")
     denoise_method = Column(String(20), nullable=True, default="none", comment="去噪方法 none/wavelet/vmd/med")
-    analyzed_at = Column(DateTime, default=datetime.utcnow, comment="分析时间")
+    analyzed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), comment="分析时间")
 
 
 class Alarm(Base):
@@ -106,7 +106,7 @@ class Alarm(Base):
     suggestion = Column(Text, comment="处理建议")
     batch_index = Column(Integer, nullable=True, comment="关联的 sensor_data 批次号")
     is_resolved = Column(Integer, default=0, comment="是否已处理 0/1")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     resolved_at = Column(DateTime, nullable=True)
 
 
@@ -124,7 +124,7 @@ class CollectionTask(Base):
     status = Column(String(20), default="pending", comment="状态: pending/processing/completed/failed")
     sample_rate = Column(Integer, default=25600, comment="采样率 Hz")
     duration = Column(Integer, default=10, comment="采集时长秒")
-    created_at = Column(DateTime, default=datetime.utcnow, comment="创建时间")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), comment="创建时间")
     started_at = Column(DateTime, nullable=True, comment="开始执行时间")
     completed_at = Column(DateTime, nullable=True, comment="完成时间")
     result_batch_index = Column(Integer, nullable=True, comment="完成后关联的batch_index")

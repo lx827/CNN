@@ -5,7 +5,7 @@ from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
 from app.services.analyzer import analyze_device
 from . import router, _sanitize_for_json
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import asyncio
 import numpy as np
@@ -36,7 +36,7 @@ async def update_batch_diagnosis(
             diag.order_analysis = existing
         if rot_freq is not None:
             diag.rot_freq = rot_freq
-        diag.analyzed_at = datetime.utcnow()
+        diag.analyzed_at = datetime.now(timezone.utc)
     else:
         diag = Diagnosis(
             device_id=device_id,
@@ -47,7 +47,7 @@ async def update_batch_diagnosis(
             order_analysis=order_analysis or {},
             rot_freq=rot_freq,
             status="normal",
-            analyzed_at=datetime.utcnow(),
+            analyzed_at=datetime.now(timezone.utc),
         )
         db.add(diag)
 
@@ -232,7 +232,7 @@ async def reanalyze_batch(
             diag.order_analysis = safe_order
             diag.rot_freq = result.get("rot_freq")
             diag.status = result["status"]
-            diag.analyzed_at = datetime.utcnow()
+            diag.analyzed_at = datetime.now(timezone.utc)
         else:
             db.add(Diagnosis(
                 device_id=device_id, batch_index=batch_index,
@@ -242,12 +242,12 @@ async def reanalyze_batch(
                 order_analysis=safe_order,
                 rot_freq=result.get("rot_freq"),
                 status=result["status"],
-                analyzed_at=datetime.utcnow(),
+                analyzed_at=datetime.now(timezone.utc),
             ))
 
         for r in records:
             r.is_analyzed = 1
-            r.analyzed_at = datetime.utcnow()
+            r.analyzed_at = datetime.now(timezone.utc)
 
         device.health_score = result["health_score"]
         device.status = result["status"]
@@ -338,7 +338,7 @@ async def reanalyze_all_batches(
                 diag.order_analysis = safe_oa
                 diag.rot_freq = result.get("rot_freq")
                 diag.status = result["status"]
-                diag.analyzed_at = datetime.utcnow()
+                diag.analyzed_at = datetime.now(timezone.utc)
             else:
                 db.add(Diagnosis(
                     device_id=device_id, batch_index=bi,
@@ -348,12 +348,12 @@ async def reanalyze_all_batches(
                     order_analysis=safe_oa,
                     rot_freq=result.get("rot_freq"),
                     status=result["status"],
-                    analyzed_at=datetime.utcnow(),
+                    analyzed_at=datetime.now(timezone.utc),
                 ))
 
             for r in records:
                 r.is_analyzed = 1
-                r.analyzed_at = datetime.utcnow()
+                r.analyzed_at = datetime.now(timezone.utc)
 
             db.commit()
             results.append({"batch_index": bi, "health_score": result["health_score"], "status": result["status"]})

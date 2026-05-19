@@ -15,7 +15,7 @@ from app.core.config import (
     SENSOR_SAMPLE_RATE,
     SENSOR_WINDOW_SECONDS,
 )
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.websocket import manager
 from app.services.analyzer import analyze_device
 from app.services.diagnosis.features import compute_channel_features
@@ -102,14 +102,14 @@ async def analysis_worker():
                             order_analysis=result.get("order_analysis"),
                             rot_freq=result.get("rot_freq"),
                             status=result["status"],
-                            analyzed_at=datetime.utcnow(),
+                            analyzed_at=datetime.now(timezone.utc),
                         )
                         db.add(diag)
 
                         # 标记该批次所有记录为已检测
                         for r in records:
                             r.is_analyzed = 1
-                            r.analyzed_at = datetime.utcnow()
+                            r.analyzed_at = datetime.now(timezone.utc)
 
                         # 更新设备健康度
                         if device:
@@ -136,7 +136,7 @@ async def analysis_worker():
                                 existing_ch.health_score = ch_result.get("health_score")
                                 existing_ch.status = ch_result.get("status", "normal")
                                 existing_ch.rot_freq = ch_result.get("rot_freq_hz")
-                                existing_ch.analyzed_at = datetime.utcnow()
+                                existing_ch.analyzed_at = datetime.now(timezone.utc)
                             else:
                                 db.add(Diagnosis(
                                     device_id=device_id, batch_index=batch_index,
@@ -145,7 +145,7 @@ async def analysis_worker():
                                     health_score=ch_result.get("health_score"),
                                     status=ch_result.get("status", "normal"),
                                     rot_freq=ch_result.get("rot_freq_hz"),
-                                    analyzed_at=datetime.utcnow(),
+                                    analyzed_at=datetime.now(timezone.utc),
                                 ))
 
                         db.commit()

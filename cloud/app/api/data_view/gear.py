@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
-from datetime import datetime
+from datetime import datetime, timezone
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod, DiagnosisStrategy
 from app.services.diagnosis.features import has_bearing_params as _service_has_bearing, has_gear_params as _service_has_gear
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
@@ -11,7 +11,6 @@ from app.services.diagnosis.order_tracking import (
     _compute_order_spectrum_varying_speed,
 )
 from . import router, prepare_signal, _get_channel_name, _extract_device_param, _sanitize_for_json
-from datetime import datetime
 import logging
 import numpy as np
 import asyncio
@@ -259,7 +258,7 @@ async def get_channel_analyze(
                 diag.health_score = result.get("health_score", 100)
                 diag.status = result.get("status", "normal")
                 diag.engine_result = safe_data
-                diag.analyzed_at = datetime.utcnow()
+                diag.analyzed_at = datetime.now(timezone.utc)
             else:
                 db.add(Diagnosis(
                     device_id=device_id,
@@ -269,7 +268,7 @@ async def get_channel_analyze(
                     status=result.get("status", "normal"),
                     engine_result=safe_data,
                     denoise_method=denoise,
-                    analyzed_at=datetime.utcnow(),
+                    analyzed_at=datetime.now(timezone.utc),
                 ))
             db.commit()
         except Exception as db_err:
@@ -388,7 +387,7 @@ async def get_channel_full_analysis(
                 diag.health_score = result.get("health_score", 100)
                 diag.status = result.get("status", "normal")
                 diag.full_analysis = safe_data
-                diag.analyzed_at = datetime.utcnow()
+                diag.analyzed_at = datetime.now(timezone.utc)
             else:
                 db.add(Diagnosis(
                     device_id=device_id,
@@ -398,7 +397,7 @@ async def get_channel_full_analysis(
                     status=result.get("status", "normal"),
                     full_analysis=safe_data,
                     denoise_method=denoise,
-                    analyzed_at=datetime.utcnow(),
+                    analyzed_at=datetime.now(timezone.utc),
                 ))
             db.commit()
         except Exception as db_err:

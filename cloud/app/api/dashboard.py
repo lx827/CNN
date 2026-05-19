@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
 from app.models import Device, Diagnosis, Alarm
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict
 
 router = APIRouter(prefix="/api/dashboard", tags=["设备总览"])
@@ -35,7 +35,7 @@ def get_dashboard(db: Session = Depends(get_db)):
     返回设备总览所需的所有数据
     """
     # 1. 设备列表（含离线判断）
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     devices = db.query(Device).all()
     device_list = []
     for d in devices:

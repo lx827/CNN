@@ -16,7 +16,7 @@ from app.database import get_db
 from app.models import SensorData, Device
 from app.core.websocket import manager
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 import base64
 import zlib
 
@@ -110,7 +110,7 @@ def ingest_data(payload: dict, db: Session = Depends(get_db)):
             if timestamp.tzinfo is not None:
                 timestamp = timestamp.replace(tzinfo=None)
         else:
-            timestamp = datetime.utcnow()
+            timestamp = datetime.now(timezone.utc)
         is_special = payload.get("is_special", 0)  # 0=普通, 1=特殊
         task_id = payload.get("task_id")  # 关联的采集任务ID（特殊采集时）
 
@@ -164,7 +164,7 @@ def ingest_data(payload: dict, db: Session = Depends(get_db)):
             task = db.query(CollectionTask).filter(CollectionTask.id == task_id).first()
             if task:
                 task.status = "completed"
-                task.completed_at = datetime.utcnow()
+                task.completed_at = datetime.now(timezone.utc)
                 task.result_batch_index = batch_index
                 db.commit()
 

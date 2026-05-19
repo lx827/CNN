@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from app.database import get_db
 from app.models import CollectionTask, Device
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 router = APIRouter(prefix="/api/collect", tags=["采集任务"])
@@ -90,7 +90,7 @@ def get_pending_tasks(
     # 刷新设备最后在线时间并标记为在线（轮询也是有效的通信）
     device = db.query(Device).filter(Device.device_id == device_id).first()
     if device:
-        device.last_seen_at = datetime.utcnow()
+        device.last_seen_at = datetime.now(timezone.utc)
         device.is_online = 1
         db.commit()
 
@@ -105,7 +105,7 @@ def get_pending_tasks(
 
     # 标记为 processing
     task.status = "processing"
-    task.started_at = datetime.utcnow()
+    task.started_at = datetime.now(timezone.utc)
     db.commit()
 
     return {
@@ -135,7 +135,7 @@ def complete_task(
         raise HTTPException(status_code=404, detail="任务不存在")
 
     task.status = "completed"
-    task.completed_at = datetime.utcnow()
+    task.completed_at = datetime.now(timezone.utc)
     task.result_batch_index = batch_index
     db.commit()
 

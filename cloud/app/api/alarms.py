@@ -69,13 +69,13 @@ def resolve_alarm(alarm_id: int, db: Session = Depends(get_db)):
     """
     处理（关闭）一条告警
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
     alarm = db.query(Alarm).filter(Alarm.id == alarm_id).first()
     if not alarm:
         return {"code": 404, "message": "告警不存在"}
 
     alarm.is_resolved = 1
-    alarm.resolved_at = datetime.utcnow()
+    alarm.resolved_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"code": 200, "message": "告警已处理"}

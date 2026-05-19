@@ -19,7 +19,7 @@
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from app.database import SessionLocal
@@ -78,7 +78,7 @@ def _is_device_offline(device: Optional[Device], now: Optional[datetime] = None)
     if last_seen.tzinfo is not None:
         last_seen = last_seen.replace(tzinfo=None)
 
-    threshold = _get_offline_threshold(device, now or datetime.utcnow())
+    threshold = _get_offline_threshold(device, now or datetime.now(timezone.utc))
     return last_seen < threshold
 
 
@@ -94,7 +94,7 @@ async def offline_monitor_worker():
 
             db = SessionLocal()
             try:
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
                 devices = db.query(Device).all()
 
                 online_count = sum(1 for d in devices if d.is_online)

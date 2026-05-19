@@ -32,7 +32,7 @@ def _save_research_diagnosis(db: Session, device_id: str, batch_index: int,
             diag.health_score = health_score
             diag.status = status
             diag.full_analysis = _sanitize_for_json(result)
-            diag.analyzed_at = __import__("datetime").datetime.utcnow()
+            diag.analyzed_at = __import__("datetime").datetime.now(timezone.utc)
         else:
             diag = Diagnosis(
                 device_id=device_id,
@@ -42,7 +42,7 @@ def _save_research_diagnosis(db: Session, device_id: str, batch_index: int,
                 health_score=health_score,
                 status=status,
                 full_analysis=_sanitize_for_json(result),
-                analyzed_at=__import__("datetime").datetime.utcnow(),
+                analyzed_at=__import__("datetime").datetime.now(timezone.utc),
             )
             db.add(diag)
         db.commit()

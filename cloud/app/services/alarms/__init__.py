@@ -4,7 +4,7 @@
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 from sqlalchemy.orm import Session
 from app.models import Alarm, Device
@@ -36,7 +36,7 @@ def _has_recent_unresolved_alarm(
     通道级告警用 device_id + channel + category + level 去重。
     设备级告警用 device_id + category + level 去重。
     """
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
     query = db.query(Alarm).filter(
         Alarm.device_id == device_id,
         Alarm.category == category,
