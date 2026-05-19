@@ -283,7 +283,7 @@ def plot_summary():
     ax.set_xticklabels(labels)
     ax.set_ylabel("测试数")
     ax.set_title("基础算法正确性 — 测试通过率汇总")
-    ax.set_ylim(0, 10)
+    ax.set_ylim(0, 15)
     ax.legend()
 
     for i, (t, p) in enumerate(zip(totals, passed)):
