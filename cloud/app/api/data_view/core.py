@@ -4,6 +4,7 @@ from sqlalchemy import func, desc
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
 from . import router, _get_channel_name, prepare_signal
+from app.services.diagnosis.signal_utils import denoise_signal
 from datetime import datetime
 import logging
 
@@ -155,6 +156,7 @@ def get_channel_data(
     batch_index: int,
     channel: int,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     db: Session = Depends(get_db)
 ):
     """
@@ -173,7 +175,8 @@ def get_channel_data(
     device = db.query(Device).filter(Device.device_id == device_id).first()
 
     # 时域波形返回去均值后的数据，便于观察
-    dc_removed = prepare_signal(record.data, detrend=detrend).tolist()
+    dc_removed = prepare_signal(record.data, detrend=detrend)
+    dc_removed = denoise_signal(dc_removed, denoise).tolist()
 
     return {
         "code": 200,

@@ -155,6 +155,63 @@ def prepare_signal(signal, detrend: bool = False) -> np.ndarray:
     return arr - np.mean(arr)
 
 
+def denoise_signal(signal: np.ndarray, method: str) -> np.ndarray:
+    """
+    通用信号去噪（供 DataView 实时计算端点复用）
+    method 可选值对应 DenoiseMethod 枚举的字符串值。
+    返回去噪后的信号；method='none' 或未知值时原样返回。
+    注意：输入信号应为已经 prepare_signal 处理过的零均值信号。
+    """
+    arr = np.asarray(signal, dtype=np.float64)
+    if not method or method == "none":
+        return arr
+
+    try:
+        if method == "wavelet":
+            from .preprocessing import wavelet_denoise
+            return wavelet_denoise(arr, wavelet="db8")
+        elif method == "vmd":
+            from .vmd_denoise import vmd_denoise
+            return vmd_denoise(arr, K=5, alpha=2000)
+        elif method == "wavelet_vmd":
+            from .preprocessing import cascade_wavelet_vmd
+            result, _ = cascade_wavelet_vmd(arr)
+            return result
+        elif method == "wavelet_lms":
+            from .preprocessing import cascade_wavelet_lms
+            result, _ = cascade_wavelet_lms(arr)
+            return result
+        elif method == "emd":
+            from .emd_denoise import emd_denoise
+            result, _ = emd_denoise(arr, method="emd")
+            return result
+        elif method == "ceemdan":
+            from .emd_denoise import emd_denoise
+            result, _ = emd_denoise(arr, method="ceemdan")
+            return result
+        elif method == "savgol":
+            from .savgol_denoise import sg_denoise
+            result, _ = sg_denoise(arr)
+            return result
+        elif method == "wavelet_packet":
+            from .wavelet_packet import wavelet_packet_denoise
+            result, _ = wavelet_packet_denoise(arr)
+            return result
+        elif method == "ceemdan_wp":
+            from .emd_denoise import emd_denoise
+            from .wavelet_packet import wavelet_packet_denoise
+            step1, _ = emd_denoise(arr, method="ceemdan")
+            step2, _ = wavelet_packet_denoise(step1)
+            return step2
+        elif method == "eemd":
+            from .emd_denoise import emd_denoise
+            result, _ = emd_denoise(arr, method="eemd")
+            return result
+    except Exception:
+        pass
+    return arr
+
+
 def bandpass_filter(
     signal: np.ndarray,
     fs: float,

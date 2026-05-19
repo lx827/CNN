@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import SensorData, Device
 from app.services.diagnosis.features import compute_fft
 from . import router, prepare_signal, _get_channel_name
+from app.services.diagnosis.signal_utils import denoise_signal
 from datetime import datetime
 import logging
 import numpy as np
@@ -21,6 +22,7 @@ def get_channel_fft(
     channel: int,
     max_freq: Optional[int] = 5000,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     db: Session = Depends(get_db)
 ):
     """
@@ -39,6 +41,7 @@ def get_channel_fft(
     try:
         sample_rate = record.sample_rate or 25600
         signal = prepare_signal(record.data, detrend=detrend)
+        signal = denoise_signal(signal, denoise)
         freq, amp = compute_fft(signal.tolist(), sample_rate)
         freq_amp = [fa for fa in zip(freq, amp) if fa[0] <= max_freq]
 
@@ -71,6 +74,7 @@ async def get_channel_stft(
     nperseg: int = Query(default=512, ge=64, le=4096, description="STFT 窗口长度（点数）"),
     noverlap: int = Query(default=256, ge=0, le=4095, description="STFT 窗口重叠长度（点数）"),
     detrend: bool = Query(default=False, description="是否线性去趋势"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     db: Session = Depends(get_db)
 ):
     """
@@ -92,6 +96,7 @@ async def get_channel_stft(
 
     try:
         signal = prepare_signal(record.data, detrend=detrend)
+        signal = denoise_signal(signal, denoise)
         sample_rate = record.sample_rate or 25600
 
         # 如果数据太长，截取前 5 秒做 STFT（避免计算量过大）
@@ -147,6 +152,7 @@ def get_channel_stats(
     window_size: int = Query(default=1024, ge=64, le=8192, description="加窗窗口大小（点数）"),
     step: int = Query(default=None, ge=1, le=4096, description="滑动步长（点数），默认窗口大小的一半"),
     detrend: bool = Query(default=False, description="是否线性去趋势"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     db: Session = Depends(get_db)
 ):
     """
@@ -168,6 +174,7 @@ def get_channel_stats(
 
     try:
         signal = prepare_signal(record.data, detrend=detrend)
+        signal = denoise_signal(signal, denoise)
         sample_rate = record.sample_rate or 25600
 
         # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）

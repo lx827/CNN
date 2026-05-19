@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device
 from . import router, prepare_signal
+from app.services.diagnosis.signal_utils import denoise_signal
 from datetime import datetime
 import io
 import logging
@@ -16,6 +17,7 @@ def export_channel_csv(
     batch_index: int,
     channel: int,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     db: Session = Depends(get_db)
 ):
     """
@@ -31,7 +33,8 @@ def export_channel_csv(
     if not record:
         raise HTTPException(status_code=404, detail="数据不存在")
 
-    signal = prepare_signal(record.data, detrend=detrend).tolist() if record.data else []
+    signal = prepare_signal(record.data, detrend=detrend) if record.data else []
+    signal = denoise_signal(signal, denoise).tolist()
     sample_rate = record.sample_rate or 25600
 
     # 生成 CSV

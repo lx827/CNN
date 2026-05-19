@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device
 from . import router, prepare_signal, _get_channel_name, _compute_cepstrum
+from app.services.diagnosis.signal_utils import denoise_signal
 from datetime import datetime
 import asyncio
 import logging
@@ -17,6 +18,7 @@ async def get_channel_cepstrum(
     channel: int,
     max_quefrency: float = Query(default=500.0, ge=10.0, le=2000.0, description="最大倒频率 (ms)"),
     detrend: bool = Query(default=False, description="是否线性去趋势"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     db: Session = Depends(get_db)
 ):
     """
@@ -46,6 +48,7 @@ async def get_channel_cepstrum(
 
     try:
         sig = prepare_signal(record.data, detrend=detrend)
+        sig = denoise_signal(sig, denoise)
         sample_rate = record.sample_rate or 25600
 
         # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）

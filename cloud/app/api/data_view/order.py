@@ -11,6 +11,7 @@ from app.services.diagnosis.order_tracking import (
     _order_tracking,
 )
 from . import router, prepare_signal, _get_channel_name
+from app.services.diagnosis.signal_utils import denoise_signal
 from datetime import datetime, timezone
 import logging
 import numpy as np
@@ -29,6 +30,7 @@ async def get_channel_order(
     max_order: int = Query(default=50, ge=5, le=200, description="返回的最大阶次"),
     rot_freq: Optional[float] = Query(default=None, ge=1.0, le=500.0, description="直接指定转频(Hz)，传入则跳过自动估计"),
     detrend: bool = Query(default=False, description="是否线性去趋势"),
+    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     db: Session = Depends(get_db)
 ):
     """
@@ -66,6 +68,7 @@ async def get_channel_order(
 
     try:
         sig = prepare_signal(record.data, detrend=detrend)
+        sig = denoise_signal(sig, denoise)
         sample_rate = record.sample_rate or 25600
 
         # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）
