@@ -279,19 +279,18 @@ peak_amp = found["amp"] if found else 0.0
 | 去直流 | `signal_utils.py:91` `remove_dc` | `features.py:276` `remove_dc` (实际是线性去趋势) | ✅ 已修复 (2026-05-19) — 改为 `prepare_signal(detrend=True)` |
 | Excess 峭度 | `emd_denoise.py:605` `_excess_kurtosis` | `sensitive_selector.py:58` `compute_excess_kurtosis` | ✅ 已修复 (2026-05-19) — 统一为 `kurtosis(x, fisher=True)` |
 
-### 5.3 待修复 —— 内联计算（应调用已有原子函数）
+### 5.3 内联计算修复状态
 
 云端**已有原子函数**，但调用方选择内联重写。
 
-| 内联模式 | 出现位置 | 已有原子函数 | 修复方式 |
+| 内联模式 | 出现位置 | 已有原子函数 | 修复状态 |
 |---------|---------|-------------|---------|
-| `np.sqrt(np.mean(amp_arr ** 2))` | `engine.py:868` `env_rms` | `signal_utils.py:251` `rms()` | ✅ 已修复 (2026-05-19) |
-| `peak_amp / env_rms` | `engine.py:867` `env_cf` | `signal_utils.py:261` `crest_factor()` | 改为 `crest_factor(amp_arr)` 或 `peak_value(amp_arr) / rms(amp_arr)` |
-| `np.mean((envelope - e_mean) ** 4) / (e_var ** 2 + 1e-12) - 3` | `gear/planetary_demod.py:163, 312, 686, 1629`（共 4 处） | `signal_utils.py:239` `kurtosis(signal, fisher=False)` | 改为 `kurtosis(envelope, fisher=False)` |
-| `np.median(np.abs(detail)) / 0.6745` | `preprocessing.py:52` | 应提取为 `_estimate_noise_mad(arr)` | 新增原子函数，两处共用 |
-| `np.median(np.abs(arr - smoothed)) / 0.6745` | `savgol_denoise.py:45` | 同上 `_estimate_noise_mad` | 同上 |
-| `np.median(arr)` + `1.4826 * np.median(np.abs(arr - median))` | `features.py:111-112` | 应提取为 `_median_mad(arr)` | 新增原子函数，与 order_tracking.py:90-91 共用 |
-| `np.std(arr) / np.std(arr - smoothed)` | `savgol_denoise.py:46` `snr_imp` | 无直接对应 | 可提取为 `_snr_by_residual_std(original, denoised)` |
+| `np.sqrt(np.mean(amp_arr ** 2))` | `engine.py:868` `env_rms` | `signal_utils.py` `rms()` | ✅ 已修复 (2026-05-19) |
+| `np.mean((envelope - e_mean) ** 4) / (e_var ** 2 + 1e-12) - 3` | `gear/planetary_demod.py`（共 6 处内联峭度） | `signal_utils.py` `kurtosis(signal, fisher=True)` | ✅ 已修复 (2026-05-19) — 全部改为 `kurtosis(x, fisher=True)` |
+| `np.median(np.abs(detail)) / 0.6745` | `preprocessing.py:52` | 新增 `_estimate_noise_mad(arr)` | ✅ 已修复 (2026-05-19) |
+| `np.median(np.abs(arr - smoothed)) / 0.6745` | `savgol_denoise.py:45` | 同上 `_estimate_noise_mad` | ✅ 已修复 (2026-05-19) |
+| `np.std(arr) / np.std(arr - smoothed)` | `savgol_denoise.py:46` | 新增 `_snr_by_residual_std(original, denoised)` | ✅ 已修复 (2026-05-19) |
+| `np.median(arr)` + `1.4826 * np.median(np.abs(arr - median))` | `features.py:111-112` | 应提取为 `_median_mad(arr)` | ⬜ 待修复 — 与 order_tracking.py:90-91 共用 |
 
 ### 5.4 待修复 —— 参数传递不一致
 

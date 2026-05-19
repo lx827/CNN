@@ -120,6 +120,8 @@ tests/diagnosis/foundation/
 | `signal_utils` | `_search_peak_in_band` (原子函数) | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `_estimate_background` (原子函数) | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `_compute_peak_snr` (原子函数) | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `_estimate_noise_mad` (原子函数, 2025-05新增) | `layer1/test_signal_utils_correctness.py` | △ 间接 — 无直接单元测试，经 savgol/preprocessing 间接覆盖 |
+| `signal_utils` | `_snr_by_residual_std` (原子函数, 2025-05新增) | `layer1/test_signal_utils_correctness.py` | △ 间接 — 无直接单元测试，经 savgol `snr_improvement` 间接覆盖 |
 | `vmd_denoise` | `vmd_decompose` / `vmd_denoise` / `vmd_select_impact_mode` | `layer1/test_vmd_denoise_correctness.py` | ✅ |
 | `health_score_continuous` | `sigmoid_deduction` / `multi_threshold_deduction` / `cascade_deduction` / `compute_continuous_deductions` | `layer1/test_health_score_continuous.py` | ✅ |
 | `bearing_sideband` | `compute_sideband_density` | `layer1/test_bearing_sideband.py` | ✅ |
@@ -199,6 +201,7 @@ tests/diagnosis/foundation/
 | 状态 | 数量 |
 |:--:|------|
 | ✅ 已覆盖 | **69** |
+| △ 间接覆盖 | **2** |
 | ⚠️ 需数据集 | 1 |
 | ❌ 未覆盖 | **0** |
 
