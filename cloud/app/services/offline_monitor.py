@@ -79,6 +79,9 @@ def _is_device_offline(device: Optional[Device], now: Optional[datetime] = None)
         last_seen = last_seen.replace(tzinfo=None)
 
     threshold = _get_offline_threshold(device, now or datetime.now(timezone.utc))
+    # threshold 也可能带时区（由 now 决定），统一转为 naive
+    if threshold.tzinfo is not None:
+        threshold = threshold.replace(tzinfo=None)
     return last_seen < threshold
 
 
