@@ -78,11 +78,49 @@ tests/
 │   │   ├── experiment_d_robustness.py     # 实验D：鲁棒性
 │   │   ├── experiment_e_fusion.py         # 实验E：融合方法
 │   │   └── experiment_f_health.py         # 实验F：健康度评分
+│   ├── foundation/                         # [P0+] 基础算法正确性测试
+│   │   ├── synthetic_signals.py             # 合成信号生成器（含 ground truth）
+│   │   ├── test_bearing_fault_freqs.py      # 轴承故障频率计算
+│   │   ├── test_envelope_correctness.py     # 包络谱正确性
+│   │   ├── test_order_tracking_correctness.py # 阶次跟踪正确性
+│   │   ├── test_cepstrum_correctness.py     # 倒谱正确性
+│   │   ├── plot_results.py                  # [独立绘图] 读 JSON 生成对比图
+│   │   └── output/                          # JSON 结果 + PNG 图表
 │   ├── debug/                             # 调试脚本（临时）
 │   │   └── debug_cw_fp.py                 # CW 健康数据误判诊断
 │   ├── algorithm_evaluation_framework.py  # 算法评估框架（独立）
 │   └── output/                            # 测试输出（图表等）
 └── output/                                # 顶层测试输出
+```
+
+---
+
+## 0. 基础算法正确性测试（P0+ — 验证算法计算是否正确）
+
+> **用途**：使用合成信号（含已知 ground truth）+ 真实数据集，验证基础算法（轴承频率/包络/阶次/倒谱）的计算结果是否正确。
+> **数据输出**：测试结果以 JSON 存入 `output/`，独立绘图脚本 `plot_results.py` 读取 JSON 生成对比图，无需重跑分析。
+
+| 文件 | 验证内容 | 测试方式 |
+|------|---------|---------|
+| `test_bearing_fault_freqs.py` | BPFO/BPFI/BSF/FTF 公式计算 | 与手动理论值对比，相对误差 < 0.001% |
+| `test_envelope_correctness.py` | 包络谱峰值 SNR 检测 | 合成冲击信号（50/100/150Hz）+ 合成轴承信号 + 真实 HUSTbear 数据 |
+| `test_order_tracking_correctness.py` | 转频估计 + 变速跟踪 | 合成正弦信号（10/25/50/80Hz）+ 扫频信号 + 真实 HUSTbear 数据 |
+| `test_cepstrum_correctness.py` | 倒谱峰值检测 | 合成齿轮啮合信号（mesh=450Hz）+ 合成谐波信号 |
+
+**一键运行**：
+
+```bash
+cd /d/code/CNN
+d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\foundation\test_bearing_fault_freqs.py
+d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\foundation\test_envelope_correctness.py
+d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\foundation\test_order_tracking_correctness.py
+d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\foundation\test_cepstrum_correctness.py
+```
+
+**独立绘图**（不重跑分析）：
+
+```bash
+d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\foundation\plot_results.py
 ```
 
 ---

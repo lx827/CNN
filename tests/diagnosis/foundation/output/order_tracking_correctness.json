@@ -1,0 +1,60 @@
+{
+  "rot_freq_estimation": [
+    {
+      "actual_freq": 10,
+      "estimated_freq": 9.99,
+      "abs_error_Hz": 0.01,
+      "rel_error_pct": 0.1,
+      "passed": true
+    },
+    {
+      "actual_freq": 25,
+      "estimated_freq": 24.98,
+      "abs_error_Hz": 0.02,
+      "rel_error_pct": 0.1,
+      "passed": true
+    },
+    {
+      "actual_freq": 50,
+      "estimated_freq": 49.95,
+      "abs_error_Hz": 0.05,
+      "rel_error_pct": 0.1,
+      "passed": true
+    },
+    {
+      "actual_freq": 80,
+      "estimated_freq": 80.0,
+      "abs_error_Hz": 0.0,
+      "rel_error_pct": 0.0,
+      "passed": true
+    }
+  ],
+  "chirp_order_tracking": [
+    {
+      "test": "chirp_10_40Hz",
+      "single_frame_kurtosis": 4.87,
+      "multi_frame_kurtosis": 4.85,
+      "varying_speed_kurtosis": 45.72,
+      "med_rot_freq": 5.0,
+      "std_rot_freq": 0.0,
+      "cv_pct": 0.0,
+      "chirp_detected": false,
+      "passed": true
+    }
+  ],
+  "real_hustbear": [
+    {
+      "file": "H_20Hz-X.npy",
+      "description": "\u5065\u5eb7\u6052\u901f",
+      "estimated_rot_freq_Hz": 19.79,
+      "estimated_rot_rpm": 1187.0,
+      "order_spectrum_peak": 79.32,
+      "order_spectrum_points": 50655
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "passed": 6,
+    "failed": 0
+  }
+}

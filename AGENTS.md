@@ -232,12 +232,13 @@ start.bat
 
 | 修改范围 | 需运行的测试 |
 |---------|------------|
-| `features.py`, `engine.py`, `ensemble.py` | P0回归 + `algorithms/test_engine_regressions.py` |
-| `bearing.py` / 轴承相关 | P0回归 + `method_eval/test_bearing_hustbear.py` |
+| `features.py`, `engine.py`, `ensemble.py` | P0回归 + `foundation/test_bearing_fault_freqs.py` + `algorithms/test_engine_regressions.py` |
+| `bearing.py` / 轴承相关 | P0回归 + `foundation/test_envelope_correctness.py` + `method_eval/test_bearing_hustbear.py` |
 | `gear/` / 齿轮相关 | P0回归 + `planetary/test_planetary_e2e.py` |
 | `health_score.py` | P0回归 + `effectiveness/test_effectiveness.py` |
-| `order_tracking.py` | `regression/test_varying_speed_order.py` |
+| `order_tracking.py` | `foundation/test_order_tracking_correctness.py` + `regression/test_varying_speed_order.py` |
 | `preprocessing.py` / 去噪 | P0回归 + `regression/test_cpw_robustness.py` |
+| `bearing.py` 故障频率公式 | `foundation/test_bearing_fault_freqs.py` |
 | API 路由 | P0回归 + 手动 API 调用验证 |
 
 ### 5.3 其他测试命令
