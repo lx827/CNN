@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..
 from app.services.diagnosis.bearing import cpw_envelope_analysis
 from app.services.diagnosis.mckd import mckd_envelope_analysis
 from app.services.diagnosis.bearing_cyclostationary import bearing_sc_scoh_analysis
+from app.services.diagnosis.signal_utils import find_peaks_in_spectrum
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
     NumpyEncoder, bearing_outer_race, bearing_inner_race,
 )
@@ -25,17 +26,12 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 FS = 8192
 
 
-def _find_peak_snr(freqs, amps, target, tol_hz=3.0):
-    freqs = np.array(freqs)
-    amps = np.array(amps)
-    mask = np.abs(freqs - target) <= tol_hz
-    if not np.any(mask):
-        return 0.0, 0.0
-    peak_idx = np.argmax(amps[mask])
-    peak_amp = amps[mask][peak_idx]
-    median_amp = np.median(amps)
-    snr = peak_amp / (median_amp + 1e-12)
-    return float(freqs[mask][peak_idx]), snr
+def _get_peak_snr(found):
+    """从 find_peaks_in_spectrum 结果中提取峰值频率和 SNR"""
+    fund = found.get("fundamental")
+    if fund:
+        return fund["freq"], fund["snr"]
+    return 0.0, 0.0
 
 
 # ═══════════════════════════════════════════════════════════
@@ -50,7 +46,7 @@ def test_cpw():
     sig, fs, gt = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=15)
     res = cpw_envelope_analysis(sig, fs, comb_frequencies=[25.0, 50.0, 75.0], max_freq=500)
 
-    peak_f, snr = _find_peak_snr(res["envelope_freq"], res["envelope_amp"], 90.0, tol_hz=5.0)
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=90.0, tolerance_hz=5.0))
     freq_ok = abs(peak_f - 90.0) < 10.0
     snr_ok = snr > 2.0
     passed = freq_ok and snr_ok
@@ -92,7 +88,7 @@ def test_mckd():
     bearing_params = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
     res = mckd_envelope_analysis(sig, fs, bearing_params, rot_freq=25.0, filter_len=64, shift_order_M=1, max_freq=500)
 
-    peak_f, snr = _find_peak_snr(res["envelope_freq"], res["envelope_amp"], 135.0, tol_hz=5.0)
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=135.0, tolerance_hz=5.0))
     freq_ok = abs(peak_f - 135.0) < 15.0  # MCKD 对 BPFI 有一定容差
     snr_ok = snr > 2.0
     passed = freq_ok and snr_ok

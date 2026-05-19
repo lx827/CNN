@@ -21,7 +21,7 @@ from app.services.diagnosis.bearing import (
     envelope_analysis, fast_kurtogram, med_envelope_analysis,
     teager_envelope_analysis, spectral_kurtosis_envelope_analysis,
 )
-from app.services.diagnosis.signal_utils import compute_fft_spectrum, kurtosis
+from app.services.diagnosis.signal_utils import compute_fft_spectrum, kurtosis, find_peaks_in_spectrum
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
     NumpyEncoder, bearing_outer_race, impulse_train,
 )
@@ -30,19 +30,12 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 FS = 8192
 
 
-def _find_peak_snr(freqs, amps, target, tol_hz=3.0):
-    """在目标频率附近找峰值并计算 SNR"""
-    freqs = np.array(freqs)
-    amps = np.array(amps)
-    mask = np.abs(freqs - target) <= tol_hz
-    if not np.any(mask):
-        return 0.0, 0.0
-    peak_idx = np.argmax(amps[mask])
-    peak_amp = amps[mask][peak_idx]
-    # 简单 SNR：峰值 / 中位数
-    median_amp = np.median(amps)
-    snr = peak_amp / (median_amp + 1e-12)
-    return float(freqs[mask][peak_idx]), snr
+def _get_peak_snr(found):
+    """从 find_peaks_in_spectrum 结果中提取峰值频率和 SNR"""
+    fund = found.get("fundamental")
+    if fund:
+        return fund["freq"], fund["snr"]
+    return 0.0, 0.0
 
 
 # ═══════════════════════════════════════════════════════════
@@ -57,7 +50,7 @@ def test_envelope_analysis():
     # 1a. 合成外圈故障: BPFO=90Hz
     sig, fs, gt = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=15)
     res = envelope_analysis(sig, fs, fc=3000, bw=2000, f_low_pass=500, max_freq=500)
-    peak_f, snr = _find_peak_snr(res["envelope_freq"], res["envelope_amp"], 90.0, tol_hz=3.0)
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=90.0, tolerance_hz=3.0))
     freq_ok = abs(peak_f - 90.0) < 5.0
     snr_ok = snr > 3.0
     passed = freq_ok and snr_ok
@@ -73,7 +66,7 @@ def test_envelope_analysis():
     # 1b. 纯冲击序列: 100Hz
     sig, fs, gt = impulse_train(impulse_freq=100.0, duration=3.0, fs=FS, snr_db=15)
     res = envelope_analysis(sig, fs, fc=2000, bw=1500, f_low_pass=500, max_freq=500)
-    peak_f, snr = _find_peak_snr(res["envelope_freq"], res["envelope_amp"], 100.0, tol_hz=3.0)
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=100.0, tolerance_hz=3.0))
     freq_ok = abs(peak_f - 100.0) < 5.0
     snr_ok = snr > 3.0
     passed = freq_ok and snr_ok
@@ -104,7 +97,7 @@ def test_fast_kurtogram():
     # 验证：返回了最优频带参数
     has_optimal = res.get("optimal_fc", 0) > 0 and res.get("optimal_bw", 0) > 0
     # 包络谱应能检出 BPFO
-    peak_f, snr = _find_peak_snr(res["envelope_freq"], res["envelope_amp"], 90.0, tol_hz=5.0)
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=90.0, tolerance_hz=5.0))
     freq_ok = abs(peak_f - 90.0) < 10.0
     passed = has_optimal and freq_ok
     results.append({
@@ -135,7 +128,7 @@ def test_med_envelope():
     kurt_after = res.get("kurtosis_after", 0)
     kurt_improved = kurt_after > kurt_before * 1.2  # MED 应显著提升峭度
 
-    peak_f, snr = _find_peak_snr(res["envelope_freq"], res["envelope_amp"], 90.0, tol_hz=5.0)
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=90.0, tolerance_hz=5.0))
     freq_ok = abs(peak_f - 90.0) < 10.0
 
     passed = kurt_improved and freq_ok
@@ -163,7 +156,7 @@ def test_teager_envelope():
     sig, fs, gt = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=2.0, fs=FS, snr_db=15)
     res = teager_envelope_analysis(sig, fs, max_freq=500)
 
-    peak_f, snr = _find_peak_snr(res["envelope_freq"], res["envelope_amp"], 90.0, tol_hz=5.0)
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=90.0, tolerance_hz=5.0))
     freq_ok = abs(peak_f - 90.0) < 10.0
     snr_ok = snr > 2.0
     passed = freq_ok and snr_ok
@@ -190,7 +183,7 @@ def test_spectral_kurtosis_envelope():
     sig, fs, gt = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=2.0, fs=FS, snr_db=15)
     res = spectral_kurtosis_envelope_analysis(sig, fs, max_level=4, f_low=100, max_freq=500)
 
-    peak_f, snr = _find_peak_snr(res["envelope_freq"], res["envelope_amp"], 90.0, tol_hz=5.0)
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=90.0, tolerance_hz=5.0))
     freq_ok = abs(peak_f - 90.0) < 10.0
     snr_ok = snr > 2.0
     passed = freq_ok and snr_ok
