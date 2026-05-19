@@ -12,6 +12,7 @@ for arg in "$@"; do
 done
 
 cd /opt/CNN
+git switch main
 git pull
 
 # 重启后端
