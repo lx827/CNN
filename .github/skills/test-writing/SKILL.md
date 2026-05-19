@@ -14,11 +14,38 @@ user-invocable: true
 
 | 规则 | 说明 |
 |------|------|
+| **按依赖层从下往上测** | 先测零依赖的 Layer 1（signal_utils），再测依赖它的 Layer 2（features），最后测 Layer 3+（engine/ensemble）。下层不过上层白测 |
 | **测云端模块** | 测试只能 `import` 和调用 `cloud/app/` 下的现有函数，**禁止在测试文件中重写算法逻辑**（如自己写 FFT、自己写峰值检测） |
 | **合成 + 真实** | 每个算法用合成信号（已知 ground truth）验证计算正确性，再用真实数据集验证实际效果 |
 | **结果存 JSON** | 测试结果写入 `output/*.json`，含 `summary`（total/passed/failed） |
 | **绘图脚本独立** | `plot_results.py` 只读 JSON，不重跑分析 |
 | **图表能自解释** | 标注阈值线、通过/失败标记、轴含义，让非领域专家也能看懂 |
+
+---
+
+## 1.5 分层测试架构
+
+诊断功能由多层依赖组成。测试必须按依赖顺序从下往上：**Layer 1 → Layer 2 → Layer 3+**。
+
+```
+Layer 5: 应用入口 (ensemble, analyzer)
+  └── 依赖 Layer 4
+Layer 4: 中央调度器 (engine.py — import 11+ 模块)
+  └── 依赖 Layer 2+3
+Layer 3: 模块聚合 (gear/__init__)
+  └── 依赖 Layer 2
+Layer 2: 特征提取 & 复杂处理 (features, bearing, order_tracking, preprocessing)
+  └── 依赖 Layer 1
+Layer 1: 信号基元 (signal_utils, vmd_denoise — 零内部依赖)
+```
+
+**为什么这样测**：如果 Layer 3 的 `analyze_gear` 输出错误，可能是因为：
+- Layer 2 的 `_compute_bearing_fault_freqs` 算错了 → Layer 2 测试会 catch
+- Layer 1 的 `estimate_rot_freq_spectrum` 估错了 → Layer 1 测试会 catch
+
+不按层测的话，你永远不知道 bug 在哪一层。
+
+**现有层覆盖速查**：见 `tests/diagnosis/foundation/TEST_ARCHITECTURE.md`。
 
 ---
 
