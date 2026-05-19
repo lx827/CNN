@@ -302,6 +302,7 @@ class DiagnosisEngine:
             result.get("envelope_amp", []),
             rot_freq,
             rot_freq_std=rot_std,
+            method=self.bearing_method.value,
         )
 
         return {
@@ -885,6 +886,7 @@ def _evaluate_bearing_faults(
     env_amp: List[float],
     rot_freq: float,
     rot_freq_std: float = 0.0,
+    method: str = "",
 ) -> Dict[str, Any]:
     """
     评估轴承故障指示器 — 双路并行：
@@ -972,7 +974,9 @@ def _evaluate_bearing_faults(
 
                 # 频率路径判定：仅用于故障类型标注，不用于"是否故障"判断
                 # 健康轴承也有低 SNR 的频率峰值（随机波动），所以阈值不能太低
-                significant = snr > 4.5
+                # Teager/谱峭度等方法放大瞬态能量，变速数据需更高阈值防误报
+                snr_threshold = 6.0 if method in ("teager", "spectral_kurtosis") else 4.5
+                significant = snr > snr_threshold
 
                 # BPFI 内圈专项：边频带验证（至少 2 个边带 SNR>3）
                 sideband_snrs = []

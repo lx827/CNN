@@ -170,14 +170,14 @@ def fast_kurtogram(
                 best_fc = fc_approx
                 best_bw = bw_approx
 
-    # 如果峭度都很低（无明显冲击），fallback 到自适应默认频段
+    # 如果峭度都很低（无明显冲击），退回标准包络分析（不限定频带）
     if best_kurt < 0.5:
-        if fs < 10000:
-            best_fc = fs * 0.45
-            best_bw = fs * 0.35
-        else:
-            best_fc = 3000.0
-            best_bw = 2000.0
+        result = envelope_analysis(arr, fs)
+        result["optimal_fc"] = None
+        result["optimal_bw"] = None
+        result["max_kurtosis"] = round(float(best_kurt), 4)
+        result["kurtogram"] = []
+        return result
 
     # 对最优频带执行包络分析
     result = envelope_analysis(arr, fs, fc=best_fc, bw=best_bw, max_freq=1000.0)
