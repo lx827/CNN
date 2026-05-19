@@ -109,12 +109,13 @@ tests/diagnosis/foundation/
 
 | 模块 | 函数 | 测试 | 状态 |
 |------|------|------|:--:|
-| `signal_utils` | `prepare_signal` (去直流/去趋势) | `layer1/test_signal_utils_correctness.py` | ✅ |
-| `signal_utils` | `estimate_rot_freq_spectrum` | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `remove_dc` / `linear_detrend` / `prepare_signal` (去直流/去趋势) | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `estimate_rot_freq_spectrum` / `estimate_rot_freq_envelope` / `estimate_rot_freq_autocorr` | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `find_peaks_in_spectrum` | `layer1/test_signal_utils_correctness.py` | ✅ |
-| `signal_utils` | `compute_fft_spectrum` (FFT 幅值谱) | `layer1/test_signal_utils_correctness.py` | ✅ |
-| `signal_utils` | `rms`, `peak_value`, `kurtosis`, `skewness` | `layer1/test_signal_utils_correctness.py` | ✅ |
-| `signal_utils` | `bandpass_filter`, `highpass_filter`, `lowpass_filter` | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `compute_fft_spectrum` / `compute_power_spectrum` | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `rms` / `peak_value` / `kurtosis` / `skewness` / `crest_factor` | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `bandpass_filter` / `highpass_filter` / `lowpass_filter` / `lowpass_filter_complex` | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `compute_snr` (委托 `_compute_peak_snr`) | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `parabolic_interpolation` | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `zoom_fft_analysis` | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `_search_peak_in_band` (原子函数) | `layer1/test_signal_utils_correctness.py` | ✅ |
@@ -124,7 +125,7 @@ tests/diagnosis/foundation/
 | `signal_utils` | `_snr_by_residual_std` (原子函数, 2025-05新增) | `layer1/test_signal_utils_correctness.py` | △ 间接 — 无直接单元测试，经 savgol `snr_improvement` 间接覆盖 |
 | `vmd_denoise` | `vmd_decompose` / `vmd_denoise` / `vmd_select_impact_mode` | `layer1/test_vmd_denoise_correctness.py` | ✅ |
 | `health_score_continuous` | `sigmoid_deduction` / `multi_threshold_deduction` / `cascade_deduction` / `compute_continuous_deductions` | `layer1/test_health_score_continuous.py` | ✅ |
-| `bearing_sideband` | `compute_sideband_density` | `layer1/test_bearing_sideband.py` | ✅ |
+| `bearing_sideband` | `compute_sideband_density` / `evaluate_bearing_sideband_features` | `layer1/test_bearing_sideband.py` | ✅ |
 | `channel_consensus` | `cross_channel_consensus` | `layer1/test_channel_consensus.py` | ✅ |
 | `recommendation` | `_generate_recommendation` / `_match_suggestion` | `layer1/test_recommendation.py` | ✅ |
 | `gear/msb` | `msb_residual_sideband_analysis` | `layer1/test_msb_correctness.py` | ✅ |
@@ -132,7 +133,9 @@ tests/diagnosis/foundation/
 | `wavelet_packet` | `wavelet_packet_decompose` / `compute_wavelet_packet_energy_entropy` / `wavelet_packet_denoise` / `compute_mswpee` | `layer1/test_wavelet_packet_correctness.py` | ✅ |
 | `bearing_cyclostationary` | `_compute_sc_scoh_bearing` / `bearing_sc_scoh_analysis` | `layer1/test_bearing_cyclostationary_correctness.py` | ✅ |
 | `modality_bearing` | `emd_bearing_analysis` / `ceemdan_bearing_analysis` / `vmd_bearing_analysis` | `layer1/test_modality_bearing_correctness.py` | ✅ |
-| `sensitive_selector` | `score_components` / `select_top_components` / `select_emd_sensitive_imfs` / `select_vmd_sensitive_modes` | `layer1/test_sensitive_selector_correctness.py` | ✅ |
+| `sensitive_selector` | `compute_correlation` / `compute_envelope_entropy` / `compute_energy_ratio` / `compute_center_freq` / `compute_freq_match_score` (原子评分) | `layer1/test_sensitive_selector_correctness.py` | ✅ |
+| `sensitive_selector` | `score_components` / `select_top_components` | `layer1/test_sensitive_selector_correctness.py` | ✅ |
+| `sensitive_selector` | `select_wp_sensitive_nodes` / `select_emd_sensitive_imfs` / `select_vmd_sensitive_modes` | `layer1/test_sensitive_selector_correctness.py` | ✅ |
 | `trend_prediction` | `holt_winters_forecast` / `kalman_smooth_health_scores` | `layer1/test_trend_prediction_correctness.py` | ✅ |
 | `probability_calibration` | `calibrate_fault_probabilities` / `_sigmoid_prob` / `calibrate_snr_to_prob` | `layer1/test_probability_calibration_correctness.py` | ✅ |
 
@@ -143,7 +146,9 @@ tests/diagnosis/foundation/
 | `features` | `_compute_bearing_fault_freqs` | `layer2/test_features_correctness.py` | ✅ |
 | `features` | `_compute_bearing_fault_orders` | `layer2/test_features_correctness.py` | ✅ |
 | `features` | `compute_time_features` (peak/rms/kurt/crest…) | `layer2/test_features_correctness.py` | ✅ |
-| `features` | `compute_fft_features` (mesh freq, sidebands) | `layer2/test_features_correctness.py` | ✅ |
+| `features` | `compute_fft_features` (mesh freq, sidebands) / `compute_envelope_features` | `layer2/test_features_correctness.py` | ✅ |
+| `features` | `compute_channel_features` / `compute_fft` / `compute_imf_energy` | `layer2/test_features_correctness.py` | ✅ |
+| `features` | `compute_nonparam_cusum_features` | `layer2/test_features_correctness.py` | ✅ |
 | `features` | `has_bearing_params` / `has_gear_params` | `layer2/test_features_correctness.py` | ✅ |
 | `bearing` | `envelope_analysis` (Hilbert 包络) | `layer2/test_bearing_correctness.py` | ✅ |
 | `bearing` | `fast_kurtogram` (谱峭度选带) | `layer2/test_bearing_correctness.py` | ✅ |
@@ -159,12 +164,18 @@ tests/diagnosis/foundation/
 | `preprocessing` | `wavelet_denoise` | `layer2/test_preprocessing_correctness.py` | ✅ |
 | `preprocessing` | `cepstrum_pre_whitening` | `layer2/test_preprocessing_correctness.py` | ✅ |
 | `preprocessing` | `minimum_entropy_deconvolution` | `layer2/test_preprocessing_correctness.py` | ✅ |
+| `preprocessing` | `joint_denoise` (联合去噪) | `layer2/test_preprocessing_correctness.py` | ✅ |
 | `preprocessing` | `cascade_wavelet_vmd` | `layer2/test_preprocessing_cascade_correctness.py` | ✅ |
 | `preprocessing` | `cascade_wavelet_lms` | `layer2/test_preprocessing_cascade_correctness.py` | ✅ |
 | `gear/metrics` | `compute_tsa_residual_order` | `layer2/test_gear_metrics_correctness.py` | ✅ |
-| `gear/metrics` | `compute_fm0` / `compute_fm4` / `compute_car` | `layer2/test_gear_metrics_correctness.py` | ✅ |
-| `gear/metrics` | `compute_ser_order` / `analyze_sidebands` | `layer2/test_gear_metrics_correctness.py` | ✅ |
-| `gear/planetary_demod` | 行星箱 VMD/SC/SCoh/CVS 解调 | `layer2/test_planetary_demod_correctness.py` | ✅ |
+| `gear/metrics` | `compute_fm0_order` / `compute_fm4` / `compute_car` | `layer2/test_gear_metrics_correctness.py` | ✅ |
+| `gear/metrics` | `compute_m6a` / `compute_m8a` / `compute_na4` / `compute_nb4` | `layer2/test_gear_metrics_correctness.py` | ✅ |
+| `gear/metrics` | `compute_ser_order` / `analyze_sidebands_order` / `analyze_sidebands_zoom_fft` | `layer2/test_gear_metrics_correctness.py` | ✅ |
+| `gear/planetary_demod` | `planetary_envelope_order_analysis` / `planetary_fullband_envelope_order_analysis` | `layer2/test_planetary_demod_correctness.py` | ✅ |
+| `gear/planetary_demod` | `planetary_vmd_demod_analysis` / `planetary_tsa_envelope_analysis` | `layer2/test_planetary_demod_correctness.py` | ✅ |
+| `gear/planetary_demod` | `planetary_hp_envelope_order_analysis` / `planetary_sc_scoh_analysis` | `layer2/test_planetary_demod_correctness.py` | ✅ |
+| `gear/planetary_demod` | `planetary_msb_analysis` / `planetary_cvs_med_analysis` | `layer2/test_planetary_demod_correctness.py` | ✅ |
+| `gear/planetary_demod` | `evaluate_planetary_demod_results` (结果评估) | `layer2/test_planetary_demod_correctness.py` | ✅ |
 | `rule_based` | `_rule_based_analyze` | `layer2/test_rule_based_correctness.py` | ✅ |
 | `health_score` | `_compute_health_score` | `layer2/test_health_score_correctness.py` | ✅ |
 
@@ -200,10 +211,11 @@ tests/diagnosis/foundation/
 
 | 状态 | 数量 |
 |:--:|------|
-| ✅ 已覆盖 | **69** |
-| △ 间接覆盖 | **2** |
+| ✅ 已覆盖 | **79** (含间接覆盖) |
+| △ 间接覆盖 | **2** (`_estimate_noise_mad`, `_snr_by_residual_std`) |
 | ⚠️ 需数据集 | 1 |
 | ❌ 未覆盖 | **0** |
+| 📋 公共函数总数 | 85 |
 
 ---
 

@@ -158,3 +158,10 @@ python tests/diagnosis/foundation/plot_results.py
 ## 6. 何时删除旧测试
 
 当新测试完全覆盖旧测试的功能时，删除旧文件并同步更新 `docs/tests/INDEX.md`。
+
+**审查 checklist（每次新增测试文件时自查）：**
+
+- [ ] 测试文件中是否有 `np.argmax`/`np.median`/`np.fft` 等信号处理原语？
+- [ ] 这些原语是否在 `signal_utils.py` 或 `preprocessing.py` 中已有对应函数？
+- [ ] 如果云端函数"几乎能用"但返回格式太复杂，应该**提取原子函数**而不是自己重写
+- [ ] 测试中的 `def _` 辅助函数是否包含任何数学/信号处理逻辑？如果是，应该移到云端
