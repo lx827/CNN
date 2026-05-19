@@ -229,7 +229,7 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
     行星齿轮箱（planet_count≥3）的频域指标阈值与定轴齿轮箱不同：
     - 行星架构天然产生大量边频带（多个行星轮同时啮合调制）
     - SER 天然在 5~12 范围（定轴箱健康 < 1.5）
-    - CAR 天然在 10^9~10^10 量级（定轴箱健康 < 2）
+    - CAR 在 10^1 量级（背景改用中位数后值域缩至 10~30）
     - sideband_count 天然 = 6（定轴箱健康通常 ≤ 2）
 
     阈值策略：使用多指标联合判断，提高故障检出率。
@@ -292,20 +292,19 @@ def _evaluate_gear_faults(gear_result: Dict) -> Dict:
     car = gear_result.get("car")
     if car is not None:
         if is_planetary:
-            # 行星箱 CAR 范围 3500 ~ 8.4e9（健康和故障完全重叠）
-            # mesh_order 修复后 CAR 计算正确但仍无区分力
-            # 仅设极高阈值避免误报
+            # 行星箱 CAR ~10-30，健康/故障完全重叠，无区分力
+            # 仅记录数值，不设 warning/critical
             indicators["car"] = {
                 "value": round(car, 4),
-                "warning": car > 1e10,
-                "critical": car > 1e12,
+                "warning": False,
+                "critical": False,
             }
         else:
-            # 定轴箱 CAR 正常 < 2.0，故障 > 3.0
+            # 定轴箱 CAR 正常 < 5，故障 > 10（修复背景估计后值域 ~10^1）
             indicators["car"] = {
                 "value": round(car, 4),
-                "warning": car > 2.0,
-                "critical": car > 3.0,
+                "warning": car > 10.0,
+                "critical": car > 20.0,
             }
 
     # 边频带统计
