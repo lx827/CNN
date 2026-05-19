@@ -32,6 +32,7 @@ from app.services.diagnosis.signal_utils import (
     parabolic_interpolation, _band_energy, _order_band_energy,
     estimate_rot_freq_spectrum, estimate_rot_freq_autocorr,
     estimate_rot_freq_envelope, zoom_fft_analysis,
+    _search_peak_in_band, _estimate_background, _compute_peak_snr,
 )
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
     NumpyEncoder, sinusoidal, chirp_rotating, gear_mesh,
@@ -761,6 +762,76 @@ def test_cw_variable_speed():
 
 
 # ═══════════════════════════════════════════════════════════
+# 14. 原子函数 — _search_peak_in_band / _estimate_background / _compute_peak_snr
+# ═══════════════════════════════════════════════════════════
+
+def test_atomic_functions():
+    """三个原子函数的直接正确性验证"""
+    print("\n--- 原子函数 ---")
+    results = []
+    np.random.seed(42)
+
+    # ── _search_peak_in_band ──
+    freqs = np.arange(0, 500, 0.5)
+    amps = np.abs(np.random.randn(len(freqs)) * 0.1 + 0.2)
+    # 在 90Hz 放一个已知峰值
+    idx = np.argmin(np.abs(freqs - 90.0))
+    amps[idx] = 10.0
+
+    peak = _search_peak_in_band(freqs, amps, 90.0, 2.0)
+    found_ok = peak is not None and abs(peak["freq"] - 90.0) < 1.0 and abs(peak["amp"] - 10.0) < 0.1
+    results.append({
+        "test": "search_peak_in_band_found",
+        "detected_freq": round(peak["freq"], 2) if peak else None,
+        "detected_amp": round(peak["amp"], 4) if peak else None,
+        "passed": found_ok,
+    })
+    print(f"  [{'PASS' if found_ok else 'FAIL'}] 搜索已知峰90Hz: freq={peak['freq'] if peak else None}, amp={peak['amp'] if peak else None:.2f}")
+
+    # 搜索不存在的频率
+    peak_none = _search_peak_in_band(freqs, amps, 999.0, 2.0)
+    none_ok = peak_none is None
+    results.append({"test": "search_peak_not_found", "result": peak_none, "passed": none_ok})
+    print(f"  [{'PASS' if none_ok else 'FAIL'}] 搜索不存在频率999Hz: {'None' if peak_none is None else 'found'}")
+
+    # ── _estimate_background ──
+    spectrum = np.array([0.1, 0.2, 10.0, 0.3, 0.15, 0.25, 0.2, 0.18])
+
+    bg_median = _estimate_background(spectrum, "median")
+    # 中位数：排序后 [0.1, 0.15, 0.18, 0.2, 0.2, 0.25, 0.3, 10.0] → 中间值 (0.2+0.2)/2 = 0.2
+    median_ok = 0.18 < bg_median < 0.22
+    results.append({"test": "background_median", "value": round(bg_median, 4), "passed": median_ok})
+    print(f"  [{'PASS' if median_ok else 'FAIL'}] 中位数背景: {bg_median:.4f} (期望≈0.2)")
+
+    bg_mean = _estimate_background(spectrum, "mean")
+    # 均值：(0.1+0.2+10+0.3+0.15+0.25+0.2+0.18)/8 ≈ 1.4225
+    mean_ok = bg_mean > 1.0  # 被 10.0 拉高
+    results.append({"test": "background_mean", "value": round(bg_mean, 4), "passed": mean_ok})
+    print(f"  [{'PASS' if mean_ok else 'FAIL'}] 均值背景: {bg_mean:.4f} (期望≈1.4)")
+
+    bg_q75 = _estimate_background(spectrum, "q75")
+    # 75分位数应接近 0.3
+    q75_ok = 0.25 < bg_q75 < 0.35
+    results.append({"test": "background_q75", "value": round(bg_q75, 4), "passed": q75_ok})
+    print(f"  [{'PASS' if q75_ok else 'FAIL'}] q75背景: {bg_q75:.4f} (期望≈0.3)")
+
+    # ── _compute_peak_snr ──
+    snr = _compute_peak_snr(10.0, spectrum, "median")
+    # SNR = 10.0 / 0.2 = 50
+    snr_ok = 45 < snr < 55
+    results.append({"test": "peak_snr", "snr": round(snr, 2), "passed": snr_ok})
+    print(f"  [{'PASS' if snr_ok else 'FAIL'}] SNR: {snr:.1f} (期望≈50)")
+
+    # 全零频谱
+    zero_bg = _estimate_background(np.zeros(10))
+    zero_ok = zero_bg > 0  # 保证不返回0
+    results.append({"test": "background_all_zero", "value": float(zero_bg), "passed": zero_ok})
+    print(f"  [{'PASS' if zero_ok else 'FAIL'}] 全零频谱背景: {zero_bg:.2e} (>0)")
+
+    return results
+
+
+# ═══════════════════════════════════════════════════════════
 # main — 汇总输出
 # ═══════════════════════════════════════════════════════════
 
@@ -779,6 +850,7 @@ def main():
         "snr_and_energy": test_snr_and_energy(),
         "rot_freq_estimation": test_rot_freq_estimation(),
         "zoom_fft": test_zoom_fft(),
+        "atomic_functions": test_atomic_functions(),
         "all_synthetic": test_all_synthetic_signals(),
         "rot_freq_real": test_rot_freq_real(),
         "filters_peaks_real": test_filters_and_peaks_real(),

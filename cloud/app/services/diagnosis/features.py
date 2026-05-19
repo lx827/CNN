@@ -273,18 +273,12 @@ def compute_envelope_features(
     return features
 
 
-def remove_dc(signal: List[float]) -> np.ndarray:
-    """去除信号线性趋势与直流分量（基频漂移导致的 y=kx+b 趋势）"""
-    arr = np.array(signal, dtype=np.float64)
-    return detrend(arr, type='linear')
-
-
 def compute_channel_features(signal: List[float]) -> Dict[str, float]:
     """
     计算单通道振动信号的统计特征指标
     用于通道级阈值告警。
     """
-    arr = remove_dc(signal)
+    arr = prepare_signal(signal, detrend=True)
     if len(arr) == 0:
         return {}
 

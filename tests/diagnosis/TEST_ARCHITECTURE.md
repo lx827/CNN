@@ -117,9 +117,9 @@ tests/diagnosis/foundation/
 | `signal_utils` | `bandpass_filter`, `highpass_filter`, `lowpass_filter` | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `parabolic_interpolation` | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `zoom_fft_analysis` | `layer1/test_signal_utils_correctness.py` | ✅ |
-| `signal_utils` | `_search_peak_in_band` (原子函数) | `layer1/test_signal_utils_correctness.py` (通过 find_peaks 间接) | ✅ |
-| `signal_utils` | `_estimate_background` (原子函数) | `layer1/test_signal_utils_correctness.py` (通过 compute_snr 间接) | ✅ |
-| `signal_utils` | `_compute_peak_snr` (原子函数) | `layer1/test_signal_utils_correctness.py` (通过 compute_snr 间接) | ✅ |
+| `signal_utils` | `_search_peak_in_band` (原子函数) | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `_estimate_background` (原子函数) | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `_compute_peak_snr` (原子函数) | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `vmd_denoise` | `vmd_decompose` / `vmd_denoise` / `vmd_select_impact_mode` | `layer1/test_vmd_denoise_correctness.py` | ✅ |
 | `health_score_continuous` | `sigmoid_deduction` / `multi_threshold_deduction` / `cascade_deduction` / `compute_continuous_deductions` | `layer1/test_health_score_continuous.py` | ✅ |
 | `bearing_sideband` | `compute_sideband_density` | `layer1/test_bearing_sideband.py` | ✅ |

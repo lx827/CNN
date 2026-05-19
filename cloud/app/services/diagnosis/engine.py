@@ -13,6 +13,8 @@ from .signal_utils import (
     estimate_rot_freq_spectrum as _estimate_rot_freq_simple,
     _search_peak_in_band,
     _compute_peak_snr,
+    rms,
+    crest_factor,
 )
 from .order_tracking import (
     _compute_order_spectrum_multi_frame,
@@ -863,7 +865,7 @@ def _evaluate_bearing_faults_statistical(
     # 6. 包络谱峰值因子（crest_factor_in_spectrum）
     #    外圈故障：包络谱分布较均匀（多个中等峰），峰值因子偏低
     #    内圈故障：包络谱分布极不均匀（少数超强峰），峰值因子偏高
-    env_rms = float(np.sqrt(np.mean(amp_arr ** 2)))
+    env_rms = rms(amp_arr)
     env_cf = float(peak_amp / env_rms) if env_rms > 1e-12 else 0.0
     indicators["envelope_crest_factor"] = {
         "value": float(round(env_cf, 2)),
