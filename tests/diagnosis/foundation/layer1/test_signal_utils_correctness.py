@@ -33,6 +33,7 @@ from app.services.diagnosis.signal_utils import (
     estimate_rot_freq_spectrum, estimate_rot_freq_autocorr,
     estimate_rot_freq_envelope, zoom_fft_analysis,
     _search_peak_in_band, _estimate_background, _compute_peak_snr,
+    _estimate_noise_mad, _snr_by_residual_std,
 )
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
     NumpyEncoder, sinusoidal, chirp_rotating, gear_mesh,
@@ -827,6 +828,40 @@ def test_atomic_functions():
     zero_ok = zero_bg > 0  # 保证不返回0
     results.append({"test": "background_all_zero", "value": float(zero_bg), "passed": zero_ok})
     print(f"  [{'PASS' if zero_ok else 'FAIL'}] 全零频谱背景: {zero_bg:.2e} (>0)")
+
+    # ── _estimate_noise_mad ──
+    # 已知标准差的高斯噪声: std(Gaussian) ≈ 1.0, MAD/0.6745 ≈ 1.0
+    np.random.seed(42)
+    gauss_noise = np.random.randn(10000)
+    mad_est = _estimate_noise_mad(gauss_noise)
+    mad_gauss_ok = 0.85 < mad_est < 1.15
+    results.append({"test": "noise_mad_gaussian", "estimate": round(mad_est, 4), "passed": mad_gauss_ok})
+    print(f"  [{'PASS' if mad_gauss_ok else 'FAIL'}] MAD估计高斯噪声 σ≈1.0: estimate={mad_est:.4f}")
+
+    # 短信号
+    short_est = _estimate_noise_mad(np.array([1.0, 2.0]))
+    short_ok = short_est == 1e-12
+    results.append({"test": "noise_mad_short", "estimate": short_est, "passed": short_ok})
+    print(f"  [{'PASS' if short_ok else 'FAIL'}] 极短信号(len=2): estimate={short_est:.2e} (期望=1e-12)")
+
+    # ── _snr_by_residual_std ──
+    # 降噪后残差小 → SNR 改善比大
+    t = np.linspace(0, 1, 1000, endpoint=False)
+    clean = np.sin(2 * np.pi * 10 * t)
+    noisy = clean + np.random.randn(1000) * 0.1
+    denoised = clean + np.random.randn(1000) * 0.01  # 更接近 clean
+    snr_imp = _snr_by_residual_std(noisy, denoised)
+    # 残差 ~0.1, 原始std≈0.71 → SNR ≈ 7
+    snr_ok = 3.0 < snr_imp < 50.0
+    results.append({"test": "snr_residual_improvement", "snr_imp": round(snr_imp, 2), "passed": snr_ok})
+    print(f"  [{'PASS' if snr_ok else 'FAIL'}] 残差SNR改善: SNR_imp={snr_imp:.2f} (期望3~50)")
+
+    # 完美降噪 → 极大SNR
+    perfect_snr = _snr_by_residual_std(noisy, noisy)
+    # 残差=0 → 返回1e12
+    perfect_ok = perfect_snr > 1e6
+    results.append({"test": "snr_residual_perfect", "snr_imp": perfect_snr, "passed": perfect_ok})
+    print(f"  [{'PASS' if perfect_ok else 'FAIL'}] 完美降噪(残差≈0): SNR_imp={perfect_snr:.2e} (期望>1e6)")
 
     return results
 

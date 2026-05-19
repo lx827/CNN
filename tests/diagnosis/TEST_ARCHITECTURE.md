@@ -88,14 +88,17 @@ tests/diagnosis/foundation/
 │   ├── test_engine_integration.py
 │   ├── test_ensemble_integration.py
 │   ├── test_analyzer_integration.py
+│   ├── test_real_data.py             # 真实数据集端到端 (HUSTbear/CW/WTgearbox)
 │   ├── LAYER3_ISSUES.md
 │   └── plot_results.py
 ├── layer4/                           # Layer 4 中央调度器深层
 │   ├── test_engine_deep.py
+│   ├── test_engine_deep_real.py      # 真实数据深层验证
 │   └── plot_results.py
 ├── layer5/                           # Layer 5 应用入口辅助函数
 │   ├── test_ensemble_helpers.py
 │   ├── test_analyzer_helpers.py
+│   ├── test_helpers_boundary.py      # 边界值与极限覆盖
 │   └── plot_results.py
 └── output/                           # 旧测试输出（兼容保留）
     └── plots/
@@ -109,20 +112,18 @@ tests/diagnosis/foundation/
 
 | 模块 | 函数 | 测试 | 状态 |
 |------|------|------|:--:|
-| `signal_utils` | `remove_dc` / `linear_detrend` / `prepare_signal` (去直流/去趋势) | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `prepare_signal` (去直流/去趋势) | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `estimate_rot_freq_spectrum` / `estimate_rot_freq_envelope` / `estimate_rot_freq_autocorr` | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `find_peaks_in_spectrum` | `layer1/test_signal_utils_correctness.py` | ✅ |
-| `signal_utils` | `compute_fft_spectrum` / `compute_power_spectrum` | `layer1/test_signal_utils_correctness.py` | ✅ |
-| `signal_utils` | `rms` / `peak_value` / `kurtosis` / `skewness` / `crest_factor` | `layer1/test_signal_utils_correctness.py` | ✅ |
-| `signal_utils` | `bandpass_filter` / `highpass_filter` / `lowpass_filter` / `lowpass_filter_complex` | `layer1/test_signal_utils_correctness.py` | ✅ |
-| `signal_utils` | `compute_snr` (委托 `_compute_peak_snr`) | `layer1/test_signal_utils_correctness.py` | ✅ |
-| `signal_utils` | `parabolic_interpolation` | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `compute_fft_spectrum` (FFT 幅值谱) | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `rms` / `kurtosis` / `skewness` / `crest_factor` (诊断统计指标) | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `bandpass_filter` / `highpass_filter` / `lowpass_filter` (诊断频带滤波) | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `zoom_fft_analysis` | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `_search_peak_in_band` (原子函数) | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `_estimate_background` (原子函数) | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `signal_utils` | `_compute_peak_snr` (原子函数) | `layer1/test_signal_utils_correctness.py` | ✅ |
-| `signal_utils` | `_estimate_noise_mad` (原子函数, 2025-05新增) | `layer1/test_signal_utils_correctness.py` | △ 间接 — 无直接单元测试，经 savgol/preprocessing 间接覆盖 |
-| `signal_utils` | `_snr_by_residual_std` (原子函数, 2025-05新增) | `layer1/test_signal_utils_correctness.py` | △ 间接 — 无直接单元测试，经 savgol `snr_improvement` 间接覆盖 |
+| `signal_utils` | `_estimate_noise_mad` (原子函数, 2025-05新增) | `layer1/test_signal_utils_correctness.py` | ✅ |
+| `signal_utils` | `_snr_by_residual_std` (原子函数, 2025-05新增) | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `vmd_denoise` | `vmd_decompose` / `vmd_denoise` / `vmd_select_impact_mode` | `layer1/test_vmd_denoise_correctness.py` | ✅ |
 | `health_score_continuous` | `sigmoid_deduction` / `multi_threshold_deduction` / `cascade_deduction` / `compute_continuous_deductions` | `layer1/test_health_score_continuous.py` | ✅ |
 | `bearing_sideband` | `compute_sideband_density` / `evaluate_bearing_sideband_features` | `layer1/test_bearing_sideband.py` | ✅ |
@@ -147,7 +148,7 @@ tests/diagnosis/foundation/
 | `features` | `_compute_bearing_fault_orders` | `layer2/test_features_correctness.py` | ✅ |
 | `features` | `compute_time_features` (peak/rms/kurt/crest…) | `layer2/test_features_correctness.py` | ✅ |
 | `features` | `compute_fft_features` (mesh freq, sidebands) / `compute_envelope_features` | `layer2/test_features_correctness.py` | ✅ |
-| `features` | `compute_channel_features` / `compute_fft` / `compute_imf_energy` | `layer2/test_features_correctness.py` | ✅ |
+| `features` | `compute_channel_features` (通道聚合) | `layer2/test_features_correctness.py` | ✅ |
 | `features` | `compute_nonparam_cusum_features` | `layer2/test_features_correctness.py` | ✅ |
 | `features` | `has_bearing_params` / `has_gear_params` | `layer2/test_features_correctness.py` | ✅ |
 | `bearing` | `envelope_analysis` (Hilbert 包络) | `layer2/test_bearing_correctness.py` | ✅ |
@@ -183,6 +184,8 @@ tests/diagnosis/foundation/
 
 | 模块 | 函数 | 测试 | 状态 |
 |------|------|------|:--:|
+| `gear/__init__` | `compute_fm0` / `compute_er` / `compute_ser` / `analyze_sidebands` (齿轮指标聚合) | `layer3/test_engine_integration.py` | ✅ |
+| `gear/__init__` | `_evaluate_gear_faults` (齿轮故障评估) | `layer3/test_engine_integration.py` | ✅ |
 | `engine` | `analyze_bearing` (分发 13 种轴承方法) | `layer3/test_engine_integration.py` | ✅ |
 | `engine` | `analyze_gear` (分发 2 种齿轮方法) | `layer3/test_engine_integration.py` | ✅ |
 | `engine` | `analyze_comprehensive` | `layer3/test_engine_integration.py` | ✅ |
@@ -195,6 +198,8 @@ tests/diagnosis/foundation/
 |------|------|------|:--:|
 | `engine` | `preprocess` (多 denoise 方法分支) | `layer4/test_engine_deep.py` | ✅ |
 | `engine` | `_estimate_rot_freq` (转频估计 + 回退) | `layer4/test_engine_deep.py` | ✅ |
+| `engine` | `analyze_research_ensemble` (委托 ensemble.py) | `layer4/test_engine_deep.py` | ✅ |
+| `engine` | `_evaluate_bearing_faults` / `_evaluate_bearing_faults_statistical` | `layer4/test_engine_deep.py` | ✅ |
 | `engine` | `analyze_all_methods` | — | ⚠️ 需数据集 |
 
 ### Layer 5 — 应用入口辅助函数（依赖 Layer 1-4）
@@ -211,11 +216,11 @@ tests/diagnosis/foundation/
 
 | 状态 | 数量 |
 |:--:|------|
-| ✅ 已覆盖 | **79** (含间接覆盖) |
-| △ 间接覆盖 | **2** (`_estimate_noise_mad`, `_snr_by_residual_std`) |
-| ⚠️ 需数据集 | 1 |
+| ✅ 已覆盖 | **74** |
+| △ 间接覆盖 | **0** |
+| ⚠️ 需数据集 | **1** (`analyze_all_methods`) |
 | ❌ 未覆盖 | **0** |
-| 📋 公共函数总数 | 85 |
+| 📋 诊断函数总数 | **75** |
 
 ---
 
@@ -801,13 +806,16 @@ python ../tests/diagnosis/foundation/layer2/test_planetary_demod_correctness.py
 python ../tests/diagnosis/foundation/layer3/test_engine_integration.py
 python ../tests/diagnosis/foundation/layer3/test_ensemble_integration.py
 python ../tests/diagnosis/foundation/layer3/test_analyzer_integration.py
+python ../tests/diagnosis/foundation/layer3/test_real_data.py
 
 # Layer 4
 python ../tests/diagnosis/foundation/layer4/test_engine_deep.py
+python ../tests/diagnosis/foundation/layer4/test_engine_deep_real.py
 
 # Layer 5
 python ../tests/diagnosis/foundation/layer5/test_ensemble_helpers.py
 python ../tests/diagnosis/foundation/layer5/test_analyzer_helpers.py
+python ../tests/diagnosis/foundation/layer5/test_helpers_boundary.py
 
 # 绘图（独立运行，不重跑分析）
 python ../tests/diagnosis/foundation/layer1/plot_results.py

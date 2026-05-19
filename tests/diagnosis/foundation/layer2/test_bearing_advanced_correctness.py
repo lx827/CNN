@@ -25,6 +25,20 @@ from tests.diagnosis.foundation.layer1.synthetic_signals import (
 OUTPUT_DIR = Path(__file__).parent / "output"
 FS = 8192
 
+# ── 真实数据集配置 ──
+HUSTBEAR_DIR = Path(r"D:\code\wavelet_study\dataset\HUSTbear\down8192")
+BEARING_PARAMS = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
+FAULT_COEFF = {"OR": 3.57, "IR": 5.43, "B": 4.71}
+
+
+def _load_npy(path: Path):
+    """加载 npy 文件"""
+    try:
+        return np.load(path)
+    except Exception as e:
+        print(f"  [WARN] 无法加载 {path}: {e}")
+        return None
+
 
 def _get_peak_snr(found):
     """从 find_peaks_in_spectrum 结果中提取峰值频率和 SNR"""
@@ -136,6 +150,89 @@ def test_sc_scoh():
 
 
 # ═══════════════════════════════════════════════════════════
+# 4. 真实数据验证 — HUSTbear 数据集（高级方法）
+# ═══════════════════════════════════════════════════════════
+
+def test_real_data_hustbear_advanced():
+    """在 HUSTbear 真实数据上验证 CPW / MCKD / SC_SCoh"""
+    print("\n--- HUSTbear 真实数据验证（高级方法） ---")
+    results = []
+
+    if not HUSTBEAR_DIR.exists():
+        print("  [SKIP] HUSTbear 数据集未找到")
+        return results
+
+    test_files = [
+        ("1X_OR_20Hz-X.npy", "OR", 20.0, "外圈"),
+        ("1X_OR_25Hz-X.npy", "OR", 25.0, "外圈"),
+        ("1X_IR_20Hz-X.npy", "IR", 20.0, "内圈"),
+        ("1X_IR_25Hz-X.npy", "IR", 25.0, "内圈"),
+        ("1X_N_20Hz-X.npy",  "N",  20.0, "健康"),
+    ]
+
+    for fname, fault, rot_freq, desc in test_files:
+        fpath = HUSTBEAR_DIR / fname
+        signal = _load_npy(fpath)
+        if signal is None:
+            continue
+
+        target_freq = 0.0 if fault == "N" else rot_freq * FAULT_COEFF.get(fault, 0)
+        print(f"  [{desc}] {fname} 转频={rot_freq}Hz 目标={target_freq:.1f}Hz")
+
+        file_res = {"file": fname, "fault": fault, "rot_freq": rot_freq,
+                    "target_freq": round(target_freq, 2), "methods": []}
+
+        # CPW
+        try:
+            comb = [rot_freq * h for h in range(1, 4)]
+            res = cpw_envelope_analysis(signal, FS, comb_frequencies=comb, max_freq=500)
+            ef, ea = np.array(res.get("envelope_freq", [])), np.array(res.get("envelope_amp", []))
+            if len(ef) > 0:
+                peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(ef, ea, target_freq, tolerance_hz=5.0))
+                if fault == "N":
+                    passed = snr < 3.0
+                else:
+                    passed = abs(peak_f - target_freq) < target_freq * 0.15 + 3 and snr > 2.0
+                file_res["methods"].append({"method": "cpw", "peak_f": round(peak_f, 2), "snr": round(snr, 2), "passed": passed})
+                print(f"    [{'PASS' if passed else 'FAIL'}] CPW: peak={peak_f:.1f}Hz SNR={snr:.1f}")
+        except Exception as e:
+            print(f"    [WARN] CPW 失败: {e}")
+
+        # MCKD
+        try:
+            res = mckd_envelope_analysis(signal, FS, BEARING_PARAMS, rot_freq=rot_freq, filter_len=64, shift_order_M=1, max_freq=500)
+            ef, ea = np.array(res.get("envelope_freq", [])), np.array(res.get("envelope_amp", []))
+            if len(ef) > 0:
+                peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(ef, ea, target_freq, tolerance_hz=5.0))
+                if fault == "N":
+                    passed = snr < 3.0
+                else:
+                    passed = abs(peak_f - target_freq) < target_freq * 0.15 + 3 and snr > 2.0
+                file_res["methods"].append({"method": "mckd", "peak_f": round(peak_f, 2), "snr": round(snr, 2), "passed": passed})
+                print(f"    [{'PASS' if passed else 'FAIL'}] MCKD: peak={peak_f:.1f}Hz SNR={snr:.1f}")
+        except Exception as e:
+            print(f"    [WARN] MCKD 失败: {e}")
+
+        # SC_SCoh
+        try:
+            res = bearing_sc_scoh_analysis(signal, FS, bearing_params=BEARING_PARAMS, rot_freq=rot_freq, seg_len=2048)
+            sc_max = res.get("sc_max_value", 0)
+            n_ind = len(res.get("fault_indicators", []))
+            if fault == "N":
+                passed = n_ind == 0 or sc_max < 0.1
+            else:
+                passed = n_ind > 0 and sc_max > 0
+            file_res["methods"].append({"method": "sc_scoh", "sc_max": round(sc_max, 4), "n_indicators": n_ind, "passed": passed})
+            print(f"    [{'PASS' if passed else 'FAIL'}] SC_SCoh: sc_max={sc_max:.4f} indicators={n_ind}")
+        except Exception as e:
+            print(f"    [WARN] SC_SCoh 失败: {e}")
+
+        results.append(file_res)
+
+    return results
+
+
+# ═══════════════════════════════════════════════════════════
 # main
 # ═══════════════════════════════════════════════════════════
 
@@ -148,15 +245,23 @@ def main():
         "cpw": test_cpw(),
         "mckd": test_mckd(),
         "sc_scoh": test_sc_scoh(),
+        "real_data_hustbear": test_real_data_hustbear_advanced(),
     }
 
     total = 0
     passed = 0
     for category, items in all_results.items():
-        for item in items:
-            total += 1
-            if item.get("passed", False):
-                passed += 1
+        if category == "real_data_hustbear":
+            for file_item in items:
+                for m in file_item.get("methods", []):
+                    total += 1
+                    if m.get("passed", False):
+                        passed += 1
+        else:
+            for item in items:
+                total += 1
+                if item.get("passed", False):
+                    passed += 1
 
     all_results["summary"] = {"total": total, "passed": passed, "failed": total - passed}
 

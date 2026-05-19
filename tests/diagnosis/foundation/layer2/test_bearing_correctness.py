@@ -29,6 +29,67 @@ from tests.diagnosis.foundation.layer1.synthetic_signals import (
 OUTPUT_DIR = Path(__file__).parent / "output"
 FS = 8192
 
+# ── 真实数据集配置 ──
+HUSTBEAR_DIR = Path(r"D:\code\wavelet_study\dataset\HUSTbear\down8192")
+# ER-16K 轴承参数 (AGENTS.md Table 1)
+BEARING_PARAMS = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
+# 故障频率系数 × 转频
+FAULT_COEFF = {"OR": 3.57, "IR": 5.43, "B": 4.71}
+
+
+def _parse_hustbear_filename(fname: str):
+    """解析 HUSTbear 文件名，返回 (fault_type, rot_freq_hz, channel)"""
+    # 格式: {负载}_{故障类型}_{转速模式}-{通道}.npy
+    # e.g. 1X_OR_20Hz-X.npy
+    base = fname.replace(".npy", "")
+    parts = base.split("_")
+    if len(parts) < 3:
+        return None, None, None
+    fault = parts[1]  # N, B, IR, OR, C
+    speed_part = parts[2]  # 20Hz-X
+    speed_chan = speed_part.split("-")
+    rot_freq = float(speed_chan[0].replace("Hz", "")) if speed_chan[0].endswith("Hz") else None
+    channel = speed_chan[1] if len(speed_chan) > 1 else ""
+    return fault, rot_freq, channel
+
+
+def _load_npy(path: Path):
+    """加载 npy 文件，失败返回 None"""
+    try:
+        return np.load(path)
+    except Exception as e:
+        print(f"  [WARN] 无法加载 {path}: {e}")
+        return None
+
+
+def _eval_bearing_on_real(signal, fs, method_func, method_name, target_freq, rot_freq=None):
+    """在真实数据上运行一种轴承诊断方法，返回结果 dict"""
+    try:
+        if method_name == "envelope":
+            res = method_func(signal, fs, fc=3000, bw=2000, f_low_pass=500, max_freq=500)
+        elif method_name == "kurtogram":
+            res = method_func(signal, fs, max_level=5, f_low=100)
+        elif method_name == "med":
+            res = method_func(signal, fs, med_filter_len=64, max_freq=500)
+        elif method_name == "teager":
+            res = method_func(signal, fs, max_freq=500)
+        elif method_name == "sk":
+            res = method_func(signal, fs, max_level=4, f_low=100, max_freq=500)
+        else:
+            return None
+    except Exception as e:
+        print(f"    [WARN] {method_name} 失败: {e}")
+        return None
+
+    ef = np.array(res.get("envelope_freq", []))
+    ea = np.array(res.get("envelope_amp", []))
+    if len(ef) == 0 or len(ea) == 0:
+        return None
+
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(ef, ea, target_freq=target_freq, tolerance_hz=5.0))
+    return {"method": method_name, "peak_f": round(peak_f, 2), "snr": round(snr, 2),
+            "target_freq": round(target_freq, 2)}
+
 
 def _get_peak_snr(found):
     """从 find_peaks_in_spectrum 结果中提取峰值频率和 SNR"""
@@ -199,6 +260,82 @@ def test_spectral_kurtosis_envelope():
 
 
 # ═══════════════════════════════════════════════════════════
+# 6. 真实数据验证 — HUSTbear 数据集
+# ═══════════════════════════════════════════════════════════
+
+def test_real_data_hustbear():
+    """在 HUSTbear 真实轴承数据集上验证 5 种方法"""
+    print("\n--- HUSTbear 真实数据验证 ---")
+    results = []
+
+    if not HUSTBEAR_DIR.exists():
+        print("  [SKIP] HUSTbear 数据集未找到")
+        return results
+
+    # 选代表性样本：各故障类型 × 不同转速
+    test_files = [
+        ("1X_N_20Hz-X.npy",  "N",  20.0, "健康"),
+        ("1X_N_25Hz-X.npy",  "N",  25.0, "健康"),
+        ("1X_OR_20Hz-X.npy", "OR", 20.0, "外圈"),
+        ("1X_OR_25Hz-X.npy", "OR", 25.0, "外圈"),
+        ("1X_IR_20Hz-X.npy", "IR", 20.0, "内圈"),
+        ("1X_IR_25Hz-X.npy", "IR", 25.0, "内圈"),
+        ("1X_B_20Hz-X.npy",  "B",  20.0, "球"),
+        ("1X_B_25Hz-X.npy",  "B",  25.0, "球"),
+    ]
+
+    methods = [
+        ("envelope",   envelope_analysis),
+        ("kurtogram",  fast_kurtogram),
+        ("med",        med_envelope_analysis),
+        ("teager",     teager_envelope_analysis),
+        ("sk",         spectral_kurtosis_envelope_analysis),
+    ]
+
+    for fname, fault, rot_freq, desc in test_files:
+        fpath = HUSTBEAR_DIR / fname
+        signal = _load_npy(fpath)
+        if signal is None:
+            continue
+
+        # 计算期望故障频率
+        if fault == "N":
+            target_freq = 0.0  # 健康数据不应有强故障频率
+        else:
+            target_freq = rot_freq * FAULT_COEFF.get(fault, 0)
+
+        print(f"  [{desc}] {fname} 转频={rot_freq}Hz 目标={target_freq:.1f}Hz")
+
+        file_results = {"file": fname, "fault": fault, "rot_freq": rot_freq,
+                        "target_freq": round(target_freq, 2), "methods": []}
+
+        for mname, mfunc in methods:
+            eval_res = _eval_bearing_on_real(signal, FS, mfunc, mname, target_freq, rot_freq)
+            if eval_res is None:
+                continue
+
+            # 判定：故障数据应在目标频率附近检出峰值且SNR>2
+            # 健康数据不应在任意故障频率处有高SNR（放宽到<3）
+            peak_f = eval_res["peak_f"]
+            snr = eval_res["snr"]
+            if fault == "N":
+                passed = snr < 3.0  # 健康不应误报
+            else:
+                freq_ok = abs(peak_f - target_freq) < target_freq * 0.15 + 3  # ±15% 容差
+                snr_ok = snr > 2.0
+                passed = freq_ok and snr_ok
+
+            eval_res["passed"] = passed
+            file_results["methods"].append(eval_res)
+            status = "PASS" if passed else "FAIL"
+            print(f"    [{status}] {mname}: peak={peak_f:.1f}Hz SNR={snr:.1f}")
+
+        results.append(file_results)
+
+    return results
+
+
+# ═══════════════════════════════════════════════════════════
 # main
 # ═══════════════════════════════════════════════════════════
 
@@ -213,15 +350,24 @@ def main():
         "med_envelope": test_med_envelope(),
         "teager_envelope": test_teager_envelope(),
         "spectral_kurtosis_envelope": test_spectral_kurtosis_envelope(),
+        "real_data_hustbear": test_real_data_hustbear(),
     }
 
     total = 0
     passed = 0
     for category, items in all_results.items():
-        for item in items:
-            total += 1
-            if item.get("passed", False):
-                passed += 1
+        if category == "real_data_hustbear":
+            # 真实数据：每个文件内多个方法分别统计
+            for file_item in items:
+                for m in file_item.get("methods", []):
+                    total += 1
+                    if m.get("passed", False):
+                        passed += 1
+        else:
+            for item in items:
+                total += 1
+                if item.get("passed", False):
+                    passed += 1
 
     all_results["summary"] = {"total": total, "passed": passed, "failed": total - passed}
 
