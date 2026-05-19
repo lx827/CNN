@@ -313,7 +313,7 @@ def compute_channel_features(signal: List[float]) -> Dict[str, float]:
 
 def compute_fft(signal: List[float], sample_rate: int = 25600):
     """计算 FFT 频谱"""
-    arr = remove_dc(signal)
+    arr = prepare_signal(signal)
     n = len(arr)
     yf = np.abs(rfft(arr))
     xf = rfftfreq(n, 1 / sample_rate)
