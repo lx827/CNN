@@ -96,7 +96,7 @@ def main():
         ax1.barh(i, r["hi"] - r["lo"], left=r["lo"], height=0.25,
                  color="#BDC3C7", alpha=0.5, zorder=1)
         ax1.text(r["hi"] + 0.5, i + 0.12, f"[{r['lo']:.0f}-{r['hi']:.0f}]Hz",
-                 fontsize=8, color="gray", va="bottom")
+                 fontsize=10, color="#7F8C8D", va="bottom")
 
         # 仅显示阶次跟踪法（最准确）
         c_ord = "#2980B9" if r["order_ok"] else "#E74C3C"
@@ -104,12 +104,6 @@ def main():
                     marker="D", edgecolors="white", linewidth=1.2)
         ax1.text(r["order_hz"] + 0.5, i, f"{r['order_hz']:.1f}±{r['order_std']:.1f} Hz",
                  fontsize=9, color=c_ord, fontweight="bold")
-
-        # 通过/失败标记
-        ok = r["order_ok"]
-        mk = "OK" if ok else "NG"
-        ax1.text(max(r["lo"], r["hi"]) + 3, i, mk, fontsize=14,
-                 color="#27AE60" if ok else "#E74C3C", fontweight="bold", ha="center")
 
     ax1.set_yticks(list(y))
     ax1.set_yticklabels(labels, fontsize=11)
