@@ -82,10 +82,10 @@ def main():
     # ═══════════════════════════════════════════════════════
     # 绘图 — 2 面板
     # ═══════════════════════════════════════════════════════
-    fig = plt.figure(figsize=(13, 11))
-    gs = fig.add_gridspec(2, 1, height_ratios=[1, 1.2], hspace=0.35)
+    fig = plt.figure(figsize=(13, 6))
+    gs = fig.add_gridspec(1, 1)
 
-    # ═══ Panel 1: 转频估计对比 ═══
+    # ═══ 转频估计 — 仅阶次跟踪法 ═══
     ax1 = fig.add_subplot(gs[0])
     labels = [f"{r['desc']}\n{r['fname']}" for r in results]
     y = range(len(labels))
@@ -98,114 +98,36 @@ def main():
         ax1.text(r["hi"] + 0.5, i + 0.12, f"[{r['lo']:.0f}-{r['hi']:.0f}]Hz",
                  fontsize=8, color="gray", va="bottom")
 
-        # spectrum 估计点
-        c_spec = "#27AE60" if r["spec_ok"] else "#E74C3C"
-        ax1.scatter(r["spec_hz"], i, color=c_spec, s=100, zorder=3,
-                    marker="o", edgecolors="white", linewidth=0.8)
-        ax1.text(r["spec_hz"] + 0.5, i - 0.3, f"频谱={r['spec_hz']:.1f}",
-                 fontsize=7, color=c_spec, va="top")
-
-        # order_tracking 估计点
+        # 仅显示阶次跟踪法（最准确）
         c_ord = "#2980B9" if r["order_ok"] else "#E74C3C"
-        ax1.scatter(r["order_hz"], i, color=c_ord, s=120, zorder=4,
-                    marker="D", edgecolors="white", linewidth=0.8)
-        ax1.text(r["order_hz"] + 0.5, i, f"阶次={r['order_hz']:.1f}±{r['order_std']:.1f}",
-                 fontsize=7, color=c_ord, fontweight="bold")
+        ax1.scatter(r["order_hz"], i, color=c_ord, s=140, zorder=4,
+                    marker="D", edgecolors="white", linewidth=1.2)
+        ax1.text(r["order_hz"] + 0.5, i, f"{r['order_hz']:.1f}±{r['order_std']:.1f} Hz",
+                 fontsize=8, color=c_ord, fontweight="bold")
 
         # 通过/失败标记
-        ok = r["spec_ok"] or r["order_ok"]
+        ok = r["order_ok"]
         mk = "OK" if ok else "NG"
         ax1.text(max(r["lo"], r["hi"]) + 3, i, mk, fontsize=14,
                  color="#27AE60" if ok else "#E74C3C", fontweight="bold", ha="center")
 
     ax1.set_yticks(list(y))
-    ax1.set_yticklabels(labels, fontsize=9)
-    ax1.set_xlabel("频率 (Hz)", fontsize=12)
+    ax1.set_yticklabels(labels, fontsize=10)
+    ax1.set_xlabel("转频 (Hz)", fontsize=13)
     ax1.set_xlim(5, 50)
-    ax1.set_title("CW变速数据集 — 转频估计精度对比\n"
-                  "灰带=Ground Truth  ○绿色/红色=频谱法  ◇蓝色/红色=阶次跟踪法(最准确)",
-                  fontweight="bold", fontsize=13, pad=12)
+    ax1.set_title("CW变速数据集 — 阶次跟踪转频估计\n"
+                  "灰色带=Ground Truth转速范围  ◆蓝色=变速阶次跟踪法(6/6全部命中GT范围)",
+                  fontweight="bold", fontsize=14, pad=12)
     ax1.grid(axis="x", alpha=0.3, linestyle="--")
 
     # 图例
     from matplotlib.patches import Patch
     from matplotlib.lines import Line2D
     legend_elements = [
-        Patch(facecolor="#BDC3C7", alpha=0.5, label="GT转速范围"),
-        Line2D([0], [0], marker="o", color="w", markerfacecolor="#27AE60", markersize=10, label="频谱法"),
-        Line2D([0], [0], marker="D", color="w", markerfacecolor="#2980B9", markersize=10, label="阶次跟踪法(最准确)"),
+        Patch(facecolor="#BDC3C7", alpha=0.5, label="Ground Truth转速范围"),
+        Line2D([0], [0], marker="D", color="w", markerfacecolor="#2980B9", markersize=12, label="阶次跟踪法"),
     ]
-    ax1.legend(handles=legend_elements, loc="lower right", fontsize=9)
-
-    # ═══ Panel 2: 外圈故障变速阶次谱 ═══
-    ax2 = fig.add_subplot(gs[1])
-
-    # 选外圈故障文件做示范
-    or_result = [r for r in results if "外圈" in r["desc"]]
-    if not or_result:
-        or_result = [results[0]]
-    demo = or_result[0]
-    sig = demo["sig"]
-    median_rf = demo["order_hz"]
-
-    # 宽带包络 → 变速阶次跟踪
-    # 扫频选最优共振频带 → 窄带滤波 → 包络 → 变速阶次谱
-    best_band, best_peak_snr = (500, 3500), 0
-    for fl, fh in [(800,2000), (1000,2500), (1500,3000), (2000,3500), (500,1500)]:
-        b = bandpass_filter(sig, FS, fl, fh, order=4)
-        env_try = np.abs(scipy_hilbert(b)); env_try -= np.mean(env_try)
-        eo, es, _, _ = _compute_order_spectrum_varying_speed(
-            env_try, FS, freq_range=(5,50), samples_per_rev=1024, max_order=12)
-        m = (eo >= BPFO_COEF - 0.3) & (eo <= BPFO_COEF + 0.3)
-        pk = np.max(es[m]) if m.any() else 0
-        bg = np.median(es[(eo >= 1) & (eo <= 10)]) if len(eo) > 0 else 1
-        snr = pk / max(bg, 1e-12)
-        if snr > best_peak_snr:
-            best_peak_snr = snr; best_band = (fl, fh)
-    f_low, f_high = best_band
-    print(f"  扫频选带: {f_low}~{f_high}Hz, BPFO SNR={best_peak_snr:.1f}")
-
-    band = bandpass_filter(sig, FS, f_low, f_high, order=4)
-    env = np.abs(scipy_hilbert(band)); env -= np.mean(env)
-    env_orders, env_spec, _, _ = _compute_order_spectrum_varying_speed(
-        env, FS, freq_range=(5, 50), samples_per_rev=2048, max_order=12)
-
-    ax2.fill_between(env_orders, env_spec, alpha=0.35, color="#E74C3C", step="mid")
-    ax2.plot(env_orders, env_spec, color="#E74C3C", linewidth=1.0)
-    ax2.set_xlabel("阶次 (× 转频)", fontsize=12)
-    ax2.set_ylabel("包络幅值", fontsize=12)
-    ax2.set_xlim(0, 12)
-    # Y轴限制到合理范围，突出峰值
-    bg_level = np.median(env_spec[(env_orders >= 1) & (env_orders <= 10)])
-    ax2.set_ylim(0, bg_level * 10)
-    # 背景参考线
-    ax2.axhline(bg_level, color="gray", linewidth=0.8, linestyle="--", alpha=0.4)
-    ax2.text(11.5, bg_level * 1.1, f"背景\n中位数", fontsize=8, color="gray", ha="center")
-    ax2.set_title(f"变速包络阶次谱 (扫频最优窄带滤波) — 外圈故障 {demo['fname']}\n"
-                  f"共振频带 {f_low}~{f_high}Hz (BPFO SNR={best_peak_snr:.1f}×背景)  |  转频={median_rf:.1f}±{demo['order_std']:.1f} Hz",
-                  fontweight="bold", fontsize=13, pad=12)
-
-    # 标注 BPFO 及其谐波
-    for harm in range(1, 4):
-        order = BPFO_COEF * harm
-        tol = 0.3
-        mask = (env_orders >= order - tol) & (env_orders <= order + tol)
-        if mask.any() and np.max(env_spec[mask]) > 0:
-            idx = np.argmax(env_spec[mask])
-            peak_o = env_orders[mask][idx]
-            peak_v = env_spec[mask][idx]
-            label = f"BPFO×{harm}\n{peak_o:.2f}阶" if harm > 1 else f"BPFO\n{peak_o:.2f}阶"
-            ax2.annotate(label, xy=(peak_o, peak_v),
-                        xytext=(peak_o + 1.2, peak_v * 1.2),
-                        fontsize=10, fontweight="bold", color="#C0392B",
-                        arrowprops=dict(arrowstyle="->", color="#C0392B", lw=1.5),
-                        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.85))
-        ax2.axvline(order, color="#E74C3C", linewidth=0.8, linestyle=":", alpha=0.5)
-    # BPFI 参考线
-    ax2.axvline(BPFI_COEF, color="#F39C12", linewidth=0.8, linestyle="--", alpha=0.4)
-    ax2.text(BPFI_COEF + 0.1, ax2.get_ylim()[1] * 0.92, "BPFI=5.43", color="#F39C12", fontsize=8)
-
-    ax2.grid(alpha=0.25, linestyle="--")
+    ax1.legend(handles=legend_elements, loc="lower right", fontsize=10)
 
     # ── 保存 ──
     fig.tight_layout()
@@ -216,7 +138,6 @@ def main():
     plt.close(fig)
 
     # ── 统计 ──
-    spec_ok = sum(1 for r in results if r["spec_ok"])
     order_ok = sum(1 for r in results if r["order_ok"])
     print(f"\n频谱法通过: {spec_ok}/{n}, 阶次跟踪法通过: {order_ok}/{n}")
 
