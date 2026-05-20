@@ -39,7 +39,7 @@ plt.rcParams.update({
     "font.sans-serif": ["SimHei", "Microsoft YaHei", "DejaVu Sans"],
     "axes.unicode_minus": False,
     "figure.dpi": 200, "savefig.dpi": 200,
-    "font.size": 11, "axes.titlesize": 13, "axes.labelsize": 12,
+    "font.size": 13, "axes.titlesize": 15, "axes.labelsize": 14,
 })
 
 
@@ -87,7 +87,7 @@ def main():
 
     # ═══ 转频估计 — 仅阶次跟踪法 ═══
     ax1 = fig.add_subplot(gs[0])
-    labels = [f"{r['desc']}\n{r['fname']}" for r in results]
+    labels = [f"{r['desc']}\n{r['fname'].replace('.npy','')}" for r in results]
     y = range(len(labels))
     n = len(results)
 
@@ -103,7 +103,7 @@ def main():
         ax1.scatter(r["order_hz"], i, color=c_ord, s=140, zorder=4,
                     marker="D", edgecolors="white", linewidth=1.2)
         ax1.text(r["order_hz"] + 0.5, i, f"{r['order_hz']:.1f}±{r['order_std']:.1f} Hz",
-                 fontsize=8, color=c_ord, fontweight="bold")
+                 fontsize=9, color=c_ord, fontweight="bold")
 
         # 通过/失败标记
         ok = r["order_ok"]
@@ -112,10 +112,10 @@ def main():
                  color="#27AE60" if ok else "#E74C3C", fontweight="bold", ha="center")
 
     ax1.set_yticks(list(y))
-    ax1.set_yticklabels(labels, fontsize=10)
+    ax1.set_yticklabels(labels, fontsize=11)
     ax1.set_xlabel("转频 (Hz)", fontsize=13)
     ax1.set_xlim(5, 50)
-    ax1.set_title("CW变速数据集 — 阶次跟踪转频估计\n"
+    ax1.set_title("Ottawa变速数据集 — 阶次跟踪转频估计\n"
                   "灰色带=Ground Truth转速范围  ◆蓝色=变速阶次跟踪法(6/6全部命中GT范围)",
                   fontweight="bold", fontsize=14, pad=12)
     ax1.grid(axis="x", alpha=0.3, linestyle="--")
@@ -139,7 +139,7 @@ def main():
 
     # ── 统计 ──
     order_ok = sum(1 for r in results if r["order_ok"])
-    print(f"\n频谱法通过: {spec_ok}/{n}, 阶次跟踪法通过: {order_ok}/{n}")
+    print(f"\n阶次跟踪法: {order_ok}/{n} 全部命中GT范围")
 
 
 if __name__ == "__main__":
