@@ -149,9 +149,24 @@ def main():
     median_rf = demo["order_hz"]
 
     # 宽带包络 → 变速阶次跟踪
-    band = bandpass_filter(sig, FS, 500, 3500, order=4)
-    env = np.abs(scipy_hilbert(band))
-    env = env - np.mean(env)
+    # 扫频选最优共振频带 → 窄带滤波 → 包络 → 变速阶次谱
+    best_band, best_peak_snr = (500, 3500), 0
+    for fl, fh in [(800,2000), (1000,2500), (1500,3000), (2000,3500), (500,1500)]:
+        b = bandpass_filter(sig, FS, fl, fh, order=4)
+        env_try = np.abs(scipy_hilbert(b)); env_try -= np.mean(env_try)
+        eo, es, _, _ = _compute_order_spectrum_varying_speed(
+            env_try, FS, freq_range=(5,50), samples_per_rev=1024, max_order=12)
+        m = (eo >= BPFO_COEF - 0.3) & (eo <= BPFO_COEF + 0.3)
+        pk = np.max(es[m]) if m.any() else 0
+        bg = np.median(es[(eo >= 1) & (eo <= 10)]) if len(eo) > 0 else 1
+        snr = pk / max(bg, 1e-12)
+        if snr > best_peak_snr:
+            best_peak_snr = snr; best_band = (fl, fh)
+    f_low, f_high = best_band
+    print(f"  扫频选带: {f_low}~{f_high}Hz, BPFO SNR={best_peak_snr:.1f}")
+
+    band = bandpass_filter(sig, FS, f_low, f_high, order=4)
+    env = np.abs(scipy_hilbert(band)); env -= np.mean(env)
     env_orders, env_spec, _, _ = _compute_order_spectrum_varying_speed(
         env, FS, freq_range=(5, 50), samples_per_rev=2048, max_order=12)
 
@@ -160,8 +175,14 @@ def main():
     ax2.set_xlabel("阶次 (× 转频)", fontsize=12)
     ax2.set_ylabel("包络幅值", fontsize=12)
     ax2.set_xlim(0, 12)
-    ax2.set_title(f"变速阶次谱 — 外圈故障 {demo['fname']}  |  转频={median_rf:.1f}±{demo['order_std']:.1f} Hz\n"
-                  "BPFO=3.57×fr 峰值清晰可辨，变速工况下阶次跟踪算法有效",
+    # Y轴限制到合理范围，突出峰值
+    bg_level = np.median(env_spec[(env_orders >= 1) & (env_orders <= 10)])
+    ax2.set_ylim(0, bg_level * 10)
+    # 背景参考线
+    ax2.axhline(bg_level, color="gray", linewidth=0.8, linestyle="--", alpha=0.4)
+    ax2.text(11.5, bg_level * 1.1, f"背景\n中位数", fontsize=8, color="gray", ha="center")
+    ax2.set_title(f"变速包络阶次谱 (扫频最优窄带滤波) — 外圈故障 {demo['fname']}\n"
+                  f"共振频带 {f_low}~{f_high}Hz (BPFO SNR={best_peak_snr:.1f}×背景)  |  转频={median_rf:.1f}±{demo['order_std']:.1f} Hz",
                   fontweight="bold", fontsize=13, pad=12)
 
     # 标注 BPFO 及其谐波
