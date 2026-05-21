@@ -72,10 +72,6 @@
 
 **效果**：CW 单文件 212,654ms→~300ms (**×700**)，准确率保持（H-A-1 302ms sig=3, I-A-1 361ms sig=2, O-A-1 217ms sig=2）。
 
-| 3 | `cloud/app/services/diagnosis/engine.py` | `significant = snr > 4.5` 阈值待提高 | ⏳ 待修复 |
-| 4 | `cloud/app/services/diagnosis/engine.py` | 需引入主导峰排序、谐波族验证、相对 SNR 机制 | ⏳ 待修复 |
-| 5 | `cloud/app/services/diagnosis/ensemble.py` | D-S 融合参数或输入质量待调整 | ⏳ 待修复 |
-
 **修复验证**（层级1+2+3修复后）：
 
 - P0 回归测试：全部通过
