@@ -218,6 +218,7 @@ def cascade_wavelet_vmd(
     wavelet: str = "db8",
     wavelet_level: Optional[int] = None,
     wavelet_mode: Literal["soft", "hard", "improved"] = "soft",
+    wavelet_threshold_scale: float = 0.5,
     vmd_K: int = 5,
     vmd_alpha: int = 2000,
     vmd_corr_threshold: float = 0.3,
@@ -241,6 +242,7 @@ def cascade_wavelet_vmd(
         wavelet: 小波基
         wavelet_level: 小波分解层数
         wavelet_mode: 小波阈值模式
+        wavelet_threshold_scale: 小波阈值缩放系数（级联场景默认 0.5，避免过度去噪）
         vmd_K: VMD 模态数
         vmd_alpha: VMD 惩罚因子
         vmd_corr_threshold: IMF 相关系数阈值
@@ -252,10 +254,11 @@ def cascade_wavelet_vmd(
     arr = np.array(signal, dtype=np.float64)
     N = len(arr)
 
-    # Step 1: 小波阈值去噪
+    # Step 1: 小波阈值去噪（级联场景降低阈值，避免过度去噪扭曲信号结构）
     wavelet_result = wavelet_denoise(
         arr, wavelet=wavelet, level=wavelet_level,
-        threshold_mode=wavelet_mode
+        threshold_mode=wavelet_mode,
+        threshold_scale=wavelet_threshold_scale,
     )
 
     # Step 2-4: VMD 分解 + 筛选重构
@@ -278,6 +281,7 @@ def cascade_wavelet_vmd(
         "method": "cascade_wavelet_vmd",
         "wavelet": wavelet,
         "wavelet_mode": wavelet_mode,
+        "wavelet_threshold_scale": wavelet_threshold_scale,
         "vmd_K": vmd_K,
         "vmd_alpha": vmd_alpha,
         "kurtosis_before": round(kurt_before, 4),

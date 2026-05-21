@@ -2,16 +2,15 @@
 
 > 最后更新: 2026-05-21 | 详见 AGENTS.md §14
 
-## 未修复 (4)
+## 未修复 (3)
 
 | # | 文件 | 描述 |
 |---|------|------|
 | 11d | `ensemble.py`, `health_score.py` | D-S 证据融合未生效（0/30 样本被覆盖）|
 | 13 | `ensemble.py` | **WTgearbox 五分类 30%→20%** — `_gear_confidence` 行星箱 impulse_context 过严 |
 | 13b | `ensemble.py` | **WTgearbox 五分类需降 `_gear_confidence` 行星箱 kurt 阈值** — 见下 |
-| 14 | `preprocessing.py`, `vmd_denoise.py` | **小波+VMD 级联 ΔSNR 仅 +0.19dB，远差于 VMD 单独 +3.18dB** — 见下 |
 
-## 已修复 (14)
+## 已修复 (15)
 
 | # | 文件 | 描述 |
 |---|------|------|
@@ -19,6 +18,7 @@
 | 11c | `engine.py` | ✅ **显著性主导比过滤** — 主导峰需 > 次强峰 1.5× |
 | 12 | `engine.py` | **Teager Ottawa/CW 耗时爆炸（212s→0.3s）** — samples_per_rev 1024→256 |
 | 13a | 评估脚本 | ✅ **WTG 五分类传 bearing_params** — 6处 gear_teeth 补传 bearing_params |
+| 14 | `preprocessing.py`, `vmd_denoise.py` | ✅ **小波+VMD 级联 ΔSNR +0.19→+0.98dB** — 见下 |
 
 **Bug #11 详细**（根因分析与修复记录）：
 
@@ -116,8 +116,17 @@
    - 单独 VMD 输入 = 原始含噪信号，噪声能量帮助提高了 IMF 整体相关性
    - 更多 IMF 通过 `corr>0.3` 筛选，重构信号结构更完整
 
-**修复方向**：
+**修复记录**：
 
-- 方案A：级联时 VMD 筛选改以**原始含噪信号**为参考计算相关性
-- 方案B：降低级联 VMD 阈值（`corr_threshold` 0.3→0.15）
-- 方案C：改为 **VMD + 小波后处理**（逆序级联）
+| 层级 | 文件 | 修复内容 | 效果 |
+|------|------|---------|------|
+| 1 | `vmd_denoise.py` | `vmd_denoise()` 新增 `reference_signal` 参数，级联时以原始含噪信号为 IMF 筛选基准 | 避免 IMF 与"已失真小波输出"的相关性被低估 |
+| 2 | `preprocessing.py` | `cascade_wavelet_vmd()` 新增 `wavelet_threshold_scale=0.5` 参数（默认 0.5，原为隐式 1.0） | 降低小波软阈值强度，避免过度去噪扭曲信号结构 |
+| 3 | `preprocessing.py` | `cascade_wavelet_vmd()` 调用 `vmd_denoise()` 时传入 `reference_signal=arr` | 联合修复 |
+
+**修复验证**：
+- P0 回归测试：全部通过
+- 去噪效果评估（`run_eval.py` 实验C）：
+  - 修复前：小波+VMD 级联 ΔSNR = **+0.19 dB**
+  - 修复后：小波+VMD 级联 ΔSNR = **+0.98 dB**（提升 **5.2×**）
+  - 对比：VMD 单独仍为 +3.18 dB（级联受小波前置失真限制，无法超越单独 VMD）
