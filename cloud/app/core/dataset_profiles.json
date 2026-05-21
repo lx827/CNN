@@ -1,490 +1,492 @@
 {
-  "_comment": "数据集默认超参数配置 — 由 tests/diagnosis/hyperparams/optimize_*.py 生成并维护",
-  "_version": "1.0.0",
-  "_generated_by": "manual_extraction_from_code_20260522",
-  "hustbear": {
-    "_description": "HUSTbear 恒速轴承数据集 (ER-16K, 8192Hz, 99样本)",
-    "diagnosis": {
-      "bearing": {
-        "kurtosis_threshold": 5.0,
-        "crest_evidence_threshold": 10.0,
-        "envelope_hp_fc": 3000,
-        "envelope_hp_bw": 2000,
-        "kurtogram_min_kurt": 0.5,
-        "snr_warning": 3.0,
-        "snr_critical": 5.0,
-        "impulse_context_kurt": 5.0,
-        "impulse_context_crest": 10.0,
-        "sk_shift": 3.0,
-        "cyclostat_peak_warning": 0.3,
-        "cyclostat_snr_warning": 3.0,
-        "cyclostat_peak_critical": 0.5,
-        "cyclostat_snr_critical": 5.0
-      },
-      "ensemble": {
-        "bearing_confidence_threshold": 0.55,
-        "bearing_vote_fraction_weight": 0.45,
-        "ds_dominant_prob": 0.4,
-        "ds_uncertainty_max": 0.3,
-        "ds_conflict_high": 0.8,
-        "ds_conflict_penalty": 8
-      },
-      "calibration": {
-        "snr_threshold": 5.0,
-        "max_prob": 0.85,
-        "slope": 1.5
-      },
-      "planetary": {
-        "fault_snr_threshold": 3.0
-      },
-      "rule": {
-        "rms": {
-          "baseline": 2.0,
-          "critical": 15.0
+    "_comment": "数据集默认超参数配置 — 由 tests/diagnosis/hyperparams/optimize_*.py 生成并维护",
+    "_version": "1.0.0",
+    "_generated_by": "manual_extraction_from_code_20260522",
+    "hustbear": {
+        "_description": "HUSTbear 恒速轴承数据集 (ER-16K, 8192Hz, 99样本)",
+        "diagnosis": {
+            "bearing": {
+                "kurtosis_threshold": 5.0,
+                "crest_evidence_threshold": 10.0,
+                "envelope_hp_fc": 3000,
+                "envelope_hp_bw": 2000,
+                "kurtogram_min_kurt": 0.5,
+                "snr_warning": 3.0,
+                "snr_critical": 5.0,
+                "impulse_context_kurt": 5.0,
+                "impulse_context_crest": 10.0,
+                "sk_shift": 3.0,
+                "cyclostat_peak_warning": 0.3,
+                "cyclostat_snr_warning": 3.0,
+                "cyclostat_peak_critical": 0.5,
+                "cyclostat_snr_critical": 5.0
+            },
+            "ensemble": {
+                "bearing_confidence_threshold": 0.55,
+                "bearing_vote_fraction_weight": 0.45,
+                "ds_dominant_prob": 0.4,
+                "ds_uncertainty_max": 0.3,
+                "ds_conflict_high": 0.8,
+                "ds_conflict_penalty": 8
+            },
+            "calibration": {
+                "snr_threshold": 5.0,
+                "max_prob": 0.85,
+                "slope": 1.5
+            },
+            "planetary": {
+                "fault_snr_threshold": 3.0
+            },
+            "rule": {
+                "rms": {
+                    "baseline": 2.0,
+                    "critical": 15.0
+                },
+                "peak": {
+                    "baseline": 5.0,
+                    "critical": 40.0
+                },
+                "kurtosis": {
+                    "baseline": 3.0,
+                    "critical": 15.0
+                },
+                "crest_factor": {
+                    "baseline": 3.0,
+                    "critical": 12.0
+                },
+                "skewness": {
+                    "baseline": 0.3,
+                    "critical": 2.0
+                },
+                "impulse_factor": {
+                    "baseline": 5.0,
+                    "critical": 20.0
+                }
+            }
         },
-        "peak": {
-          "baseline": 5.0,
-          "critical": 40.0
+        "health_score": {
+            "kurtosis": {
+                "thresholds": [
+                    5,
+                    8,
+                    12,
+                    20
+                ],
+                "deductions": [
+                    15,
+                    22,
+                    30,
+                    40
+                ]
+            },
+            "crest": {
+                "thresholds": [
+                    7,
+                    10,
+                    15
+                ],
+                "deductions": [
+                    5,
+                    10,
+                    15
+                ]
+            },
+            "dynamic_baseline": {
+                "thresholds": [
+                    4,
+                    6
+                ],
+                "deductions": [
+                    10,
+                    18
+                ]
+            },
+            "trend_drift": {
+                "threshold": 8,
+                "max_ded": 8,
+                "slope": 1.5
+            }
         },
-        "kurtosis": {
-          "baseline": 3.0,
-          "critical": 15.0
-        },
-        "crest_factor": {
-          "baseline": 3.0,
-          "critical": 12.0
-        },
-        "skewness": {
-          "baseline": 0.3,
-          "critical": 2.0
-        },
-        "impulse_factor": {
-          "baseline": 5.0,
-          "critical": 20.0
+        "preprocessing": {
+            "wavelet_threshold_scale": 1.0,
+            "vmd_corr_threshold": 0.3,
+            "vmd_kurt_threshold": 3.0,
+            "cascade_threshold_scale": 0.5
         }
-      }
     },
-    "health_score": {
-      "kurtosis": {
-        "thresholds": [
-          5,
-          8,
-          12,
-          20
-        ],
-        "deductions": [
-          15,
-          22,
-          30,
-          40
-        ]
-      },
-      "crest": {
-        "thresholds": [
-          7,
-          10,
-          15
-        ],
-        "deductions": [
-          5,
-          10,
-          15
-        ]
-      },
-      "dynamic_baseline": {
-        "thresholds": [
-          4,
-          6
-        ],
-        "deductions": [
-          10,
-          18
-        ]
-      },
-      "trend_drift": {
-        "threshold": 8,
-        "max_ded": 8,
-        "slope": 1.5
-      }
-    },
-    "preprocessing": {
-      "wavelet_threshold_scale": 1.0,
-      "vmd_corr_threshold": 0.3,
-      "vmd_kurt_threshold": 3.0,
-      "cascade_threshold_scale": 0.5
-    }
-  },
-  "cw": {
-    "_description": "CW/Ottawa 变速轴承数据集 (ER-16K, 8192Hz, 36样本, 变速工况)",
-    "diagnosis": {
-      "bearing": {
-        "kurtosis_threshold": 5.0,
-        "crest_evidence_threshold": 10.0,
-        "envelope_hp_fc": 3000,
-        "envelope_hp_bw": 2000,
-        "kurtogram_min_kurt": 0.5,
-        "snr_warning": 2.5,
-        "snr_critical": 4.5,
-        "impulse_context_kurt": 5.0,
-        "impulse_context_crest": 10.0,
-        "variable_speed": true,
-        "sk_shift": 3.0,
-        "cyclostat_peak_warning": 0.3,
-        "cyclostat_snr_warning": 3.0,
-        "cyclostat_peak_critical": 0.5,
-        "cyclostat_snr_critical": 5.0
-      },
-      "ensemble": {
-        "bearing_confidence_threshold": 0.5,
-        "bearing_vote_fraction_weight": 0.45,
-        "ds_dominant_prob": 0.35,
-        "ds_uncertainty_max": 0.35,
-        "ds_conflict_high": 0.8,
-        "ds_conflict_penalty": 8
-      },
-      "calibration": {
-        "snr_threshold": 5.0,
-        "max_prob": 0.85,
-        "slope": 1.5
-      },
-      "planetary": {
-        "fault_snr_threshold": 3.0
-      },
-      "rule": {
-        "rms": {
-          "baseline": 2.0,
-          "critical": 15.0
+    "cw": {
+        "_description": "CW/Ottawa 变速轴承数据集 (ER-16K, 8192Hz, 36样本, 变速工况)",
+        "diagnosis": {
+            "bearing": {
+                "kurtosis_threshold": 5.0,
+                "crest_evidence_threshold": 10.0,
+                "envelope_hp_fc": 3000,
+                "envelope_hp_bw": 2000,
+                "kurtogram_min_kurt": 0.5,
+                "snr_warning": 2.5,
+                "snr_critical": 4.5,
+                "significant_snr": 3.5,
+                "dominant_ratio": 1.2,
+                "impulse_context_kurt": 5.0,
+                "impulse_context_crest": 10.0,
+                "variable_speed": true,
+                "sk_shift": 3.0,
+                "cyclostat_peak_warning": 0.3,
+                "cyclostat_snr_warning": 3.0,
+                "cyclostat_peak_critical": 0.5,
+                "cyclostat_snr_critical": 5.0
+            },
+            "ensemble": {
+                "bearing_confidence_threshold": 0.5,
+                "bearing_vote_fraction_weight": 0.45,
+                "ds_dominant_prob": 0.35,
+                "ds_uncertainty_max": 0.35,
+                "ds_conflict_high": 0.8,
+                "ds_conflict_penalty": 8
+            },
+            "calibration": {
+                "snr_threshold": 5.0,
+                "max_prob": 0.85,
+                "slope": 1.5
+            },
+            "planetary": {
+                "fault_snr_threshold": 3.0
+            },
+            "rule": {
+                "rms": {
+                    "baseline": 2.0,
+                    "critical": 15.0
+                },
+                "peak": {
+                    "baseline": 5.0,
+                    "critical": 40.0
+                },
+                "kurtosis": {
+                    "baseline": 3.0,
+                    "critical": 15.0
+                },
+                "crest_factor": {
+                    "baseline": 3.0,
+                    "critical": 12.0
+                },
+                "skewness": {
+                    "baseline": 0.3,
+                    "critical": 2.0
+                },
+                "impulse_factor": {
+                    "baseline": 5.0,
+                    "critical": 20.0
+                }
+            }
         },
-        "peak": {
-          "baseline": 5.0,
-          "critical": 40.0
+        "health_score": {
+            "kurtosis": {
+                "thresholds": [
+                    5,
+                    8,
+                    12,
+                    20
+                ],
+                "deductions": [
+                    12,
+                    18,
+                    26,
+                    36
+                ]
+            },
+            "crest": {
+                "thresholds": [
+                    7,
+                    10,
+                    15
+                ],
+                "deductions": [
+                    4,
+                    8,
+                    12
+                ]
+            },
+            "dynamic_baseline": {
+                "thresholds": [
+                    4,
+                    6
+                ],
+                "deductions": [
+                    8,
+                    15
+                ]
+            },
+            "trend_drift": {
+                "threshold": 8,
+                "max_ded": 8,
+                "slope": 1.5
+            }
         },
-        "kurtosis": {
-          "baseline": 3.0,
-          "critical": 15.0
-        },
-        "crest_factor": {
-          "baseline": 3.0,
-          "critical": 12.0
-        },
-        "skewness": {
-          "baseline": 0.3,
-          "critical": 2.0
-        },
-        "impulse_factor": {
-          "baseline": 5.0,
-          "critical": 20.0
+        "preprocessing": {
+            "wavelet_threshold_scale": 1.0,
+            "vmd_corr_threshold": 0.3,
+            "vmd_kurt_threshold": 3.0,
+            "cascade_threshold_scale": 0.5
         }
-      }
     },
-    "health_score": {
-      "kurtosis": {
-        "thresholds": [
-          5,
-          8,
-          12,
-          20
-        ],
-        "deductions": [
-          12,
-          18,
-          26,
-          36
-        ]
-      },
-      "crest": {
-        "thresholds": [
-          7,
-          10,
-          15
-        ],
-        "deductions": [
-          4,
-          8,
-          12
-        ]
-      },
-      "dynamic_baseline": {
-        "thresholds": [
-          4,
-          6
-        ],
-        "deductions": [
-          8,
-          15
-        ]
-      },
-      "trend_drift": {
-        "threshold": 8,
-        "max_ded": 8,
-        "slope": 1.5
-      }
-    },
-    "preprocessing": {
-      "wavelet_threshold_scale": 1.0,
-      "vmd_corr_threshold": 0.3,
-      "vmd_kurt_threshold": 3.0,
-      "cascade_threshold_scale": 0.5
-    }
-  },
-  "wtgearbox": {
-    "_description": "WTgearbox 行星齿轮箱数据集 (行星箱, 8192Hz, 160样本, 恒速)",
-    "diagnosis": {
-      "bearing": {
-        "kurtosis_threshold": 5.0,
-        "crest_evidence_threshold": 10.0,
-        "envelope_hp_fc": 3000,
-        "envelope_hp_bw": 2000,
-        "kurtogram_min_kurt": 0.5,
-        "snr_warning": 3.0,
-        "snr_critical": 5.0,
-        "impulse_context_kurt": 5.0,
-        "impulse_context_crest": 10.0,
-        "sk_shift": 3.0,
-        "cyclostat_peak_warning": 0.3,
-        "cyclostat_snr_warning": 3.0,
-        "cyclostat_peak_critical": 0.5,
-        "cyclostat_snr_critical": 5.0
-      },
-      "ensemble": {
-        "bearing_confidence_threshold": 0.55,
-        "gear_confidence_threshold": 0.55,
-        "ds_dominant_prob": 0.4,
-        "ds_uncertainty_max": 0.3,
-        "ds_conflict_high": 0.8,
-        "ds_conflict_penalty": 8
-      },
-      "gear": {
-        "gear_kurt_threshold": 6.0,
-        "gear_crest_threshold": 8.0,
-        "tsa_residual_kurt_threshold": 5.0,
-        "ser_warning": 8.0,
-        "ser_critical": 10.0,
-        "fm0_warning": 5.0,
-        "fm0_critical": 10.0,
-        "fm4_warning": 4.0,
-        "fm4_critical": 7.0,
-        "car_warning": 1.2,
-        "car_critical": 2.0,
-        "sideband_count_warning": 2,
-        "sideband_count_critical": 4
-      },
-      "planetary": {
-        "snr_threshold_warning": 3.0,
-        "snr_threshold_critical": 5.0,
-        "scoh_warning": 0.3,
-        "scoh_critical": 0.5,
-        "env_kurt_warning": 3.0,
-        "env_kurt_critical": 5.0,
-        "fault_snr_threshold": 3.0
-      },
-      "calibration": {
-        "snr_threshold": 5.0,
-        "max_prob": 0.85,
-        "slope": 1.5
-      },
-      "rule": {
-        "rms": {
-          "baseline": 2.0,
-          "critical": 15.0
+    "wtgearbox": {
+        "_description": "WTgearbox 行星齿轮箱数据集 (行星箱, 8192Hz, 160样本, 恒速)",
+        "diagnosis": {
+            "bearing": {
+                "kurtosis_threshold": 5.0,
+                "crest_evidence_threshold": 10.0,
+                "envelope_hp_fc": 3000,
+                "envelope_hp_bw": 2000,
+                "kurtogram_min_kurt": 0.5,
+                "snr_warning": 3.0,
+                "snr_critical": 5.0,
+                "impulse_context_kurt": 5.0,
+                "impulse_context_crest": 10.0,
+                "sk_shift": 3.0,
+                "cyclostat_peak_warning": 0.3,
+                "cyclostat_snr_warning": 3.0,
+                "cyclostat_peak_critical": 0.5,
+                "cyclostat_snr_critical": 5.0
+            },
+            "ensemble": {
+                "bearing_confidence_threshold": 0.55,
+                "gear_confidence_threshold": 0.55,
+                "ds_dominant_prob": 0.4,
+                "ds_uncertainty_max": 0.3,
+                "ds_conflict_high": 0.8,
+                "ds_conflict_penalty": 8
+            },
+            "gear": {
+                "gear_kurt_threshold": 6.0,
+                "gear_crest_threshold": 8.0,
+                "tsa_residual_kurt_threshold": 5.0,
+                "ser_warning": 8.0,
+                "ser_critical": 10.0,
+                "fm0_warning": 5.0,
+                "fm0_critical": 10.0,
+                "fm4_warning": 4.0,
+                "fm4_critical": 7.0,
+                "car_warning": 1.2,
+                "car_critical": 2.0,
+                "sideband_count_warning": 2,
+                "sideband_count_critical": 4
+            },
+            "planetary": {
+                "snr_threshold_warning": 3.0,
+                "snr_threshold_critical": 5.0,
+                "scoh_warning": 0.3,
+                "scoh_critical": 0.5,
+                "env_kurt_warning": 3.0,
+                "env_kurt_critical": 5.0,
+                "fault_snr_threshold": 3.0
+            },
+            "calibration": {
+                "snr_threshold": 5.0,
+                "max_prob": 0.85,
+                "slope": 1.5
+            },
+            "rule": {
+                "rms": {
+                    "baseline": 2.0,
+                    "critical": 15.0
+                },
+                "peak": {
+                    "baseline": 5.0,
+                    "critical": 40.0
+                },
+                "kurtosis": {
+                    "baseline": 3.0,
+                    "critical": 15.0
+                },
+                "crest_factor": {
+                    "baseline": 3.0,
+                    "critical": 12.0
+                },
+                "skewness": {
+                    "baseline": 0.3,
+                    "critical": 2.0
+                },
+                "impulse_factor": {
+                    "baseline": 5.0,
+                    "critical": 20.0
+                }
+            }
         },
-        "peak": {
-          "baseline": 5.0,
-          "critical": 40.0
+        "health_score": {
+            "kurtosis": {
+                "thresholds": [
+                    10,
+                    12,
+                    20
+                ],
+                "deductions": [
+                    15,
+                    25,
+                    40
+                ]
+            },
+            "crest": {
+                "thresholds": [
+                    12,
+                    15
+                ],
+                "deductions": [
+                    10,
+                    15
+                ]
+            },
+            "dynamic_baseline": {
+                "thresholds": [
+                    4,
+                    6
+                ],
+                "deductions": [
+                    10,
+                    18
+                ]
+            },
+            "trend_drift": {
+                "threshold": 8,
+                "max_ded": 8,
+                "slope": 1.5
+            },
+            "tsa_residual_kurt": {
+                "thresholds": [
+                    3,
+                    5
+                ],
+                "deductions": [
+                    8,
+                    15
+                ]
+            },
+            "na4_trend": {
+                "thresholds": [
+                    3,
+                    5
+                ],
+                "deductions": [
+                    6,
+                    10
+                ]
+            },
+            "scoh_evidence": {
+                "threshold": 0.3,
+                "max_ded": 5.0,
+                "slope": 4.0
+            }
         },
-        "kurtosis": {
-          "baseline": 3.0,
-          "critical": 15.0
-        },
-        "crest_factor": {
-          "baseline": 3.0,
-          "critical": 12.0
-        },
-        "skewness": {
-          "baseline": 0.3,
-          "critical": 2.0
-        },
-        "impulse_factor": {
-          "baseline": 5.0,
-          "critical": 20.0
+        "preprocessing": {
+            "wavelet_threshold_scale": 1.0,
+            "vmd_corr_threshold": 0.3,
+            "vmd_kurt_threshold": 3.0,
+            "cascade_threshold_scale": 0.5
         }
-      }
     },
-    "health_score": {
-      "kurtosis": {
-        "thresholds": [
-          10,
-          12,
-          20
-        ],
-        "deductions": [
-          15,
-          25,
-          40
-        ]
-      },
-      "crest": {
-        "thresholds": [
-          12,
-          15
-        ],
-        "deductions": [
-          10,
-          15
-        ]
-      },
-      "dynamic_baseline": {
-        "thresholds": [
-          4,
-          6
-        ],
-        "deductions": [
-          10,
-          18
-        ]
-      },
-      "trend_drift": {
-        "threshold": 8,
-        "max_ded": 8,
-        "slope": 1.5
-      },
-      "tsa_residual_kurt": {
-        "thresholds": [
-          3,
-          5
-        ],
-        "deductions": [
-          8,
-          15
-        ]
-      },
-      "na4_trend": {
-        "thresholds": [
-          3,
-          5
-        ],
-        "deductions": [
-          6,
-          10
-        ]
-      },
-      "scoh_evidence": {
-        "threshold": 0.3,
-        "max_ded": 5.0,
-        "slope": 4.0
-      }
-    },
-    "preprocessing": {
-      "wavelet_threshold_scale": 1.0,
-      "vmd_corr_threshold": 0.3,
-      "vmd_kurt_threshold": 3.0,
-      "cascade_threshold_scale": 0.5
-    }
-  },
-  "default": {
-    "_description": "通用回退配置（未知数据集时使用，与 thresholds.py 一致）",
-    "diagnosis": {
-      "bearing": {
-        "kurtosis_threshold": 5.0,
-        "crest_evidence_threshold": 10.0,
-        "envelope_hp_fc": 3000,
-        "envelope_hp_bw": 2000,
-        "kurtogram_min_kurt": 0.5,
-        "snr_warning": 3.0,
-        "snr_critical": 5.0,
-        "impulse_context_kurt": 5.0,
-        "impulse_context_crest": 10.0,
-        "sk_shift": 3.0,
-        "cyclostat_peak_warning": 0.3,
-        "cyclostat_snr_warning": 3.0,
-        "cyclostat_peak_critical": 0.5,
-        "cyclostat_snr_critical": 5.0
-      },
-      "ensemble": {
-        "bearing_confidence_threshold": 0.55,
-        "ds_dominant_prob": 0.4,
-        "ds_uncertainty_max": 0.3,
-        "ds_conflict_high": 0.8,
-        "ds_conflict_penalty": 8
-      },
-      "calibration": {
-        "snr_threshold": 5.0,
-        "max_prob": 0.85,
-        "slope": 1.5
-      },
-      "planetary": {
-        "fault_snr_threshold": 3.0
-      },
-      "rule": {
-        "rms": {
-          "baseline": 2.0,
-          "critical": 15.0
+    "default": {
+        "_description": "通用回退配置（未知数据集时使用，与 thresholds.py 一致）",
+        "diagnosis": {
+            "bearing": {
+                "kurtosis_threshold": 5.0,
+                "crest_evidence_threshold": 10.0,
+                "envelope_hp_fc": 3000,
+                "envelope_hp_bw": 2000,
+                "kurtogram_min_kurt": 0.5,
+                "snr_warning": 3.0,
+                "snr_critical": 5.0,
+                "impulse_context_kurt": 5.0,
+                "impulse_context_crest": 10.0,
+                "sk_shift": 3.0,
+                "cyclostat_peak_warning": 0.3,
+                "cyclostat_snr_warning": 3.0,
+                "cyclostat_peak_critical": 0.5,
+                "cyclostat_snr_critical": 5.0
+            },
+            "ensemble": {
+                "bearing_confidence_threshold": 0.55,
+                "ds_dominant_prob": 0.4,
+                "ds_uncertainty_max": 0.3,
+                "ds_conflict_high": 0.8,
+                "ds_conflict_penalty": 8
+            },
+            "calibration": {
+                "snr_threshold": 5.0,
+                "max_prob": 0.85,
+                "slope": 1.5
+            },
+            "planetary": {
+                "fault_snr_threshold": 3.0
+            },
+            "rule": {
+                "rms": {
+                    "baseline": 2.0,
+                    "critical": 15.0
+                },
+                "peak": {
+                    "baseline": 5.0,
+                    "critical": 40.0
+                },
+                "kurtosis": {
+                    "baseline": 3.0,
+                    "critical": 15.0
+                },
+                "crest_factor": {
+                    "baseline": 3.0,
+                    "critical": 12.0
+                },
+                "skewness": {
+                    "baseline": 0.3,
+                    "critical": 2.0
+                },
+                "impulse_factor": {
+                    "baseline": 5.0,
+                    "critical": 20.0
+                }
+            }
         },
-        "peak": {
-          "baseline": 5.0,
-          "critical": 40.0
+        "health_score": {
+            "kurtosis": {
+                "thresholds": [
+                    5,
+                    8,
+                    12,
+                    20
+                ],
+                "deductions": [
+                    15,
+                    22,
+                    30,
+                    40
+                ]
+            },
+            "crest": {
+                "thresholds": [
+                    7,
+                    10,
+                    15
+                ],
+                "deductions": [
+                    5,
+                    10,
+                    15
+                ]
+            },
+            "dynamic_baseline": {
+                "thresholds": [
+                    4,
+                    6
+                ],
+                "deductions": [
+                    10,
+                    18
+                ]
+            }
         },
-        "kurtosis": {
-          "baseline": 3.0,
-          "critical": 15.0
-        },
-        "crest_factor": {
-          "baseline": 3.0,
-          "critical": 12.0
-        },
-        "skewness": {
-          "baseline": 0.3,
-          "critical": 2.0
-        },
-        "impulse_factor": {
-          "baseline": 5.0,
-          "critical": 20.0
+        "preprocessing": {
+            "wavelet_threshold_scale": 1.0,
+            "vmd_corr_threshold": 0.3,
+            "vmd_kurt_threshold": 3.0,
+            "cascade_threshold_scale": 0.5
         }
-      }
-    },
-    "health_score": {
-      "kurtosis": {
-        "thresholds": [
-          5,
-          8,
-          12,
-          20
-        ],
-        "deductions": [
-          15,
-          22,
-          30,
-          40
-        ]
-      },
-      "crest": {
-        "thresholds": [
-          7,
-          10,
-          15
-        ],
-        "deductions": [
-          5,
-          10,
-          15
-        ]
-      },
-      "dynamic_baseline": {
-        "thresholds": [
-          4,
-          6
-        ],
-        "deductions": [
-          10,
-          18
-        ]
-      }
-    },
-    "preprocessing": {
-      "wavelet_threshold_scale": 1.0,
-      "vmd_corr_threshold": 0.3,
-      "vmd_kurt_threshold": 3.0,
-      "cascade_threshold_scale": 0.5
     }
-  }
 }

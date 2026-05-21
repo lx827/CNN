@@ -1,6 +1,5 @@
 # `engine.py` — 诊断引擎调度器
 
-
 > **算法原理**: 详见 [小波与模态分解算法文档](../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../ALGORITHMS.md)。
 **对应源码**：`cloud/app/services/diagnosis/engine.py`
 
@@ -74,8 +73,13 @@ def __init__(
     denoise_method = DenoiseMethod.NONE,
     bearing_params: Optional[Dict] = None,
     gear_teeth: Optional[Dict] = None,
+    dataset: str = "default",
 )
 ```
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| dataset | `str` | 数据集标识（`"hustbear"`/`"cw"`/`"wtgearbox"`/`"default"`），用于加载数据集专属超参数（阈值等），回退到 `dataset_profiles.json` → 代码默认值 |
 
 #### `preprocess`
 
@@ -226,6 +230,7 @@ def _evaluate_bearing_faults(
     env_amp: List[float],
     rot_freq: float,
     rot_freq_std: float = 0.0,
+    dataset: str = "default",
 ) -> Dict[str, Any]
 ```
 
@@ -236,8 +241,12 @@ def _evaluate_bearing_faults(
 | env_amp | `List[float]` | 包络谱幅值列表 |
 | rot_freq | `float` | 转频（Hz） |
 | rot_freq_std | `float` | 转频标准差（Hz），用于变速工况下放宽容差 |
+| dataset | `str` | 数据集标识，用于加载专属超参数（如 `significant_snr`、`dominant_ratio`），不同数据集的噪声环境和转速特性需独立阈值 |
 
 - **返回值**：`Dict[str, Any]` — 故障指示器字典
   - 有参数时：包含 `BPFO`、`BPFI`、`BSF` 的物理匹配结果，以及以 `_stat` 后缀的统计路径结果
   - 无参数时：仅返回统计路径结果
-- **说明**：轴承故障评估双路并行入口。**物理参数路径**：根据轴承几何公式计算理论特征频率，在包络谱中搜索匹配峰值及谐波，BPFI 增加边频带验证；**统计路径**：始终计算作为兜底和佐证。两路结果独立并存，通过 `_stat` 后缀区分。转频不确定性（`rot_freq_std`）越大，搜索容差越宽，避免变速工况漏检
+  - 每个物理指标包含 `significant`（峰值可检测，SNR>阈值）和 `dominant`（主导故障，最高SNR且主导比达标）两个独立字段
+- **说明**：轴承故障评估双路并行入口。`significant` 表示故障频率峰可检测（SNR 超数据集专属阈值），用
+于检测"有无故障"；`dominant` 表示该故障是主导故障（最高 SNR 且主导比达标），用于故障类型判别。
+两路结果独立并存，通过 `_stat` 后缀区分。转频不确定性（`rot_freq_std`）越大，搜索容差越宽，避免变速工况漏检

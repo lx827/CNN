@@ -353,6 +353,7 @@ def run_research_ensemble(
     rot_freq: Optional[float] = None,
     profile: str = "runtime",
     max_seconds: float = 5.0,
+    dataset: str = "default",
 ) -> Dict[str, Any]:
     arr = np.array(signal, dtype=np.float64)
     if max_seconds and max_seconds > 0:
@@ -388,6 +389,7 @@ def run_research_ensemble(
             denoise_method=_safe_denoise(denoise),
             bearing_params=bearing_params,
             gear_teeth=gear_teeth,
+            dataset=dataset,
         )
         proc = base.preprocess(arr)
         time_features = compute_time_features(proc)
@@ -414,6 +416,7 @@ def run_research_ensemble(
                     denoise_method=_safe_denoise(denoise),
                     bearing_params=bearing_params,
                     gear_teeth=gear_teeth,
+                    dataset=dataset,
                 )
                 result = engine.analyze_bearing(proc, fs, rf, preprocess=False)
                 result["denoise"] = denoise
@@ -437,6 +440,7 @@ def run_research_ensemble(
                     denoise_method=_safe_denoise(denoise),
                     bearing_params=bearing_params,
                     gear_teeth=gear_teeth,
+                    dataset=dataset,
                 )
                 # exhaustive profile 启用行星箱慢方法（VMD/SC/SCoh/MSB）
                 if profile == "exhaustive":

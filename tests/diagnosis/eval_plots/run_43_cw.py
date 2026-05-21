@@ -51,7 +51,7 @@ def run_binary():
         print(f"  [{name_cn}] {acc:.2f}% ({correct}/{total_t}) {avg_ms}ms")
         results["methods"][name_cn] = {"accuracy": round(acc, 2), "correct": correct, "total": total_t, "avg_time_ms": avg_ms}
 
-    # Ensemble
+    # Ensemble (dataset="cw" 启用变速低阈值)
     t0 = time.perf_counter()
     correct, total_t, times = 0, 0, []
     for fpath, is_healthy, _label in files:
@@ -59,7 +59,7 @@ def run_binary():
         if sig is None: continue
         try:
             t1 = time.perf_counter()
-            res = run_research_ensemble(sig, FS, bearing_params=BP, max_seconds=MAX_S)
+            res = run_research_ensemble(sig, FS, bearing_params=BP, max_seconds=MAX_S, dataset="cw")
             times.append((time.perf_counter() - t1) * 1000)
             if ensemble_detect(res, is_healthy): correct += 1
             total_t += 1
@@ -83,7 +83,7 @@ def run_multiclass():
         if sig is None: continue
         try:
             t1 = time.perf_counter()
-            res = run_research_ensemble(sig, FS, bearing_params=BP, max_seconds=MAX_S)
+            res = run_research_ensemble(sig, FS, bearing_params=BP, max_seconds=MAX_S, dataset="cw")
             times.append((time.perf_counter() - t1) * 1000)
             # CW 变速数据: significant 标志过严，按 SNR 直接判定
             best_type = None; best_snr = 0

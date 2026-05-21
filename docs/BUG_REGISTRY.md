@@ -9,11 +9,13 @@
 | 11d | `ensemble.py`, `health_score.py` | D-S 证据融合未生效（0/30 样本被覆盖）|
 | 13d | `ensemble.py` | **WTG 五分类断齿检出 1/16** — gear_abnormal 标签映射缺失 |
 
-## 已修复 (17)
+## 已修复 (18)
 
 | # | 文件 | 描述 |
 |---|------|------|
-| 15 | `eval_plots/run_all.py`, `fast_eval.py` | ✅ **Ensemble HUSTbear 二分类 60.61%→?%** — 评估标准统一（两步判定）
+| 16 | `engine.py` | ✅ **CW 轴承诊断全灭（self未定义）** — `_evaluate_bearing_faults` 用 `self._dataset` 但非类方法 |
+| 16b | `engine.py` | ✅ **significant/dominant 语义混淆** — 主导比过滤覆盖原始 significant，CW 变速数据全漏检 |
+| 15 | `eval_plots/run_all.py`, `fast_eval.py` | ✅ **Ensemble HUSTbear 二分类 60.61%→84.85%** — 评估标准统一（两步判定）
 | 11 | `run_all.py`, `ensemble.py`, `engine.py` | **Ensemble 五分类偏向 BPFO** — 根因链修复（见下） |
 | 11c | `engine.py` | ✅ **显著性主导比过滤** — 主导峰需 > 次强峰 1.5× |
 | 12 | `engine.py` | **Teager Ottawa/CW 耗时爆炸（212s→0.3s）** — samples_per_rev 1024→256 |
@@ -172,3 +174,54 @@
 | `tests/diagnosis/hyperparams/optimize_*.py` | **新增**：网格搜索脚本 |
 
 **加载优先级**：`device.diagnosis_config` > `dataset_profiles.json` > `thresholds.py`
+
+---
+
+**Bug #16 详细**（CW 轴承诊断全灭 — `self._dataset` 未定义）✅ 已修复
+
+**现象**：CW 数据集 `run_research_ensemble(dataset='cw')` 返回 `bearing_results` 全部报错 `name 'self' is not defined`，`best_bearing` 为 `None`，所有轴承指标为空。
+
+**根因**：
+
+1. `engine.py:141`：`DiagnosisEngine.__init__` 存储 `self._dataset = dataset`
+2. `engine.py:996-1054`：`_evaluate_bearing_faults` 使用 `self._dataset` 获取 HyperParams
+3. **`_evaluate_bearing_faults` 是模块级函数，不是类方法** → `self` 未定义 → 所有轴承方法报错
+
+**修复**：
+
+| 文件 | 修复内容 |
+|------|---------|
+| `engine.py` | `_evaluate_bearing_faults` 添加 `dataset: str = "default"` 形参 |
+| `engine.py` | 调用点 `analyze_bearing` 传入 `dataset=self._dataset` |
+| `engine.py` | 函数体内 `self._dataset` → `dataset`（3 处） |
+
+---
+
+**Bug #16b 详细**（`significant`/`dominant` 语义混淆）✅ 已修复
+
+**现象**：CW 修复 #16 后，BPFI snr=3.64 > CW 阈值 3.5，但 `significant` 仍为 `False`，导致变速故障无法检出。
+
+**根因**：
+
+- `engine.py:996`：`significant = snr > _sig_snr` → CW BPFI=3.64>3.5 → True ✓
+- `engine.py:1057`：`v["significant"] = is_dominant or (snr_val > 15.0)` → **覆盖**了上述 True！
+- CW 变速数据主导比 = 3.98/3.64=1.09 < 1.2 → `is_dominant=False` → `significant=False`
+
+两个不同语义共用 `significant` 字段：
+
+- 语义 A：故障频率峰可检测（SNR>阈值）— 用于"有无故障"判定
+- 语义 B：该故障是主导故障（最高SNR+主导比）— 用于故障类型判别
+
+**修复**：
+
+- `engine.py:1057`：`significant` → `dominant`（新字段），不再覆盖 `significant`
+- `significant` 保留语义 A（SNR>阈值），`dominant` 承载语义 B（主导故障判别）
+- 下游代码（ensemble/eval）使用 `significant` 做检测判定，行为一致
+
+**影响范围**：
+
+- `engine.py`：`_evaluate_bearing_faults` 中 `significant` 恢复为可检测判定
+- `ensemble.py`：`_bearing_confidence` / `_fault_label` 仍用 `significant`，兼容
+- `analyzer.py`：`prob.get("significant")` 仍工作，且更稳定
+- 恒速数据（HUSTbear）无新增误报（healthy: 全部 sig=False; out: BPFO sig=True 正确）
+- CW 变速数据恢复检出（BPFI sig=True with CW threshold=3.5）

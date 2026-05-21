@@ -16,6 +16,7 @@ from .signal_utils import (
     rms,
     crest_factor,
 )
+from .hyperparams import HyperParams
 from .order_tracking import (
     _compute_order_spectrum_multi_frame,
     _compute_order_spectrum_varying_speed,
@@ -128,6 +129,7 @@ class DiagnosisEngine:
         denoise_method = DenoiseMethod.NONE,
         bearing_params: Optional[Dict] = None,
         gear_teeth: Optional[Dict] = None,
+        dataset: str = "default",
     ):
         # 兼容字符串传入
         self.strategy = strategy if isinstance(strategy, DiagnosisStrategy) else DiagnosisStrategy(strategy)
@@ -136,6 +138,7 @@ class DiagnosisEngine:
         self.denoise_method = denoise_method if isinstance(denoise_method, DenoiseMethod) else DenoiseMethod(denoise_method)
         self.bearing_params = bearing_params or {}
         self.gear_teeth = gear_teeth or {}
+        self._dataset = dataset
 
     def preprocess(self, signal: np.ndarray) -> np.ndarray:
         """去直流 + 线性去趋势 + 可选去噪（所有诊断路径统一入口）"""
@@ -314,6 +317,7 @@ class DiagnosisEngine:
             result.get("envelope_amp", []),
             rot_freq,
             rot_freq_std=rot_std,
+            dataset=self._dataset,
         )
 
         return {
@@ -901,6 +905,7 @@ def _evaluate_bearing_faults(
     env_amp: List[float],
     rot_freq: float,
     rot_freq_std: float = 0.0,
+    dataset: str = "default",
 ) -> Dict[str, Any]:
     """
     评估轴承故障指示器 — 双路并行：
@@ -986,9 +991,9 @@ def _evaluate_bearing_faults(
                 peak_amp = peak["amp"] if peak else 0.0
                 snr = _compute_peak_snr(peak_amp, amp_arr) if peak else 0.0
 
-                # 频率路径判定：仅用于故障类型标注，不用于"是否故障"判断
-                # 健康轴承也有低 SNR 的频率峰值（随机波动），所以阈值不能太低
-                significant = snr > 4.5
+                # 频率路径判定：按数据集独立调优
+                _sig_snr = HyperParams(dataset=dataset).get_float("diagnosis.bearing.significant_snr", 4.5)
+                significant = snr > _sig_snr
 
                 # BPFI 内圈专项：边频带验证（至少 2 个边带 SNR>3）
                 sideband_snrs = []
@@ -1044,10 +1049,12 @@ def _evaluate_bearing_faults(
             for k, v in param_indicators.items():
                 if k in ("BPFO", "BPFI", "BSF") and isinstance(v, dict):
                     snr_val = v.get("snr", 0.0)
-                    # 主导峰需同时满足：>4.5 基础阈值 + 是最高峰 + 比次强峰高 1.5×
-                    # 超高 SNR（>15）单独放行，不要求主导比
-                    is_dominant = snr_val > 4.5 and snr_val == max_snr and dominant_ratio > 1.5
-                    v["significant"] = is_dominant or (snr_val > 15.0)
+                    _dom_snr = HyperParams(dataset=dataset).get_float("diagnosis.bearing.significant_snr", 4.5)
+                    _dom_ratio = HyperParams(dataset=dataset).get_float("diagnosis.bearing.dominant_ratio", 1.5)
+                    is_dominant = snr_val > _dom_snr and snr_val == max_snr and dominant_ratio > _dom_ratio
+                    # significant = 峰值可检测（SNR>阈值），保留原始判定不被覆盖
+                    # dominant = 该故障是主导故障（最高 SNR 且主导比达标）
+                    v["dominant"] = is_dominant or (snr_val > 15.0)
 
         # 合并：物理参数路径 + 统计路径（以 _stat 后缀区分）
         # 有物理参数时，若 BPFO/BPFI/BSF 全部未检出，统计指标不独立报警
