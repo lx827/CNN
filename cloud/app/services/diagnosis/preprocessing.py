@@ -259,10 +259,12 @@ def cascade_wavelet_vmd(
     )
 
     # Step 2-4: VMD 分解 + 筛选重构
+    # 传入原始信号作为 reference_signal，避免 IMF 与"已失真小波输出"的相关性被低估（Bug #14）
     vmd_result = vmd_denoise(
         wavelet_result, K=vmd_K, alpha=vmd_alpha,
         corr_threshold=vmd_corr_threshold,
-        kurt_threshold=vmd_kurt_threshold
+        kurt_threshold=vmd_kurt_threshold,
+        reference_signal=arr,
     )
 
     # 计算指标

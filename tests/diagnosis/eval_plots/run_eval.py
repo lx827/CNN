@@ -396,15 +396,15 @@ def run_expA2_bearing_multiclass():
 
 
 def _map_bearing_label(fl):
-    """映射 ensemble fault_label → 标准中文类别"""
+    """映射 ensemble fault_label → 标准中文类别（精确匹配，避免子串误判）"""
     fl_lower = str(fl).lower()
-    if "bpfo" in fl_lower or "outer" in fl_lower:
+    if fl_lower == "bearing_bpfo" or "outer" in fl_lower:
         return "外圈"
-    if "bpfi" in fl_lower or "inner" in fl_lower:
+    if fl_lower == "bearing_bpfi" or "inner" in fl_lower:
         return "内圈"
-    if "bsf" in fl_lower or "ball" in fl_lower:
+    if fl_lower == "bearing_bsf" or "ball" in fl_lower:
         return "球故障"
-    if "compound" in fl_lower or fl_lower.startswith("bearing_bpfo_bpfi"):
+    if "compound" in fl_lower or fl_lower == "bearing_bpfo_bpfi" or fl_lower == "bearing_bpfo_bsf" or fl_lower == "bearing_bpfi_bsf":
         return "复合"
     if "healthy" in fl_lower or "normal" in fl_lower or "unknown" in fl_lower:
         return "健康"

@@ -205,25 +205,30 @@ def vmd_denoise(
     alpha: float = 2000,
     corr_threshold: float = 0.3,
     kurt_threshold: float = 3.0,
+    reference_signal: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
     VMD 降噪：分解后筛选有效 IMF 重构
 
     筛选规则：
-    - 与原始信号的互相关系数 > corr_threshold
+    - 与参考信号的互相关系数 > corr_threshold
     - 峭度 > kurt_threshold（保留冲击成分）
 
     Args:
-        signal: 输入信号
+        signal: 输入信号（VMD 分解对象）
         K: 模态数
         alpha: 惩罚因子
         corr_threshold: 最小互相关系数
         kurt_threshold: 最小峭度（fisher=False，正态=3）
+        reference_signal: 相关性计算基准信号。级联去噪时传入原始含噪信号，
+                          避免 IMF 与"已失真中间信号"的相关性被低估。
 
     Returns:
         降噪后的信号（长度与输入信号原始长度一致）
     """
     arr = np.array(signal, dtype=np.float64)
+    # 相关性计算基准：级联场景下使用原始信号，单独使用时默认用输入信号
+    ref = np.array(reference_signal, dtype=np.float64) if reference_signal is not None else arr
     N = len(arr)
 
     u, _, _ = vmd_decompose(arr, K=K, alpha=alpha)
@@ -232,12 +237,12 @@ def vmd_denoise(
     selected = []
     for i in range(u.shape[0]):
         imf = u[i, :]
-        # 去均值后计算相关性
+        # 去均值后计算相关性（以 ref 为基准）
         imf_z = imf - np.mean(imf)
-        arr_z = arr[: len(imf)] - np.mean(arr[: len(imf)])
+        ref_z = ref[: len(imf)] - np.mean(ref[: len(imf)])
         corr = (
-            np.abs(np.corrcoef(imf_z, arr_z)[0, 1])
-            if np.std(imf_z) > 0 and np.std(arr_z) > 0
+            np.abs(np.corrcoef(imf_z, ref_z)[0, 1])
+            if np.std(imf_z) > 0 and np.std(ref_z) > 0
             else 0
         )
 
@@ -252,13 +257,13 @@ def vmd_denoise(
             selected.append(imf)
 
     if not selected:
-        # 如果没有选中任何 IMF，保留相关性最高的一个
+        # 如果没有选中任何 IMF，保留与 ref 相关性最高的一个
         best_idx = 0
         best_corr = 0
         for i in range(u.shape[0]):
             imf = u[i, :]
-            arr_seg = arr[: len(imf)]
-            corr = np.abs(np.corrcoef(imf - np.mean(imf), arr_seg - np.mean(arr_seg))[0, 1])
+            ref_seg = ref[: len(imf)]
+            corr = np.abs(np.corrcoef(imf - np.mean(imf), ref_seg - np.mean(ref_seg))[0, 1])
             if corr > best_corr:
                 best_corr = corr
                 best_idx = i

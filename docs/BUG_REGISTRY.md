@@ -2,12 +2,14 @@
 
 > 最后更新: 2026-05-21 | 详见 AGENTS.md §14
 
-## 未修复 (2)
+## 未修复 (4)
 
 | # | 文件 | 描述 |
 |---|------|------|
 | 11c | `engine.py` | 显著性判定缺乏故障类型间区分机制（主导峰/谐波族/相对排序）|
 | 11d | `ensemble.py`, `health_score.py` | D-S 证据融合未生效（0/30 样本被覆盖）|
+| 13 | `ensemble.py`, 评估脚本 | **WTgearbox 五分类 30% — 几乎所有故障→"健康"** — 见下 |
+| 14 | `preprocessing.py`, `vmd_denoise.py` | **小波+VMD 级联 ΔSNR 仅 +0.19dB，远差于 VMD 单独 +3.18dB** — 见下 |
 
 ## 已修复 (13)
 
@@ -86,3 +88,59 @@
     - 外圈：`bearing_bsf`(4), `bearing_bpfo`(2) ⚠️ 外圈误判为球故障较多
     - 复合：`bearing_bpfo`(4), `bearing_bpfi`(2)
 - 结论：层级1+2+3修复消除了"全部预测外圈"的假象和多参数误检，但**外圈→球故障**、**球故障→外圈**的交叉误判仍较严重，需层级4（谐波族/主导峰机制）进一步改善
+
+**Bug #13 详细**（WTgearbox 五分类 30% — 几乎所有故障→"健康"）
+
+**现象**：2026-05-21 评估，WTgearbox 五分类 Accuracy=30%，断齿/缺齿/磨损全部预测为"健康"，仅裂纹部分检出（3/6）。
+
+**根因链**：
+
+1. **评估脚本未传 `bearing_params`**
+   - `run_research_ensemble(sig, FS, gear_teeth=GEAR_PARAMS)` — `bearing_params=None`
+   - `ensemble.py:376`：`skip_bearing = True`，轴承诊断全跳过，`bearing_score=0.0`
+
+2. **`_gear_confidence` 行星箱 `impulse_context` 阈值过高**
+   - `ensemble.py:199-201`：`GEAR_KURT_THRESHOLD=10.0`, `GEAR_CREST_THRESHOLD=10.0`
+   - `impulse_context = kurt>10 or crest>10 or kurt<5.5`
+   - WTG 故障样本 kurt 多在 5.5~10.0、crest<10 → `impulse_context=False` → `confidence=0.0`
+
+3. **`_fault_label` 回退链无兜底**
+   - `gear_score=0.0`, `bearing_score=0.0` → 两者相等，不进入 gear 分支
+   - 回退到 bearing 路径 → `best_bearing={}` → 无 indicators → 无 hits
+   - 最终返回 `"unknown"`
+
+4. **评估标签映射**：`"unknown"` → `"健康"`
+
+**裂纹能部分检出的原因**：裂纹样本 `pfek<3.0` 触发 warning，gear 指标活跃 → 绕过了 `impulse_context` 门控。
+
+| 层级 | 文件 | 问题 |
+|------|------|------|
+| 1 | 评估脚本 | `bearing_params` 未传入 → 轴承诊断全跳过 |
+| 2 | `ensemble.py:199` | 行星箱 `impulse_context` kurt>10 过高 |
+| 3 | `ensemble.py:321` | `gear_score=0` 时无兜底，返回 `"unknown"` |
+| 4 | 评估映射 | `"unknown"` → `"健康"` |
+
+**Bug #14 详细**（小波+VMD 级联去噪效果反常）
+
+**现象**：`EVALUATION_REPORT_20260521.md §4.7` 去噪效果评估中，VMD 单独 ΔSNR=+3.18dB，小波+VMD 级联仅 +0.19dB（差 ~15 倍）。
+
+**根因链**：
+
+1. **级联时 VMD 的 IMF 筛选基准错误（直接原因）**
+   - `vmd_denoise.py:236-242`：IMF 相关性计算以 **VMD 输入信号**为参考
+   - 级联时 VMD 输入 = 小波去噪后信号（已失真），而非原始含噪信号
+   - 小波去噪后的信号能量已衰减，IMF 与这个"失真基准"的相关性被低估 → 有用 IMF 被错误丢弃
+
+2. **"串联失真"叠加（设计原因）**
+   - `preprocessing.py:255-266`：`cascade_wavelet_vmd` 先小波、后 VMD
+   - 小波 `db8` 软阈值永久移除部分频带能量（含噪声 + 边缘有用信号）
+   - VMD 再对"已失真信号"二次处理，两次非线性失真叠加
+
+3. **单独 VMD 效果好的原因（对比）**
+   - 单独 VMD 输入 = 原始含噪信号，噪声能量帮助提高了 IMF 整体相关性
+   - 更多 IMF 通过 `corr>0.3` 筛选，重构信号结构更完整
+
+**修复方向**：
+- 方案A：级联时 VMD 筛选改以**原始含噪信号**为参考计算相关性
+- 方案B：降低级联 VMD 阈值（`corr_threshold` 0.3→0.15）
+- 方案C：改为 **VMD + 小波后处理**（逆序级联）
