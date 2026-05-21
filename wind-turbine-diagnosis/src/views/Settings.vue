@@ -368,6 +368,81 @@
       </el-form>
     </el-card>
 
+    <!-- 诊断超参数配置 -->
+    <el-card style="margin-top: 20px">
+      <template #header>
+        <div class="card-header">
+          <span>诊断超参数配置</span>
+          <el-text type="info" size="small">按数据集独立调优，保存后实时生效</el-text>
+        </div>
+      </template>
+
+      <el-form label-width="180px" style="max-width: 700px">
+        <el-alert type="info" :closable="false" style="margin-bottom: 16px">
+          不同数据集的振动特性不同，建议选择对应数据集后微调关键阈值。默认值已根据 {{ hyperDataset }} 数据集优化。
+        </el-alert>
+
+        <el-form-item label="数据集类型">
+          <el-select v-model="hyperDataset" style="width: 200px" @change="onHyperDatasetChange">
+            <el-option label="HUSTbear (恒速轴承)" value="hustbear" />
+            <el-option label="CW/Ottawa (变速轴承)" value="cw" />
+            <el-option label="WTgearbox (行星齿轮箱)" value="wtgearbox" />
+            <el-option label="自定义" value="custom" />
+          </el-select>
+        </el-form-item>
+
+        <el-divider content-position="left">时域证据门控</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="峭度门控">
+              <el-input-number v-model="hyperParams.bearing_kurtosis_threshold" :min="3" :max="10" :step="0.5" controls-position="right" style="width: 160px" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="峰值因子门控">
+              <el-input-number v-model="hyperParams.bearing_crest_threshold" :min="6" :max="15" :step="0.5" controls-position="right" style="width: 160px" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">轴承诊断阈值</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="SNR 警告">
+              <el-input-number v-model="hyperParams.snr_warning" :min="1.5" :max="6" :step="0.5" controls-position="right" style="width: 160px" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="SNR 严重">
+              <el-input-number v-model="hyperParams.snr_critical" :min="3" :max="10" :step="0.5" controls-position="right" style="width: 160px" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">齿轮诊断阈值</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="齿轮峭度门控">
+              <el-input-number v-model="hyperParams.gear_kurt_threshold" :min="3" :max="12" :step="0.5" controls-position="right" style="width: 160px" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="齿轮峰值门控">
+              <el-input-number v-model="hyperParams.gear_crest_threshold" :min="5" :max="15" :step="0.5" controls-position="right" style="width: 160px" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item style="margin-top: 16px;">
+          <el-button type="primary" :loading="savingHyper" @click="onSaveHyperParams">
+            <el-icon><Check /></el-icon>
+            保存诊断超参数
+          </el-button>
+          <el-button @click="onResetHyperParams">重置默认</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
     <!-- 配置说明 -->
     <el-card style="margin-top: 20px">
       <template #header>
@@ -407,6 +482,7 @@ const deviceList = ref([])
 const savingEdge = ref(false)
 const savingMechanical = ref(false)
 const savingThresholds = ref(false)
+const savingHyper = ref(false)
 
 const form = ref({
   device_id: 'WTG-001',
@@ -481,6 +557,70 @@ const thresholdItems = {
   crest_factor: { label: '峰值因子', step: 0.1, precision: 1 },
 }
 
+// ─── 诊断超参数 ───
+const DATASET_DEFAULTS = {
+  hustbear: {
+    bearing_kurtosis_threshold: 5.0, bearing_crest_threshold: 10.0,
+    snr_warning: 3.0, snr_critical: 5.0,
+    gear_kurt_threshold: 6.0, gear_crest_threshold: 8.0,
+  },
+  cw: {
+    bearing_kurtosis_threshold: 5.0, bearing_crest_threshold: 10.0,
+    snr_warning: 2.5, snr_critical: 4.5,
+    gear_kurt_threshold: 6.0, gear_crest_threshold: 8.0,
+  },
+  wtgearbox: {
+    bearing_kurtosis_threshold: 5.0, bearing_crest_threshold: 10.0,
+    snr_warning: 3.0, snr_critical: 5.0,
+    gear_kurt_threshold: 6.0, gear_crest_threshold: 8.0,
+  },
+}
+const hyperDataset = ref('hustbear')
+const hyperParams = ref({ ...DATASET_DEFAULTS.hustbear })
+
+const onHyperDatasetChange = (val) => {
+  if (val !== 'custom' && DATASET_DEFAULTS[val]) {
+    hyperParams.value = { ...DATASET_DEFAULTS[val] }
+  }
+}
+
+const onSaveHyperParams = async () => {
+  savingHyper.value = true
+  try {
+    const diagnosisConfig = {
+      diagnosis: {
+        bearing: {
+          kurtosis_threshold: hyperParams.value.bearing_kurtosis_threshold,
+          crest_evidence_threshold: hyperParams.value.bearing_crest_threshold,
+          snr_warning: hyperParams.value.snr_warning,
+          snr_critical: hyperParams.value.snr_critical,
+        },
+        gear: {
+          gear_kurt_threshold: hyperParams.value.gear_kurt_threshold,
+          gear_crest_threshold: hyperParams.value.gear_crest_threshold,
+        },
+      },
+    }
+    await updateDeviceConfig(form.value.device_id, {
+      dataset: hyperDataset.value,
+      diagnosis_config: JSON.stringify(diagnosisConfig),
+    })
+    ElMessage.success('诊断超参数已保存，即时生效')
+  } catch (e) {
+    console.error('保存诊断超参数失败:', e)
+    ElMessage.error('保存失败')
+  } finally {
+    savingHyper.value = false
+  }
+}
+
+const onResetHyperParams = () => {
+  if (hyperDataset.value !== 'custom') {
+    hyperParams.value = { ...DATASET_DEFAULTS[hyperDataset.value] }
+    ElMessage.success('已重置为数据集默认值')
+  }
+}
+
 const loadDevices = async () => {
   const res = await getDevices()
   deviceList.value = (res.data || []).map(d => ({
@@ -530,6 +670,28 @@ const loadConfig = async () => {
     const names = d.channel_names || {}
     for (let i = 1; i <= 8; i++) {
       channelNames.value[i] = names[String(i)] || `通道${i}`
+    }
+
+    // 加载诊断超参数
+    hyperDataset.value = d.dataset || 'hustbear'
+    if (d.diagnosis_config) {
+      try {
+        const diagCfg = typeof d.diagnosis_config === 'string'
+          ? JSON.parse(d.diagnosis_config)
+          : d.diagnosis_config
+        const bearing = diagCfg.diagnosis?.bearing || {}
+        const gear = diagCfg.diagnosis?.gear || {}
+        hyperParams.value = {
+          bearing_kurtosis_threshold: bearing.kurtosis_threshold ?? DATASET_DEFAULTS[hyperDataset.value].bearing_kurtosis_threshold,
+          bearing_crest_threshold: bearing.crest_evidence_threshold ?? DATASET_DEFAULTS[hyperDataset.value].bearing_crest_threshold,
+          snr_warning: bearing.snr_warning ?? DATASET_DEFAULTS[hyperDataset.value].snr_warning,
+          snr_critical: bearing.snr_critical ?? DATASET_DEFAULTS[hyperDataset.value].snr_critical,
+          gear_kurt_threshold: gear.gear_kurt_threshold ?? DATASET_DEFAULTS[hyperDataset.value].gear_kurt_threshold,
+          gear_crest_threshold: gear.gear_crest_threshold ?? DATASET_DEFAULTS[hyperDataset.value].gear_crest_threshold,
+        }
+      } catch { /* keep defaults */ }
+    } else {
+      hyperParams.value = { ...DATASET_DEFAULTS[hyperDataset.value] }
     }
 
     const parsed = parseInterval(form.value.upload_interval)

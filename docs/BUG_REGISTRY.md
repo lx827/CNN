@@ -141,11 +141,13 @@
 **现象**：4.2.1 评估中 Ensemble 60.61%，是所有方法中最低（VMD 88.89%、DWT 82.83%）。
 
 **根因**：评估标准不对称
+
 - 单方法判定：`_bearing_detect` 检查任意显著非统计指标 → 非常宽松
 - Ensemble 判定：`_ensemble_detect` 检查 `hs >= 70 && status == normal` → 非常严格
 - health_score 有严格的时域证据门控（kurt>5/crest>10），部分故障样本无法通过
 
 **修复**：`_ensemble_detect` 改为两步判定
+
 1. health_score 路径：hs<70 或 status!=normal → 故障
 2. 子方法指标路径：与 `_bearing_detect/_gear_detect` 同标准，任意子方法有显著指标 → 故障
 

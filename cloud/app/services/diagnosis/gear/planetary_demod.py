@@ -18,6 +18,7 @@ from ..signal_utils import (
     lowpass_filter,
     prepare_signal,
 )
+from ..hyperparams import HyperParams
 from ..order_tracking import _compute_order_spectrum, _compute_order_spectrum_multi_frame
 from ..gear.metrics import _order_band_amplitude
 
@@ -205,9 +206,9 @@ def planetary_envelope_order_analysis(
     planet_modulation_depth = planet_fault_amp / max(mesh_amp, 1e-12)
     carrier_modulation_depth = carrier_amp / max(mesh_amp, 1e-12)
 
-    # 显著性判定
-    SNR_THRESHOLD_WARNING = 3.0
-    SNR_THRESHOLD_CRITICAL = 5.0
+    # 显著性判定（从 HyperParams 加载）
+    SNR_THRESHOLD_WARNING = HyperParams().get_float("diagnosis.planetary.snr_threshold_warning", 3.0)
+    SNR_THRESHOLD_CRITICAL = HyperParams().get_float("diagnosis.planetary.snr_threshold_critical", 5.0)
 
     return {
         "method": "planetary_envelope_order",
@@ -314,8 +315,8 @@ def planetary_fullband_envelope_order_analysis(
     else:
         envelope_kurtosis = 0.0
 
-    SNR_THRESHOLD_WARNING = 3.0
-    SNR_THRESHOLD_CRITICAL = 5.0
+    SNR_THRESHOLD_WARNING = HyperParams().get_float("diagnosis.planetary.snr_threshold_warning", 3.0)
+    SNR_THRESHOLD_CRITICAL = HyperParams().get_float("diagnosis.planetary.snr_threshold_critical", 5.0)
 
     return {
         "method": "planetary_fullband_envelope_order",
@@ -1079,13 +1080,11 @@ def planetary_sc_scoh_analysis(
     carrier_sc_snr = carrier_sc_peak / psd_bg
     mesh_sc_snr = mesh_sc_peak / psd_bg
 
-    # === 显著性判定 ===
-    # 谱相干阈值：SCoh > 0.3 为弱证据（warning），> 0.5 为强证据（critical）
-    # SCoh SNR 阈值：> 3.0 为 warning，> 5.0 为 critical
-    SCOH_WARNING_THRESHOLD = 0.3
-    SCOH_CRITICAL_THRESHOLD = 0.5
-    SCOH_SNR_WARNING = 3.0
-    SCOH_SNR_CRITICAL = 5.0
+    # === 显著性判定（从 HyperParams 加载） ===
+    SCOH_WARNING_THRESHOLD = HyperParams().get_float("diagnosis.planetary.scoh_warning", 0.3)
+    SCOH_CRITICAL_THRESHOLD = HyperParams().get_float("diagnosis.planetary.scoh_critical", 0.5)
+    SCOH_SNR_WARNING = HyperParams().get_float("diagnosis.planetary.snr_threshold_warning", 3.0)
+    SCOH_SNR_CRITICAL = HyperParams().get_float("diagnosis.planetary.snr_threshold_critical", 5.0)
 
     return {
         "method": "planetary_sc_scoh",
