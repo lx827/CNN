@@ -154,6 +154,7 @@ def _infer_gear_subtype_from_indicators(gear_result: Dict) -> Optional[str]:
     fm0 = get_val("fm0")
     ser = get_val("ser")
     car = get_val("car")
+    sun_fault = get_val("planetary_sun_fault")
 
     # 各类型证据分
     scores = {"break": 0.0, "crack": 0.0, "wear": 0.0, "missing": 0.0}
@@ -171,12 +172,15 @@ def _infer_gear_subtype_from_indicators(gear_result: Dict) -> Optional[str]:
     elif fm4 > 3.2 and is_active("fm4") and pfek > 3.0:
         scores["wear"] += 1.5
 
-    # Break: FM0 高 或 SER 极高 或 sideband 多
+    # Break: FM0 高 或 SER 极高 或 sideband 多 或 太阳轮故障频率检出
     if fm0 > 5.0 and is_active("fm0"):
         scores["break"] += 2.5
     if ser > 10.0 and is_active("ser"):
         scores["break"] += 1.5
     if is_active("sideband_count"):
+        scores["break"] += 1.0
+    # 太阳轮故障频率是断齿的辅助指标（避免过度拉高断齿分数挤占 crack）
+    if sun_fault > 0 and is_active("planetary_sun_fault") and pfek < 5.0:
         scores["break"] += 1.0
 
     # Crack: 低 pfek（< 3.0）且 fm4 不太高（< 4.0，避免与 wear 混淆）
