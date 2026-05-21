@@ -96,7 +96,7 @@ def eval_bearing_binary(dataset_name, data_dir, file_glob, fault_func, class_nam
         results["methods"][name] = {"accuracy": round(acc, 2), "correct": correct,
                                      "total": total, "avg_time_ms": avg_ms}
 
-    # Ensemble
+    # Ensemble — 两步判定（Bug #15 修复）
     t0 = time.perf_counter()
     correct, total, times = 0, 0, []
     for fname, is_h, _ in files:
@@ -109,7 +109,14 @@ def eval_bearing_binary(dataset_name, data_dir, file_glob, fault_func, class_nam
             times.append((time.perf_counter() - t1) * 1000)
             hs = res.get("health_score", 100)
             st = res.get("status", "normal")
-            pred_h = st == "normal" and hs >= 70
+            if st != "normal" or hs < 70:
+                pred_h = False
+            else:
+                bearing = res.get("bearing", {}) or {}
+                bind = bearing.get("fault_indicators", {})
+                has_f = any(v.get("significant") for k, v in bind.items()
+                           if isinstance(v, dict) and not k.endswith("_stat"))
+                pred_h = not has_f
             if pred_h == is_h:
                 correct += 1
             total += 1
@@ -164,7 +171,7 @@ def eval_gear_binary():
         results["methods"][name] = {"accuracy": round(acc, 2), "correct": correct,
                                      "total": total, "avg_time_ms": avg_ms}
 
-    # Ensemble
+    # Ensemble gear — 两步判定（Bug #15 修复）
     t0 = time.perf_counter()
     correct, total, times = 0, 0, []
     for fname, is_h in files:
@@ -177,7 +184,15 @@ def eval_gear_binary():
             times.append((time.perf_counter() - t1) * 1000)
             hs = res.get("health_score", 100)
             st = res.get("status", "normal")
-            if (st == "normal" and hs >= 70) == is_h:
+            if st != "normal" or hs < 70:
+                pred_h = False
+            else:
+                gear = res.get("gear", {}) or {}
+                gind = gear.get("fault_indicators", {})
+                has_f = any(v.get("warning") or v.get("critical")
+                           for v in gind.values() if isinstance(v, dict))
+                pred_h = not has_f
+            if pred_h == is_h:
                 correct += 1
             total += 1
         except Exception:

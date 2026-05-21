@@ -7,13 +7,13 @@
 | # | 文件 | 描述 |
 |---|------|------|
 | 11d | `ensemble.py`, `health_score.py` | D-S 证据融合未生效（0/30 样本被覆盖）|
-| 13d | `ensemble.py` | **WTG 五分类断齿检出 0%** — gear_abnormal 标签映射缺失 |
-| 15 | `eval_plots/run_all.py`, `fast_eval.py` | **Ensemble HUSTbear 二分类 60.61%（最低）** — health_score 门控过严 vs 单方法指标判定 |
+| 13d | `ensemble.py` | **WTG 五分类断齿检出 1/16** — gear_abnormal 标签映射缺失 |
 
-## 已修复 (16)
+## 已修复 (17)
 
 | # | 文件 | 描述 |
 |---|------|------|
+| 15 | `eval_plots/run_all.py`, `fast_eval.py` | ✅ **Ensemble HUSTbear 二分类 60.61%→?%** — 评估标准统一（两步判定）
 | 11 | `run_all.py`, `ensemble.py`, `engine.py` | **Ensemble 五分类偏向 BPFO** — 根因链修复（见下） |
 | 11c | `engine.py` | ✅ **显著性主导比过滤** — 主导峰需 > 次强峰 1.5× |
 | 12 | `engine.py` | **Teager Ottawa/CW 耗时爆炸（212s→0.3s）** — samples_per_rev 1024→256 |
@@ -135,3 +135,38 @@
   - 修复前：小波+VMD 级联 ΔSNR = **+0.19 dB**
   - 修复后：小波+VMD 级联 ΔSNR = **+0.98 dB**（提升 **5.2×**）
   - 对比：VMD 单独仍为 +3.18 dB（级联受小波前置失真限制，无法超越单独 VMD）
+
+**Bug #15 详细**（Ensemble HUSTbear 二分类 60.61%）✅ 已修复
+
+**现象**：4.2.1 评估中 Ensemble 60.61%，是所有方法中最低（VMD 88.89%、DWT 82.83%）。
+
+**根因**：评估标准不对称
+- 单方法判定：`_bearing_detect` 检查任意显著非统计指标 → 非常宽松
+- Ensemble 判定：`_ensemble_detect` 检查 `hs >= 70 && status == normal` → 非常严格
+- health_score 有严格的时域证据门控（kurt>5/crest>10），部分故障样本无法通过
+
+**修复**：`_ensemble_detect` 改为两步判定
+1. health_score 路径：hs<70 或 status!=normal → 故障
+2. 子方法指标路径：与 `_bearing_detect/_gear_detect` 同标准，任意子方法有显著指标 → 故障
+
+**影响范围**：`run_all.py::_ensemble_detect` + `fast_eval.py` 2 处内联
+
+---
+
+## 🏗️ 超参数独立化重构 (2026-05-22)
+
+**背景**：三个数据集（HUSTbear/CW/WTgearbox）共用同一套硬编码阈值，导致变速轴承和行星齿轮箱的阈值不适配。
+
+**变更文件**：
+
+| 文件 | 变更 |
+|------|------|
+| `cloud/app/core/dataset_profiles.json` | **新增**：三数据集默认超参数 |
+| `cloud/app/services/diagnosis/hyperparams.py` | **新增**：三级回退加载器 |
+| `cloud/app/models.py` | 新增 `dataset`, `diagnosis_config` 字段 |
+| `cloud/app/services/diagnosis/ensemble.py` | 齿轮/峰值阈值 → HyperParams |
+| `cloud/app/services/diagnosis/health_score.py` | CREST_EVIDENCE → HyperParams |
+| `cloud/app/services/diagnosis/health_score_continuous.py` | CREST_EVIDENCE → HyperParams |
+| `tests/diagnosis/hyperparams/optimize_*.py` | **新增**：网格搜索脚本 |
+
+**加载优先级**：`device.diagnosis_config` > `dataset_profiles.json` > `thresholds.py`

@@ -103,9 +103,28 @@ def _bearing_detect(result, is_healthy):
 
 
 def _ensemble_detect(result, is_healthy):
+    """Ensemble 二分类判定：两步检测
+    1. 健康度路径：health_score < 70 或 status != normal → 故障
+    2. 子方法指标路径：与 _bearing_detect/_gear_detect 同标准
+       任意子方法有显著指标 → 故障（弥补 health_score 门控过严）
+    """
     hs = result.get("health_score", 100)
     status = result.get("status", "normal")
-    pred_healthy = status == "normal" and hs >= 70
+    if status != "normal" or hs < 70:
+        return not is_healthy  # 判为故障
+
+    # 兜底：子方法指标路径
+    bearing = result.get("bearing", {}) or {}
+    gear = result.get("gear", {}) or {}
+    bearing_ind = bearing.get("fault_indicators", {})
+    gear_ind = gear.get("fault_indicators", {})
+    has_bearing_fault = any(
+        v.get("significant") for k, v in bearing_ind.items()
+        if isinstance(v, dict) and not k.endswith("_stat"))
+    has_gear_fault = any(
+        v.get("warning") or v.get("critical")
+        for v in gear_ind.values() if isinstance(v, dict))
+    pred_healthy = not (has_bearing_fault or has_gear_fault)
     return pred_healthy == is_healthy
 
 
