@@ -86,6 +86,7 @@ def update_device_config(device_id: str, payload: dict, db: Session = Depends(ge
         "sample_rate", "window_seconds", "channel_count", "channel_names",
         "gear_teeth", "bearing_params",
         "compression_enabled", "downsample_ratio",
+        "dataset", "diagnosis_config",      # 诊断超参数 + 数据集类型
     ]
     updated = {}
     for field in allowed_fields:
@@ -138,6 +139,7 @@ def update_batch_config(payload: dict, db: Session = Depends(get_db)):
         "sample_rate", "window_seconds", "channel_count",
         "gear_teeth", "bearing_params",
         "compression_enabled", "downsample_ratio",
+        "dataset", "diagnosis_config",
     ]
 
     updated_count = 0

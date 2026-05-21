@@ -16,6 +16,7 @@ from .signal_utils import (
     prepare_signal, bandpass_filter, lowpass_filter,
 )
 from .preprocessing import cepstrum_pre_whitening, minimum_entropy_deconvolution
+from .hyperparams import HyperParams
 
 
 def envelope_analysis(
@@ -348,7 +349,8 @@ def spectral_kurtosis_envelope_analysis(
             sk = float(np.mean((power - mean_power) ** 4) / (np.var(power) ** 2 + 1e-12))
             impulsiveness = float(np.max(band_mag) / (np.median(band_mag) + 1e-12))
             snr = float(np.percentile(band_mag, 95) / (np.median(band_mag) + 1e-12))
-            score = max(0.0, sk - 3.0) * np.log1p(impulsiveness) * np.log1p(snr)
+            _sk_shift = HyperParams().get_float("diagnosis.bearing.sk_shift", 3.0)
+            score = max(0.0, sk - _sk_shift) * np.log1p(impulsiveness) * np.log1p(snr)
             bw = max(bin_bw * group_bins, fs / 512)
 
             candidates.append({

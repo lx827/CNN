@@ -480,13 +480,14 @@ def planetary_vmd_demod_analysis(
         planet_amp = _order_band_amplitude(oa_arr, os_arr, planet_fault_order, 0.3)
         carrier_amp = _order_band_amplitude(oa_arr, os_arr, carrier_order, 0.3)
 
+        _fault_sig = HyperParams().get_float("diagnosis.planetary.fault_snr_threshold", 3.0)
         return {
             f"{name}_sun_fault_snr": round(sun_amp / bg, 4),
             f"{name}_planet_fault_snr": round(planet_amp / bg, 4),
             f"{name}_carrier_snr": round(carrier_amp / bg, 4),
-            f"{name}_sun_fault_significant": sun_amp / bg > 3.0,
-            f"{name}_planet_fault_significant": planet_amp / bg > 3.0,
-            f"{name}_carrier_significant": carrier_amp / bg > 3.0,
+            f"{name}_sun_fault_significant": sun_amp / bg > _fault_sig,
+            f"{name}_planet_fault_significant": planet_amp / bg > _fault_sig,
+            f"{name}_carrier_significant": carrier_amp / bg > _fault_sig,
         }
 
     amp_demod = _search_fault_orders(amp_oa, amp_os, "amp_demod")
@@ -606,9 +607,9 @@ def planetary_tsa_envelope_analysis(
         "sun_modulation_depth": round(sun_modulation_depth, 4),
         "planet_modulation_depth": round(planet_modulation_depth, 4),
         "carrier_modulation_depth": round(carrier_modulation_depth, 4),
-        "sun_fault_significant": sun_fault_snr > 3.0,
-        "planet_fault_significant": planet_fault_snr > 3.0,
-        "carrier_significant": carrier_snr > 3.0,
+        "sun_fault_significant": sun_fault_snr > HyperParams().get_float("diagnosis.planetary.fault_snr_threshold", 3.0),
+        "planet_fault_significant": planet_fault_snr > HyperParams().get_float("diagnosis.planetary.fault_snr_threshold", 3.0),
+        "carrier_significant": carrier_snr > HyperParams().get_float("diagnosis.planetary.fault_snr_threshold", 3.0),
     }
 
 
@@ -1426,11 +1427,9 @@ def planetary_msb_analysis(
     msb_planet_snr = msb_planet_fault / bg_msb_se
     msb_carrier_snr = msb_carrier / bg_msb_se
 
-    # 显著性阈值
-    # MSB-SE SNR > 3.0 为 warning，> 5.0 为 critical
-    # MSB-SE absolute threshold：需要背景+SNR双重条件
-    MSB_SNR_WARNING = 3.0
-    MSB_SNR_CRITICAL = 5.0
+    # MSB-SE SNR 阈值（从 HyperParams 加载）
+    MSB_SNR_WARNING = HyperParams().get_float("diagnosis.planetary.snr_threshold_warning", 3.0)
+    MSB_SNR_CRITICAL = HyperParams().get_float("diagnosis.planetary.snr_threshold_critical", 5.0)
 
     return {
         "method": "planetary_msb",

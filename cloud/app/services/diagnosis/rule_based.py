@@ -12,11 +12,12 @@ from .features import (
 )
 from .signal_utils import prepare_signal, _band_energy, _order_band_energy
 from .order_tracking import _compute_order_spectrum_multi_frame, _compute_order_spectrum_varying_speed
+from .hyperparams import HyperParams
 
 logger = logging.getLogger(__name__)
 
-# 特征阈值配置（用于 _feature_severity）
-FEATURE_THRESHOLDS = {
+# 特征阈值回退默认值（HyperParams 未配置时使用）
+_DEFAULT_FEATURE_THRESHOLDS = {
     "rms": {"baseline": 2.0, "critical": 15.0},
     "peak": {"baseline": 5.0, "critical": 40.0},
     "kurtosis": {"baseline": 3.0, "critical": 15.0},
@@ -24,6 +25,26 @@ FEATURE_THRESHOLDS = {
     "skewness": {"baseline": 0.3, "critical": 2.0},
     "impulse_factor": {"baseline": 5.0, "critical": 20.0},
 }
+
+# 模块级延迟加载：首次访问时从 HyperParams 读取
+_FEATURE_THRESHOLDS_CACHE = None
+
+def _get_feature_thresholds():
+    """获取有效特征阈值（HyperParams 覆盖 + 回退默认值）"""
+    global _FEATURE_THRESHOLDS_CACHE
+    if _FEATURE_THRESHOLDS_CACHE is not None:
+        return _FEATURE_THRESHOLDS_CACHE
+    hp = HyperParams()
+    thresholds = dict(_DEFAULT_FEATURE_THRESHOLDS)
+    for key in thresholds:
+        hp_val = hp.get(f"diagnosis.rule.{key}")
+        if isinstance(hp_val, dict):
+            thresholds[key] = hp_val
+    _FEATURE_THRESHOLDS_CACHE = thresholds
+    return thresholds
+
+# 保持向后兼容的模块级引用
+FEATURE_THRESHOLDS = _DEFAULT_FEATURE_THRESHOLDS
 
 
 def adaptive_rms_baseline(rot_freq_hz: float) -> float:
@@ -39,7 +60,7 @@ def adaptive_rms_baseline(rot_freq_hz: float) -> float:
     低速(20Hz): baseline=2.0, 高速(50Hz): baseline=3.5
     """
     if rot_freq_hz <= 0:
-        return FEATURE_THRESHOLDS["rms"]["baseline"]
+        return _get_feature_thresholds()["rms"]["baseline"]
     return max(1.0, 0.05 * rot_freq_hz + 1.0)
 
 
@@ -50,7 +71,7 @@ def _feature_severity(value: float, metric: str, rot_freq: float = 0.0) -> float
     metric: 特征名称
     rot_freq: 转频(Hz)，用于 RMS baseline 自适应
     """
-    cfg = FEATURE_THRESHOLDS.get(metric)
+    cfg = _get_feature_thresholds().get(metric)
     if not cfg:
         return 0.0
     baseline = cfg["baseline"]

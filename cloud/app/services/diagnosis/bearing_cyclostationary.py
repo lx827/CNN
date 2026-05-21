@@ -17,6 +17,7 @@ ALGORITHMS.md §1.5 参考：
 """
 import numpy as np
 from typing import Dict, Tuple, Optional, List
+from .hyperparams import HyperParams
 
 from .signal_utils import prepare_signal
 
@@ -259,14 +260,19 @@ def bearing_sc_scoh_analysis(
             background = float(np.median(scoh_slice))
             snr = peak / (background + 1e-12)
 
-            warning = peak > 0.3 and snr > 3.0
-            critical = peak > 0.5 and snr > 5.0
+            _peak_warn = HyperParams().get_float("diagnosis.bearing.cyclostat_peak_warning", 0.3)
+            _snr_warn = HyperParams().get_float("diagnosis.bearing.cyclostat_snr_warning", 3.0)
+            _peak_crit = HyperParams().get_float("diagnosis.bearing.cyclostat_peak_critical", 0.5)
+            _snr_crit = HyperParams().get_float("diagnosis.bearing.cyclostat_snr_critical", 5.0)
+
+            warning = peak > _peak_warn and snr > _snr_warn
+            critical = peak > _peak_crit and snr > _snr_crit
 
             indicators[name] = {
                 "theory_hz": round(f_hz, 2),
                 "scoh_peak": round(peak, 4),
                 "scoh_snr": round(snr, 4),
-                "significant": bool(peak > 0.3),
+                "significant": bool(peak > _peak_warn),
                 "warning": warning,
                 "critical": critical,
             }

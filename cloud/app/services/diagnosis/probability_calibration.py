@@ -22,20 +22,34 @@
 """
 import math
 from typing import Dict, Tuple
+from .hyperparams import HyperParams
 
-
-# 校准映射参数（sigmoid 曲线）
+# 校准映射参数回退值（sigmoid 曲线）
 # threshold=5.0: SNR=5 是健康/故障的分界点
 # max_prob=0.85: 即使 SNR 很高，单指标概率不超过 0.85（避免过度自信）
 # slope=1.5: 过渡带约 ±4 SNR 单位
-CALIB_THRESHOLD = 5.0
-CALIB_MAX_PROB = 0.85
-CALIB_SLOPE = 1.5
+_CALIB_THRESHOLD = 5.0
+_CALIB_MAX_PROB = 0.85
+_CALIB_SLOPE = 1.5
+
+def _get_calib_threshold():
+    return HyperParams().get_float("diagnosis.calibration.snr_threshold", _CALIB_THRESHOLD)
+
+def _get_calib_max_prob():
+    return HyperParams().get_float("diagnosis.calibration.max_prob", _CALIB_MAX_PROB)
+
+def _get_calib_slope():
+    return HyperParams().get_float("diagnosis.calibration.slope", _CALIB_SLOPE)
 
 
-def _sigmoid_prob(value: float, threshold: float = CALIB_THRESHOLD,
-                  max_prob: float = CALIB_MAX_PROB, slope: float = CALIB_SLOPE) -> float:
+def _sigmoid_prob(value: float, threshold: float = None, max_prob: float = None, slope: float = None) -> float:
     """sigmoid 校准：将连续值映射为概率"""
+    if threshold is None:
+        threshold = _get_calib_threshold()
+    if max_prob is None:
+        max_prob = _get_calib_max_prob()
+    if slope is None:
+        slope = _get_calib_slope()
     t = (value - threshold) * slope
     if t > 20:
         return max_prob
