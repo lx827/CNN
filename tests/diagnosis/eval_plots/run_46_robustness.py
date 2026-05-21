@@ -39,7 +39,7 @@ def run():
             except Exception:
                 det = False
             curve[str(s_db)] = det
-            print(f"    {name_cn} SNR={s_db}dB: {'✓' if det else '✗'}")
+            print(f"    {name_cn} SNR={s_db}dB: {'PASS' if det else 'FAIL'}")
         results["methods"][name_cn] = curve
 
     # Ensemble

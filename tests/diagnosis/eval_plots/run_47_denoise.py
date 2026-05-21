@@ -36,7 +36,7 @@ def run():
 
         row = {"baseline": round(baseline_snr, 2)}
         # 小波
-        w = wavelet_denoise(sig_noisy, FS)
+        w = wavelet_denoise(sig_noisy, threshold_scale=0.5)
         row["小波"] = round(snr_db(sig_clean, w) - baseline_snr, 2)
         # VMD
         v = vmd_denoise(sig_noisy, FS)
