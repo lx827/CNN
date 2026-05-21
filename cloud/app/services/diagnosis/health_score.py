@@ -11,11 +11,14 @@ D-S 融合闭环：从 fusion_bridge.py 接收 D-S 融合结果，
 """
 from typing import Dict, Optional, Tuple
 
-# 峰值因子单独作为统计证据门控的阈值。
-CREST_EVIDENCE_THRESHOLD = 10.0
-
 # 连续衰减扣分模块
 from .health_score_continuous import compute_continuous_deductions, cascade_deduction, sigmoid_deduction
+
+# 超参数加载器
+from .hyperparams import HyperParams
+
+# 默认峰值因子证据门控阈值（回退值）
+_DEFAULT_CREST_EVIDENCE = 10.0
 
 # 权重配置
 from app.core.config import DIAGNOSIS_WEIGHTS

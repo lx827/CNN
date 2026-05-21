@@ -8,6 +8,7 @@
 |---|------|------|
 | 11d | `ensemble.py`, `health_score.py` | D-S 证据融合未生效（0/30 样本被覆盖）|
 | 13d | `ensemble.py` | **WTG 五分类断齿检出 0%** — gear_abnormal 标签映射缺失 |
+| 15 | `eval_plots/run_all.py`, `fast_eval.py` | **Ensemble HUSTbear 二分类 60.61%（最低）** — health_score 门控过严 vs 单方法指标判定 |
 
 ## 已修复 (16)
 

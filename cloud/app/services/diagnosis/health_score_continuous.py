@@ -10,6 +10,8 @@
 import math
 from typing import Dict, Optional
 
+from .hyperparams import HyperParams
+
 # 默认斜率：控制过渡带宽度。slope=2.0 时过渡带约 ±3 个单位。
 DEFAULT_SLOPE = 2.0
 
@@ -169,7 +171,7 @@ def compute_continuous_deductions(
     crest = _sf(time_features.get("crest_factor"), 5.0)
     rms = _sf(time_features.get("rms"), 0.0)
 
-    CREST_EVIDENCE_THRESHOLD = 10.0
+    CREST_EVIDENCE_THRESHOLD = HyperParams().get_float("diagnosis.bearing.crest_evidence_threshold", 10.0)
 
     try:
         is_gear_device = bool(gear_teeth and (float(gear_teeth.get("input") or 0) > 0 or float(gear_teeth.get("sun") or 0) > 0))

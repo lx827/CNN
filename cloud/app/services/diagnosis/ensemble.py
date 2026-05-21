@@ -18,7 +18,8 @@ import numpy as np
 
 from .engine import BearingMethod, DenoiseMethod, DiagnosisEngine, DiagnosisStrategy, GearMethod
 from .features import compute_time_features, has_bearing_params, has_gear_params
-from .health_score import _compute_health_score, CREST_EVIDENCE_THRESHOLD, get_ds_label, is_ds_conflict_high, _infer_gear_subtype_from_indicators
+from .health_score import _compute_health_score, get_ds_label, is_ds_conflict_high, _infer_gear_subtype_from_indicators
+from .hyperparams import HyperParams
 from .recommendation import _generate_recommendation
 
 
@@ -122,10 +123,9 @@ def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
     crest = _as_float(time_features.get("crest_factor"), 5.0)
     rms_mad_z = _as_float(time_features.get("rms_mad_z"), 0.0)
     cusum = _as_float(time_features.get("cusum_score"), 0.0)
-    # 与 health_score.py 保持一致的时域证据标准：
-    # 峰值因子 7~9 在工业振动中属正常范围，真正的冲击需要 crest>10 或 kurt>5
-    # 动态基线指标(kurt_mad_z, cusum)单独不算冲击证据，只表示趋势漂移
-    impulse_context = kurt > 5.0 or crest > CREST_EVIDENCE_THRESHOLD
+    _crest_ev = HyperParams().get_float("diagnosis.bearing.crest_evidence_threshold", 10.0)
+    _kurt_ctx = HyperParams().get_float("diagnosis.bearing.impulse_context_kurt", 5.0)
+    impulse_context = kurt > _kurt_ctx or crest > _crest_ev
 
     # 低频优势度：仅用于弱证据（stat_hits=1）场景的辅助判断
     low_freq_dominance = False
@@ -193,15 +193,14 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
     if is_planetary:
         # 行星箱健康 kurt=7~13, crest=7~11；故障分布极宽
         # crack 时 kurt 显著降低（3.9~5.5），双向门控：高峭度 + 低峭度
-        # 降低至 6.0：WTG 故障样本 kurt 多在 5.5~10，原 10.0 导致全部截断（Bug #13b）
-        GEAR_KURT_THRESHOLD = 6.0
-        GEAR_CREST_THRESHOLD = 8.0
+        # 从 HyperParams 加载，默认 6.0/8.0（Bug #13b）
+        GEAR_KURT_THRESHOLD = HyperParams().get_float("diagnosis.gear.gear_kurt_threshold", 6.0)
+        GEAR_CREST_THRESHOLD = HyperParams().get_float("diagnosis.gear.gear_crest_threshold", 8.0)
         impulse_context = kurt > GEAR_KURT_THRESHOLD or crest > GEAR_CREST_THRESHOLD or kurt < 5.5
     else:
         # 定轴齿轮箱：齿轮故障主要表现为频域调制边带，时域冲击不一定明显
-        # 降低阈值 + 频域指标强时放宽门控
-        GEAR_KURT_THRESHOLD = 8.0
-        GEAR_CREST_THRESHOLD = 8.0
+        GEAR_KURT_THRESHOLD = HyperParams().get_float("diagnosis.gear.gear_kurt_threshold", 8.0)
+        GEAR_CREST_THRESHOLD = HyperParams().get_float("diagnosis.gear.gear_crest_threshold", 8.0)
         impulse_context = kurt > GEAR_KURT_THRESHOLD or crest > GEAR_CREST_THRESHOLD
         # 频域指标强时即使时域证据弱也打开门控
         if not impulse_context:
@@ -216,7 +215,7 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
     tsa_env_result = result.get("planetary_tsa_demod") or {}
     if isinstance(tsa_env_result, dict) and "error" not in tsa_env_result:
         tsa_residual_kurt = _as_float(tsa_env_result.get("residual_kurtosis"), 0.0)
-    TSA_RESIDUAL_KURT_THRESHOLD = 5.0  # 阈值2.5时健康误报34.4%(N1子集tsa_rk偏高)，提升至5.0(误报9.4%)
+    TSA_RESIDUAL_KURT_THRESHOLD = HyperParams().get_float("diagnosis.gear.tsa_residual_kurt_threshold", 5.0)
     tsa_evidence = tsa_residual_kurt > TSA_RESIDUAL_KURT_THRESHOLD
 
     # 检查低频优势（旋转谐波主导时齿轮指标无效）
@@ -307,10 +306,10 @@ def _time_confidence(time_features: Dict) -> float:
     elif kurt > 5:
         score = max(score, 0.35)
 
-    # 峰值因子证据阈值与 health_score.py 一致 (CREST_EVIDENCE_THRESHOLD=10)
+    _crest_ev = HyperParams().get_float("diagnosis.bearing.crest_evidence_threshold", 10.0)
     if crest > 15:
         score = max(score, 0.65)
-    elif crest > CREST_EVIDENCE_THRESHOLD:
+    elif crest > _crest_ev:
         score = max(score, 0.45)
 
     # 动态基线不作为冲击证据——变速工况下基线指标天然偏高

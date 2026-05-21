@@ -44,6 +44,11 @@ Layer 1: 信号处理基元（零内部依赖）
   sensitive_selector.py       (敏感分量评分选择)
   trend_prediction.py         (Holt-Winters/Kalman趋势预测)
   probability_calibration.py  (概率校准/SNR→概率)
+  │
+Layer 0: 超参数配置（被所有层引用，零内部依赖）
+  hyperparams.py              (HyperParams 三级回退加载器)
+  core/dataset_profiles.json  (三个数据集默认超参数)
+  core/thresholds.py          (全局回退阈值)
 ```
 
 **每个 import 箭头代表"如果被依赖模块出错，依赖它的模块必然出错"。**

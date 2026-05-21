@@ -37,6 +37,8 @@ class Device(Base):
     bearing_params = Column(JSON, nullable=True, comment="轴承参数，如 {n:9, d:7.94, D:39.04, alpha:0}")
     compression_enabled = Column(Integer, default=1, comment="边端是否启用数据压缩 0/1")
     downsample_ratio = Column(Integer, default=8, comment="边端降采样压缩比")
+    dataset = Column(String(50), nullable=True, comment="数据集类型: hustbear/cw/wtgearbox，影响默认超参数选择")
+    diagnosis_config = Column(Text, nullable=True, comment="JSON: 诊断超参数覆盖，如 {\"bearing\":{\"kurtosis_threshold\":4.5}}")
     is_online = Column(Integer, default=1, comment="是否在线 1=在线 0=离线，由离线监测器维护")
     last_seen_at = Column(DateTime, nullable=True, comment="设备最后一次数据上传时间")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
