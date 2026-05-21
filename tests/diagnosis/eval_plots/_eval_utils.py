@@ -87,6 +87,48 @@ def gear_detect(result, is_healthy):
     has_warn = any(v.get("warning") or v.get("critical") for v in inds.values() if isinstance(v, dict))
     return has_warn != is_healthy
 
+# ─── 故障标签映射 （兼容英文 bearing_xxx / 中文 D-S 标签）───
+def map_fault_label_bearing(fl) -> str:
+    """ensemble fault_label → 轴承五分类标准名"""
+    fl_str = str(fl).lower()
+    if "bsf" in fl_str or "ball" in fl_str or "滚动体" in fl_str or "球故障" in fl_str:
+        return "球故障"
+    if "bpfi" in fl_str or "inner" in fl_str or "内圈" in fl_str:
+        return "内圈"
+    if "bpfo" in fl_str or "outer" in fl_str or "外圈" in fl_str:
+        return "外圈"
+    if "复合" in fl_str or "compound" in fl_str:
+        return "复合"
+    if "abnormal" in fl_str or "bearing_" in fl_str:
+        return "外圈"
+    return "健康"
+
+def map_fault_label_cw(fl) -> str:
+    """CW三分类映射"""
+    fl_str = str(fl).lower()
+    if "内圈" in fl_str or "bpfi" in fl_str:
+        return "内圈"
+    if "外圈" in fl_str or "bpfo" in fl_str:
+        return "外圈"
+    if "abnormal" in fl_str:
+        return "外圈"
+    return "健康"
+
+def map_fault_label_gear(fl) -> str:
+    """WTG五分类映射"""
+    fl_str = str(fl).lower()
+    if "断齿" in fl_str or "break" in fl_str:
+        return "断齿"
+    if "缺齿" in fl_str or "missing" in fl_str:
+        return "缺齿"
+    if "裂纹" in fl_str or "crack" in fl_str:
+        return "裂纹"
+    if "磨损" in fl_str or "wear" in fl_str:
+        return "磨损"
+    if "abnormal" in fl_str:
+        return "磨损"
+    return "健康"
+
 # ─── 指标计算 ───
 def compute_metrics(y_true, y_pred, classes=None):
     n = len(y_true)

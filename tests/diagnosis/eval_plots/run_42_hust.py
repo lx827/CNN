@@ -97,21 +97,8 @@ def run_multiclass():
             t1 = time.perf_counter()
             res = run_research_ensemble(sig, FS, bearing_params=BP, max_seconds=MAX_S)
             times.append((time.perf_counter() - t1) * 1000)
-            fl = res.get("fault_label", "健康")
-            # 兼容多种标签格式：中文 / 英文 / bearing_xxx
-            fl_str = str(fl).lower()
-            if "健康" in fl_str or "normal" in fl_str or "unknown" in fl_str or fl_str == "":
-                pred = "健康"
-            elif "球故障" in fl_str or "滚动体" in fl_str or "bsf" in fl_str or "ball" in fl_str:
-                pred = "球故障"
-            elif "内圈" in fl_str or "bpfi" in fl_str or "inner" in fl_str:
-                pred = "内圈"
-            elif "外圈" in fl_str or "bpfo" in fl_str or "outer" in fl_str:
-                pred = "外圈"
-            elif "复合" in fl_str or "compound" in fl_str:
-                pred = "复合"
-            else:
-                pred = "健康"  # fallback
+            fl = res.get("fault_label", "unknown")
+            pred = map_fault_label_bearing(fl)
             y_true.append(label); y_pred.append(pred)
         except Exception: pass
 

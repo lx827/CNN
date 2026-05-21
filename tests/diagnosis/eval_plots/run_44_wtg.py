@@ -75,12 +75,8 @@ def run_multiclass():
             t1 = time.perf_counter()
             res = run_research_ensemble(sig, FS, bearing_params=BP, gear_teeth=GP, max_seconds=MAX_S)
             times.append((time.perf_counter() - t1) * 1000)
-            fl = res.get("fault_label", "健康")
-            pred = "健康"
-            if "断齿" in str(fl): pred = "断齿"
-            elif "缺齿" in str(fl): pred = "缺齿"
-            elif "裂纹" in str(fl) or "crack" in str(fl).lower(): pred = "裂纹"
-            elif "磨损" in str(fl) or "wear" in str(fl).lower(): pred = "磨损"
+            fl = res.get("fault_label", "unknown")
+            pred = map_fault_label_gear(fl)
             y_true.append(label); y_pred.append(pred)
         except Exception: pass
 
