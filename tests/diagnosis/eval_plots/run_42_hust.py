@@ -29,7 +29,7 @@ def run_binary():
     results = {"total": len(files), "healthy": len(healthy), "fault": len(files) - len(healthy),
                "methods": {}}
     methods = [
-        ("VMD", BearingMethod.VMD_ENVELOPE), ("DWT", BearingMethod.DWT_ENVELOPE),
+        ("VMD", BearingMethod.VMD_ENVELOPE), ("DWT", BearingMethod.DWT),
         ("标准包络", BearingMethod.ENVELOPE), ("EMD", BearingMethod.EMD_ENVELOPE),
         ("MED增强", BearingMethod.MED), ("MCKD", BearingMethod.MCKD),
         ("Teager", BearingMethod.TEAGER), ("谱峭度重加权", BearingMethod.SPECTRAL_KURTOSIS),
