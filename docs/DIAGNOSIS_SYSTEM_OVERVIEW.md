@@ -308,7 +308,7 @@ $$
 | 频域补偿（无时域冲击时） | critical ≥ 2 或 (critical≥1 & warning≥2) → 强制打开 | 不补偿 |
 | 旋转谐波门控 | low_freq_ratio > 0.55 → 阻塞 | 同 |
 
-**有齿轮参数时**（`has_gear_params = True`，即配置了 input 齿数）：
+**有齿轮参数时**（`has_gear_params = True`，即配置了 input 齿数或 sun 齿数）：
 
 ```
 若 impulse_context 且 非 rotation_dominant:
@@ -339,7 +339,7 @@ $$
 
 ```python
 has_bearing_params(p)  →  p.n > 0 且 p.d > 0 且 p.D > 0  # 三参数均有效
-has_gear_params(gt)    →  gt.input > 0                    # 只需主动轮齿数
+has_gear_params(gt)    →  gt.input > 0 or gt.sun > 0      # 定轴箱/行星箱
 ```
 
 **诊断矩阵**：

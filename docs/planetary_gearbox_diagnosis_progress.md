@@ -205,7 +205,7 @@ DiagnosisEngine.analyze_research_ensemble()  ← ensemble.py 主入口
 | `gear/__init__.py` | `_evaluate_gear_faults`: 阈值评估 | 行星箱: SER>15/20, CAR>1e10/1e12, sideband≥8/10, order_kurt>50/200 |
 | `gear/metrics.py` | SER/FM4/M6A/M8A/边频带计算 | `analyze_sidebands_order` 添加 `spacing` 参数 |
 | `health_score.py` | 健康度评分 | `is_gear_device` 分离: 齿轮设备kurt阈值>10/>12/>20, crest>12/>15; 轴承设备保持kurt>5/>8/>10/>20 |
-| `ensemble.py` | 多算法集成+置信度 | `_gear_confidence`: 时域证据门控(GEAR_KURT_THRESHOLD=12, GEAR_CREST_THRESHOLD=15) |
+| `ensemble.py` | 多算法集成+置信度 | `_gear_confidence`: 行星箱时域证据门控(GEAR_KURT_THRESHOLD=6, GEAR_CREST_THRESHOLD=8)；`_fault_label` 齿轮优先 |
 | `analyzer.py` | 设备级融合+fault_probabilities | kurt>12 → "齿轮磨损"概率映射(0.3~0.8) |
 
 ### 4.3 阈值不一致问题 ⚠️

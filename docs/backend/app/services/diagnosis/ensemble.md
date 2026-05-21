@@ -33,7 +33,7 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]
 **参数有效性判断已统一到 `features.py`**：
 
 - `has_bearing_params(bearing_params)` — 轴承参数有效性（n, d, D 均 >0）
-- `has_gear_params(gear_teeth)` — 齿轮参数有效性（input >0）
+- `has_gear_params(gear_teeth)` — 齿轮参数有效性（input >0 或 sun >0，定轴箱/行星箱通用）
 
 ensemble.py 通过 `from .features import has_bearing_params, has_gear_params` 导入统一版本，不再本地定义。
 
@@ -57,7 +57,7 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
 
 **行星齿轮箱特殊处理**（2025-05）：
 
-- 当 `planet_count >= 3` 时，使用独立阈值：`kurt > 10` 或 `crest > 10` 或 `kurt < 5.5` 打开 impulse gate
+- 当 `planet_count >= 3` 时，使用独立阈值：`kurt > 6` 或 `crest > 8` 或 `kurt < 5.5` 打开 impulse gate
 - warning hits 给 0.05~0.35 分（根据命中数量和类型），critical hits 给 0.20~0.60 分
 - `abnormal = confidence >= 0.55`
 
@@ -79,10 +79,10 @@ def _fault_label(best_bearing: Dict, best_gear: Dict, bearing_score: float, gear
 - **返回值**：`str` — 如 `"gear_break"`、`"gear_crack"`、`"gear_wear"`、`"gear_missing"`、`"gear_abnormal"`、`"bearing_abnormal"`、`"unknown"`
 - **说明**：生成综合故障标签
 
-**逻辑**：
+**逻辑**（Bug #13 修复后）：
 
-1. `gear_score > bearing_score` 且 `gear_score >= 0.55` → 调用 `_infer_gear_subtype_from_indicators(best_gear)` 推断具体子类型
-2. `gear_score > bearing_score` 但 `< 0.55` → 仍尝试从 indicators 推断子类型（低 confidence 但有 indicators）
+1. **齿轮优先**：`gear_score >= 0.55` 或有齿轮子类型 ∧ `gear_score > 0` → 返回齿轮标签
+2. 齿轮弱信号但有子类型 → 仍返回齿轮标签
 3. 否则检查轴承 indicators → 返回轴承标签
 4. 无明确证据 → `"unknown"`
 

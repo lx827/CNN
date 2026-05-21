@@ -163,7 +163,7 @@ def has_bearing_params(bearing_params: Optional[Dict]) -> bool
 def has_gear_params(gear_teeth: Optional[Dict]) -> bool
 ```
 
-- **说明**：齿轮参数有效性统一入口（input > 0）。本函数取代了原先在 `ensemble.py` 和 `gear.py` 中的两处重复实现。
+- **说明**：齿轮参数有效性统一入口（input > 0 或 sun > 0，定轴箱/行星箱通用）。本函数取代了原先在 `ensemble.py` 和 `gear.py` 中的两处重复实现。
 
 ### `robust_z`
 
