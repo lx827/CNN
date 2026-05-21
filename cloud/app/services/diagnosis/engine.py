@@ -1037,12 +1037,17 @@ def _evaluate_bearing_faults(
             if k in ("BPFO", "BPFI", "BSF") and isinstance(v, dict)
         }
         if phys_snrs:
-            max_snr = max(phys_snrs.values())
+            sorted_snrs = sorted(phys_snrs.values(), reverse=True)
+            max_snr = sorted_snrs[0]
+            second_snr = sorted_snrs[1] if len(sorted_snrs) > 1 else 1.0
+            dominant_ratio = max_snr / max(second_snr, 1.0)
             for k, v in param_indicators.items():
                 if k in ("BPFO", "BPFI", "BSF") and isinstance(v, dict):
                     snr_val = v.get("snr", 0.0)
-                    # 主导峰（最强且超过基础阈值）或超高置信度
-                    v["significant"] = (snr_val > 4.5 and snr_val == max_snr) or (snr_val > 15.0)
+                    # 主导峰需同时满足：>4.5 基础阈值 + 是最高峰 + 比次强峰高 1.5×
+                    # 超高 SNR（>15）单独放行，不要求主导比
+                    is_dominant = snr_val > 4.5 and snr_val == max_snr and dominant_ratio > 1.5
+                    v["significant"] = is_dominant or (snr_val > 15.0)
 
         # 合并：物理参数路径 + 统计路径（以 _stat 后缀区分）
         # 有物理参数时，若 BPFO/BPFI/BSF 全部未检出，统计指标不独立报警

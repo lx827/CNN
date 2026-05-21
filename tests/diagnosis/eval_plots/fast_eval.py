@@ -173,7 +173,7 @@ def eval_gear_binary():
             continue
         try:
             t1 = time.perf_counter()
-            res = run_research_ensemble(sig, FS, gear_teeth=GEAR_PARAMS, max_seconds=5.0)
+            res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, gear_teeth=GEAR_PARAMS, max_seconds=5.0)
             times.append((time.perf_counter() - t1) * 1000)
             hs = res.get("health_score", 100)
             st = res.get("status", "normal")

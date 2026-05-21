@@ -631,7 +631,7 @@ def run_44_wtg_multiclass():
                 continue
             try:
                 t1 = time.perf_counter()
-                res = run_research_ensemble(sig, FS, gear_teeth=GEAR_PARAMS, max_seconds=MAX_S)
+                res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, gear_teeth=GEAR_PARAMS, max_seconds=MAX_S)
                 times.append((time.perf_counter() - t1) * 1000)
                 fl = str(res.get("fault_label", "unknown")).lower()
                 if "break" in fl or "broken" in fl:

@@ -123,7 +123,7 @@ def _worker_ensemble_gear(fname, is_healthy):
     if sig is None:
         return None
     try:
-        res = run_research_ensemble(sig, FS, gear_teeth=GEAR_PARAMS, max_seconds=MAX_S)
+        res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, gear_teeth=GEAR_PARAMS, max_seconds=MAX_S)
         hs = res.get("health_score", 100)
         status = res.get("status", "normal")
         pred_healthy = status == "normal" and hs >= 70
@@ -473,7 +473,7 @@ def run_expB2_gear_multiclass():
             if sig is None:
                 continue
             try:
-                res = run_research_ensemble(sig, FS, gear_teeth=GEAR_PARAMS, max_seconds=MAX_S)
+                res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, gear_teeth=GEAR_PARAMS, max_seconds=MAX_S)
                 fl = res.get("fault_label", "unknown")
                 pred = _map_gear_label(fl)
                 y_true.append(class_map[cat])
