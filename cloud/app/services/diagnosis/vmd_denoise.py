@@ -10,7 +10,7 @@ VMD 将信号分解为若干个本征模态函数（IMF），
 通过筛选高相关性 + 高峭度的 IMF 重构信号，实现降噪与特征增强。
 """
 import numpy as np
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 
 def _vmd_core(
