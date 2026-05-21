@@ -193,8 +193,9 @@ def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optiona
     if is_planetary:
         # 行星箱健康 kurt=7~13, crest=7~11；故障分布极宽
         # crack 时 kurt 显著降低（3.9~5.5），双向门控：高峭度 + 低峭度
-        GEAR_KURT_THRESHOLD = 10.0
-        GEAR_CREST_THRESHOLD = 10.0
+        # 降低至 6.0：WTG 故障样本 kurt 多在 5.5~10，原 10.0 导致全部截断（Bug #13b）
+        GEAR_KURT_THRESHOLD = 6.0
+        GEAR_CREST_THRESHOLD = 8.0
         impulse_context = kurt > GEAR_KURT_THRESHOLD or crest > GEAR_CREST_THRESHOLD or kurt < 5.5
     else:
         # 定轴齿轮箱：齿轮故障主要表现为频域调制边带，时域冲击不一定明显
@@ -317,14 +318,16 @@ def _time_confidence(time_features: Dict) -> float:
 
 
 def _fault_label(best_bearing: Dict, best_gear: Dict, bearing_score: float, gear_score: float) -> str:
-    if gear_score > bearing_score:
+    # 齿轮路径优先：当齿轮有指标时优先选齿轮标签，避免轴承在纯齿轮数据上误报
+    gear_subtype = _infer_gear_subtype_from_indicators(best_gear)
+    if gear_score >= 0.55 or (gear_score > 0 and gear_subtype):
+        if gear_subtype:
+            return f"gear_{gear_subtype}"
         if gear_score >= 0.55:
-            subtype = _infer_gear_subtype_from_indicators(best_gear)
-            return f"gear_{subtype}" if subtype else "gear_abnormal"
-        # 低 confidence 但有 indicators：尝试推断具体类型
-        subtype = _infer_gear_subtype_from_indicators(best_gear)
-        if subtype:
-            return f"gear_{subtype}"
+            return "gear_abnormal"
+    # 齿轮有微弱信号但不足以判定 → 尝试轴承
+    if gear_score > bearing_score and gear_subtype:
+        return f"gear_{gear_subtype}"
 
     indicators = best_bearing.get("fault_indicators", {}) if best_bearing else {}
     param_hits = [

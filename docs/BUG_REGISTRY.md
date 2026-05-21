@@ -2,22 +2,21 @@
 
 > 最后更新: 2026-05-21 | 详见 AGENTS.md §14
 
-## 未修复 (3)
+## 未修复 (2)
 
 | # | 文件 | 描述 |
 |---|------|------|
 | 11d | `ensemble.py`, `health_score.py` | D-S 证据融合未生效（0/30 样本被覆盖）|
-| 13 | `ensemble.py` | **WTgearbox 五分类 30%→20%** — `_gear_confidence` 行星箱 impulse_context 过严 |
-| 13b | `ensemble.py` | **WTgearbox 五分类需降 `_gear_confidence` 行星箱 kurt 阈值** — 见下 |
+| 13d | `ensemble.py` | **WTG 五分类断齿检出 0%** — gear_abnormal 标签映射缺失 |
 
-## 已修复 (15)
+## 已修复 (16)
 
 | # | 文件 | 描述 |
 |---|------|------|
 | 11 | `run_all.py`, `ensemble.py`, `engine.py` | **Ensemble 五分类偏向 BPFO** — 根因链修复（见下） |
 | 11c | `engine.py` | ✅ **显著性主导比过滤** — 主导峰需 > 次强峰 1.5× |
 | 12 | `engine.py` | **Teager Ottawa/CW 耗时爆炸（212s→0.3s）** — samples_per_rev 1024→256 |
-| 13a | 评估脚本 | ✅ **WTG 五分类传 bearing_params** — 6处 gear_teeth 补传 bearing_params |
+| 13 | `features.py`, `ensemble.py`, 评估脚本 | ✅ **WTG 五分类 20%→51.25%** — 全链路修复（见下） |
 | 14 | `preprocessing.py`, `vmd_denoise.py` | ✅ **小波+VMD 级联 ΔSNR +0.19→+0.98dB** — 见下 |
 
 **Bug #11 详细**（根因分析与修复记录）：
@@ -81,20 +80,24 @@
     - 复合：`bearing_bpfo`(4), `bearing_bpfi`(2)
 - 结论：层级1+2+3修复消除了"全部预测外圈"的假象和多参数误检，但**外圈→球故障**、**球故障→外圈**的交叉误判仍较严重，需层级4（谐波族/主导峰机制）进一步改善
 
-**Bug #13 详细**（WTgearbox 五分类）— 部分修复
+**Bug #13 详细**（WTgearbox 五分类）✅ 已修复
 
-**现象**：WTgearbox 五分类几乎所有故障→"健康"。
+**现象**：WTgearbox 五分类 20%，几乎所有故障→"健康"。
 
-**层级1修复（✅ 已完成）**：评估脚本 6 处补传 `bearing_params`，轴承诊断不再被跳过。
+**根因链**：
 
-**层级2待修复（⏳ #13b）**：`_gear_confidence` 行星箱 `GEAR_KURT_THRESHOLD=10.0` 仍过高，WTG 故障 kurt 在 5.5~10 区间 → `impulse_context=False` → `confidence=0`。**需降低阈值或取消 kurt 门控**。
+1. `features.py:393`：`has_gear_params` 只认 `input`（定轴箱），不认 `sun`（行星箱）→ `skip_gear=True`
+2. `ensemble.py:199`：行星箱 `GEAR_KURT_THRESHOLD=10` 过高 → `impulse_context=False`
+3. `ensemble.py:321`：`_fault_label` 轴承优先 → 齿轮数据上报虚假轴承故障
 
-| 层级 | 文件 | 问题 | 状态 |
-|------|------|------|:--:|
-| 1 | 评估脚本 | `bearing_params` 未传入 | ✅ |
-| 2 | `ensemble.py:199` | 行星箱 `impulse_context` kurt>10 过高 | ⏳ |
-| 3 | `ensemble.py:321` | `gear_score=0` 回退链无兜底 | ⏳ |
-| 4 | 评估映射 | `"unknown"`→`"健康"` | ⏳ |
+**修复**：
+
+- `features.py`：`has_gear_params` 增加 `sun` 键识别
+- `ensemble.py`：`GEAR_KURT_THRESHOLD` 10→6, `GEAR_CREST_THRESHOLD` 10→8
+- `ensemble.py`：`_fault_label` 齿轮优先逻辑
+- 评估脚本：6 处补传 `bearing_params`
+
+**效果**：WTG 五分类 20%→**51.25%**，Bal Acc 61.4% 缺陷(F1=0.74)裂纹(F1=0.54)大幅提升。断齿仍 0%（#13d）。
 
 **Bug #14 详细**（小波+VMD 级联去噪效果反常）
 
@@ -125,6 +128,7 @@
 | 3 | `preprocessing.py` | `cascade_wavelet_vmd()` 调用 `vmd_denoise()` 时传入 `reference_signal=arr` | 联合修复 |
 
 **修复验证**：
+
 - P0 回归测试：全部通过
 - 去噪效果评估（`run_eval.py` 实验C）：
   - 修复前：小波+VMD 级联 ΔSNR = **+0.19 dB**

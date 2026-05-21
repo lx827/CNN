@@ -390,7 +390,10 @@ def has_gear_params(gear_teeth: Optional[Dict]) -> bool:
     注意：调用方应先将通道级格式转换为设备级格式再传入。
     """
     try:
-        return bool(gear_teeth and float(gear_teeth.get("input") or 0) > 0)
+        return bool(gear_teeth and (
+            float(gear_teeth.get("input") or 0) > 0 or
+            float(gear_teeth.get("sun") or 0) > 0  # 行星箱用 sun 键
+        ))
     except (TypeError, ValueError):
         return False
 
