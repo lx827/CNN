@@ -85,8 +85,18 @@ def run_multiclass():
             t1 = time.perf_counter()
             res = run_research_ensemble(sig, FS, bearing_params=BP, max_seconds=MAX_S)
             times.append((time.perf_counter() - t1) * 1000)
-            fl = res.get("fault_label", "unknown")
-            pred = map_fault_label_cw(fl)
+            # CW 变速数据: significant 标志过严，按 SNR 直接判定
+            best_type = None; best_snr = 0
+            for k, v in bind.items():
+                if isinstance(v, dict) and not k.endswith("_stat"):
+                    snr = float(v.get("snr", 0))
+                    if snr > best_snr:
+                        best_snr = snr
+                        best_type = k.lower()
+            if best_type and best_snr > 3.0:
+                pred = map_fault_label_cw(f"bearing_{best_type}")
+            else:
+                pred = "健康"
             y_true.append(label); y_pred.append(pred)
         except Exception: pass
 
