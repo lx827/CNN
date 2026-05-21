@@ -259,11 +259,14 @@ class DiagnosisEngine:
             result = med_envelope_analysis(arr, fs)
         elif self.bearing_method == BearingMethod.TEAGER:
             # Teager 对变速敏感：先阶次跟踪角域重采样，消除转速调制后再分析
+            # samples_per_rev=256（非1024）：避免信号膨胀触发 fast_kurtogram 的
+            # STFT O(N²) 行为。256点/转对包络分析足够（角分辨率 ~1.4°）
             if rot_freq and rot_freq > 0:
-                arr_order, _ = _order_tracking(arr, fs, rot_freq, samples_per_rev=1024)
+                SAMP_PER_REV = 256
+                arr_order, _ = _order_tracking(arr, fs, rot_freq, samples_per_rev=SAMP_PER_REV)
                 arr_order = arr_order - arr_order.mean()
-                # 角域重采样后等效采样率 = samples_per_rev × rot_freq
-                fs_order = 1024 * rot_freq
+                # 角域重采样后等效采样率 = SAMP_PER_REV × rot_freq
+                fs_order = SAMP_PER_REV * rot_freq
                 result = teager_envelope_analysis(arr_order, fs_order)
             else:
                 result = teager_envelope_analysis(arr, fs)
@@ -1025,6 +1028,21 @@ def _evaluate_bearing_faults(
                     "theory_hz": round(f_hz, 2), "detected_hz": None,
                     "peak_amp": 0.0, "snr": 0.0, "significant": False,
                 }
+
+        # 相对主导过滤：三个故障频率中，只有最强峰或超高 SNR 才保留 significant
+        # 避免健康样本因随机波动导致多参数误检（Bug #11b）
+        phys_snrs = {
+            k: v.get("snr", 0.0)
+            for k, v in param_indicators.items()
+            if k in ("BPFO", "BPFI", "BSF") and isinstance(v, dict)
+        }
+        if phys_snrs:
+            max_snr = max(phys_snrs.values())
+            for k, v in param_indicators.items():
+                if k in ("BPFO", "BPFI", "BSF") and isinstance(v, dict):
+                    snr_val = v.get("snr", 0.0)
+                    # 主导峰（最强且超过基础阈值）或超高置信度
+                    v["significant"] = (snr_val > 4.5 and snr_val == max_snr) or (snr_val > 15.0)
 
         # 合并：物理参数路径 + 统计路径（以 _stat 后缀区分）
         # 有物理参数时，若 BPFO/BPFI/BSF 全部未检出，统计指标不独立报警

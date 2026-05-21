@@ -307,13 +307,14 @@ def run_42_hust_multiclass():
                 res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S)
                 times.append((time.perf_counter() - t1) * 1000)
                 fl = str(res.get("fault_label", "unknown")).lower()
-                if "bpfo" in fl or "outer" in fl:
+                # 精确匹配主导故障类型（修复子串匹配 Bug）
+                if fl == "bearing_bpfo" or "outer" in fl:
                     pred = "外圈"
-                elif "bpfi" in fl or "inner" in fl:
+                elif fl == "bearing_bpfi" or "inner" in fl:
                     pred = "内圈"
-                elif "bsf" in fl or "ball" in fl:
+                elif fl == "bearing_bsf" or "ball" in fl:
                     pred = "球故障"
-                elif "compound" in fl or "bpfo_bpfi" in fl:
+                elif "compound" in fl or fl == "bearing_bpfo_bpfi" or fl == "bearing_bpfo_bsf" or fl == "bearing_bpfi_bsf":
                     pred = "复合"
                 elif "healthy" in fl or "normal" in fl or "unknown" in fl:
                     pred = "健康"
@@ -472,9 +473,10 @@ def run_43_ottawa_multiclass():
                 res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S)
                 times.append((time.perf_counter() - t1) * 1000)
                 fl = str(res.get("fault_label", "unknown")).lower()
-                if "bpfo" in fl or "outer" in fl:
+                # 精确匹配主导故障类型（修复子串匹配 Bug）
+                if fl == "bearing_bpfo" or "outer" in fl:
                     pred = "外圈"
-                elif "bpfi" in fl or "inner" in fl:
+                elif fl == "bearing_bpfi" or "inner" in fl:
                     pred = "内圈"
                 elif "healthy" in fl or "normal" in fl or "unknown" in fl:
                     pred = "健康"

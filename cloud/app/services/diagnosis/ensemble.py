@@ -328,11 +328,15 @@ def _fault_label(best_bearing: Dict, best_gear: Dict, bearing_score: float, gear
 
     indicators = best_bearing.get("fault_indicators", {}) if best_bearing else {}
     param_hits = [
-        name for name, item in indicators.items()
+        (name, float(item.get("snr", 0.0)))
+        for name, item in indicators.items()
         if isinstance(item, dict) and item.get("significant") and not name.endswith("_stat")
     ]
     if param_hits:
-        return "bearing_" + "_".join(param_hits[:2])
+        # 按 SNR 降序取主导故障类型，避免多故障拼接导致子串误判
+        param_hits.sort(key=lambda x: x[1], reverse=True)
+        dominant = param_hits[0][0].lower()
+        return f"bearing_{dominant}"
     if bearing_score >= 0.55:
         return "bearing_abnormal"
     return "unknown"

@@ -183,23 +183,19 @@ def eval_denoise():
     print(f"\n{'='*60}\n去噪效果对比\n{'='*60}")
     result = {"methods": {}}
 
-    for label, fcode in [("外圈故障", "O"), ("健康", "H")]:
-        files = sorted(f for f in HUST.glob("*-X.npy")
-                       if (lambda s, fc=fcode: (lambda x: {"H": "H", "N": "H", "B": "B", "I": "I", "O": "O", "C": "C"}.get(x))(s.replace(".npy","").rsplit("-",1)[0].split("_")[-1]) if s.replace(".npy","").rsplit("-",1)[0].split("_")[-1] in "HNBIOCh" else None)(f.name) == fc)
-        # 简化：直接按文件名匹配
-        files2 = sorted(f for f in HUST.glob("*-X.npy") if
-                        (lambda n: [p for p in n.replace(".npy","").rsplit("-",1)[0].split("_") if p in "HNBIOCh"][-1] if [p for p in n.replace(".npy","").rsplit("-",1)[0].split("_") if p in "HNBIOCh"] else None)(f.name) in ({fc:fc,"H":fc}.get(fcode,fcode)))
-        # 太复杂，手动收集
-        pass
-
-    # 简化版：直接找文件
-    def fc(f): 
-        s=f.replace(".npy","").rsplit("-",1)[0]
+    def fc(f):
+        s = f.replace(".npy", "").rsplit("-", 1)[0]
         for p in s.split("_"):
-            if p in "HNBIOCh": return {"H":"H","N":"H","B":"B","I":"I","O":"O","C":"C"}.get(p)
+            if p in "HNBIOCh":
+                return {"H": "H", "N": "H", "B": "B", "I": "I", "O": "O", "C": "C"}.get(p)
+        return None
+
     for label, fcode in [("外圈故障", "O"), ("健康", "H")]:
         files = sorted(f for f in HUST.glob("*-X.npy") if fc(f.name) == fcode)
-        if not files: continue
+        if not files:
+            print(f"  [{label}] 未找到文件")
+            continue
+        print(f"  [{label}] 使用: {files[0].name}")
         sig_c = load_sig(HUST, files[0].name)
         np.random.seed(42)
         sig_n = sig_c + np.random.randn(len(sig_c)) * np.std(sig_c)
@@ -212,10 +208,11 @@ def eval_denoise():
             try:
                 proc = engine.preprocess(sig_n)
                 rp = np.var(sig_c - proc[:len(sig_c)])
-            except: rp = bp
+            except Exception:
+                rp = bp
             dsnr = 10 * np.log10(max(bp, 1e-12) / max(rp, 1e-12))
             result["methods"].setdefault(dl, {})[label] = round(dsnr, 2)
-            print(f"  {dl} [{label}]: DSNR={dsnr:+.1f}dB")
+            print(f"    {dl}: DSNR={dsnr:+.1f}dB")
 
     return result
 
