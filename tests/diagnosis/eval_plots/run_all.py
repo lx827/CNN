@@ -676,6 +676,88 @@ def run_44_wtg_multiclass():
 
 
 # ═══════════════════════════════════════════════════════════
+# 4.4b WTgearbox 齿轮数据上运行轴承方法（跨域特异性测试）
+# ═══════════════════════════════════════════════════════════
+def run_44b_wtg_bearing_cross():
+    print("\n" + "=" * 60)
+    print("4.4b WTgearbox 轴承方法跨域测试（齿轮数据）")
+    print("=" * 60)
+
+    files_healthy = sorted(f.name for f in WTGEAR_DIR.glob("He_*-c1.npy"))
+    files_fault = sorted(f.name for f in WTGEAR_DIR.glob("*.npy")
+                         if "-c1.npy" in f.name and not f.name.startswith("He"))
+    files = [(f, True) for f in files_healthy] + [(f, False) for f in files_fault]
+    print(f"  健康:{len(files_healthy)} 故障:{len(files_fault)} 总计:{len(files)}")
+
+    results = {"total": len(files), "healthy": len(files_healthy),
+               "fault": len(files_fault), "methods": {}}
+
+    METHODS = [
+        ("标准包络", BearingMethod.ENVELOPE),
+        ("Kurtogram", BearingMethod.KURTOGRAM),
+        ("CPW预白化", BearingMethod.CPW),
+        ("MED增强", BearingMethod.MED),
+        ("MCKD", BearingMethod.MCKD),
+        ("Teager", BearingMethod.TEAGER),
+        ("谱峭度重加权", BearingMethod.SPECTRAL_KURTOSIS),
+        ("DWT", BearingMethod.DWT),
+        ("EMD", BearingMethod.EMD_ENVELOPE),
+        ("VMD", BearingMethod.VMD_ENVELOPE),
+    ]
+
+    for name_cn, method_val in METHODS:
+        t0 = time.perf_counter()
+        correct, total_t, times = 0, 0, []
+        for fname, is_healthy in files:
+            sig = load_npy(WTGEAR_DIR, fname)
+            if sig is None:
+                continue
+            try:
+                t1 = time.perf_counter()
+                engine = DiagnosisEngine(
+                    bearing_method=method_val,
+                    bearing_params=BEARING_PARAMS, denoise_method=DenoiseMethod.NONE)
+                res = engine.analyze_bearing(sig, FS)
+                times.append((time.perf_counter() - t1) * 1000)
+                if _bearing_detect(res, is_healthy):
+                    correct += 1
+                total_t += 1
+            except Exception:
+                pass
+        acc = correct / max(total_t, 1) * 100
+        avg_ms = round(np.mean(times), 1) if times else 0
+        total_s = time.perf_counter() - t0
+        print(f"  [{name_cn}] {acc:.2f}% ({correct}/{total_t}) 平均{avg_ms}ms 总{total_s:.0f}s")
+        results["methods"][name_cn] = {"accuracy": round(acc, 2), "correct": correct,
+                                        "total": total_t, "avg_time_ms": avg_ms}
+
+    # Ensemble cross-domain
+    t0 = time.perf_counter()
+    correct, total_t, times = 0, 0, []
+    for fname, is_healthy in files:
+        sig = load_npy(WTGEAR_DIR, fname)
+        if sig is None:
+            continue
+        try:
+            t1 = time.perf_counter()
+            res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S)
+            times.append((time.perf_counter() - t1) * 1000)
+            if _ensemble_detect(res, is_healthy):
+                correct += 1
+            total_t += 1
+        except Exception:
+            pass
+    acc = correct / max(total_t, 1) * 100
+    avg_ms = round(np.mean(times), 1) if times else 0
+    print(f"  [Ensemble] {acc:.2f}% ({correct}/{total_t}) 平均{avg_ms}ms")
+    results["methods"]["Ensemble"] = {"accuracy": round(acc, 2), "correct": correct,
+                                       "total": total_t, "avg_time_ms": avg_ms}
+
+    save_json(results, "44b_wtg_bearing_cross.json")
+    return results
+
+
+# ═══════════════════════════════════════════════════════════
 # 4.5 跨数据集对比
 # ═══════════════════════════════════════════════════════════
 def run_45_cross_dataset():
@@ -724,18 +806,22 @@ def run_46_robustness():
 
     sig_clean = load_npy(HUSTBEAR_DIR, or_files[0].name)
     np.random.seed(42)
+    sig_power = np.var(sig_clean.astype(np.float64))
+    z = np.random.randn(len(sig_clean))   # 固定噪声实现，仅按SNR缩放
 
     snr_levels = [20, 10, 5, 0, -5]
     results = {"snr_levels": snr_levels, "methods": {}}
 
     for name_cn, method_val in [
         ("包络", BearingMethod.ENVELOPE), ("Kurtogram", BearingMethod.KURTOGRAM),
-        ("MED", BearingMethod.MED), ("MCKD", BearingMethod.MCKD),
+        ("CPW", BearingMethod.CPW), ("MED", BearingMethod.MED),
+        ("Teager", BearingMethod.TEAGER), ("谱峭度", BearingMethod.SPECTRAL_KURTOSIS),
+        ("MCKD", BearingMethod.MCKD), ("DWT", BearingMethod.DWT),
+        ("EMD", BearingMethod.EMD_ENVELOPE), ("VMD", BearingMethod.VMD_ENVELOPE),
     ]:
         curve = []
         for snr_db in snr_levels:
-            sig_power = np.var(sig_clean.astype(np.float64))
-            noise = np.sqrt(sig_power / (10 ** (snr_db / 10))) * np.random.randn(len(sig_clean))
+            noise = np.sqrt(sig_power / (10 ** (snr_db / 10))) * z
             try:
                 engine = DiagnosisEngine(
                     bearing_method=method_val,
@@ -753,8 +839,7 @@ def run_46_robustness():
     # Ensemble robustness
     curve = []
     for snr_db in snr_levels:
-        sig_power = np.var(sig_clean.astype(np.float64))
-        noise = np.sqrt(sig_power / (10 ** (snr_db / 10))) * np.random.randn(len(sig_clean))
+        noise = np.sqrt(sig_power / (10 ** (snr_db / 10))) * z
         try:
             res = run_research_ensemble(sig_clean + noise, FS, bearing_params=BEARING_PARAMS, max_seconds=5.0)
             detected = res.get("status", "normal") != "normal" or res.get("health_score", 100) < 70
@@ -794,11 +879,19 @@ def run_47_denoise():
         engine = DiagnosisEngine()
         for dname, dlabel in [
             ("none", "无去噪"), ("wavelet", "小波去噪"), ("vmd", "VMD去噪"),
-            ("med", "MED去噪"), ("wavelet_vmd", "小波+VMD级联"),
+            ("wavelet_vmd", "小波+VMD级联"), ("wavelet_lms", "小波+LMS"),
+            ("emd", "EMD去噪"), ("ceemdan", "CEEMDAN去噪"),
+            ("savgol", "SAVGOL平滑"), ("wavelet_packet", "小波包去噪"),
+            ("ceemdan_wp", "CEEMDAN+小波包"), ("eemd", "EEMD去噪"),
+            ("med", "MED增强"),
         ]:
-            engine.denoise_method = DenoiseMethod(dname)
             try:
-                proc = engine.preprocess(sig_noisy)
+                if dname == "med":
+                    from app.services.diagnosis.preprocessing import minimum_entropy_deconvolution
+                    proc, _ = minimum_entropy_deconvolution(sig_noisy)
+                else:
+                    engine.denoise_method = DenoiseMethod(dname)
+                    proc = engine.preprocess(sig_noisy)
                 rp = np.var(sig_clean - proc[:len(sig_clean)])
             except Exception:
                 rp = base_power
@@ -830,6 +923,7 @@ def main():
     run_43_ottawa_multiclass()
     run_44_wtg_binary()
     run_44_wtg_multiclass()
+    run_44b_wtg_bearing_cross()
     run_45_cross_dataset()
     run_46_robustness()
     run_47_denoise()

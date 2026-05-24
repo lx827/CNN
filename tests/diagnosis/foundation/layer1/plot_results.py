@@ -689,9 +689,13 @@ def plot_wavelet_packet_detail():
         (axes[0], rn, "白噪声", C_FAIL),
         (axes[1], rt, "200Hz单频", C_PASS),
     ]:
-        energies = res.get("node_energies", [])
-        if energies:
-            ax.bar(range(len(energies)), energies, color=c, alpha=0.85)
+        energy_dict = res.get("energy_ratios", {})
+        if energy_dict:
+            nodes = list(energy_dict.keys())
+            vals = list(energy_dict.values())
+            ax.bar(range(len(nodes)), vals, color=c, alpha=0.85)
+            ax.set_xticks(range(len(nodes)))
+            ax.set_xticklabels(nodes, fontsize=8)
         ne = res.get("normalized_entropy", 0)
         mk = MK_OK if (lbl=="白噪声" and ne>0.7) or (lbl=="200Hz单频" and ne<0.7) else MK_NG
         ax.set_title(f"{lbl} | 归一化熵={ne:.3f} [{mk}]\n判定:噪声熵>0.7, 单频熵<0.7为通过")

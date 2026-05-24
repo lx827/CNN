@@ -452,7 +452,25 @@ $$f_{mesh} = Z \cdot f_r$$
 
 #### 2.2.2 角域重采样（Order Tracking）
 
-根据转速脉冲或编码器，将时域信号 $x(t)$ 按等角度 $\Delta\theta$ 重采样为 $x(\theta)$。
+根据转速脉冲或编码器，将时域信号 $x(t)$ 按等角度 $\Delta\theta$ 重采样为 $x(\theta)$。本项目实现三种阶次跟踪模式以适应不同转速工况：
+
+**模式一：单帧阶次跟踪（恒定转速）**
+
+假设整段信号转速恒定，基于估计转频直接等角度重采样后做 FFT。其核心为计算阶次跟踪（Computed Order Tracking, COT）：利用插值将等时间间隔采样转换为等角度间隔采样，消除转速波动导致的频谱模糊 [Potter & Gahleitner, 1995; Fyfe & Munck, 1997]。
+
+**模式二：多帧平均阶次跟踪（转速缓变）**
+
+将信号分帧（默认 1 秒/帧，50% 重叠），每帧独立估计转频并做角域重采样，再插值到公共阶次轴后谱平均。通过 MAD 离群值剔除过滤转速估计异常帧。适用于转速缓慢漂移工况，通过多帧平均抑制随机噪声与瞬时转速估计误差。
+
+**模式三：变速阶次跟踪（转速剧烈变化）**
+
+适用于启停机、扫频等转速剧烈变化工况：
+1. STFT 时频分析，在转频搜索范围内追踪每个时间片的峰值频率，得到瞬时频率 $f_{inst}(t)$
+2. Savitzky-Golay 滤波平滑瞬时频率，抑制 STFT 峰值噪声
+3. 数值积分得到瞬时相位 $\phi(t) = 2\pi \int f_{inst}(t) dt$
+4. 在等相位点（等角度）重采样得到角域信号，再做 FFT 得到阶次谱
+
+该方法本质为基于瞬时频率积分的无键相阶次跟踪 [Urbanek et al., 2013]。
 
 #### 2.2.3 同步平均公式
 
@@ -1396,6 +1414,10 @@ $$m(A) = \frac{\sum_{B\cap C=A} m_1(B)m_2(C)}{1-K}, \quad K = \sum_{B\cap C=\emp
 | **Antoni & Randall (2002)** | _Differential diagnosis of gear and bearing faults_, ASME J. Vib. Acoust. 124: 165-171 | 齿轮与轴承故障鉴别诊断 | 3.4 |
 | **Zakrajsek et al. (1993)** | _An analysis of gear fault detection methods as applied to pitting fatigue failure data_, Proc. MFPT | 多种齿轮故障检测方法对比 | 2.3 |
 | **Bonnardot et al. (2005)** | _Use of the acceleration signal of a gearbox in order to perform angular resampling..._, MSSP 19: 766-785 | 角域重采样技术 | 2.2 |
+| **Potter & Gahleitner (1995)** | _Signal processing for improved order tracking_, SAE Technical Paper 952146 | 计算阶次跟踪（COT）经典方法：等角度插值重采样 | 2.2 |
+| **Vold & Leuridan (1985)** | _High resolution order tracking at extreme slew rates, using Kalman tracking filters_, SAE Technical Paper 851286 | 高变化率下的短时阶次跟踪与分帧处理基础 | 2.2 |
+| **Fyfe & Munck (1997)** | _Analysis of computed order tracking_, MSSP 11(2): 187-205 | COT 插值精度与误差分析 | 2.2 |
+| **Urbanek et al. (2013)** | _Computation of instantaneous frequency and amplitude of non-stationary signals using STFT peak tracking_, IEEE T-IM 62(10): 2754-2763 | STFT 峰值追踪瞬时频率 + 等相位重采样，无键相阶次跟踪 | 2.2 |
 | **汪超等 (2015)** | _基于边频带分析的齿轮故障诊断研究_, 十堰职业技术学院学报 | 边频带与故障模式对应关系 | 2.5 |
 
 ### 行星齿轮箱专用诊断文献
@@ -1422,6 +1444,8 @@ $$m(A) = \frac{\sum_{B\cap C=A} m_1(B)m_2(C)}{1-K}, \quad K = \sum_{B\cap C=\emp
 | **Yuan et al. (2025)** | _Multisensor fault diagnosis via Markov chain and Evidence theory_, EAAI | 高冲突证据下的 D-S 融合 | 4.4.3 |
 | **Hanna et al. (GE)** | _Sideband Energy Ratio_, ADAPT.wind | SER 算法与工程应用 | 2.3.7 |
 | **NASA CR-2009-00039501** | _Gear Fault Detection Effectiveness_ | NA4 开发背景与公式 | 2.3.3 |
+| **Yen & Lin (2000)** | _Wavelet packet feature extraction for vibration monitoring_, IEEE Trans. Industrial Electronics 47(3): 650-667 | 小波包能量/熵特征提取，用于齿轮频带能量重分布检测 | 2.3, 2.7 |
+| **Widrow & Hoff (1960)** | _Adaptive switching circuits_, IRE WESCON Convention Record | LMS 自适应滤波器原始文献，用于小波域自适应噪声抵消 | 4.2 |
 
 ---
 

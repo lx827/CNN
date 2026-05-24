@@ -64,15 +64,70 @@ def plot_engine_deep():
             transform=ax.transAxes, ha="right", va="bottom", fontsize=11,
             bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
 
-    out = PLOT_DIR / "layer4_engine_deep.png"
+    t, p, f = _count_tests(data)
+    ax.text(0.98, 0.02, f"通过: {p}/{t}", transform=ax.transAxes, ha="right",
+            va="bottom", fontsize=11, bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
+
     fig.tight_layout()
-    fig.savefig(out, dpi=150)
+    fig.savefig(PLOT_DIR / "layer4_engine_deep.svg")
     plt.close(fig)
-    print(f"[保存] {out}")
+    print("  [OK] layer4_engine_deep.svg")
+
+
+def _count_tests(data) -> tuple:
+    total, passed, failed = 0, 0, 0
+    if isinstance(data, list):
+        for item in data:
+            t, p, f = _count_tests(item)
+            total += t; passed += p; failed += f
+    elif isinstance(data, dict):
+        if "passed" in data and isinstance(data["passed"], bool):
+            total = 1
+            if data["passed"]: passed = 1
+            else: failed = 1
+        for v in data.values():
+            t, p, f = _count_tests(v)
+            total += t; passed += p; failed += f
+    return total, passed, failed
+
+
+def plot_summary():
+    if not HAS_MPL:
+        return
+    summary = {}
+    for json_name in ["engine_deep", "engine_deep_real"]:
+        data = load_json(f"{json_name}.json")
+        if data:
+            t, p, f = _count_tests(data)
+            if t > 0:
+                label = json_name.replace("engine_", "").replace("_", "\n")
+                summary[label] = {"total": t, "passed": p, "failed": f}
+    if not summary: return
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    labels = list(summary.keys())
+    totals = [v["total"] for v in summary.values()]
+    passed = [v["passed"] for v in summary.values()]
+    failed = [v["failed"] for v in summary.values()]
+    x = range(len(labels))
+    ax.bar(x, passed, color='#52C41A', label='通过')
+    ax.bar(x, failed, bottom=passed, color='#FF4D4F', label='失败')
+    ax.set_xticks(x); ax.set_xticklabels(labels, fontsize=10)
+    ax.set_ylabel("测试数")
+    ax.set_title("Layer 4: 深层逻辑 — 测试通过率汇总", fontsize=12, fontweight='bold')
+    ax.set_ylim(0, max(totals) * 1.3 if totals else 10)
+    ax.legend()
+    for i, (t, p_val) in enumerate(zip(totals, passed)):
+        ax.text(i, t + max(totals) * 0.03, f"{p_val}/{t}", ha='center', fontsize=10, fontweight='bold')
+    plt.tight_layout()
+    fig.savefig(PLOT_DIR / "layer4_summary.svg")
+    plt.close(fig)
+    print("  [OK] layer4_summary.svg")
 
 
 def main():
     plot_engine_deep()
+    plot_summary()
 
 
 if __name__ == "__main__":

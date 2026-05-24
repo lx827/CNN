@@ -47,28 +47,26 @@ def plot_ensemble_helpers():
         return
 
     labels, passed = zip(*items)
-    colors = ["#2ecc71" if p else "#e74c3c" for p in passed]
+    colors = ["#52C41A" if p else "#FF4D4F" for p in passed]
 
     fig, ax = plt.subplots(figsize=(8, max(4, len(items) * 0.4)))
     y = range(len(items))
     ax.barh(y, [1] * len(items), color=colors)
     ax.set_yticks(y)
-    ax.set_yticklabels(labels)
+    ax.set_yticklabels(labels, fontsize=9)
     ax.set_xlim(0, 1)
     ax.set_xticks([])
-    ax.set_title("Layer 5: ensemble.py 辅助函数 — 测试结果")
+    ax.set_title("Layer 5: ensemble.py 辅助函数 — 测试结果", fontsize=12, fontweight='bold')
     ax.invert_yaxis()
 
-    s = data.get("summary", {})
-    ax.text(0.98, 0.02, f"通过: {s.get('passed', 0)}/{s.get('total', 0)}",
-            transform=ax.transAxes, ha="right", va="bottom", fontsize=11,
-            bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
+    t, p, f = _count_tests(data)
+    ax.text(0.98, 0.02, f"通过: {p}/{t}", transform=ax.transAxes, ha="right",
+            va="bottom", fontsize=11, bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
 
-    out = PLOT_DIR / "layer5_ensemble_helpers.png"
     fig.tight_layout()
-    fig.savefig(out, dpi=150)
+    fig.savefig(PLOT_DIR / "layer5_ensemble_helpers.svg")
     plt.close(fig)
-    print(f"[保存] {out}")
+    print("  [OK] layer5_ensemble_helpers.svg")
 
 
 def plot_analyzer_helpers():
@@ -91,7 +89,7 @@ def plot_analyzer_helpers():
         return
 
     labels, passed = zip(*items)
-    colors = ["#2ecc71" if p else "#e74c3c" for p in passed]
+    colors = ["#52C41A" if p else "#FF4D4F" for p in passed]
 
     fig, ax = plt.subplots(figsize=(8, max(3, len(items) * 0.4)))
     y = range(len(items))
@@ -100,24 +98,74 @@ def plot_analyzer_helpers():
     ax.set_yticklabels(labels)
     ax.set_xlim(0, 1)
     ax.set_xticks([])
-    ax.set_title("Layer 5: analyzer.py 辅助函数 — 测试结果")
+    ax.set_title("Layer 5: analyzer.py 辅助函数 — 测试结果", fontsize=12, fontweight='bold')
     ax.invert_yaxis()
 
-    s = data.get("summary", {})
-    ax.text(0.98, 0.02, f"通过: {s.get('passed', 0)}/{s.get('total', 0)}",
-            transform=ax.transAxes, ha="right", va="bottom", fontsize=11,
-            bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
+    t, p, f = _count_tests(data)
+    ax.text(0.98, 0.02, f"通过: {p}/{t}", transform=ax.transAxes, ha="right",
+            va="bottom", fontsize=11, bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
 
-    out = PLOT_DIR / "layer5_analyzer_helpers.png"
     fig.tight_layout()
-    fig.savefig(out, dpi=150)
+    fig.savefig(PLOT_DIR / "layer5_analyzer_helpers.svg")
     plt.close(fig)
-    print(f"[保存] {out}")
+    print("  [OK] layer5_analyzer_helpers.svg")
+
+
+def _count_tests(data) -> tuple:
+    total, passed, failed = 0, 0, 0
+    if isinstance(data, list):
+        for item in data:
+            t, p, f = _count_tests(item)
+            total += t; passed += p; failed += f
+    elif isinstance(data, dict):
+        if "passed" in data and isinstance(data["passed"], bool):
+            total = 1
+            if data["passed"]: passed = 1
+            else: failed = 1
+        for v in data.values():
+            t, p, f = _count_tests(v)
+            total += t; passed += p; failed += f
+    return total, passed, failed
+
+
+def plot_summary():
+    if not HAS_MPL:
+        return
+    summary = {}
+    for json_name in ["ensemble_helpers", "analyzer_helpers", "helpers_real"]:
+        data = load_json(f"{json_name}.json")
+        if data:
+            t, p, f = _count_tests(data)
+            if t > 0:
+                label = json_name.replace("_helpers", "").replace("_", "\n")
+                summary[label] = {"total": t, "passed": p, "failed": f}
+    if not summary: return
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    labels = list(summary.keys())
+    totals = [v["total"] for v in summary.values()]
+    passed = [v["passed"] for v in summary.values()]
+    failed = [v["failed"] for v in summary.values()]
+    x = range(len(labels))
+    ax.bar(x, passed, color='#52C41A', label='通过')
+    ax.bar(x, failed, bottom=passed, color='#FF4D4F', label='失败')
+    ax.set_xticks(x); ax.set_xticklabels(labels, fontsize=10)
+    ax.set_ylabel("测试数")
+    ax.set_title("Layer 5: 辅助函数 — 测试通过率汇总", fontsize=12, fontweight='bold')
+    ax.set_ylim(0, max(totals) * 1.4 if totals else 10)
+    ax.legend()
+    for i, (t, p_val) in enumerate(zip(totals, passed)):
+        ax.text(i, t + max(totals) * 0.03, f"{p_val}/{t}", ha='center', fontsize=10, fontweight='bold')
+    plt.tight_layout()
+    fig.savefig(PLOT_DIR / "layer5_summary.svg")
+    plt.close(fig)
+    print("  [OK] layer5_summary.svg")
 
 
 def main():
     plot_ensemble_helpers()
     plot_analyzer_helpers()
+    plot_summary()
 
 
 if __name__ == "__main__":
