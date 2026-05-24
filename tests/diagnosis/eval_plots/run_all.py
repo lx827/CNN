@@ -794,59 +794,153 @@ def run_45_cross_dataset():
 # ═══════════════════════════════════════════════════════════
 # 4.6 噪声鲁棒性
 # ═══════════════════════════════════════════════════════════
-def run_46_robustness():
+def run_46_robustness(n_mc=10):
+    """
+    4.6 噪声鲁棒性 — Monte-Carlo 统计版
+    使用多个样本 × 多次独立噪声实现，输出检出率/误报率。
+    """
     print("\n" + "=" * 60)
-    print("4.6 噪声鲁棒性")
+    print("4.6 噪声鲁棒性 (Monte-Carlo, 多样本)")
     print("=" * 60)
 
     or_files = sorted(f for f in HUSTBEAR_DIR.glob("*-X.npy") if _fault_code_hust(f.name) == "O")
-    if not or_files:
-        print("  未找到外圈故障文件")
+    h_files = sorted(f for f in HUSTBEAR_DIR.glob("*-X.npy") if _fault_code_hust(f.name) == "H")
+    if not or_files or not h_files:
+        print("  未找到足够样本")
         return None
 
-    sig_clean = load_npy(HUSTBEAR_DIR, or_files[0].name)
-    np.random.seed(42)
-    sig_power = np.var(sig_clean.astype(np.float64))
-    z = np.random.randn(len(sig_clean))   # 固定噪声实现，仅按SNR缩放
-
+    # 使用全部可用样本（各5个），每个样本每个SNR跑 n_mc 次
+    or_files = or_files[:5]
+    h_files = h_files[:5]
     snr_levels = [20, 10, 5, 0, -5]
-    results = {"snr_levels": snr_levels, "methods": {}}
 
-    for name_cn, method_val in [
+    methods = [
         ("包络", BearingMethod.ENVELOPE), ("Kurtogram", BearingMethod.KURTOGRAM),
         ("CPW", BearingMethod.CPW), ("MED", BearingMethod.MED),
         ("Teager", BearingMethod.TEAGER), ("谱峭度", BearingMethod.SPECTRAL_KURTOSIS),
         ("MCKD", BearingMethod.MCKD), ("DWT", BearingMethod.DWT),
         ("EMD", BearingMethod.EMD_ENVELOPE), ("VMD", BearingMethod.VMD_ENVELOPE),
-    ]:
+    ]
+
+    results = {"snr_levels": snr_levels, "methods": {}}
+
+    def _detected(res):
+        inds = res.get("fault_indicators", {})
+        return any(v.get("significant") for k, v in inds.items()
+                   if isinstance(v, dict) and not k.endswith("_stat"))
+
+    for name_cn, method_val in methods:
+        print(f"  测试方法: {name_cn}")
         curve = []
         for snr_db in snr_levels:
-            noise = np.sqrt(sig_power / (10 ** (snr_db / 10))) * z
-            try:
-                engine = DiagnosisEngine(
-                    bearing_method=method_val,
-                    bearing_params=BEARING_PARAMS, denoise_method=DenoiseMethod.NONE)
-                res = engine.analyze_bearing(sig_clean + noise, FS)
-                inds = res.get("fault_indicators", {})
-                detected = any(v.get("significant") for k, v in inds.items()
-                               if isinstance(v, dict) and not k.endswith("_stat"))
-                curve.append({"snr_db": snr_db, "detected": detected})
-                print(f"    {name_cn} SNR={snr_db}dB: {'检出' if detected else '未检出'}")
-            except Exception:
-                curve.append({"snr_db": snr_db, "detected": False})
+            detect_count = 0
+            total_fault = 0
+            fp_count = 0
+            total_healthy = 0
+
+            # 故障样本 — Monte-Carlo
+            for fpath in or_files:
+                sig_clean = load_npy(HUSTBEAR_DIR, fpath.name)
+                if sig_clean is None:
+                    continue
+                sig_power = np.var(sig_clean.astype(np.float64))
+                for _ in range(n_mc):
+                    noise = np.random.normal(0, np.sqrt(sig_power / (10 ** (snr_db / 10))), len(sig_clean))
+                    try:
+                        engine = DiagnosisEngine(
+                            bearing_method=method_val,
+                            bearing_params=BEARING_PARAMS, denoise_method=DenoiseMethod.NONE)
+                        res = engine.analyze_bearing(sig_clean + noise, FS)
+                        if _detected(res):
+                            detect_count += 1
+                        total_fault += 1
+                    except Exception:
+                        total_fault += 1
+
+            # 健康样本 — 误报率
+            for fpath in h_files:
+                sig_clean = load_npy(HUSTBEAR_DIR, fpath.name)
+                if sig_clean is None:
+                    continue
+                sig_power = np.var(sig_clean.astype(np.float64))
+                for _ in range(n_mc):
+                    noise = np.random.normal(0, np.sqrt(sig_power / (10 ** (snr_db / 10))), len(sig_clean))
+                    try:
+                        engine = DiagnosisEngine(
+                            bearing_method=method_val,
+                            bearing_params=BEARING_PARAMS, denoise_method=DenoiseMethod.NONE)
+                        res = engine.analyze_bearing(sig_clean + noise, FS)
+                        if _detected(res):
+                            fp_count += 1
+                        total_healthy += 1
+                    except Exception:
+                        total_healthy += 1
+
+            dr = detect_count / total_fault if total_fault > 0 else 0.0
+            fpr = fp_count / total_healthy if total_healthy > 0 else 0.0
+            curve.append({
+                "snr_db": snr_db,
+                "detected": dr >= 0.5,
+                "detection_rate": round(dr, 4),
+                "false_positive_rate": round(fpr, 4),
+                "total_fault_tests": total_fault,
+                "total_healthy_tests": total_healthy,
+            })
+            print(f"    {name_cn} SNR={snr_db}dB: 检出率={dr:.1%}, 误报率={fpr:.1%} (故障{total_fault}, 健康{total_healthy})")
         results["methods"][name_cn] = curve
 
     # Ensemble robustness
+    print("  测试方法: Ensemble")
     curve = []
     for snr_db in snr_levels:
-        noise = np.sqrt(sig_power / (10 ** (snr_db / 10))) * z
-        try:
-            res = run_research_ensemble(sig_clean + noise, FS, bearing_params=BEARING_PARAMS, max_seconds=5.0)
-            detected = res.get("status", "normal") != "normal" or res.get("health_score", 100) < 70
-            curve.append({"snr_db": snr_db, "detected": detected})
-            print(f"    Ensemble SNR={snr_db}dB: {'检出' if detected else '未检出'}")
-        except Exception:
-            curve.append({"snr_db": snr_db, "detected": False})
+        detect_count = 0
+        total_fault = 0
+        fp_count = 0
+        total_healthy = 0
+
+        for fpath in or_files:
+            sig_clean = load_npy(HUSTBEAR_DIR, fpath.name)
+            if sig_clean is None:
+                continue
+            sig_power = np.var(sig_clean.astype(np.float64))
+            for _ in range(n_mc):
+                noise = np.random.normal(0, np.sqrt(sig_power / (10 ** (snr_db / 10))), len(sig_clean))
+                try:
+                    res = run_research_ensemble(sig_clean + noise, FS, bearing_params=BEARING_PARAMS, max_seconds=5.0)
+                    detected = res.get("status", "normal") != "normal" or res.get("health_score", 100) < 70
+                    if detected:
+                        detect_count += 1
+                    total_fault += 1
+                except Exception:
+                    total_fault += 1
+
+        for fpath in h_files:
+            sig_clean = load_npy(HUSTBEAR_DIR, fpath.name)
+            if sig_clean is None:
+                continue
+            sig_power = np.var(sig_clean.astype(np.float64))
+            for _ in range(n_mc):
+                noise = np.random.normal(0, np.sqrt(sig_power / (10 ** (snr_db / 10))), len(sig_clean))
+                try:
+                    res = run_research_ensemble(sig_clean + noise, FS, bearing_params=BEARING_PARAMS, max_seconds=5.0)
+                    detected = res.get("status", "normal") != "normal" or res.get("health_score", 100) < 70
+                    if detected:
+                        fp_count += 1
+                    total_healthy += 1
+                except Exception:
+                    total_healthy += 1
+
+        dr = detect_count / total_fault if total_fault > 0 else 0.0
+        fpr = fp_count / total_healthy if total_healthy > 0 else 0.0
+        curve.append({
+            "snr_db": snr_db,
+            "detected": dr >= 0.5,
+            "detection_rate": round(dr, 4),
+            "false_positive_rate": round(fpr, 4),
+            "total_fault_tests": total_fault,
+            "total_healthy_tests": total_healthy,
+        })
+        print(f"    Ensemble SNR={snr_db}dB: 检出率={dr:.1%}, 误报率={fpr:.1%}")
     results["methods"]["Ensemble"] = curve
 
     save_json(results, "46_robustness.json")

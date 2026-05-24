@@ -424,46 +424,48 @@ def plot_robustness():
     methods_data = data["methods"]
 
     method_names = list(methods_data.keys())
-    # 构建检测矩阵：行=方法，列=SNR
-    detect_matrix = []
+    # 构建检出率矩阵：行=方法，列=SNR
+    dr_matrix = []
+    fpr_matrix = []
     for mname in method_names:
-        row = [int(item["detected"]) for item in methods_data[mname]]
-        detect_matrix.append(row)
-    detect_matrix = np.array(detect_matrix)
+        dr_row = [item.get("detection_rate", 1.0 if item.get("detected") else 0.0) for item in methods_data[mname]]
+        fpr_row = [item.get("false_positive_rate", 0.0) for item in methods_data[mname]]
+        dr_matrix.append(dr_row)
+        fpr_matrix.append(fpr_row)
+    dr_matrix = np.array(dr_matrix)
+    fpr_matrix = np.array(fpr_matrix)
 
     fig, ax = plt.subplots(figsize=(10, 7))
 
-    # 热力图：1=检出(绿色), 0=未检出(红色)
-    cmap = plt.matplotlib.colors.ListedColormap(["#E74C3C", "#27AE60"])
-    im = ax.imshow(detect_matrix, cmap=cmap, aspect="auto", vmin=0, vmax=1)
+    # 连续色标热力图：检出率 0%~100% (RdYlGn: 红→黄→绿)
+    cmap = plt.cm.RdYlGn
+    im = ax.imshow(dr_matrix, cmap=cmap, aspect="auto", vmin=0, vmax=1)
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("检出率 (Detection Rate)", fontsize=12)
 
     ax.set_xticks(np.arange(len(snr_levels)))
     ax.set_yticks(np.arange(len(method_names)))
     ax.set_xticklabels([f"{s} dB" for s in snr_levels], fontsize=11)
     ax.set_yticklabels(method_names, fontsize=11)
 
-    # 每个格子里标注检出/未检出
+    # 每个格子里标注检出率 + 误报率
     for i in range(len(method_names)):
         for j in range(len(snr_levels)):
-            text = "检出" if detect_matrix[i, j] == 1 else "未检出"
-            color = "white" if detect_matrix[i, j] == 1 else "white"
-            ax.text(j, i, text, ha="center", va="center", fontsize=10,
+            dr = dr_matrix[i, j]
+            fpr = fpr_matrix[i, j]
+            text = f"{dr:.0%}\nFP:{fpr:.0%}"
+            # 根据背景色亮度决定文字颜色
+            color = "white" if dr < 0.35 or dr > 0.85 else "black"
+            ax.text(j, i, text, ha="center", va="center", fontsize=9,
                     fontweight="bold", color=color)
 
-    ax.set_title("鲁棒性评估 — 强噪声环境下的故障检出率\n（绿色=检出  红色=未检出）",
-                 fontsize=14, fontweight="bold", pad=18)
-
-    # 添加图例
-    from matplotlib.patches import Patch
-    legend_elements = [
-        Patch(facecolor="#27AE60", label="检出"),
-        Patch(facecolor="#E74C3C", label="未检出"),
-    ]
-    ax.legend(handles=legend_elements, loc="upper right", fontsize=10, framealpha=0.9)
+    ax.set_title("鲁棒性评估 — 强噪声环境下的故障检出率\n"
+                 f"（5样本 × {methods_data[method_names[0]][0].get('total_fault_tests', 0) // 5}次/MC，绿色=高检出率 红色=低检出率）",
+                 fontsize=13, fontweight="bold", pad=18)
 
     fig.tight_layout()
     for fmt in ["svg", "png"]:
-        fig.savefig(OUTPUT_DIR / f"comparison_robustness.{fmt}")
+        fig.savefig(OUTPUT_DIR / f"comparison_robustness.{fmt}", dpi=150)
     plt.close(fig)
     print("  [OK] comparison_robustness")
 
