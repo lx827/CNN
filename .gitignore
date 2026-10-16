@@ -120,3 +120,6 @@ tests/diagnosis/foundation/layer2/output/
 tests/diagnosis/foundation/layer3/output/
 tests/diagnosis/foundation/layer4/output/
 tests/diagnosis/foundation/layer5/output/
+
+# Local project document
+/docs/dc_modified.docx
