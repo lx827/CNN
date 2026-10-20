@@ -188,6 +188,8 @@ let gaugeInstance = null
 let pieInstance = null
 let isUnmounted = false
 let pollTimer = null
+let refreshPromise = null
+let refreshPending = false
 const unsubscribe = []
 
 const normalCount = ref(0)
@@ -211,7 +213,7 @@ const getHealthColor = (health) => {
   return '#F5222D'
 }
 
-const loadData = async () => {
+const fetchDashboardData = async () => {
   if (isUnmounted) return
   const res = await getDeviceInfo()
   if (isUnmounted) return
@@ -228,6 +230,27 @@ const loadData = async () => {
   // 默认选中第一个设备（如果有）
   const selectedId = selectedDevice.value?.deviceId
   selectedDevice.value = devices.value.find(d => d.deviceId === selectedId) || devices.value[0] || null
+}
+
+// 推送和轮询共用串行刷新；请求期间的多个事件合并为一次后续查询。
+const loadData = () => {
+  if (isUnmounted) return Promise.resolve()
+  refreshPending = true
+  if (refreshPromise) return refreshPromise
+  refreshPromise = (async () => {
+    while (refreshPending && !isUnmounted) {
+      refreshPending = false
+      try {
+        await fetchDashboardData()
+      } catch (error) {
+        if (!refreshPending || isUnmounted) throw error
+        console.error('刷新设备总览失败，继续处理待刷新事件:', error)
+      }
+    }
+  })().finally(() => {
+    refreshPromise = null
+  })
+  return refreshPromise
 }
 
 const selectDevice = (dev) => {
@@ -450,6 +473,7 @@ const handleResize = () => {
 // 必须在 setup 同步注册，防止反复路由切换累积轮询和推送订阅。
 onUnmounted(() => {
   isUnmounted = true
+  refreshPending = false
   unsubscribe.forEach(off => off())
   clearInterval(pollTimer)
   gaugeInstance?.dispose()

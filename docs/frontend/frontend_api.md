@@ -240,6 +240,8 @@ import { getDevices } from '@/api/device';
 
 **2026-10-21 生命周期与刷新约定**：卸载钩子在 setup 同步注册，退出时取消订阅、60 秒轮询和 resize 监听并销毁图表；等待请求/nextTick 期间退出，不再初始化资源。刷新后按 `deviceId` 重新绑定选中设备，仪表盘不再引用旧对象。状态 `critical` 与原有 `fault` 均显示为故障并纳入故障计数。
 
+`loadData()` 将首次加载、上线/离线推送和轮询串行执行；请求期间的事件合并为一次后续查询。若当前请求失败但已有待刷新事件，记录错误并继续查询；没有后续事件时向调用方抛出错误并释放刷新状态。卸载后丢弃响应和待刷新事件。
+
 | 属性 | 说明 |
 |------|------|
 | **文件路径** | `src/views/Dashboard.vue` |
@@ -259,7 +261,8 @@ import { getDevices } from '@/api/device';
 
 | 方法名 | 说明 |
 |--------|------|
-| `loadData()` | 加载设备总览与告警统计 |
+| `loadData()` | 串行加载设备总览与告警统计，合并在途刷新；返回整轮刷新 Promise |
+| `fetchDashboardData()` | 执行一次总览查询并更新设备、统计和当前选中对象 |
 | `selectDevice(device)` | 选中设备并更新仪表盘数据 |
 | `initGaugeChart()` | 初始化健康度仪表盘 |
 | `initPieChart()` | 初始化告警饼图 |

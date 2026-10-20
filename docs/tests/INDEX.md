@@ -12,7 +12,7 @@
 | `tests/backend/test_read_paths.py` | 摘要 SQL/顺序、历史 N+1、严格 JSON、缓存、索引迁移、真实 HTTP 读路径（9 项） | cloud venv 中后端依赖及 httpx；隔离内存 SQLite |
 | `tests/backend/test_event_loop.py` | 慢去噪期间的协程调度（1 项，覆盖 STFT/倒谱/阶次三个端点） | 同上；受控去噪替身，不测去噪数学效果 |
 | `tests/frontend/monitor_lifecycle.test.cjs` | 生命周期、推送合并、设备切换竞争、在途刷新、慢轮询（7 项） | 已安装前端依赖 |
-| `tests/frontend/dashboard_lifecycle.test.cjs` | 卸载释放、异步卸载、选中对象刷新和 critical 显示（3 项） | 已安装前端依赖 |
+| `tests/frontend/dashboard_lifecycle.test.cjs` | 卸载释放、异步卸载、选中对象刷新、critical 显示、推送/轮询串行合并、失败恢复（6 项） | 已安装前端依赖 |
 | `tests/frontend/websocket.test.cjs` | 握手幂等、迟到回调、重连去重（3 项） | Node 自带 test/vm；WebSocket 替身 |
 
 本机 Windows PowerShell，在 `E:/A-codehub/CNN/cloud` 执行：
@@ -33,7 +33,7 @@ python -m unittest discover -s ../tests/backend -p 'test_*.py' -v
 node --test tests/frontend/monitor_lifecycle.test.cjs tests/frontend/dashboard_lifecycle.test.cjs tests/frontend/websocket.test.cjs
 ```
 
-预期结果为后端 10 项、前端 13 项全部通过；P0 回归仍需按项目要求分别运行。测试运行环境和局限见 [架构整顿记录](../ARCHITECTURE_REFACTOR_20261021.md)。
+预期结果为后端 10 项、前端 16 项全部通过；P0 回归仍需按项目要求分别运行。测试运行环境和局限见 [架构整顿记录](../ARCHITECTURE_REFACTOR_20261021.md)。
 
 ---
 
