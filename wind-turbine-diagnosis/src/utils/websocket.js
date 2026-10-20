@@ -26,13 +26,19 @@ class WebSocketClient {
   }
 
   connect() {
-    if (this.ws?.readyState === WebSocket.OPEN) return
+    if (this.ws && [WebSocket.OPEN, WebSocket.CONNECTING].includes(this.ws.readyState)) return
     this.isManualClose = false
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
 
     try {
-      this.ws = new WebSocket(buildWebSocketURL())
+      const socket = new WebSocket(buildWebSocketURL())
+      this.ws = socket
 
       this.ws.onopen = () => {
+        if (this.ws !== socket) return
         console.log('[WebSocket] 已连接')
         this.reconnectAttempts = 0
         this.emit('open', {})
@@ -40,6 +46,7 @@ class WebSocketClient {
       }
 
       this.ws.onmessage = (event) => {
+        if (this.ws !== socket) return
         try {
           const msg = JSON.parse(event.data)
           this.emit(msg.type || 'message', msg.data || msg)
@@ -49,6 +56,9 @@ class WebSocketClient {
       }
 
       this.ws.onclose = () => {
+        // 路由快速切换时旧连接可能延迟触发 close，不能影响新连接。
+        if (this.ws !== socket) return
+        this.ws = null
         console.log('[WebSocket] 连接断开')
         this.stopHeartbeat()
         this.emit('close', {})
@@ -58,6 +68,7 @@ class WebSocketClient {
       }
 
       this.ws.onerror = (err) => {
+        if (this.ws !== socket) return
         console.error('[WebSocket] 连接错误:', err)
         this.emit('error', err)
       }
@@ -68,6 +79,7 @@ class WebSocketClient {
   }
 
   scheduleReconnect() {
+    if (this.isManualClose || this.reconnectTimer) return
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.warn('[WebSocket] 已达到最大重连次数，停止重连')
       this.emit('max_retries', {})
@@ -82,11 +94,13 @@ class WebSocketClient {
     console.log(`[WebSocket] ${delay}ms 后尝试第 ${this.reconnectAttempts} 次重连...`)
 
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
       this.connect()
     }, delay)
   }
 
   startHeartbeat() {
+    this.stopHeartbeat()
     this.heartbeatTimer = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify({ type: 'ping' }))
@@ -140,8 +154,9 @@ class WebSocketClient {
       this.reconnectTimer = null
     }
     if (this.ws) {
-      this.ws.close()
+      const socket = this.ws
       this.ws = null
+      socket.close()
     }
   }
 }

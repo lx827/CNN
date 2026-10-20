@@ -14,6 +14,7 @@
 | [README](../README.md) | `README.md` | 项目概述、快速开始 |
 | [AGENTS](../AGENTS.md) | `AGENTS.md` | AI Agent 环境配置、开发命令、关键代码路径 |
 | [架构设计](../architecture.md) | `architecture.md` | 系统架构设计 |
+| [2026-10-21 架构整顿](./ARCHITECTURE_REFACTOR_20261021.md) | `docs/ARCHITECTURE_REFACTOR_20261021.md` | 摘要读模型、响应性能根因、修复验证与剩余问题 |
 | [算法说明](../ALGORITHMS.md) | `ALGORITHMS.md` | 诊断算法说明 |
 | [诊断算法体系全景](./DIAGNOSIS_SYSTEM_OVERVIEW.md) | `docs/DIAGNOSIS_SYSTEM_OVERVIEW.md` | 5 子系统串联：方法公式、投票逻辑、评分机制 |
 | [部署指南](../DEPLOY.md) | `DEPLOY.md` | 服务器部署指南 |

@@ -48,7 +48,8 @@ async def get_channel_cepstrum(
 
     try:
         sig = prepare_signal(record.data, detrend=detrend)
-        sig = denoise_signal(sig, denoise)
+        # 去噪与倒谱计算均在线程池执行，避免拖住其他 HTTP/WebSocket 请求。
+        sig = await asyncio.to_thread(denoise_signal, sig, denoise)
         sample_rate = record.sample_rate or 25600
 
         # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）

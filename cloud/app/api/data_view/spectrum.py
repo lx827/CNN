@@ -96,7 +96,8 @@ async def get_channel_stft(
 
     try:
         signal = prepare_signal(record.data, detrend=detrend)
-        signal = denoise_signal(signal, denoise)
+        # 去噪同样属于重计算，必须离开事件循环，复用已有的两线程池。
+        signal = await asyncio.to_thread(denoise_signal, signal, denoise)
         sample_rate = record.sample_rate or 25600
 
         # 如果数据太长，截取前 5 秒做 STFT（避免计算量过大）

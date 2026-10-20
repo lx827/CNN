@@ -49,12 +49,14 @@ docs/backend/app/
 │   ├── __init__.md
 │   ├── config.py            ← 全局配置
 │   ├── memory_log.md        ← 内存日志
+│   ├── json_utils.md        ← 严格 JSON/NumPy/非有限值转换
 │   ├── thresholds.md        ← 全局阈值配置
 │   └── websocket.md         ← WebSocket 连接管理器
 │
 └── services/                ← 服务层
     ├── __init__.md
     ├── analyzer.md          ← 综合分析引擎
+    ├── diagnosis_queries.md ← 诊断摘要读模型与统一最新记录规则
     ├── nn_predictor.md      ← 神经网络预留接口
     ├── offline_monitor.md   ← 离线监测
     │

@@ -44,6 +44,7 @@ async def get_channel_stft(
 - **async**：✅
 - **响应 data**：`{device_id, batch_index, channel, channel_name, sample_rate, is_special, time, freq, magnitude}`
 - **说明**：STFT 时频谱（信号截断 5 秒）
+- **2026-10-21**：去噪和 STFT 核心计算均通过 `asyncio.to_thread` 复用两线程池，避免 VMD 等预处理阻塞事件循环。保留原有先去噪、再截断的顺序。
 
 ### `GET /{device_id}/{batch_index}/{channel}/stats`
 

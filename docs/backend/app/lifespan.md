@@ -2,6 +2,8 @@
 
 **对应源码**：`cloud/app/lifespan.py`
 
+**2026-10-21 依赖调整**：JSON 转换直接来自 `app.core.json_utils`，不再通过 `app.api.data_view` 路由包导入。线程池仍为两线程，后台分析仍使用原有串行信号量。
+
 ## 全局变量
 
 | 变量 | 类型 | 说明 |

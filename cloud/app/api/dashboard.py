@@ -4,11 +4,12 @@
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import case, func
 from app.database import get_db
 from app.models import Device, Diagnosis, Alarm
 from datetime import datetime, timezone
 from typing import Dict
+from app.services.diagnosis_queries import latest_diagnosis_summaries
 
 router = APIRouter(prefix="/api/dashboard", tags=["设备总览"])
 
@@ -56,10 +57,11 @@ def get_dashboard(db: Session = Depends(get_db)):
 
     # 2. 最新诊断结果（取每个设备最新一条）
     latest_diag = {}
+    summaries = latest_diagnosis_summaries(db, [d.device_id for d in devices])
+    diag_map = {diag.device_id: diag for diag in summaries}
     for d in devices:
         is_offline = not d.is_online
-        diag = db.query(Diagnosis).filter(Diagnosis.device_id == d.device_id) \
-            .order_by(Diagnosis.analyzed_at.desc()).first()
+        diag = diag_map.get(d.device_id)
         if diag:
             fault_probs = diag.fault_probabilities or {}
             # 将频率指示器（BPFO/BPFI/BSF）映射为标准中文故障名，合并同名概率
@@ -92,12 +94,14 @@ def get_dashboard(db: Session = Depends(get_db)):
             }
 
     # 3. 告警统计
-    alarm_stats = {
-        "total": db.query(Alarm).count(),
-        "warning": db.query(Alarm).filter(Alarm.level == "warning").count(),
-        "critical": db.query(Alarm).filter(Alarm.level == "critical").count(),
-        "unresolved": db.query(Alarm).filter(Alarm.is_resolved == 0).count(),
-    }
+    counts = db.query(
+        func.count(Alarm.id),
+        func.sum(case((Alarm.level == "warning", 1), else_=0)),
+        func.sum(case((Alarm.level == "critical", 1), else_=0)),
+        func.sum(case((Alarm.is_resolved == 0, 1), else_=0)),
+    ).one()
+    alarm_stats = dict(zip(("total", "warning", "critical", "unresolved"),
+                          (int(value or 0) for value in counts)))
 
     return {
         "code": 200,

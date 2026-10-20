@@ -88,3 +88,9 @@ def init_db():
             if "is_online" not in device_cols:
                 conn.execute(text("ALTER TABLE devices ADD COLUMN is_online INTEGER DEFAULT 1"))
             conn.commit()
+
+    # create_all 不会给已存在的表补索引；必须在旧库列迁移完成后显式补齐。
+    from app.models import Diagnosis
+    for index in Diagnosis.__table__.indexes:
+        if index.name.startswith("ix_diagnosis_"):
+            index.create(bind=engine, checkfirst=True)

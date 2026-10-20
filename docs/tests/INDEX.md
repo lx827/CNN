@@ -3,6 +3,38 @@
 > **文档用途**：统一记录所有测试文件的位置、用途、运行方式和依赖，避免重复编写测试。
 > **维护要求**：新增测试文件时，必须在此索引中添加条目。
 
+**前端监测回归**：在本机项目根目录执行 `node --test tests/frontend/monitor_lifecycle.test.cjs`；`--test` 使用 Node.js 自带测试运行器运行指定文件。依赖前端已安装的 `vue` 和 `@vue/compiler-sfc`，无需新增依赖，不访问云端或创建采集任务。使用真实 Vue 生命周期与模拟 API/ECharts，验证首屏默认通道、通道切换、页面返回和异步卸载清理；不覆盖浏览器像素渲染。
+
+**2026-10-21 新增回归**：
+
+| 文件 | 覆盖 | 依赖 |
+|---|---|---|
+| `tests/backend/test_read_paths.py` | 摘要 SQL/顺序、历史 N+1、严格 JSON、缓存、索引迁移、真实 HTTP 读路径（9 项） | cloud venv 中后端依赖及 httpx；隔离内存 SQLite |
+| `tests/backend/test_event_loop.py` | 慢去噪期间的协程调度（1 项，覆盖 STFT/倒谱/阶次三个端点） | 同上；受控去噪替身，不测去噪数学效果 |
+| `tests/frontend/monitor_lifecycle.test.cjs` | 生命周期、推送合并、设备切换竞争、在途刷新、慢轮询（7 项） | 已安装前端依赖 |
+| `tests/frontend/dashboard_lifecycle.test.cjs` | 卸载释放、异步卸载、选中对象刷新、critical 显示、推送/轮询串行合并、失败恢复（6 项） | 已安装前端依赖 |
+| `tests/frontend/websocket.test.cjs` | 握手幂等、迟到回调、重连去重（3 项） | Node 自带 test/vm；WebSocket 替身 |
+
+本机 Windows PowerShell，在 `E:/A-codehub/CNN/cloud` 执行：
+
+```powershell
+# 仅对当前 PowerShell 进程允许虚拟环境激活脚本，不修改系统持久策略，无需管理员。
+Set-ExecutionPolicy -Scope Process Bypass
+# 激活后端虚拟环境，使后续 python 使用 cloud/venv；不安装依赖、不访问网络。
+. ./venv/Scripts/Activate.ps1
+# 用 unittest 自动发现 ../tests/backend 中 test_*.py 文件，-v 输出每项结果；使用内存测试库，不修改业务库。
+python -m unittest discover -s ../tests/backend -p 'test_*.py' -v
+```
+
+本机项目根目录执行前端整组回归：
+
+```powershell
+# --test 调用 Node 自带测试运行器，依次列出三个测试文件；不连接云端、不下发采集。
+node --test tests/frontend/monitor_lifecycle.test.cjs tests/frontend/dashboard_lifecycle.test.cjs tests/frontend/websocket.test.cjs
+```
+
+预期结果为后端 10 项、前端 16 项全部通过；P0 回归仍需按项目要求分别运行。测试运行环境和局限见 [架构整顿记录](../ARCHITECTURE_REFACTOR_20261021.md)。
+
 ---
 
 ## 目录结构
@@ -10,6 +42,13 @@
 ```
 tests/
 ├── README.md                              # 原始测试说明（旧版）
+├── frontend/
+│   ├── monitor_lifecycle.test.cjs          # 监测初始化、请求/轮询调度及卸载
+│   ├── dashboard_lifecycle.test.cjs        # 总览刷新、状态与生命周期
+│   └── websocket.test.cjs                  # 连接状态竞争与重连去重
+├── backend/
+│   ├── test_read_paths.py                  # 摘要查询、缓存、索引和 HTTP
+│   └── test_event_loop.py                  # 去噪期间事件循环响应
 ├── diagnosis/
 │   ├── __init__.py
 │   ├── regression/                        # [P0] 回归测试 — 每次修改后必跑

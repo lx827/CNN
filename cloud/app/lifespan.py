@@ -17,6 +17,7 @@ from app.core.config import (
 )
 from datetime import datetime, timezone
 from app.core.websocket import manager
+from app.core.json_utils import sanitize_for_json as _sanitize_for_json
 from app.services.analyzer import analyze_device
 from app.services.diagnosis.features import compute_channel_features
 from app.services.alarms import generate_alarms
@@ -34,7 +35,6 @@ async def analysis_worker():
     后台协程：扫描所有设备的未检测批次，执行分析，标记为已检测
     """
     from app.models import SensorData, Diagnosis
-    from app.api.data_view import _sanitize_for_json
 
     while True:
         try:

@@ -18,7 +18,6 @@ from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
 from app.services.diagnosis.features import compute_fft
 from app.api.data_view import _get_channel_name
-from typing import List
 
 router = APIRouter(prefix="/api/monitor", tags=["实时监测"])
 
@@ -60,28 +59,17 @@ def get_latest_monitor(
 
         if latest_special:
             latest_batch = latest_special
-            is_special_batch = True
         else:
             # 没有特殊数据，回退到普通数据
             latest_batch = db.query(func.max(SensorData.batch_index)).filter(
                 SensorData.device_id == device_id,
                 SensorData.is_special == 0
             ).scalar()
-            is_special_batch = False
     else:
         # 默认找最新的（不分类型，取 batch_index 最大的）
         latest_batch = db.query(func.max(SensorData.batch_index)).filter(
             SensorData.device_id == device_id
         ).scalar()
-        is_special_batch = False
-        if latest_batch:
-            # 判断这个批次是不是特殊的
-            check = db.query(SensorData).filter(
-                SensorData.device_id == device_id,
-                SensorData.batch_index == latest_batch
-            ).first()
-            if check:
-                is_special_batch = bool(check.is_special)
 
     results = []
     if latest_batch:
@@ -120,7 +108,8 @@ def get_latest_monitor(
             })
 
     # 查询最新诊断结果，获取估计转频
-    latest_diag = db.query(Diagnosis).filter(
+    # 这里只需要转频，避免加载完整诊断 JSON。
+    latest_diag = db.query(Diagnosis.rot_freq).filter(
         Diagnosis.device_id == device_id
     ).order_by(Diagnosis.analyzed_at.desc()).first()
 
@@ -156,14 +145,17 @@ def get_monitor_history(
 
     batch_indices = [r[0] for r in batch_records]
 
+    # 批量读取，查询数不随历史批次数增长。
+    records = db.query(SensorData).filter(
+        SensorData.device_id == device_id,
+        SensorData.channel == channel,
+        SensorData.batch_index.in_(batch_indices),
+    ).all() if batch_indices else []
+    record_map = {record.batch_index: record for record in records}
+
     items = []
     for bi in batch_indices:
-        record = db.query(SensorData).filter(
-            SensorData.device_id == device_id,
-            SensorData.channel == channel,
-            SensorData.batch_index == bi
-        ).first()
-
+        record = record_map.get(bi)
         if record:
             items.append({
                 "batch_index": record.batch_index,

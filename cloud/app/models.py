@@ -10,7 +10,7 @@
 - diagnosis: 诊断结果，关联到具体批次
 - alarms: 告警记录
 """
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, JSON, UniqueConstraint, Index
 from app.database import Base
 from datetime import datetime, timezone
 
@@ -89,6 +89,13 @@ class Diagnosis(Base):
     full_analysis = Column(JSON, nullable=True, comment="analyze_all_methods 完整结果（通道级）")
     denoise_method = Column(String(20), nullable=True, default="none", comment="去噪方法 none/wavelet/vmd/med")
     analyzed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), comment="分析时间")
+
+    # 分别支持设备最新摘要、批次摘要和按通道/去噪方法读取缓存。
+    __table_args__ = (
+        Index("ix_diagnosis_device_time", "device_id", "analyzed_at", "id"),
+        Index("ix_diagnosis_batch_time", "device_id", "batch_index", "analyzed_at", "id"),
+        Index("ix_diagnosis_cache", "device_id", "batch_index", "channel", "denoise_method", "analyzed_at"),
+    )
 
 
 class Alarm(Base):

@@ -19,6 +19,7 @@ router = APIRouter(prefix="/api/data", tags=["振动数据查看"])
 # ── 公共工具函数（统一入口，消除重复） ──
 # prepare_signal 实际实现在 signal_utils.py，此处重导出以保持 data_view 子模块兼容
 from app.services.diagnosis.signal_utils import prepare_signal  # noqa: F401
+from app.core.json_utils import sanitize_for_json as _sanitize_for_json  # noqa: F401
 
 
 def _extract_device_param(params, device_keys):
@@ -42,23 +43,6 @@ def _extract_device_param(params, device_keys):
         if ch and isinstance(ch, dict) and any(k in ch for k in device_keys):
             return ch
     return params
-
-
-def _sanitize_for_json(obj):
-    """递归将 numpy 类型转换为 Python 原生类型，确保 JSON 可序列化"""
-    if isinstance(obj, (np.integer,)):
-        return int(obj)
-    if isinstance(obj, (np.floating,)):
-        return float(obj)
-    if isinstance(obj, (np.bool_,)):
-        return bool(obj)
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    if isinstance(obj, dict):
-        return {k: _sanitize_for_json(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_sanitize_for_json(v) for v in obj]
-    return obj
 
 
 def _compute_cepstrum(

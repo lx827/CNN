@@ -27,7 +27,7 @@ def _extract_device_param(params, device_keys)
 def _sanitize_for_json(obj) -> Any
 ```
 
-- **说明**：递归将 numpy 类型转换为 Python 原生类型。统一入口，消除 diagnosis_ops.py 中的重复。
+- **说明**：兼容重导出 `app.core.json_utils.sanitize_for_json`，递归转换 NumPy/数组/元组；NaN/Infinity 转为 `None`，保证严格 JSON 可序列化。后台任务直接依赖 core 工具层。
 
 ### `_compute_cepstrum`
 

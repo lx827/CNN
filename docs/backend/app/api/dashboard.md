@@ -21,3 +21,4 @@ def get_dashboard(db: Session = Depends(get_db)) -> dict
 - **参数**：无（需认证）
 - **响应**：`{code: 200, data: {devices, diagnosis, alarm_stats}}`
 - **说明**：设备总览数据（设备列表 + 最新诊断 + 告警统计）
+- **2026-10-21 读路径**：通过 `services/diagnosis_queries.py` 批量读取每设备最新摘要，不读取完整算法 JSON；告警统计合并为一次条件聚合。有设备时总计三次 SELECT，查询数不随设备数增加。最新记录按 `analyzed_at` 再按 `id` 降序选择。
