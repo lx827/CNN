@@ -3,6 +3,8 @@
 > **文档用途**：统一记录所有测试文件的位置、用途、运行方式和依赖，避免重复编写测试。
 > **维护要求**：新增测试文件时，必须在此索引中添加条目。
 
+**前端监测回归**：在本机项目根目录执行 `node --test tests/frontend/monitor_lifecycle.test.cjs`；`--test` 使用 Node.js 自带测试运行器运行指定文件。依赖前端已安装的 `vue` 和 `@vue/compiler-sfc`，无需新增依赖，不访问云端或创建采集任务。使用真实 Vue 生命周期与模拟 API/ECharts，验证首屏默认通道、通道切换、页面返回和异步卸载清理；不覆盖浏览器像素渲染。
+
 ---
 
 ## 目录结构
@@ -10,6 +12,8 @@
 ```
 tests/
 ├── README.md                              # 原始测试说明（旧版）
+├── frontend/
+│   └── monitor_lifecycle.test.cjs          # 监测页初始化、路由返回及异步卸载回归
 ├── diagnosis/
 │   ├── __init__.py
 │   ├── regression/                        # [P0] 回归测试 — 每次修改后必跑

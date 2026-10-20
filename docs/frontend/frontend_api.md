@@ -430,6 +430,11 @@ import { getSystemLogs } from '@/api/system';
 | `startPolling(taskId)` | 启动任务状态轮询 |
 | `loadLatestData()` | 加载最新实时振动数据 |
 | `updateCharts()` | 更新时域和频谱图表 |
+| `initCharts()` | 挂载后先创建时域和频谱实例，再加载设备和波形数据 |
+| `setupWebSocket()` | 注册具名推送回调；离开页面时移除订阅并关闭连接 |
+| `handleResize()` | 调整图表尺寸；随页面挂载注册、卸载移除 |
+
+**生命周期约定（2026-10-19 修复）**：首次进入和路由返回均先初始化图表，再请求数据并绘制默认通道，无需手动切换通道。`onUnmounted` 在 setup 阶段同步注册，清理采集轮询、WebSocket 订阅、图表实例及 resize 监听；异步初始化和波形请求在页面卸载后不再继续建立连接或绘图。波形读取云端数据库中的已有记录，显示波形不代表本机边端正在采集。
 
 **调用 API**
 

@@ -165,6 +165,7 @@ const frequencyChart = ref(null)
 let timeInstance = null
 let freqInstance = null
 let pollTimer = null
+let isUnmounted = false
 
 // 采集状态
 const isCollecting = ref(false)
@@ -315,6 +316,8 @@ const loadLatestData = async (preferSpecial = false) => {
   try {
     const deviceId = selectedMonitorDevice.value || 'WTG-001'
     const res = await getRealtimeVibrationData(deviceId, preferSpecial)
+    // 页面离开后，忽略尚未完成的请求，避免更新已销毁的图表。
+    if (isUnmounted) return
     const data = res.data
     channels.value = data.channels
     params.value = data.sensorParams
@@ -335,14 +338,13 @@ const onMonitorDeviceChange = () => {
 
 // WebSocket 实时推送
 let wsClient = null
+const handleMonitorUpdate = () => {
+  loadLatestData()
+}
 const setupWebSocket = () => {
   wsClient = getWebSocketClient()
-  wsClient.on('sensor_update', () => {
-    loadLatestData()
-  })
-  wsClient.on('diagnosis_update', () => {
-    loadLatestData()
-  })
+  wsClient.on('sensor_update', handleMonitorUpdate)
+  wsClient.on('diagnosis_update', handleMonitorUpdate)
   wsClient.connect()
 }
 
@@ -476,27 +478,35 @@ const initCharts = () => {
   freqInstance.setOption(freqOption)
 }
 
-onMounted(async () => {
-  await loadCollectDevices()
-  await loadLatestData()
-  initCharts()
-  setupWebSocket()
+const handleResize = () => {
+  timeInstance?.resize()
+  freqInstance?.resize()
+}
 
-  const handleResize = () => {
-    timeInstance?.resize()
-    freqInstance?.resize()
-  }
+onMounted(async () => {
+  // 先建立图表实例，保证首次返回的数据即可绘制默认通道。
+  initCharts()
   window.addEventListener('resize', handleResize)
 
-  onUnmounted(() => {
-    if (pollTimer) {
-      clearInterval(pollTimer)
-    }
-    wsClient?.close()
-    timeInstance?.dispose()
-    freqInstance?.dispose()
-    window.removeEventListener('resize', handleResize)
-  })
+  await loadCollectDevices()
+  if (isUnmounted) return
+  await loadLatestData()
+  if (isUnmounted) return
+  setupWebSocket()
+})
+
+// 生命周期钩子在 setup 中同步注册，确保路由切换时执行清理。
+onUnmounted(() => {
+  isUnmounted = true
+  if (pollTimer) {
+    clearInterval(pollTimer)
+  }
+  wsClient?.off('sensor_update', handleMonitorUpdate)
+  wsClient?.off('diagnosis_update', handleMonitorUpdate)
+  wsClient?.close()
+  timeInstance?.dispose()
+  freqInstance?.dispose()
+  window.removeEventListener('resize', handleResize)
 })
 </script>
 
