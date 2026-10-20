@@ -202,6 +202,7 @@ const buildSensors = (chList) => {
 const loadCollectDevices = async () => {
   try {
     const res = await getDevices()
+    if (isUnmounted) return
     collectDevices.value = res.data || []
     if (collectDevices.value.length > 0) {
       if (!selectedCollectDevice.value) {
@@ -231,6 +232,7 @@ const requestCollect = async () => {
 
     // 1. 向云端发送采集请求
     const res = await requestCollection(selectedCollectDevice.value)
+    if (isUnmounted) return
     const taskData = res.data
 
     if (!taskData) {
@@ -256,13 +258,16 @@ const requestCollect = async () => {
 
 // ============ 轮询任务状态 ============
 const startPolling = (taskId) => {
+  if (pollTimer) clearTimeout(pollTimer)
   let pollCount = 0
   const maxPolls = 60  // 最多轮询60次（约2分钟）
 
   const doPoll = async () => {
+    if (isUnmounted) return
     try {
       pollCount++
       const res = await getTaskStatus(taskId)
+      if (isUnmounted) return
       const task = res.data
 
       if (!task) {
@@ -279,12 +284,13 @@ const startPolling = (taskId) => {
         collectionStatus.value = '采集完成，正在加载数据...'
         collectionProgress.value = 90
         // 任务完成，刷新数据
-        await loadLatestData(true) // true = 优先特殊数据
+        await refreshLatestData(true) // true = 优先特殊数据
+        if (isUnmounted) return
         collectionStatus.value = '采集完成！'
         collectionProgress.value = 100
         isCollecting.value = false
         lastDataSource.value = 'special'
-        clearInterval(pollTimer)
+        clearTimeout(pollTimer)
         pollTimer = null
         ElMessage.success('特殊采集完成，数据已加载')
         return
@@ -296,19 +302,22 @@ const startPolling = (taskId) => {
         throw new Error('采集超时，请检查边端是否在线')
       }
     } catch (e) {
+      if (isUnmounted) return
       console.error('轮询失败:', e)
       collectionStatus.value = e.message || '采集异常'
       collectionProgress.value = 0
       isCollecting.value = false
-      clearInterval(pollTimer)
+      clearTimeout(pollTimer)
       pollTimer = null
       ElMessage.error(e.message || '采集异常')
+    } finally {
+      // 上轮完成后再等待 2 秒，慢请求不会与下一轮重叠。
+      if (!isUnmounted && isCollecting.value) pollTimer = setTimeout(doPoll, 2000)
     }
   }
 
-  // 立即执行一次，然后每2秒轮询
+  // 立即执行一次，后续由完成回调调度。
   doPoll()
-  pollTimer = setInterval(doPoll, 2000)
 }
 
 // ============ 加载最新数据 ============
@@ -317,10 +326,11 @@ const loadLatestData = async (preferSpecial = false) => {
     const deviceId = selectedMonitorDevice.value || 'WTG-001'
     const res = await getRealtimeVibrationData(deviceId, preferSpecial)
     // 页面离开后，忽略尚未完成的请求，避免更新已销毁的图表。
-    if (isUnmounted) return
+    if (isUnmounted || deviceId !== (selectedMonitorDevice.value || 'WTG-001')) return
     const data = res.data
     channels.value = data.channels
     params.value = data.sensorParams
+    if (activeChannel.value >= channels.value.length) activeChannel.value = 0
 
     // 更新传感器状态（根据数据状态）
     updateSensorStatus(data.channels)
@@ -333,13 +343,45 @@ const loadLatestData = async (preferSpecial = false) => {
 
 // 切换监测设备时刷新数据
 const onMonitorDeviceChange = () => {
-  loadLatestData()
+  refreshLatestData()
 }
 
 // WebSocket 实时推送
 let wsClient = null
-const handleMonitorUpdate = () => {
-  loadLatestData()
+let latestRefreshTimer = null
+let latestRefreshPromise = null
+let latestRefreshPreferSpecial = false
+let latestRefreshPending = false
+
+// 推送事件可能在同一批数据到达时连续触发。合并短时间内的刷新，避免
+// sensor_update 和 diagnosis_update 各自发起一次完整的 FFT 请求。
+const refreshLatestData = (preferSpecial = false) => {
+  if (isUnmounted) return Promise.resolve()
+  latestRefreshPending = true
+  latestRefreshPreferSpecial = latestRefreshPreferSpecial || preferSpecial
+  if (latestRefreshPromise) return latestRefreshPromise
+
+  latestRefreshPromise = (async () => {
+    while (latestRefreshPending && !isUnmounted) {
+      latestRefreshPending = false
+      const requestPreferSpecial = latestRefreshPreferSpecial
+      latestRefreshPreferSpecial = false
+      await loadLatestData(requestPreferSpecial)
+    }
+  })().finally(() => {
+    latestRefreshPromise = null
+  })
+
+  return latestRefreshPromise
+}
+
+const handleMonitorUpdate = (event) => {
+  if (event?.device_id && event.device_id !== selectedMonitorDevice.value) return
+  if (isUnmounted || latestRefreshTimer) return
+  latestRefreshTimer = setTimeout(() => {
+    latestRefreshTimer = null
+    refreshLatestData()
+  }, 100)
 }
 const setupWebSocket = () => {
   wsClient = getWebSocketClient()
@@ -378,7 +420,11 @@ const updateSensorStatus = (chList) => {
 
 // ============ 图表更新 ============
 const updateCharts = () => {
-  if (!channels.value[activeChannel.value]) return
+  if (!channels.value[activeChannel.value]) {
+    timeInstance?.setOption({ xAxis: { data: [] }, series: [{ data: [] }] })
+    freqInstance?.setOption({ xAxis: { data: [] }, series: [{ data: [] }] })
+    return
+  }
 
   const channel = channels.value[activeChannel.value]
   const timeData = channel.timeDomain
@@ -490,7 +536,7 @@ onMounted(async () => {
 
   await loadCollectDevices()
   if (isUnmounted) return
-  await loadLatestData()
+  await refreshLatestData()
   if (isUnmounted) return
   setupWebSocket()
 })
@@ -498,8 +544,14 @@ onMounted(async () => {
 // 生命周期钩子在 setup 中同步注册，确保路由切换时执行清理。
 onUnmounted(() => {
   isUnmounted = true
+  if (latestRefreshTimer) {
+    clearTimeout(latestRefreshTimer)
+    latestRefreshTimer = null
+  }
+  latestRefreshPreferSpecial = false
+  latestRefreshPending = false
   if (pollTimer) {
-    clearInterval(pollTimer)
+    clearTimeout(pollTimer)
   }
   wsClient?.off('sensor_update', handleMonitorUpdate)
   wsClient?.off('diagnosis_update', handleMonitorUpdate)

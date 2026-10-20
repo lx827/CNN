@@ -47,6 +47,8 @@
 
 ### `Diagnosis` — 诊断结果表
 
+复合索引：`ix_diagnosis_device_time(device_id, analyzed_at, id)`、`ix_diagnosis_batch_time(device_id, batch_index, analyzed_at, id)`、`ix_diagnosis_cache(device_id, batch_index, channel, denoise_method, analyzed_at)`；分别用于设备摘要、批次摘要、通道去噪缓存检索。不新增唯一约束，不清理旧记录。
+
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | int | 主键 |

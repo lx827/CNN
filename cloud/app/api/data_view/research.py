@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
@@ -32,7 +33,7 @@ def _save_research_diagnosis(db: Session, device_id: str, batch_index: int,
             diag.health_score = health_score
             diag.status = status
             diag.full_analysis = _sanitize_for_json(result)
-            diag.analyzed_at = __import__("datetime").datetime.now(timezone.utc)
+            diag.analyzed_at = datetime.now(timezone.utc)
         else:
             diag = Diagnosis(
                 device_id=device_id,
@@ -42,7 +43,7 @@ def _save_research_diagnosis(db: Session, device_id: str, batch_index: int,
                 health_score=health_score,
                 status=status,
                 full_analysis=_sanitize_for_json(result),
-                analyzed_at=__import__("datetime").datetime.now(timezone.utc),
+                analyzed_at=datetime.now(timezone.utc),
             )
             db.add(diag)
         db.commit()

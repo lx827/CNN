@@ -4,6 +4,8 @@
 > **算法原理**: 详见 [小波与模态分解算法文档](../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../ALGORITHMS.md)。
 **对应源码**：`cloud/app/api/data_view/cepstrum.py`
 
+**2026-10-21 调度修复**：去噪与倒谱核心计算均通过 `asyncio.to_thread` 复用两线程池，避免长时间去噪阻塞 HTTP/WebSocket 的协程调度；保留原有处理顺序。
+
 ## 路由端点
 
 ### `GET /{device_id}/{batch_index}/{channel}/cepstrum`

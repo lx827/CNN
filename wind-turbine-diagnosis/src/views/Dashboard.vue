@@ -100,7 +100,7 @@
 
           <div class="device-footer">
             <span><el-icon><Clock /></el-icon> {{ dev.runHours }} h</span>
-            <span v-if="dev.status === 'fault' || dev.status === 'warning'" class="fault-hint">
+            <span v-if="['fault', 'critical', 'warning'].includes(dev.status)" class="fault-hint">
               <el-icon><Warning /></el-icon> 需关注
             </span>
           </div>
@@ -186,6 +186,9 @@ const gaugeChart = ref(null)
 const pieChart = ref(null)
 let gaugeInstance = null
 let pieInstance = null
+let isUnmounted = false
+let pollTimer = null
+const unsubscribe = []
 
 const normalCount = ref(0)
 const warningCount = ref(0)
@@ -193,12 +196,12 @@ const faultCount = ref(0)
 const offlineCount = ref(0)
 
 const getStatusType = (status) => {
-  const map = { normal: 'success', warning: 'warning', fault: 'danger', offline: 'info' }
+  const map = { normal: 'success', warning: 'warning', fault: 'danger', critical: 'danger', offline: 'info' }
   return map[status] || 'info'
 }
 
 const getStatusText = (status) => {
-  const map = { normal: '正常', warning: '预警', fault: '故障', offline: '离线' }
+  const map = { normal: '正常', warning: '预警', fault: '故障', critical: '故障', offline: '离线' }
   return map[status] || '未知'
 }
 
@@ -209,7 +212,9 @@ const getHealthColor = (health) => {
 }
 
 const loadData = async () => {
+  if (isUnmounted) return
   const res = await getDeviceInfo()
+  if (isUnmounted) return
   const data = res.data
   devices.value = data.devices || []
   alarmStats.value = data.alarmStats || {}
@@ -217,13 +222,12 @@ const loadData = async () => {
   // 统计各状态设备数量
   normalCount.value = devices.value.filter(d => d.status === 'normal').length
   warningCount.value = devices.value.filter(d => d.status === 'warning').length
-  faultCount.value = devices.value.filter(d => d.status === 'fault').length
+  faultCount.value = devices.value.filter(d => ['fault', 'critical'].includes(d.status)).length
   offlineCount.value = devices.value.filter(d => d.status === 'offline').length
 
   // 默认选中第一个设备（如果有）
-  if (devices.value.length > 0 && !selectedDevice.value) {
-    selectedDevice.value = devices.value[0]
-  }
+  const selectedId = selectedDevice.value?.deviceId
+  selectedDevice.value = devices.value.find(d => d.deviceId === selectedId) || devices.value[0] || null
 }
 
 const selectDevice = (dev) => {
@@ -231,7 +235,7 @@ const selectDevice = (dev) => {
 }
 
 const initGaugeChart = () => {
-  if (!gaugeChart.value) return
+  if (isUnmounted || !gaugeChart.value) return
   if (!gaugeInstance) gaugeInstance = echarts.init(gaugeChart.value)
 
   const isOffline = selectedDevice.value?.status === 'offline'
@@ -409,39 +413,48 @@ const initPieChart = async () => {
 // 监听选中设备变化，更新图表
 watch(selectedDevice, async () => {
   await nextTick()
+  if (isUnmounted) return
   initGaugeChart()
   initPieChart()
 })
 
 onMounted(async () => {
-  await loadData()
+  try {
+    await loadData()
+  } catch (error) {
+    console.error('加载设备总览失败:', error)
+  }
+  if (isUnmounted) return
   await nextTick()
+  if (isUnmounted) return
   initGaugeChart()
   initPieChart()
 
   // WebSocket 监听设备上线/离线事件，实时刷新仪表板
   const wsClient = getWebSocketClient()
   wsClient.connect()
-  const onDeviceOnline = wsClient.on('device_online', () => loadData())
-  const onDeviceOffline = wsClient.on('device_offline', () => loadData())
+  const refresh = () => loadData().catch(error => console.error('刷新设备总览失败:', error))
+  unsubscribe.push(wsClient.on('device_online', refresh), wsClient.on('device_offline', refresh))
 
   // 定时轮询兜底：每 60 秒刷新设备状态（防止 WebSocket 断连时状态不更新）
-  const pollTimer = setInterval(() => loadData(), 60000)
+  pollTimer = setInterval(refresh, 60000)
 
-  const handleResize = () => {
-    gaugeInstance?.resize()
-    pieInstance?.resize()
-  }
   window.addEventListener('resize', handleResize)
+})
 
-  onUnmounted(() => {
-    onDeviceOnline()
-    onDeviceOffline()
-    clearInterval(pollTimer)
-    gaugeInstance?.dispose()
-    pieInstance?.dispose()
-    window.removeEventListener('resize', handleResize)
-  })
+const handleResize = () => {
+  gaugeInstance?.resize()
+  pieInstance?.resize()
+}
+
+// 必须在 setup 同步注册，防止反复路由切换累积轮询和推送订阅。
+onUnmounted(() => {
+  isUnmounted = true
+  unsubscribe.forEach(off => off())
+  clearInterval(pollTimer)
+  gaugeInstance?.dispose()
+  pieInstance?.dispose()
+  window.removeEventListener('resize', handleResize)
 })
 </script>
 

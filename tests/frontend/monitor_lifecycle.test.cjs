@@ -43,7 +43,7 @@ const flush = async () => {
   await vue.nextTick()
 }
 
-function createHarness({ devicesPromise } = {}) {
+function createHarness({ devicesPromise, fetchData, taskStatus, timers = {} } = {}) {
   const charts = []
   const listeners = new Map()
   const resizeListeners = new Set()
@@ -65,6 +65,7 @@ function createHarness({ devicesPromise } = {}) {
     clearTimeout,
     setInterval,
     clearInterval,
+    ...timers,
     window: {
       addEventListener: (_event, callback) => resizeListeners.add(callback),
       removeEventListener: (_event, callback) => resizeListeners.delete(callback)
@@ -88,12 +89,13 @@ function createHarness({ devicesPromise } = {}) {
       graphic: { LinearGradient: function () {} }
     },
     getDevices: () => devicesPromise || Promise.resolve({ data: [{ device_id: 'WTG-001' }] }),
-    getRealtimeVibrationData: async () => {
+    getRealtimeVibrationData: async (...args) => {
       requests++
+      if (fetchData) return fetchData(...args)
       return { data: { channels, sensorParams: { estimated_rpm: 1200 } } }
     },
     requestCollection: async () => { throw new Error('本测试禁止创建采集任务') },
-    getTaskStatus: async () => { throw new Error('本测试禁止查询采集任务') },
+    getTaskStatus: taskStatus || (async () => { throw new Error('本测试禁止查询采集任务') }),
     getWebSocketClient: () => socket,
     ElMessage: { success() {}, warning() {}, error() {} }
   }
@@ -154,11 +156,80 @@ test('离开后清理图表和订阅，重新进入无需手动刷新', async ()
     assertWaveforms(harness.charts.slice(2))
     const before = harness.requests
     for (const callback of harness.listeners.get('sensor_update')) callback({})
+    await new Promise(resolve => setTimeout(resolve, 130))
     await flush()
     assert.equal(harness.requests, before + 1, '返回页面后一次推送只触发一次请求')
   } finally {
     second.app.unmount()
   }
+})
+
+test('其他设备的推送不刷新，连续推送只产生一次请求', async t => {
+  const harness = createHarness()
+  const page = harness.mount()
+  t.after(() => page.app.unmount())
+  await flush()
+  const before = harness.requests
+  for (const callback of harness.listeners.get('sensor_update')) callback({ device_id: 'OTHER' })
+  await new Promise(resolve => setTimeout(resolve, 130))
+  assert.equal(harness.requests, before)
+  for (const event of ['sensor_update', 'diagnosis_update', 'sensor_update']) {
+    for (const callback of harness.listeners.get(event)) callback({ device_id: 'WTG-001' })
+  }
+  await new Promise(resolve => setTimeout(resolve, 130))
+  assert.equal(harness.requests, before + 1)
+})
+
+test('切换设备时慢请求不能覆盖新设备，推送到达时保留一次后续刷新', async t => {
+  const pending = []
+  const harness = createHarness({ fetchData: (deviceId, preferSpecial) => new Promise(resolve => {
+    pending.push({ deviceId, preferSpecial, resolve })
+  }) })
+  const page = harness.mount()
+  t.after(() => page.app.unmount())
+  await flush()
+  assert.equal(pending.length, 1)
+  page.state.selectedMonitorDevice = 'WTG-002'
+  page.state.onMonitorDeviceChange()
+  await flush()
+  // 在途请求串行，旧响应结束后必须刷新当前设备。
+  pending[0].resolve({ data: { channels, sensorParams: { device: 'OLD' } } })
+  await flush()
+  assert.notEqual(page.state.params.device, 'OLD')
+  assert.equal(pending.length, 2)
+  assert.equal(pending[1].deviceId, 'WTG-002')
+  pending[1].resolve({ data: { channels: [channels[1]], sensorParams: { device: 'NEW' } } })
+  await flush()
+  assert.equal(page.state.params.device, 'NEW')
+  assert.equal(page.state.activeChannel, 0)
+})
+
+test('请求进行中收到新推送会在结束后刷新，卸载会取消待刷新', async t => {
+  let resolveRequest
+  let calls = 0
+  const harness = createHarness({ fetchData: () => {
+    calls++
+    if (calls === 2) return new Promise(resolve => { resolveRequest = resolve })
+    return Promise.resolve({ data: { channels, sensorParams: {} } })
+  } })
+  const page = harness.mount()
+  t.after(() => page.app.unmount())
+  await flush()
+  const emit = () => {
+    for (const callback of harness.listeners.get('sensor_update')) callback({ device_id: 'WTG-001' })
+  }
+  emit()
+  await new Promise(resolve => setTimeout(resolve, 130))
+  assert.equal(calls, 2)
+  emit()
+  await new Promise(resolve => setTimeout(resolve, 130))
+  resolveRequest({ data: { channels, sensorParams: {} } })
+  await flush()
+  assert.equal(calls, 3, '在途请求不能吞掉后续推送')
+  emit()
+  page.app.unmount()
+  await new Promise(resolve => setTimeout(resolve, 130))
+  assert.equal(calls, 3)
 })
 
 test('数据尚未返回就离开页面，不应在卸载后创建图表或连接', async () => {
@@ -172,4 +243,39 @@ test('数据尚未返回就离开页面，不应在卸载后创建图表或连�
   assert.ok(harness.charts.every(chart => chart.disposed), '卸载后的异步回调不能遗留图表')
   assert.equal(harness.connected, false, '卸载后的异步回调不能重新连接')
   assert.equal(harness.resizeListeners.size, 0)
+})
+
+test('慢任务查询期间不启动重复轮询，卸载后不再调度下一轮', async () => {
+  const timers = new Map()
+  let timerId = 0, resolveStatus, calls = 0
+  const harness = createHarness({
+    timers: {
+      setTimeout: callback => { timers.set(++timerId, callback); return timerId },
+      clearTimeout: id => timers.delete(id),
+      setInterval: callback => { timers.set(++timerId, callback); return timerId },
+      clearInterval: id => timers.delete(id)
+    },
+    taskStatus: () => { calls++; return new Promise(resolve => { resolveStatus = resolve }) }
+  })
+  const page = harness.mount()
+  await flush()
+  page.state.isCollecting = true
+  page.state.startPolling(1)
+  try {
+    assert.equal(calls, 1)
+    assert.equal(timers.size, 0, '上次查询未返回时不能预约下一轮查询')
+    resolveStatus({ data: { status: 'pending' } })
+    await flush()
+    assert.equal(timers.size, 1)
+    const callback = [...timers.values()][0]
+    timers.clear()
+    callback()
+    assert.equal(calls, 2)
+    page.app.unmount()
+    resolveStatus({ data: { status: 'pending' } })
+    await flush()
+    assert.equal(timers.size, 0)
+  } finally {
+    page.app.unmount()
+  }
 })

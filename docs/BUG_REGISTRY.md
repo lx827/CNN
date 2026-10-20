@@ -1,6 +1,6 @@
 # Bug 记录
 
-> 最后更新: 2026-10-19 | 详见 AGENTS.md §14
+> 最后更新: 2026-10-21 | 详见 AGENTS.md §14
 
 ## 未修复 (2)
 
@@ -9,7 +9,7 @@
 | 11d | `ensemble.py`, `health_score.py` | D-S 证据融合未生效（0/30 样本被覆盖）|
 | 13d | `ensemble.py` | **WTG 五分类断齿检出 0%** — gear_abnormal 标签映射缺失 |
 
-## 已修复 (17)
+## 已修复 (24)
 
 | # | 文件 | 描述 |
 |---|------|------|
@@ -19,6 +19,23 @@
 | 13 | `features.py`, `ensemble.py`, 评估脚本 | ✅ **WTG 五分类 20%→51.25%** — 全链路修复（见下） |
 | 14 | `preprocessing.py`, `vmd_denoise.py` | ✅ **小波+VMD 级联 ΔSNR +0.19→+0.98dB** — 见下 |
 | 15 | `Monitor.vue` | **实时监测首次进入/返回后波形为空，切换通道才显示** — 先初始化图表再加载数据，同步注册卸载清理并移除旧推送订阅 |
+| 16 | `dashboard.py`, `monitor.py`, `data_view/core.py`, `diagnosis_queries.py` | **列表慢/摘要不一致** — N+1、全量诊断 JSON 加载、按插入顺序覆盖；改为批量摘要查询，统一按时间/id 选最新，补复合索引 |
+| 17 | `data_view/research.py` | **研究诊断缓存一直无法保存** — 使用未导入的 timezone，NameError 被捕获；显式导入并验证插入/更新 |
+| 18 | `core/json_utils.py`, `data_view/__init__.py` | **NaN/Infinity 导致 HTTP JSON 编码失败** — 原转换器未递归处理数组中的非有限值；严格转换为 null |
+| 19 | `spectrum.py`, `cepstrum.py`, `order.py` | **去噪阻塞全站协程调度** — async 路由直接执行慢去噪；改为复用原有两线程池 |
+| 20 | `Dashboard.vue` | **离开后轮询/订阅泄漏、仪表盘不刷新、critical 显示未知** — 同步卸载注册，刷新选中对象，兼容 critical/fault |
+| 21 | `Monitor.vue` | **重复刷新、旧设备慢响应覆盖、慢轮询叠加** — 合并推送/串行刷新/保留一次后续刷新，丢弃旧设备响应，完成后再调度轮询 |
+| 22 | `utils/websocket.js` | **重复握手、旧 close 破坏新心跳、多个重连定时器** — OPEN/CONNECTING 幂等，校验连接实例，定时器去重 |
+
+**Bug #16–22 验证（2026-10-21）**：
+
+- 每组均先通过实际函数/端点/真实 Vue 生命周期的测试复现，再修改实现；没有使用线上数据库或向现场设备下发采集。
+- 后端 `tests/backend/test_read_paths.py`：总览 11 台设备由 16 次 SELECT 降为 3 次，历史 16 个批次由 17 次降为 2 次；批次列表不加载完整算法 JSON，两列表结果一致；缓存插入/覆盖、严格 JSON、旧库重复补索引、真实应用五条 HTTP 读路径均通过。
+- 后端 `tests/backend/test_event_loop.py`：用受控慢去噪在 STFT/倒谱/阶次实际端点上验证其他协程能被调度，修复前三个端点均失败，修复后通过。不代表真实 VMD 算法耗时降低。
+- 前端 `monitor_lifecycle.test.cjs`（7 项）、`dashboard_lifecycle.test.cjs`（3 项）、`websocket.test.cjs`（3 项）全部通过；不覆盖实际浏览器像素渲染。
+- 三项 P0 回归通过，前端生产构建通过。线上 P95 延迟、MySQL/Ubuntu 环境、完整数据集分类效果未验证。原有 #11d/#13d 仍未解决。
+
+**仍需核实的语义/架构问题**：`/monitor/latest` 默认按最大 batch_index 取批次，普通批次循环覆盖、特殊批次长期保留，因此“最新”不必等于采集时间最近；设备转频与所展示批次也可能不是同批。改变此规则会影响结果含义，本轮未改。同步数据库访问、后台事务范围、重复诊断缓存写入的竞争还需进一步单独验证。详见 [本轮架构记录](ARCHITECTURE_REFACTOR_20261021.md)。
 
 **Bug #15 详细（2026-10-19）**：
 

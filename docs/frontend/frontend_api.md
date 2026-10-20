@@ -238,6 +238,8 @@ import { getDevices } from '@/api/device';
 
 ### 3.2 Dashboard.vue
 
+**2026-10-21 生命周期与刷新约定**：卸载钩子在 setup 同步注册，退出时取消订阅、60 秒轮询和 resize 监听并销毁图表；等待请求/nextTick 期间退出，不再初始化资源。刷新后按 `deviceId` 重新绑定选中设备，仪表盘不再引用旧对象。状态 `critical` 与原有 `fault` 均显示为故障并纳入故障计数。
+
 | 属性 | 说明 |
 |------|------|
 | **文件路径** | `src/views/Dashboard.vue` |
@@ -403,6 +405,10 @@ import { getSystemLogs } from '@/api/system';
 
 ### 3.6 Monitor.vue
 
+**2026-10-21 请求调度**：WebSocket 只响应当前设备的事件，将 100 ms 内的连续事件合并；同一页面最多一个监测刷新请求在途，在途事件保留一次后续刷新。`refreshLatestData(preferSpecial=false)` 供初始化、设备切换和采集完成复用，后续刷新保留特殊采集优先请求。切换设备后丢弃旧设备响应，通道数减少时重置无效通道选择，空数据清空图表。卸载取消待执行定时器。
+
+**采集轮询**：完成一次状态查询后再等待 2 秒，避免慢请求重叠；卸载后忽略响应且不再安排下一轮。成功/失败/最多 60 次的终止条件保留。
+
 | 属性 | 说明 |
 |------|------|
 | **文件路径** | `src/views/Monitor.vue` |
@@ -435,6 +441,8 @@ import { getSystemLogs } from '@/api/system';
 | `handleResize()` | 调整图表尺寸；随页面挂载注册、卸载移除 |
 
 **生命周期约定（2026-10-19 修复）**：首次进入和路由返回均先初始化图表，再请求数据并绘制默认通道，无需手动切换通道。`onUnmounted` 在 setup 阶段同步注册，清理采集轮询、WebSocket 订阅、图表实例及 resize 监听；异步初始化和波形请求在页面卸载后不再继续建立连接或绘图。波形读取云端数据库中的已有记录，显示波形不代表本机边端正在采集。
+
+**WebSocket 工具约定（2026-10-21）**：`utils/websocket.js` 的 `connect()` 对 OPEN/CONNECTING 均幂等；旧连接的迟到回调不影响新连接。重连定时器和心跳各最多一个，主动 close 禁止安排重连；`on/off` 的现有接口保持兼容。
 
 **调用 API**
 

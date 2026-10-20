@@ -19,6 +19,7 @@ def _save_research_diagnosis(db, device_id, batch_index, channel, denoise, resul
 ```
 
 - **说明**：将研究诊断结果写入 diagnosis 表缓存
+- **2026-10-21 修复**：显式导入 `datetime/timezone`，插入和覆盖更新均使用 UTC 时间；消除原先 `NameError` 被捕获后缓存一直不落库的问题。
 
 ## 路由端点
 

@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
 from . import router, _get_channel_name, prepare_signal
 from app.services.diagnosis.signal_utils import denoise_signal
+from app.services.diagnosis_queries import latest_diagnosis_summaries
 from datetime import datetime
 import logging
 
@@ -51,17 +52,9 @@ def get_all_device_data(
     for r in batch_records:
         batch_map[r.device_id].append(r)
 
-    # 2. 一次性查询所有诊断结果（所有设备）
-    # 同一 batch 可能有多条，在 Python 中保留最新的
-    diag_records = db.query(Diagnosis).filter(
-        Diagnosis.device_id.in_(device_ids)
-    ).all()
-
-    diag_map = {}
-    for d in diag_records:
-        key = (d.device_id, d.batch_index)
-        if key not in diag_map or (d.analyzed_at and diag_map[key].analyzed_at and d.analyzed_at > diag_map[key].analyzed_at):
-            diag_map[key] = d
+    # 2. 数据库筛选最新摘要，避免加载和反序列化完整算法结果。
+    diag_records = latest_diagnosis_summaries(db, device_ids, per_batch=True)
+    diag_map = {(d.device_id, d.batch_index): d for d in diag_records}
 
     # 3. 组装结果
     result = []
@@ -128,9 +121,7 @@ def get_device_batches(
     batch_records = query.all()
 
     # 预加载诊断结果
-    diag_records = db.query(Diagnosis).filter(
-        Diagnosis.device_id == device_id
-    ).all()
+    diag_records = latest_diagnosis_summaries(db, [device_id], per_batch=True)
     diag_map = {d.batch_index: d for d in diag_records}
 
     batches = []

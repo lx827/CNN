@@ -68,7 +68,8 @@ async def get_channel_order(
 
     try:
         sig = prepare_signal(record.data, detrend=detrend)
-        sig = denoise_signal(sig, denoise)
+        # VMD 等去噪可能耗时较长，不能直接占用事件循环。
+        sig = await asyncio.to_thread(denoise_signal, sig, denoise)
         sample_rate = record.sample_rate or 25600
 
         # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）
