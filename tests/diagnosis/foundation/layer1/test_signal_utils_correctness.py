@@ -35,6 +35,7 @@ from app.services.diagnosis.signal_utils import (
     _search_peak_in_band, _estimate_background, _compute_peak_snr,
     _estimate_noise_mad, _snr_by_residual_std,
 )
+from tests.diagnosis.data_paths import HUSTBEAR_DIR, WTGEARBOX_DIR, HUSTGEARBOX_DIR, CW_DIR
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
     NumpyEncoder, sinusoidal, chirp_rotating, gear_mesh,
     bearing_outer_race, bearing_inner_race, impulse_train,
@@ -45,10 +46,10 @@ FS = 8192
 
 # 真实数据集路径
 REAL_DATASETS = {
-    "hustbear": Path(r"D:\code\wavelet_study\dataset\HUSTbear\down8192"),
-    "wtgearbox": Path(r"D:\code\wavelet_study\dataset\WTgearbox\down8192"),
-    "hustgearbox": Path(r"D:\code\wavelet_study\dataset\HUSTgearbox\down8192"),
-    "cw": Path(r"D:\code\CNN\CW\down8192_CW"),
+    "hustbear": HUSTBEAR_DIR,
+    "wtgearbox": WTGEARBOX_DIR,
+    "hustgearbox": HUSTGEARBOX_DIR,
+    "cw": CW_DIR,
 }
 
 # ═══════════════════════════════════════════════════════════

@@ -4,11 +4,14 @@ import sys, json, time
 from pathlib import Path
 import numpy as np
 
-sys.path.insert(0, r'd:\code\CNN\cloud')
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
+sys.path.insert(0, str(PROJECT_ROOT / "tests" / "diagnosis"))
 from app.services.diagnosis.engine import DiagnosisEngine, BearingMethod, DenoiseMethod
 from app.services.diagnosis.ensemble import run_research_ensemble
+from data_paths import HUSTBEAR_DIR
 
-HUST = Path(r'D:\code\wavelet_study\dataset\HUSTbear\down8192')
+HUST = HUSTBEAR_DIR
 FS = 8192
 MAX_PTS = FS * 5
 BP = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}

@@ -12,16 +12,18 @@
 5. 联合降噪（wavelet+VMD）— 级联去噪效果
 6. 非参数 CUSUM — 健康vs故障漂移检测
 """
+import os
 import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import numpy as np
-import os
+from data_paths import HUSTBEAR_DIR, CW_DIR, WTGEARBOX_DIR
 
 # 数据集路径
-HUST_DIR = "d:\\code\\wavelet_study\\dataset\\HUSTbear\\down8192"
-CW_DIR = "d:\\code\\CNN\\CW\\down8192_CW"
-WTG_DIR = "d:\\code\\wavelet_study\\dataset\\WTgearbox\\down8192"
+HUST_DIR = str(HUSTBEAR_DIR)
+WTG_DIR = str(WTGEARBOX_DIR)
 
 FS = 8192  # 所有数据集采样率 8192 Hz
 

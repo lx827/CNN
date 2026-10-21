@@ -15,13 +15,14 @@ import numpy as np
 CLOUD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "cloud"))
 if CLOUD_DIR not in sys.path:
     sys.path.insert(0, CLOUD_DIR)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.services.diagnosis.engine import DiagnosisEngine, BearingMethod
 from app.services.diagnosis.features import compute_time_features
 from app.services.diagnosis.health_score import _compute_health_score
+from data_paths import CW_DIR
 
 # ==================== 配置 ====================
-CW_DIR = r"D:\code\CNN\CW\down8192_CW"
 FS = 8192
 MAX_SECONDS = 5
 MAX_SAMPLES = FS * MAX_SECONDS

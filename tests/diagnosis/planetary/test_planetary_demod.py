@@ -27,6 +27,7 @@ import json
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "cloud"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.services.diagnosis.gear.planetary_demod import (
     planetary_envelope_order_analysis,
@@ -38,7 +39,9 @@ from app.services.diagnosis.gear.planetary_demod import (
     planetary_msb_analysis,
 )
 
-DATA_DIR = Path(r"D:\code\wavelet_study\dataset\WTgearbox\down8192")
+from data_paths import WTGEARBOX_DIR
+
+DATA_DIR = WTGEARBOX_DIR
 FS = 8192
 
 GEAR_TEETH = {

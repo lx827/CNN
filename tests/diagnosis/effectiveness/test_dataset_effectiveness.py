@@ -9,8 +9,8 @@
   - 导致误判的具体指标分析
 
 数据集：
-  HUSTbear: D:/code/wavelet_study/dataset/HUSTbear/down8192  (8192 Hz)
-  CW:       D:/code/CNN/CW/down8192_CW                      (8192 Hz)
+  HUSTbear: <仓库>/data/HUSTbear/down8192  (8192 Hz)
+  CW:       <仓库>/data/CW/down8192_CW      (8192 Hz)
 
 运行方式:
     cd d:/code/CNN
@@ -26,6 +26,7 @@ from collections import defaultdict
 CLOUD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "cloud"))
 if CLOUD_DIR not in sys.path:
     sys.path.insert(0, CLOUD_DIR)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.services.diagnosis import (
     DiagnosisEngine,
@@ -34,11 +35,11 @@ from app.services.diagnosis import (
     DenoiseMethod,
 )
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
+from data_paths import HUSTBEAR_DIR, CW_DIR
 
 # ==================== 数据集配置 ====================
 
-HUST_DIR = r"D:\code\wavelet_study\dataset\HUSTbear\down8192"
-CW_DIR = r"D:\code\CNN\CW\down8192_CW"
+HUST_DIR = str(HUSTBEAR_DIR)
 FS = 8192
 MAX_SECONDS = 5  # 截断到 5 秒，与 DataView 保持一致
 

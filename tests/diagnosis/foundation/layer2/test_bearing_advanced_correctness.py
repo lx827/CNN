@@ -18,6 +18,7 @@ from app.services.diagnosis.bearing import cpw_envelope_analysis
 from app.services.diagnosis.mckd import mckd_envelope_analysis
 from app.services.diagnosis.bearing_cyclostationary import bearing_sc_scoh_analysis
 from app.services.diagnosis.signal_utils import find_peaks_in_spectrum
+from tests.diagnosis.data_paths import HUSTBEAR_DIR
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
     NumpyEncoder, bearing_outer_race, bearing_inner_race,
 )
@@ -26,7 +27,6 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 FS = 8192
 
 # ── 真实数据集配置 ──
-HUSTBEAR_DIR = Path(r"D:\code\wavelet_study\dataset\HUSTbear\down8192")
 BEARING_PARAMS = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
 FAULT_COEFF = {"OR": 3.57, "IR": 5.43, "B": 4.71}
 

@@ -23,6 +23,7 @@ from app.services.diagnosis.gear.metrics import (
 )
 from app.services.diagnosis.signal_utils import compute_fft_spectrum
 from app.services.diagnosis.order_tracking import _compute_order_spectrum
+from tests.diagnosis.data_paths import WTGEARBOX_DIR
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
     NumpyEncoder, gear_mesh, sinusoidal,
 )
@@ -31,7 +32,6 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 FS = 8192
 
 # ── 真实数据集配置 ──
-WTGEARBOX_DIR = Path(r"D:\code\wavelet_study\dataset\WTgearbox\down8192")
 # WTgearbox 行星齿轮箱参数 (AGENTS.md)
 WTGEARBOX_MESH_ORDER = 175 / 8  # = 21.875 × fr → mesh_order = 21.875
 

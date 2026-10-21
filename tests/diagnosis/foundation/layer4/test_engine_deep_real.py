@@ -22,10 +22,7 @@ from tests.diagnosis.foundation.layer1.synthetic_signals import NumpyEncoder
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 FS = 8192
-HUSTBEAR_DIR = Path("D:/code/wavelet_study/dataset/HUSTbear/down8192")
-CW_DIR = Path("D:/code/CNN/CW/down8192_CW")
-WTGEARBOX_DIR = Path("D:/code/wavelet_study/dataset/WTgearbox/down8192")
-HUSTGEARBOX_DIR = Path("D:/code/wavelet_study/dataset/HUSTgearbox/down8192")
+from tests.diagnosis.data_paths import HUSTBEAR_DIR, CW_DIR, WTGEARBOX_DIR, HUSTGEARBOX_DIR
 
 
 def load_npy(dataset_dir, fname, max_pts=8192 * 3):
