@@ -14,6 +14,8 @@ import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
+sys.path.insert(0, str(PROJECT_ROOT / "tests" / "diagnosis"))
+from data_paths import CW_DIR
 
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
 from app.services.diagnosis.order_tracking import _compute_order_spectrum_varying_speed, _compute_order_spectrum
@@ -25,7 +27,6 @@ import matplotlib.pyplot as plt
 from scipy.signal import hilbert as scipy_hilbert
 
 # ── 配置 ──────────────────────────────────────────────────
-CW_DIR = Path(r"D:\code\CNN\CW\down8192_CW")
 FS = 8192
 OUT_DIR = PROJECT_ROOT / "tests" / "output" / "eval_plots" / "cw_order_demo"
 OUT_DIR.mkdir(parents=True, exist_ok=True)

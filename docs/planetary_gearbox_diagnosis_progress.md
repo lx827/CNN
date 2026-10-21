@@ -8,7 +8,7 @@
 
 ### 1.1 WTgearbox 数据集
 
-- **路径**: `D:\code\wavelet_study\dataset\WTgearbox\down8192`
+- **路径**: `data/WTgearbox/down8192`（相对仓库根目录）
 - **采样率**: 8192 Hz
 - **文件数**: 160 个 `.npy`
 - **故障类型**: He(健康), Br(断齿), Mi(缺齿), We(磨损), Rc(裂纹)

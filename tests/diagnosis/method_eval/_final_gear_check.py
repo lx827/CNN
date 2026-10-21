@@ -2,10 +2,13 @@
 齿轮诊断最终效果测试 — 40Hz 和 55Hz 所有故障类型
 """
 import sys
-sys.path.insert(0, r"d:/code/CNN/cloud")
-sys.path.insert(0, r"d:/code/CNN/tests/diagnosis")
 from pathlib import Path
 import numpy as np
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
+sys.path.insert(0, str(PROJECT_ROOT / "tests" / "diagnosis"))
+from data_paths import WTGEARBOX_DIR
 from app.services.diagnosis.engine import DiagnosisEngine, GearMethod, DiagnosisStrategy, DenoiseMethod
 from app.services.diagnosis.ensemble import run_research_ensemble
 
@@ -13,7 +16,7 @@ GEAR_PARAMS = {"input": 28, "ring": 100, "planet": 36, "planet_count": 4}
 SAMPLE_RATE = 8192
 MAX_SAMPLES = SAMPLE_RATE * 5
 
-data_dir = Path(r"D:\code\wavelet_study\dataset\WTgearbox\down8192")
+data_dir = WTGEARBOX_DIR
 
 test_files = [
     ("He_N1_40-c1.npy", "健康", 40),

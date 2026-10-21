@@ -12,6 +12,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import numpy as np
 try:
@@ -31,16 +32,14 @@ from app.services.diagnosis.order_tracking import (
     _compute_order_spectrum_varying_speed,
 )
 
-# 自动检测数据集路径（兼容不同开发环境）
+from data_paths import HUSTBEAR_DIR
+
+# 数据集路径（相对仓库根目录，可用 HUSTBEAR_DIR 环境变量覆盖）
 def _find_data_path():
-    candidates = [
-        r"D:\code\wavelet_study\dataset\HUSTbear\down8192\0.5X_B_VS_0_40_0Hz-X.npy",
-        r"E:\A-codehub\CNN\HUSTbear\down8192\0.5X_B_VS_0_40_0Hz-X.npy",
-    ]
-    for p in candidates:
-        if os.path.exists(p):
-            return p
-    raise FileNotFoundError(f"数据不存在，已尝试: {candidates}")
+    path = HUSTBEAR_DIR / "0.5X_B_VS_0_40_0Hz-X.npy"
+    if path.exists():
+        return str(path)
+    raise FileNotFoundError(f"数据不存在: {path}")
 
 DATA_PATH = _find_data_path()
 FS = 8192

@@ -9,6 +9,7 @@
 - 评估参数
 """
 import os
+import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -21,20 +22,8 @@ CLOUD_PATH = PROJECT_ROOT / "cloud"
 # ═══════════════════════════════════════════════════════════
 # 数据集路径（支持环境变量覆盖）
 # ═══════════════════════════════════════════════════════════
-HUSTBEAR_DIR = Path(os.environ.get(
-    "HUSTBEAR_DIR",
-    r"D:\code\wavelet_study\dataset\HUSTbear\down8192"
-))
-
-CW_DIR = Path(os.environ.get(
-    "CW_DIR",
-    r"D:\code\CNN\CW\down8192_CW"
-))
-
-WTGEARBOX_DIR = Path(os.environ.get(
-    "WTGEARBOX_DIR",
-    r"D:\code\wavelet_study\dataset\WTgearbox\down8192"
-))
+sys.path.insert(0, str(PROJECT_ROOT / "tests" / "diagnosis"))
+from data_paths import HUSTBEAR_DIR, CW_DIR, WTGEARBOX_DIR
 
 # ═══════════════════════════════════════════════════════════
 # 信号参数

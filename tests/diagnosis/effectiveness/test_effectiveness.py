@@ -23,16 +23,16 @@ import numpy as np
 
 # 添加 cloud 模块路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cloud'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from app.services.diagnosis.ensemble import run_research_ensemble
+from data_paths import CW_DIR as CW_DATA_DIR, WTGEARBOX_DIR as WTGEAR_DATA_DIR
 
 # ============ 参数配置 ============
 CW_BEARING_PARAMS = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
 WTGEAR_GEAR_TEETH = {"sun": 28, "ring": 100, "planet": 36, "planet_count": 4, "input": 28}
 NO_PARAMS = None
 
-CW_DATA_DIR = r"D:\code\CNN\CW\down8192_CW"
-WTGEAR_DATA_DIR = r"D:\code\wavelet_study\dataset\WTgearbox\down8192"
 FS = 8192  # 采样率
 
 

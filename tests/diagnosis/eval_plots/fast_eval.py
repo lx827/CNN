@@ -9,6 +9,8 @@ import numpy as np
 warnings.filterwarnings("ignore")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
+sys.path.insert(0, str(PROJECT_ROOT / "tests" / "diagnosis"))
+from data_paths import HUSTBEAR_DIR, CW_DIR, WTGEARBOX_DIR as WTGEAR_DIR
 
 from app.services.diagnosis.engine import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod
 from app.services.diagnosis.ensemble import run_research_ensemble
@@ -19,9 +21,6 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 FS = 8192
 MAX_PTS = FS * 5  # 5 seconds
 
-HUSTBEAR_DIR = Path(r"D:\code\wavelet_study\dataset\HUSTbear\down8192")
-CW_DIR = Path(r"D:\code\CNN\CW\down8192_CW")
-WTGEAR_DIR = Path(r"D:\code\wavelet_study\dataset\WTgearbox\down8192")
 BEARING_PARAMS = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
 GEAR_PARAMS = {"sun": 28, "ring": 100, "planet": 36, "n_planets": 4}
 

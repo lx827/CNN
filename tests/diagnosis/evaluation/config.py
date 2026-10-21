@@ -1,6 +1,7 @@
 """
 评价框架配置常量
 """
+import sys
 from pathlib import Path
 
 # 路径
@@ -8,10 +9,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 OUTPUT_DIR = Path(__file__).parent.parent / "output" / "evaluation"
 CACHE_DIR = OUTPUT_DIR / "cache"
 
-# 数据集路径
-HUSTBEAR_DIR = Path(r"D:\code\wavelet_study\dataset\HUSTbear\down8192")
-CW_DIR = Path(r"D:\code\CNN\CW\down8192_CW")
-WTGEARBOX_DIR = Path(r"D:\code\wavelet_study\dataset\WTgearbox\down8192")
+# 数据集路径（统一在 tests/diagnosis/data_paths.py 定义，默认仓库内 data/）
+sys.path.insert(0, str(PROJECT_ROOT / "tests" / "diagnosis"))
+from data_paths import HUSTBEAR_DIR, CW_DIR, WTGEARBOX_DIR
 
 # 信号参数
 SAMPLE_RATE = 8192

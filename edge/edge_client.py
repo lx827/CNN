@@ -26,6 +26,7 @@ import glob
 import requests
 import numpy as np
 from datetime import datetime
+from pathlib import Path
 from dotenv import load_dotenv
 from compressor import compress_payload
 
@@ -48,8 +49,13 @@ DEVICE_IDS_STR = os.getenv("DEVICE_IDS", "WTG-001,WTG-002,WTG-003,WTG-004,WTG-00
 DEVICE_IDS = [d.strip() for d in DEVICE_IDS_STR.split(",") if d.strip()]
 
 # ========== 数据源路径 ==========
-CW_DATA_DIR = os.getenv("CW_DATA_DIR", r"D:\code\CNN\CW\down8192_CW")
-WTGEAR_DATA_DIR = os.getenv("WTGEAR_DATA_DIR", r"D:\code\wavelet_study\dataset\WTgearbox\down8192")
+# 仓库根目录（edge/ 的上一级），数据集默认放在仓库内 data/ 下；
+# 也可用 CNN_DATA_ROOT / CW_DATA_DIR / WTGEAR_DATA_DIR 环境变量指向其他位置。
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATA_ROOT = Path(os.getenv("CNN_DATA_ROOT", PROJECT_ROOT / "data"))
+
+CW_DATA_DIR = os.getenv("CW_DATA_DIR", str(DATA_ROOT / "CW" / "down8192_CW"))
+WTGEAR_DATA_DIR = os.getenv("WTGEAR_DATA_DIR", str(DATA_ROOT / "WTgearbox" / "down8192"))
 
 # ========== 边端运行参数 ==========
 DEFAULT_UPLOAD_INTERVAL = int(os.getenv("UPLOAD_INTERVAL", "10"))

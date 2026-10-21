@@ -178,7 +178,7 @@ python ../tests/diagnosis/regression/test_varying_speed_order.py
 | 项目 | 说明 |
 |------|------|
 | **目的** | 验证变速工况下阶次跟踪算法正确性 |
-| **数据集** | 需要 HUSTbear 数据集 `D:\code\wavelet_study\dataset\HUSTbear\down8192` |
+| **数据集** | 需要 HUSTbear 数据集 `data/HUSTbear/down8192`（相对仓库根目录） |
 | **通过标准** | 转频估计在合理范围，多帧 vs 单帧阶次谱差异可接受 |
 
 ### 1.4 一键回归测试
@@ -296,9 +296,11 @@ python ../tests/diagnosis/contest/main.py
 
 | 数据集 | 路径 | 用途 |
 |--------|------|------|
-| HUSTbear | `D:\code\wavelet_study\dataset\HUSTbear\down8192` | 轴承诊断评估 |
-| CW | `D:\code\CNN\CW\down8192_CW` | 变速轴承诊断评估 |
-| WTgearbox | `D:\code\wavelet_study\dataset\WTgearbox\down8192` | 齿轮诊断评估 |
+| HUSTbear | `data/HUSTbear/down8192` | 轴承诊断评估 |
+| CW | `data/CW/down8192_CW` | 变速轴承诊断评估 |
+| WTgearbox | `data/WTgearbox/down8192` | 齿轮诊断评估 |
+
+> 路径均相对仓库根目录，由 `tests/diagnosis/data_paths.py` 统一解析；可用 `CNN_DATA_ROOT` 指向仓库外数据目录。
 
 > 回归测试（P0）不需要数据集，使用合成信号即可运行。
 

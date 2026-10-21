@@ -39,8 +39,8 @@ CLOUD_INGEST_URL=http://localhost:8000/api/ingest/
 # 设备列表（支持多设备，逗号分隔）
 DEVICE_IDS=WTG-001,WTG-002,WTG-003,WTG-004,WTG-005
 
-# 真实数据目录
-DATA_DIR=D:\code\wavelet_study\dataset\HUSTbear\down8192
+# 真实数据目录（相对仓库根目录，也可写绝对路径）
+DATA_DIR=data/HUSTbear/down8192
 
 # 信号参数
 SAMPLE_RATE=8192

@@ -17,9 +17,12 @@ MAX_PTS = FS * 5
 BP = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
 GP = {"sun": 28, "ring": 100, "planet": 36, "n_planets": 4}
 
-HUST = Path(r"D:\code\wavelet_study\dataset\HUSTbear\down8192")
-CW   = Path(r"D:\code\CNN\CW\down8192_CW")
-WTG  = Path(r"D:\code\wavelet_study\dataset\WTgearbox\down8192")
+sys.path.insert(0, str(PROJECT_ROOT / "tests" / "diagnosis"))
+from data_paths import HUSTBEAR_DIR, CW_DIR, WTGEARBOX_DIR
+
+HUST = HUSTBEAR_DIR
+CW   = CW_DIR
+WTG  = WTGEARBOX_DIR
 
 
 def save(name, data):

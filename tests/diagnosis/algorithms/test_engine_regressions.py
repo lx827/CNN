@@ -12,14 +12,15 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "cloud"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.services.diagnosis import DiagnosisEngine, GearMethod
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
+from data_paths import HUSTBEAR_DIR, CW_DIR
 
 
 FS = 8192
-HUST_DIR = r"E:\A-codehub\CNN\HUSTbear\down8192"
-CW_DIR = r"E:\A-codehub\CNN\CW"
+HUST_DIR = str(HUSTBEAR_DIR)
 
 
 def _impulse_signal(fs=FS, seconds=5, rot_freq=25.0):

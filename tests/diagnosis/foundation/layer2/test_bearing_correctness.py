@@ -22,6 +22,7 @@ from app.services.diagnosis.bearing import (
     teager_envelope_analysis, spectral_kurtosis_envelope_analysis,
 )
 from app.services.diagnosis.signal_utils import compute_fft_spectrum, kurtosis, find_peaks_in_spectrum
+from tests.diagnosis.data_paths import HUSTBEAR_DIR
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
     NumpyEncoder, bearing_outer_race, impulse_train,
 )
@@ -30,7 +31,6 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 FS = 8192
 
 # ── 真实数据集配置 ──
-HUSTBEAR_DIR = Path(r"D:\code\wavelet_study\dataset\HUSTbear\down8192")
 # ER-16K 轴承参数 (AGENTS.md Table 1)
 BEARING_PARAMS = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
 # 故障频率系数 × 转频

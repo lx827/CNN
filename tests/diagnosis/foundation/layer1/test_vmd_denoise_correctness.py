@@ -25,6 +25,7 @@ from app.services.diagnosis.vmd_denoise import (
 from app.services.diagnosis.signal_utils import (
     compute_fft_spectrum, kurtosis, rms, prepare_signal,
 )
+from tests.diagnosis.data_paths import HUSTBEAR_DIR, CW_DIR
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
     NumpyEncoder, sinusoidal, bearing_outer_race, impulse_train,
 )
@@ -33,8 +34,6 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 FS = 8192
 
 # 真实数据集路径
-HUSTBEAR_DIR = Path(r"D:\code\wavelet_study\dataset\HUSTbear\down8192")
-CW_DIR = Path(r"D:\code\CNN\CW\down8192_CW")
 
 
 # ═══════════════════════════════════════════════════════════

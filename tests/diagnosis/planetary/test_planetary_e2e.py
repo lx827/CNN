@@ -22,10 +22,13 @@ import json
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "cloud"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.services.diagnosis.engine import DiagnosisEngine, DenoiseMethod, DiagnosisStrategy, GearMethod
 
-DATA_DIR = Path(r"D:\code\wavelet_study\dataset\WTgearbox\down8192")
+from data_paths import WTGEARBOX_DIR
+
+DATA_DIR = WTGEARBOX_DIR
 FS = 8192
 
 GEAR_TEETH = {"sun": 28, "ring": 100, "planet": 36, "planet_count": 4, "input": 28}

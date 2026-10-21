@@ -100,6 +100,13 @@ CNN/
 │   ├── requirements.txt
 │   └── .env                        # 边端配置
 │
+├── data/                           # 数据集（已加入 .gitignore，不提交）
+│   ├── CQU/                        # 现场采集 CSV
+│   ├── HUSTbear/down8192/
+│   ├── CW/down8192_CW/
+│   ├── WTgearbox/down8192/
+│   └── HUSTgearbox/down8192/
+│
 └── tests/                          # 回归测试
     └── diagnosis/
         ├── test_none_params.py     # None 参数安全测试
@@ -330,7 +337,7 @@ EDGE_API_KEY=turbine-edge-secret
 CLOUD_INGEST_URL=http://localhost:8000/api/ingest/
 DEVICE_IDS=WTG-001,WTG-002,WTG-003,WTG-004,WTG-005
 USE_REAL_DATA=true
-DATA_DIR=D:\code\wavelet_study\dataset\HUSTbear\down8192
+DATA_DIR=data/HUSTbear/down8192   # 相对仓库根目录，也可用绝对路径
 SAMPLE_RATE=8192
 DURATION=10
 COMPRESSION_ENABLED=true
@@ -460,9 +467,11 @@ cloud/app/services/analyzer.py
 
 ## 9. 数据集
 
+所有数据集统一放在仓库根目录 `data/` 下，文档中的路径均相对仓库根目录。代码通过 `tests/diagnosis/data_paths.py`（测试）和 `edge/edge_client.py` 解析，换机器、换盘符无需改代码；数据集放在仓库外时用 `CNN_DATA_ROOT` 指向即可。
+
 **HUSTbear 轴承数据集：**
 
-- 路径：`D:\code\wavelet_study\dataset\HUSTbear\down8192`
+- 路径：`data/HUSTbear/down8192`
 - 采样率：8192 Hz
 - 文件格式：`.npy`（NumPy 一维数组，`dtype=float64`）
 - 文件命名规则：`{负载}_{故障类型}_{转速模式}-{通道}.npy`
@@ -494,7 +503,7 @@ cloud/app/services/analyzer.py
 > 来源：H. Huang, N. Baddour / Data in Brief 21 (2018) 1745–1749
 > **两个数据集均为 8192 Hz 采样率，诊断算法必须对两个数据集均成立。**
 
-- 路径：`D:\code\CNN\CW\down8192_CW`
+- 路径：`data/CW/down8192_CW`
 - 采样率：8192 Hz
 - 文件格式：`.npy`（NumPy 一维数组）
 - 文件命名规则：`{健康状态}-{转速模式}-{序号}.npy`
@@ -569,7 +578,7 @@ cloud/app/services/analyzer.py
 
 **WTgearbox 行星齿轮箱数据集：**
 
-- 路径：`D:\code\wavelet_study\dataset\WTgearbox\down8192`
+- 路径：`data/WTgearbox/down8192`
 - 采样率：8192 Hz
 - 文件格式：`.npy`（NumPy 一维数组）
 - 文件命名规则：`{故障类别}_{故障子类}_{转速}-c{通道}.npy`
@@ -606,7 +615,7 @@ cloud/app/services/analyzer.py
 > 来源：Chao Zhao, Enrico Zio, Weiming Shen, _Domain Generalization for Cross-Domain Fault Diagnosis_, Reliability Engineering and System Safety (2024).
 > 原始采样率 25.6 kHz，已降采样至 8192 Hz 存放在 `down8192` 目录。
 
-- 路径：`D:\code\wavelet_study\dataset\HUSTgearbox\down8192`
+- 路径：`data/HUSTgearbox/down8192`
 - 采样率：8192 Hz（原始 25.6 kHz → 降采样）
 - 文件格式：`.npy`（NumPy 一维数组）
 - 文件命名规则：`{健康状态}_{转速}_{负载倍数}-{通道}.npy`
@@ -770,3 +779,20 @@ AI Agent 在对以下范围进行修改前，**必须先查阅对应文档**，�
 ## 15. 现场试验数据交接
 
 处理设备1动不平衡、设备2轴承外圈故障、桌面“数据”目录中的现场CSV，或准备下一次现场核实时，先读 [现场数据交接记录](docs/FIELD_DATA_HANDOFF_20261020.md)。该文档记录用户最终确认的两台设备通道映射、文件来源、单位冲突及待核实条件；机械参数和故障位置不得用项目旧数据集配置代填。
+
+---
+
+## 16. Git 任务分支与合并后清理
+
+- **新任务开始时**：更新远端主分支引用，从最新主分支新建独立的本地任务分支，再进行修改、验证和本地提交；不复用上次任务分支，不直接修改或提交到主分支。
+- **任务分支的 PR 成功合入主分支后**：核实 PR 状态为 `MERGED`、目标为主分支，且待删除分支没有 PR 合并之后新增的未合入提交。确认工作区改动已保存、该分支未被其他工作树使用后，切换到其他分支，再删除对应的本地任务分支和远端任务分支，并清理失效的远端跟踪引用。远端分支已删除时，只清理本地剩余引用。
+- **清理授权**：上述条件满足时，默认执行已合并任务分支的本地和远端删除，无需再次询问。这是对“默认保留任务分支、远端删除需单独授权”的项目级明确例外；不扩大为自动推送、创建 PR、合并 PR 或删除其他分支的授权。
+- **未合并或状态不明时**：PR 仅创建或关闭、存在未保存改动、未合入提交或其他工作树占用时，保留分支并说明原因；不为清理分支而自动合并 PR。
+- **完成检查**：确认已合并任务分支在本地和远端均不存在，汇报清理结果和当前本地分支；有新功能或新任务时另建新的本地任务分支。
+
+### 16.1 提交粒度
+
+- **按逻辑单元提交**：一个提交只做一件事，改动代码、文档、配置、数据文件不要混在同一个提交里。
+- **同一任务内继续拆分**：例如目录调整、路径替换、文档同步、规则说明分别提交，不要把整个任务压成一个提交。
+- **每个提交可独立审查、独立回滚**：提交标题使用 `type(scope): 摘要` 格式，正文说明改动原因和影响。
+- **拆分不等于机械切分**：同一逻辑改动不要拆成多个无意义的小提交；单个文件内互不相关的改动应分别提交，若无法拆分则说明原因。

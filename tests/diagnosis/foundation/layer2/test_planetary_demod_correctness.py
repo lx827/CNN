@@ -22,6 +22,7 @@ from app.services.diagnosis.gear.planetary_demod import (
     planetary_vmd_demod_analysis, planetary_tsa_envelope_analysis,
     evaluate_planetary_demod_results,
 )
+from tests.diagnosis.data_paths import WTGEARBOX_DIR
 from tests.diagnosis.foundation.layer1.synthetic_signals import NumpyEncoder
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -71,7 +72,7 @@ def test_planetary_envelope_order():
     print(f"  [{'PASS' if passed else 'FAIL'}] EnvelopeOrder: sun={res.get('sun_fault_snr', 0):.2f}, planet={res.get('planet_fault_snr', 0):.2f}")
 
     # 真实 WTG 健康数据验证：planetary_sun_fault 不应误报
-    wtg_dir = Path("D:/code/wavelet_study/dataset/WTgearbox/down8192")
+    wtg_dir = WTGEARBOX_DIR
     sig_real = np.load(wtg_dir / "He_N1_20-c1.npy")[:FS*5] if wtg_dir.exists() else None
     if sig_real is not None:
         res_real = planetary_envelope_order_analysis(sig_real, FS, rot_freq=20.0, gear_teeth=GEAR_TEETH)
@@ -167,7 +168,7 @@ def test_evaluate_results():
     results = []
 
     # 用真实 WTG 健康数据的窄带结果
-    wtg_dir = Path("D:/code/wavelet_study/dataset/WTgearbox/down8192")
+    wtg_dir = WTGEARBOX_DIR
     sig_real = np.load(wtg_dir / "He_N1_20-c1.npy")[:FS*5] if wtg_dir.exists() else None
     if sig_real is None:
         results.append({"test": "eval_results_skip", "passed": True, "skip": "no data"})
