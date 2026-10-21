@@ -1,7 +1,10 @@
 ﻿import numpy as np, os, sys
+from pathlib import Path
 sys.path.insert(0, '.')
 
-data_dir = r'D:\code\wavelet_study\dataset\CW\down8192_CW'
+# cloud/ 的上一级为仓库根目录，数据集在仓库内 data/ 下
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+data_dir = str(PROJECT_ROOT / "data" / "CW" / "down8192_CW")
 
 for fname, label in [('I-A-1.npy', 'INNER RACE'), ('O-A-1.npy', 'OUTER RACE')]:
     data = np.load(os.path.join(data_dir, fname))
