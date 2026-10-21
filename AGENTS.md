@@ -100,6 +100,13 @@ CNN/
 │   ├── requirements.txt
 │   └── .env                        # 边端配置
 │
+├── data/                           # 数据集（已加入 .gitignore，不提交）
+│   ├── CQU/                        # 现场采集 CSV
+│   ├── HUSTbear/down8192/
+│   ├── CW/down8192_CW/
+│   ├── WTgearbox/down8192/
+│   └── HUSTgearbox/down8192/
+│
 └── tests/                          # 回归测试
     └── diagnosis/
         ├── test_none_params.py     # None 参数安全测试
@@ -330,7 +337,7 @@ EDGE_API_KEY=turbine-edge-secret
 CLOUD_INGEST_URL=http://localhost:8000/api/ingest/
 DEVICE_IDS=WTG-001,WTG-002,WTG-003,WTG-004,WTG-005
 USE_REAL_DATA=true
-DATA_DIR=D:\code\wavelet_study\dataset\HUSTbear\down8192
+DATA_DIR=data/HUSTbear/down8192   # 相对仓库根目录，也可用绝对路径
 SAMPLE_RATE=8192
 DURATION=10
 COMPRESSION_ENABLED=true
@@ -460,9 +467,11 @@ cloud/app/services/analyzer.py
 
 ## 9. 数据集
 
+所有数据集统一放在仓库根目录 `data/` 下，文档中的路径均相对仓库根目录。代码通过 `tests/diagnosis/data_paths.py`（测试）和 `edge/edge_client.py` 解析，换机器、换盘符无需改代码；数据集放在仓库外时用 `CNN_DATA_ROOT` 指向即可。
+
 **HUSTbear 轴承数据集：**
 
-- 路径：`D:\code\wavelet_study\dataset\HUSTbear\down8192`
+- 路径：`data/HUSTbear/down8192`
 - 采样率：8192 Hz
 - 文件格式：`.npy`（NumPy 一维数组，`dtype=float64`）
 - 文件命名规则：`{负载}_{故障类型}_{转速模式}-{通道}.npy`
@@ -494,7 +503,7 @@ cloud/app/services/analyzer.py
 > 来源：H. Huang, N. Baddour / Data in Brief 21 (2018) 1745–1749
 > **两个数据集均为 8192 Hz 采样率，诊断算法必须对两个数据集均成立。**
 
-- 路径：`D:\code\CNN\CW\down8192_CW`
+- 路径：`data/CW/down8192_CW`
 - 采样率：8192 Hz
 - 文件格式：`.npy`（NumPy 一维数组）
 - 文件命名规则：`{健康状态}-{转速模式}-{序号}.npy`
@@ -569,7 +578,7 @@ cloud/app/services/analyzer.py
 
 **WTgearbox 行星齿轮箱数据集：**
 
-- 路径：`D:\code\wavelet_study\dataset\WTgearbox\down8192`
+- 路径：`data/WTgearbox/down8192`
 - 采样率：8192 Hz
 - 文件格式：`.npy`（NumPy 一维数组）
 - 文件命名规则：`{故障类别}_{故障子类}_{转速}-c{通道}.npy`
@@ -606,7 +615,7 @@ cloud/app/services/analyzer.py
 > 来源：Chao Zhao, Enrico Zio, Weiming Shen, _Domain Generalization for Cross-Domain Fault Diagnosis_, Reliability Engineering and System Safety (2024).
 > 原始采样率 25.6 kHz，已降采样至 8192 Hz 存放在 `down8192` 目录。
 
-- 路径：`D:\code\wavelet_study\dataset\HUSTgearbox\down8192`
+- 路径：`data/HUSTgearbox/down8192`
 - 采样率：8192 Hz（原始 25.6 kHz → 降采样）
 - 文件格式：`.npy`（NumPy 一维数组）
 - 文件命名规则：`{健康状态}_{转速}_{负载倍数}-{通道}.npy`

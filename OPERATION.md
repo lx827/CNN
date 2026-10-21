@@ -244,7 +244,7 @@ POLL_INTERVAL=2              # 轮询间隔，单位秒（fallback，优先使�
 SAMPLE_RATE=8192             # 采样率 Hz（仅模拟模式生效，真实数据由文件决定）
 DURATION=10                  # 采集时长 秒（fallback，优先使用云端 window_seconds）
 USE_REAL_DATA=true           # 使用真实 .npy 数据
-DATA_DIR=D:\code\wavelet_study\dataset\CW\down8192_CW
+DATA_DIR=data/CW/down8192_CW
 SIMULATE_OFFLINE_DEVICE=WTG-003  # 模拟离线的设备
 ```
 

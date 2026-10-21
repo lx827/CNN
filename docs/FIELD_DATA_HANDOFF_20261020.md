@@ -89,6 +89,7 @@
 | 内容 | 路径 | 说明 |
 |---|---|---|
 | 原始CSV目录 | `C:/Users/Lenovo/Desktop/数据` | 10个CSV，当前唯一已提供的数据批次 |
+| 项目内CSV副本 | `data/CQU`（相对仓库根目录） | 10个同名CSV；`data/` 已加入 `.gitignore`，不作为原始来源 |
 | 设备1照片 | `C:/Users/Lenovo/Desktop/图片/IMG_9857.HEIC` | 用户提供的第一张照片；已经解码查看 |
 | 设备2照片 | `C:/Users/Lenovo/Desktop/图片/IMG_9860.HEIC` | 用户提供的第二张照片；已经解码查看 |
 | 项目目录 | `E:/A-codehub/CNN` | 本文所在项目；原始CSV尚在桌面目录 |

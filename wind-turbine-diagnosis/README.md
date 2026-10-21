@@ -190,7 +190,7 @@ proxy: {
 
 系统使用真实轴承数据集（HUSTbear）进行故障诊断演示：
 
-- **数据集路径**：`D:\code\wavelet_study\dataset\HUSTbear\down8192`
+- **数据集路径**：`data/HUSTbear/down8192`（相对仓库根目录）
 - **采样率**：8192 Hz
 - **文件格式**：`.npy`（NumPy 一维数组）
 - **故障类型**：健康(N)、球故障(B)、内圈故障(IR)、外圈故障(OR)、复合故障(C)
