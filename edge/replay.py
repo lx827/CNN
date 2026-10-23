@@ -2,6 +2,7 @@
 import argparse
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import time
@@ -111,10 +112,15 @@ def main():
                 front = ROOT / "wind-turbine-diagnosis"
                 if not (front / "node_modules").is_dir():
                     raise ValueError("缺少前端依赖，请在前端目录执行 npm install")
+                node = shutil.which("node")
+                vite = front / "node_modules/vite/bin/vite.js"
+                if not node or not vite.is_file():
+                    raise ValueError("找不到 Node.js 或 Vite，请检查前端环境")
                 (ROOT / "tmp").mkdir(exist_ok=True)
                 log = (ROOT / "tmp/quick-start-frontend.log").open("wb")
                 proc = subprocess.Popen(
-                    ["cmd.exe", "/d", "/c", "npm run dev -- --host 127.0.0.1 --strictPort"],
+                    # 直接持有 Vite 的 Node 进程，避免 cmd/npm 提前退出后遗留子进程。
+                    [node, str(vite), "--host", "127.0.0.1", "--strictPort"],
                     cwd=front, stdout=log, stderr=subprocess.STDOUT,
                     creationflags=subprocess.CREATE_NO_WINDOW,
                 )
@@ -132,8 +138,11 @@ def main():
     finally:
         # 只停止本次启动器创建的前端进程树，保留用户原已运行的前端。
         if proc and proc.poll() is None:
-            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            stopped = subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if stopped.returncode != 0 and proc.poll() is None:
+                proc.terminate()
+            proc.wait(timeout=10)
         if log:
             log.close()
 

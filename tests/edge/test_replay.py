@@ -1,5 +1,6 @@
 """验证 HUSTbear 的分类、真实三轴映射和上传前的设备归属检查。"""
 import os
+import importlib
 from pathlib import Path
 import sys
 import tempfile
@@ -10,12 +11,22 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "edge"))
-os.environ["REPLAY_DATASET"] = "hustbear"
 import edge_client as edge
 import replay
 
 
 class ReplayTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.dataset_env = patch.dict(os.environ, {"REPLAY_DATASET": "hustbear"})
+        cls.dataset_env.start()
+        importlib.reload(edge)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dataset_env.stop()
+        importlib.reload(edge)
+
     def test_axis_mapping_preserves_each_signal(self):
         with tempfile.TemporaryDirectory() as directory:
             for axis, value in [("X", 1), ("Y", 2), ("Z", 3)]:
