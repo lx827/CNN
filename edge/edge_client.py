@@ -2,7 +2,7 @@
 边端采集客户端（多设备 + 多数据源版本）
 
 安装在风机现场的工业网关，负责：
-1. 读取本地真实 .npy 振动数据（支持 CW / WTgearbox 多数据源）
+1. 读取本地真实 .npy 振动数据（支持 CW / HUSTbear / WTgearbox 多数据源）
 2. 打包并压缩数据
 3. 通过 HTTP POST 上传到云端
 
@@ -17,6 +17,7 @@
   WTG-008: WTgearbox 健康 (He)       — 仅配置齿轮参数（健康参考）
   WTG-009: 混合通道（CW轴承+WTgearbox齿轮）— 配置轴承+齿轮参数
   WTG-010: 离线模拟（不上传数据）
+  HUST-001～005: HUSTbear 健康/球/内圈/外圈/复合故障（显式回放模式启用）
 
 """
 import os
@@ -55,6 +56,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = Path(os.getenv("CNN_DATA_ROOT", PROJECT_ROOT / "data"))
 
 CW_DATA_DIR = os.getenv("CW_DATA_DIR", str(DATA_ROOT / "CW" / "down8192_CW"))
+HUSTBEAR_DATA_DIR = os.getenv("HUSTBEAR_DIR", str(DATA_ROOT / "HUSTbear" / "down8192"))
 WTGEAR_DATA_DIR = os.getenv("WTGEAR_DATA_DIR", str(DATA_ROOT / "WTgearbox" / "down8192"))
 
 # ========== 边端运行参数 ==========
@@ -102,6 +104,37 @@ DEVICE_DATA_MAP = {
 
 # WTG-010 不参与上传（离线模拟设备）
 
+# 快速启动器显式选择数据集；未指定时保留原多数据源行为。
+REPLAY_DATASET = os.getenv("REPLAY_DATASET", "").lower()
+HUSTBEAR_LABELS = {
+    "healthy": ("HUST-001", {"H", "N"}),
+    "ball": ("HUST-002", {"B"}),
+    "inner": ("HUST-003", {"I", "IR"}),
+    "outer": ("HUST-004", {"O", "OR"}),
+    "composite": ("HUST-005", {"C"}),
+}
+if REPLAY_DATASET:
+    if REPLAY_DATASET not in ("cw", "hustbear", "both"):
+        raise ValueError("REPLAY_DATASET 必须为 cw、hustbear 或 both")
+    DEVICE_DATA_MAP = {
+        dev: spec for dev, spec in DEVICE_DATA_MAP.items()
+        if dev in ("WTG-001", "WTG-002", "WTG-003")
+    } if REPLAY_DATASET in ("cw", "both") else {}
+    if REPLAY_DATASET in ("hustbear", "both"):
+        DEVICE_DATA_MAP.update({
+            dev: (HUSTBEAR_DATA_DIR, label, 3)
+            for label, (dev, _) in HUSTBEAR_LABELS.items()
+        })
+    DEVICE_IDS = list(DEVICE_DATA_MAP)
+
+
+def matching_groups(groups, data_dir, label):
+    """HUSTbear 按完整故障字段筛选，兼容负载前缀；其他数据源保持原规则。"""
+    if data_dir == HUSTBEAR_DATA_DIR:
+        tokens = HUSTBEAR_LABELS[label][1]
+        return [prefix for prefix in groups if tokens.intersection(prefix.split("_"))]
+    return [prefix for prefix in groups if prefix.startswith(label)]
+
 
 # ==================== 数据扫描与读取 ====================
 
@@ -110,6 +143,7 @@ def scan_data_groups(data_dir):
     扫描数据目录，按文件名前缀分组
     CW 文件: H-A-1.npy → prefix=H-A, ch=1
     WTgearbox 文件: Br_B1_20-c1.npy → prefix=Br_B1_20, ch=c1
+    HUSTbear 文件: 0.5X_I_20Hz-X.npy → prefix=0.5X_I_20Hz, ch=X
     """
     if not os.path.isdir(data_dir):
         raise ValueError(f"[错误] 数据目录不存在: {data_dir}")
@@ -154,10 +188,12 @@ def load_group_data(groups, prefix, target_duration=None, expected_channels=None
         channels[ch_key] = data.tolist()
 
     # 通道键统一为 ch1, ch2, ch3...
-    # WTgearbox 用 c1/c2, CW 用 1/2/3
+    # WTgearbox 用 c1/c2，CW 用 1/2/3，HUSTbear 的 X/Y/Z 按轴映射到 1/2/3。
     normalized = {}
     for ch_key, data in channels.items():
-        num = ch_key.replace("c", "").replace("ch", "")
+        num = {"X": "1", "Y": "2", "Z": "3"}.get(ch_key)
+        if num is None:
+            num = ch_key.replace("ch", "").replace("c", "")
         normalized[f"ch{num}"] = data
 
     # 不足通道用零填充
@@ -202,7 +238,7 @@ class DataSourceManager:
         if not groups:
             raise ValueError(f"数据源 {data_dir} 未扫描到数据")
 
-        candidates = [p for p in groups.keys() if p.startswith(prefix_filter)]
+        candidates = matching_groups(groups, data_dir, prefix_filter)
         if not candidates:
             raise ValueError(f"数据源 {data_dir} 中无匹配前缀 {prefix_filter}")
 
