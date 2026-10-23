@@ -2,6 +2,8 @@
 
 ## 数据集启动回归（2026-10-23）
 
+- `tests/edge/test_browser_open.py`（2026-10-24）：两项测试覆盖新启动 Vite 和复用已有前端。真实 Vite 使用 `open:true` 和浏览器脚本探针，修复前复现额外打开、修复后只剩启动器的一次打开请求；新服务使用临时端口，不占用用户 3000 端口，不打开实际浏览器、不联网到云端或上传。需 Windows、Node.js 和 Vite。
+
 - `tests/edge/test_replay.py`：HUSTbear 故障字段、X/Y/Z 信号映射、缺轴拒绝、云端设备缺失或参数不匹配时禁止继续、注册后正常放行，5 项，不联网、不上传。
 - `tests/edge/test_frontend_lifecycle.py`：Windows 真实 Vite 进程验证正常返回、Ctrl+C 两条退出路径均释放 Node 进程和端口，1 项含两种场景；需 Node.js、前端依赖及空闲 3000 端口，只访问本机，不上传。环境不满足会明确跳过。
 - `tests/backend/test_hustbear_registration.py`：真实内存 SQLite 验证独立注册、幂等、CW 保持原样、冲突整批回滚，2 项，不连接业务数据库。
