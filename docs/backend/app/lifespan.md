@@ -26,6 +26,8 @@ async def analysis_worker() -> None
 
 验证：`tests/backend/test_analysis_worker_json.py` 使用实际 worker 与内存 SQLite，覆盖通道记录新增/更新、批次实际提交、已分析标记及设备健康度更新、告警输入和严格 JSON 推送；算法与特征计算使用固定替身，不代表真实数据诊断准确率。
 
+云端验证（2026-10-23）：用户通过 Workbench 应用完整结果转换并重启服务后，三台设备的六个 CW 新旧批次均完成分析，保存的通道诊断可正常读取，近期日志无新增序列化错误。云端沿用既有转换器和算法，未整体升级代码。
+
 > **通道级 `full_analysis` 保存**（2025-05 新增）：后台分析完成后，遍历 `order_analysis.channels` 为每个通道创建独立的 `Diagnosis` 记录（`channel=ch_num`），将完整的 `run_research_ensemble()` 结果（含 `ensemble`、`bearing`、`gear`、`time_features` 等）存入 `full_analysis` 列。已有记录则覆盖更新。
 
 ### `lifespan`
