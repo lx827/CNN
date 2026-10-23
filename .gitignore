@@ -125,3 +125,6 @@ tests/diagnosis/foundation/layer5/output/
 
 # Local project document
 /docs/dc_modified.docx
+
+# Local field photos, manual scans and their readable copies (not committed)
+/docs/field-assets/
