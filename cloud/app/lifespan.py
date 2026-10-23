@@ -92,6 +92,9 @@ async def analysis_worker():
                         async with ANALYSIS_SEM:
                             result = await asyncio.to_thread(analyze_device, channels_data, sample_rate, device)
 
+                        # 批次诊断、通道缓存和推送共用 JSON 原生类型，避免 NumPy 标量阻断事务。
+                        result = _sanitize_for_json(result)
+
                         # 写入诊断结果（关联到批次）
                         diag = Diagnosis(
                             device_id=device_id,
