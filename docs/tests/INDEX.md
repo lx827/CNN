@@ -11,6 +11,7 @@
 |---|---|---|
 | `tests/backend/test_read_paths.py` | 摘要 SQL/顺序、历史 N+1、严格 JSON、缓存、索引迁移、真实 HTTP 读路径（9 项） | cloud venv 中后端依赖及 httpx；隔离内存 SQLite |
 | `tests/backend/test_event_loop.py` | 慢去噪期间的协程调度（1 项，覆盖 STFT/倒谱/阶次三个端点） | 同上；受控去噪替身，不测去噪数学效果 |
+| `tests/backend/test_analysis_worker_json.py`（2026-10-23） | 实际后台 worker 的 NumPy 结果入库，通道缓存新增/更新，批次已分析标记、健康度、告警输入及严格 JSON 推送（2 项） | cloud venv；内存 SQLite，算法替身；不访问云端或业务数据库 |
 | `tests/frontend/monitor_lifecycle.test.cjs` | 生命周期、推送合并、设备切换竞争、在途刷新、慢轮询（7 项） | 已安装前端依赖 |
 | `tests/frontend/dashboard_lifecycle.test.cjs` | 卸载释放、异步卸载、选中对象刷新、critical 显示、推送/轮询串行合并、失败恢复（6 项） | 已安装前端依赖 |
 | `tests/frontend/websocket.test.cjs` | 握手幂等、迟到回调、重连去重（3 项） | Node 自带 test/vm；WebSocket 替身 |
