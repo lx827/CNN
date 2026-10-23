@@ -6,6 +6,24 @@
 
 ## 1. 模块概述
 
+### 当前快速启动与数据集选择（2026-10-23）
+
+Windows 本机推荐双击仓库根目录 `start.bat`，选择 CW、HUSTbear 或两份同时回放。它使用现有 edge 虚拟环境，启动本机前端并打开浏览器；Ctrl+C 停止边端和本次启动的前端。完整说明见根目录 `启动说明.md`。
+
+| 选择 | 数据目录（相对仓库根目录） | 设备 |
+|---|---|---|
+| CW | `data/CW/down8192_CW` | WTG-001/002/003：健康、内圈、外圈 |
+| HUSTbear | `data/HUSTbear/down8192` | HUST-001～005：健康、球、内圈、外圈、复合 |
+| 两份 | 上述两目录 | 上述八台设备，不含缺失数据的 WTgearbox 设备 |
+
+`replay.py` 固定使用项目内两份 8192 Hz 数据，覆盖旧终端中的外部数据路径；先检查所有工况的完整通道和有限实数，再检查云端设备已注册。HUSTbear 的 H/N、B、I/IR、O/OR、C 通过下划线完整字段分类（兼容负载前缀），X/Y/Z 映射到通道 1/2/3，缺轴会在上传前拒绝。保留既有截断/重复补足至 5 秒和压缩方式。
+
+新 HUSTbear 设备需先由管理员在云端执行 `scripts/register_hustbear_devices.py`；仅新增缺失设备，参数冲突整批回滚。ER-16K 参数为 `{n:9,d:7.94,D:38.52,alpha:0}`，X/Y/Z 三轴，仅轴承诊断。未注册时启动器停止，不上传孤立批次。新设备沿用现有演示配置：108000 秒上传间隔、5 秒任务轮询，压缩开启和降采样比 8；更频繁采集请在云端配置。
+
+直接运行 `edge_client.py` 时，`REPLAY_DATASET=cw/hustbear/both` 对应固定设备映射；不设置时保留原多数据源模式及 `DEVICE_IDS` 行为。`HUSTBEAR_DIR` 可指定数据目录。下文旧版 `DATA_DIR` 配置不再用于现有多数据源客户端，请使用 `CNN_DATA_ROOT`、`CW_DATA_DIR`、`HUSTBEAR_DIR`、`WTGEAR_DATA_DIR`。
+
+新增函数：`matching_groups(groups, data_dir, label)` 返回匹配工况前缀；`replay.check_data(edge)` 扫描验证后返回 `DataSourceManager`；`replay.check_cloud(edge)` 检查云端注册及 HUSTbear 参数，失败抛异常，均不上传。
+
 边端客户端安装在风机现场的工业网关，核心职责：
 
 1. **信号采集**：读取本地真实 `.npy` 振动数据文件

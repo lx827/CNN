@@ -1,5 +1,26 @@
 # Tests — 回归测试与评估套件
 
+## 数据集启动回归（2026-10-23）
+
+- `tests/edge/test_replay.py`：HUSTbear 故障字段、X/Y/Z 信号映射、缺轴拒绝、云端设备缺失或参数不匹配时禁止继续、注册后正常放行，5 项，不联网、不上传。
+- `tests/edge/test_frontend_lifecycle.py`：Windows 真实 Vite 进程验证正常返回、Ctrl+C 两条退出路径均释放 Node 进程和端口，1 项含两种场景；需 Node.js、前端依赖及空闲 3000 端口，只访问本机，不上传。环境不满足会明确跳过。
+- `tests/backend/test_hustbear_registration.py`：真实内存 SQLite 验证独立注册、幂等、CW 保持原样、冲突整批回滚，2 项，不连接业务数据库。
+
+本机 Windows cmd，仓库根目录运行（无需管理员权限）：
+
+```bat
+:: 激活边端已有虚拟环境，不安装依赖。
+call edge\venv\Scripts\activate.bat
+:: unittest discover 扫描指定边端测试目录，-p 匹配全部测试文件，-v 输出每项结果。
+python -m unittest discover -s tests/edge -p test_*.py -v
+:: 启动器只检查两份本地数据的全部工况，不启动前端、不联网、不上传。
+python edge/replay.py --dataset both --check
+:: 切换到后端已有虚拟环境以使用 SQLAlchemy。
+call cloud\venv\Scripts\activate.bat
+:: 验证设备注册事务，-s 指定目录，-p 指定文件，-v 输出每项结果。
+python -m unittest discover -s tests/backend -p test_hustbear_registration.py -v
+```
+
 > **文档用途**：统一记录所有测试文件的位置、用途、运行方式和依赖，避免重复编写测试。
 > **维护要求**：新增测试文件时，必须在此索引中添加条目。
 

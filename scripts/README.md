@@ -1,9 +1,26 @@
 # scripts — 运维调试工具集
 
-> 所有脚本硬编码了 `/opt/CNN/cloud/turbine.db` 路径，**仅在生产服务器 (Ubuntu) 上运行**。
+> 下列旧运维脚本多使用 `/opt/CNN/cloud/turbine.db` 路径，**仅在生产服务器 (Ubuntu) 上运行**。
 > 本地开发需改路径为 `D:\code\CNN\cloud\turbine.db`。
 
 ## 脚本分类
+
+### HUSTbear 独立设备注册
+
+`register_hustbear_devices.py` 使用后端现有 `.env` 与 SQLAlchemy 连接，只新增 HUST-001～005，不覆盖 CW 或同编号冲突设备；冲突时整批回滚，重复执行无重复行。参数为 `{n:9,d:7.94,D:38.52,alpha:0}`，X/Y/Z 三轴，8192 Hz，仅轴承诊断。新设备离线创建，首次上传后上线。无需修改数据库结构或重启后端。
+
+在云端 Ubuntu 终端运行（需要数据库写入权限，不要求额外管理员权限；脚本须先上传至 `/opt/CNN/scripts/`）：
+
+```bash
+# 进入云端后端目录，读取现有 .env 和数据库。
+cd /opt/CNN/cloud
+# 激活云端后端现有 Python 环境，不安装新依赖。
+source venv/bin/activate
+# 向现有云端数据库注册五台独立设备；仅此步骤写入数据，不访问网络。
+python ../scripts/register_hustbear_devices.py
+```
+
+预期输出新增 5 台，重复运行新增 0 台。刷新页面总览检查 HUSTbear 设备，首次回放前显示离线正常。`register_devices(db)` 返回本次新增编号列表，成功提交，失败回滚；`CNN_CLOUD_DIR` 可指定后端目录。
 
 ### 设备在线/离线管理
 
