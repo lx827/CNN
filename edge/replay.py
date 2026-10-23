@@ -123,6 +123,8 @@ def main():
                     [node, str(vite), "--host", "127.0.0.1", "--strictPort"],
                     cwd=front, stdout=log, stderr=subprocess.STDOUT,
                     creationflags=subprocess.CREATE_NO_WINDOW,
+                    # Vite 配置含 open:true；由启动器统一打开页面，避免重复标签页。
+                    env={**os.environ, "BROWSER": "none"},
                 )
                 for _ in range(30):
                     if proc.poll() is not None:
