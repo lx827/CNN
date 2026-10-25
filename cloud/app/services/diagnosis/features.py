@@ -439,7 +439,7 @@ def _sign_cusum(series: np.ndarray, reference: Optional[float] = None) -> Tuple[
     """
     符号统计非参数 CUSUM
 
-    ALGORITHMS.md §4.4.1.3：
+    docs/算法原理.md §4.4.1.3：
     基于符号统计量的 CUSUM，不假设数据服从正态分布，
     对重尾、偏态的工业振动数据更鲁棒。
 
@@ -508,7 +508,7 @@ def _mann_whitney_cusum(
     """
     Mann-Whitney 统计非参数 CUSUM
 
-    ALGORITHMS.md §4.4.1.3：
+    docs/算法原理.md §4.4.1.3：
     基于 Mann-Whitney U 统计量的 CUSUM，不假设分布形式，
     对偏态分布和异常值更鲁棒。
 
@@ -606,7 +606,7 @@ def compute_nonparam_cusum_features(signal: np.ndarray) -> Dict[str, float]:
     """
     计算非参数 CUSUM 特征（符号统计 + Mann-Whitney）
 
-    ALGORITHMS.md §4.4.1.3：
+    docs/算法原理.md §4.4.1.3：
     工业振动数据往往非高斯、重尾、偏态。
     非参数 CUSUM 基于符号统计或 Mann-Whitney 统计量，
     不假设分布形式，对异常值和偏态分布更鲁棒。

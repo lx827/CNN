@@ -13,12 +13,32 @@
 |------|------|------|
 | [README](../README.md) | `README.md` | 项目概述、快速开始 |
 | [AGENTS](../AGENTS.md) | `AGENTS.md` | AI Agent 环境配置、开发命令、关键代码路径 |
-| [架构设计](../architecture.md) | `architecture.md` | 系统架构设计 |
-| [2026-10-21 架构整顿](./ARCHITECTURE_REFACTOR_20261021.md) | `docs/ARCHITECTURE_REFACTOR_20261021.md` | 摘要读模型、响应性能根因、修复验证与剩余问题 |
-| [算法说明](../ALGORITHMS.md) | `ALGORITHMS.md` | 诊断算法说明 |
+| [系统架构](./系统架构.md) | `docs/系统架构.md` | 整体架构、模块职责与目录结构 |
+| [算法原理](./算法原理.md) | `docs/算法原理.md` | 轴承与齿轮诊断的经典理论、公式与参数 |
 | [诊断算法体系全景](./DIAGNOSIS_SYSTEM_OVERVIEW.md) | `docs/DIAGNOSIS_SYSTEM_OVERVIEW.md` | 5 子系统串联：方法公式、投票逻辑、评分机制 |
-| [部署指南](../DEPLOY.md) | `DEPLOY.md` | 服务器部署指南 |
-| [运维手册](../OPERATION.md) | `OPERATION.md` | 运维操作手册 |
+| [快速启动说明](./快速启动说明.md) | `docs/快速启动说明.md` | 本机启动后端、前端与数据回放 |
+| [部署指南](./部署指南.md) | `docs/部署指南.md` | 阿里云 ECS 部署步骤 |
+| [操作手册](./操作手册.md) | `docs/操作手册.md` | 系统日常操作流程 |
+| [服务器命令速查](./服务器命令速查.md) | `docs/服务器命令速查.md` | SSH、服务、日志等常用命令 |
+
+---
+
+### 📄 项目记录与评估
+
+| 文档 | 路径 | 用途 |
+|------|------|------|
+| [Bug 登记表](./BUG_REGISTRY.md) | `docs/BUG_REGISTRY.md` | 已发现 Bug 的汇总与修复状态 |
+| [2026-10-21 架构整顿](./ARCHITECTURE_REFACTOR_20261021.md) | `docs/ARCHITECTURE_REFACTOR_20261021.md` | 摘要读模型、响应性能根因、修复验证与剩余问题 |
+| [2026-05-21 评估报告](./EVALUATION_REPORT_20260521.md) | `docs/EVALUATION_REPORT_20260521.md` | 算法与系统评估结果 |
+| [2026-10-17 论文与专利评估](./PAPER_PATENT_ASSESSMENT_20261017.md) | `docs/PAPER_PATENT_ASSESSMENT_20261017.md` | 论文、专利材料与创新点评估 |
+| [行星齿轮箱诊断进展](./planetary_gearbox_diagnosis_progress.md) | `docs/planetary_gearbox_diagnosis_progress.md` | 行星齿轮箱诊断的阶段性进展 |
+
+### 📍 现场数据交接
+
+| 文档 | 路径 | 用途 |
+|------|------|------|
+| [现场数据交接记录](./FIELD_DATA_HANDOFF_20261020.md) | `docs/FIELD_DATA_HANDOFF_20261020.md` | 设备、通道、CSV 清单、已知限制与待确认事项 |
+| [现场设备资料汇总](./FIELD_EQUIPMENT_20261023.md) | `docs/FIELD_EQUIPMENT_20261023.md` | 机械参数、通道映射、手册与铭牌转录 |
 
 ---
 
@@ -29,6 +49,7 @@
 | [后端目录索引](./backend/INDEX.md) | `docs/backend/INDEX.md` | **按文件模块结构组织后端代码** |
 | [后端 API 接口](./api/backend_api.md) | `docs/api/backend_api.md` | REST API 和 WebSocket 端点完整文档 |
 | [后端服务层接口](./backend/services.md) | `docs/backend/services.md` | 服务层所有公共函数/类接口文档 |
+| [小波与模态分解算法](algorithms/wavelet_and_modality_decomposition.md) | `docs/algorithms/wavelet_and_modality_decomposition.md` | VMD、EMD、小波等信号分解方法 |
 
 ---
 
@@ -65,8 +86,8 @@
 
 | 场景 | 查阅文档 |
 |------|----------|
-| 了解项目整体架构 | `README.md`, `architecture.md` |
-| 了解诊断算法数学公式与系统交互 | `ALGORITHMS.md`, `docs/DIAGNOSIS_SYSTEM_OVERVIEW.md` |
+| 了解项目整体架构 | `README.md`, `docs/系统架构.md` |
+| 了解诊断算法数学公式与系统交互 | `docs/算法原理.md`, `docs/DIAGNOSIS_SYSTEM_OVERVIEW.md` |
 | 配置开发环境 | `AGENTS.md` |
 | 修改后端 API 端点 | `docs/api/backend_api.md` → `docs/api/frontend_backend_interaction.md` |
 | 修改后端服务函数 | `docs/backend/services.md` |
@@ -74,7 +95,10 @@
 | 修改前端 API 调用 | `docs/frontend/frontend_api.md` → `docs/api/frontend_backend_interaction.md` |
 | 修改前端组件/工具 | `docs/frontend/frontend_services.md` |
 | 定位前端代码位置 | `docs/frontend/INDEX.md` |
-| 部署到服务器 | `DEPLOY.md`, `OPERATION.md` |
+| 部署到服务器 | `docs/部署指南.md`, `docs/操作手册.md` |
+| 启动本机环境 | `docs/快速启动说明.md` |
+| 查找服务器命令 | `docs/服务器命令速查.md` |
+| 处理现场设备数据 | `docs/FIELD_DATA_HANDOFF_20261020.md`, `docs/FIELD_EQUIPMENT_20261023.md` |
 | 运行/编写测试 | `docs/tests/INDEX.md` |
 | 服务器运维调试 | `docs/scripts/INDEX.md` |
 
@@ -97,29 +121,34 @@
 ```
 docs/
 ├── INDEX.md                          # 本文档（文档索引）
-├── DIAGNOSIS_SYSTEM_OVERVIEW.md      # 诊断算法体系全景
+├── 系统架构.md                       # 整体架构与目录结构
+├── 算法原理.md                       # 经典诊断算法理论
+├── DIAGNOSIS_SYSTEM_OVERVIEW.md      # 诊断算法体系全景（5 子系统串联）
+├── 快速启动说明.md                   # 本机启动步骤
+├── 部署指南.md                       # 服务器部署
+├── 操作手册.md                       # 日常操作
+├── 服务器命令速查.md                 # 运维常用命令
+├── BUG_REGISTRY.md                   # Bug 登记表
+├── ARCHITECTURE_REFACTOR_20261021.md # 架构整顿记录
+├── EVALUATION_REPORT_20260521.md     # 评估报告
+├── PAPER_PATENT_ASSESSMENT_20261017.md # 论文与专利评估
+├── planetary_gearbox_diagnosis_progress.md # 行星齿轮箱进展
+├── FIELD_DATA_HANDOFF_20261020.md    # 现场数据交接
+├── FIELD_EQUIPMENT_20261023.md       # 现场设备资料
 │
 ├── api/                              # API 相关文档
-│   ├── backend_api.md                # 后端 REST API + WebSocket 文档
-│   └── frontend_backend_interaction.md # 前后端交互映射
-│
-├── backend/                          # 后端文档
-│   ├── INDEX.md                      # 后端目录索引
-│   └── services.md                   # 后端服务层接口文档
-│
-└── frontend/                         # 前端文档
-    ├── INDEX.md                      # 前端目录索引
-    ├── frontend_api.md               # 前端 API 封装文档
-    └── frontend_services.md          # 前端服务层接口文档（Stores/Utils/Components）
-
+├── backend/                          # 后端模块镜像文档（每个 .py 对应同名 .md）
+├── frontend/                         # 前端文档
+├── algorithms/                       # 专项算法文档
 ├── tests/                            # 测试文档
-│   └── INDEX.md                      # 测试套件索引（回归/评估/专项）
-
-└── scripts/                          # 脚本文档
-    └── INDEX.md                      # 运维调试脚本索引
+├── scripts/                          # 脚本索引
+└── internal/                         # 文档检查工具
 ```
+
+> 说明：`docs/backend/app/` 下的文档与 `cloud/app/` 源码一一对应，文件名保持英文，便于按模块定位。
 
 ---
 
 *文档生成时间：2026-05-17*
+*最近更新：2026-10-25*
 *维护者：AI Agent（修改代码或文档结构时请务必同步更新）*

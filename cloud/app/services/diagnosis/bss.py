@@ -5,7 +5,7 @@
 - FastICA 独立成分分析
 - 单通道 VMD+ICA：用 VMD 将单通道扩展为多通道，再执行 ICA 分离
 
-ALGORITHMS.md §4.2.4 参考：
+docs/算法原理.md §4.2.4 参考：
 单通道盲分离采用 EEMD+ICA 或相空间重构+ICA。
 本项目使用 VMD（已实现且内存优化）替代 EEMD，
 将单通道振动信号分解为多个 IMF 作为多通道输入，再执行 FastICA。

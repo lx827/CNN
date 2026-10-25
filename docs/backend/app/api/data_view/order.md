@@ -1,7 +1,7 @@
 # `order.py` — 阶次跟踪
 
 
-> **算法原理**: 详见 [小波与模态分解算法文档](../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../ALGORITHMS.md)。
+> **算法原理**: 详见 [小波与模态分解算法文档](../../../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../算法原理.md)。
 **对应源码**：`cloud/app/api/data_view/order.py`
 
 **2026-10-21 调度修复**：去噪与阶次核心计算均通过 `asyncio.to_thread` 复用两线程池。去噪不再直接阻塞事件循环；算法、参数和截断顺序保持原实现。
