@@ -11,7 +11,7 @@
 - 许可：Apache-2.0，原文保存在 [LICENSE.upstream](LICENSE.upstream)。
 - 每份上游文件及本地文件的 SHA-256、具体适配见 [UPSTREAM.json](UPSTREAM.json)。
 
-保留上游参数命名、张量运算和结构。本地只作三处运行适配：`fault_bank.py` 使用包内相对导入；`o9_tools.py` 默认关闭自动 `torch.compile`，以 eager 模式运行，避免依赖额外编译器；移除 `o9.py` 直接执行时启动旧训练器的入口。未迁入旧数据加载器、随机窗口划分、训练调度器和消融实验，导入模型不会启动训练。
+保留上游参数命名、张量运算和结构。本地运行适配：`fault_bank.py`及后续迁入的`o9_loss.py`使用包内相对导入；`o9_tools.py`默认关闭自动`torch.compile`，以eager模式运行，避免依赖额外编译器；移除`o9.py`直接执行时启动旧训练器的入口。未迁入旧数据加载器、随机窗口划分、训练调度器和消融实验，导入模型不会启动训练。完整模块的CQU训练编排、域目标修正及等价STFT适配位于独立的[完整训练模块](../cqu/FULL_TRAINING.md)，不改写固定模型本体。
 
 另清理了行尾空白，并通过包内 `.gitattributes` 固定来源文件的LF换行，以便在Windows检出后仍可复核哈希。
 
@@ -28,6 +28,7 @@
 | `fault_bank.py` | `FaultBank(num_faults, feature_dim=64)`、`FaultCombiner(z_f_dim=64, num_faults=8)` | 故障原型相似度、按掩码组合原型 |
 | `classifier.py` | `DomainDiscriminator(n_domains, input_dim=64, dropout=0.1)` | 预测来源域；它不是 CQU 故障分类头 |
 | `o9_tools.py` | `ChannelLayerNorm`、`GradientReversalLayer`、`TimeAttentionPool`、`EMATracker`、`init_weights(module)` 等原工具 | 归一化、梯度反转、注意力聚合、参数初始化及原工具支持 |
+| `o9_loss.py` | `O9ReconstructionLoss`、`O9KLDivergenceLoss`、`O9OrthogonalLoss`、`O9DomainAdversarialLoss`、`O9FaultPrototypeLoss`、`O9TemporalSmoothnessLoss`、`O9FaultConsistencyLoss`、`O9FeatureVarianceLoss` | 固定版本的原损失，统一返回加权损失及分项字典；CQU阶段权重见完整训练说明 |
 
 模型的直接依赖只有 PyTorch 和 Python 标准库，无须安装或导入另一个 wavelet 项目。声明的 PyTorch 版本范围见 [requirements.txt](requirements.txt)；本机已验证 Python 3.13.7、PyTorch 2.10.0+cu126。迁移未安装或升级依赖，也未修改后端依赖。
 
@@ -72,7 +73,7 @@ with torch.inference_mode():
 
 从零构建时使用 `model.apply(init_weights)` 初始化，包括上游用 `torch.empty` 创建的原型。新任务微调以后应重新建立训练状态；本目录没有恢复旧优化器或训练轮次的自动逻辑。
 
-## 本轮已验证范围
+## 模型迁移阶段已验证范围
 
 - 第55轮、Stage2终点及Stage3终点三份权重，各自的 `model` 和 `ema` 共六组均严格加载成功，80个参数张量键及形状完整匹配。
 - 三份模型的CPU前向结果有限，输出维度、组合器及域判别器检查通过；显式关闭采样时相同输入结果一致。
@@ -83,6 +84,6 @@ with torch.inference_mode():
 
 ## 后续数据与实验约定
 
-已确认的首轮方向是：42份主要候选按完整CSV划分后切片，28份历史故障单独检查；设备1以CH2为主、CH1作对照，设备2以CH3为主；比较随机初始化与第55轮／Stage2终点／Stage3终点初始化。数据准备已固定三折每台8份训练、6份验证、7份外层开发评估，以及8192Hz／4096点／逐窗口标准化协议。各候选使用同一套文件分组，不能在外层评估记录上挑权重或通道。第三步的二分类适配与短程链路验证已完成，微调默认EMA来源；完整训练及外层/历史评估尚未实施。
+已确认的首轮方向是：42份主要候选按完整CSV划分后切片，28份历史故障单独检查；设备1以CH2为主、CH1作对照，设备2以CH3为主；比较随机初始化与第55轮／Stage2终点／Stage3终点初始化。数据准备已固定三折每台8份训练、6份验证、7份外层开发评估，以及8192Hz／4096点／逐窗口标准化协议。各候选使用同一套文件分组，不能在外层评估记录上挑权重或通道。简化二分类对照与完整O9的CQU适配均已完成短程链路验证，微调默认EMA来源；完整适配保留旧五类并新增不平衡、使用三个转速域。正式效果比较及外层/历史评估尚未实施。
 
 `o9v1/` 整体被Git忽略，保留本地历史权重、日志、数据索引、分析图及消融产物。新的CQU探索脚本、派生数据和模型结果按本机约定保存在已忽略的 `tmp/cqu/<任务名>/`。模型模块本身无需这些本地文件即可被导入和随机初始化。
