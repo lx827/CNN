@@ -1,0 +1,4 @@
+# 固定来源记录中的文本换行，保证Windows检出后哈希仍可复核。
+*.py text eol=lf
+*.json text eol=lf
+LICENSE.upstream text eol=lf

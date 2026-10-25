@@ -1,0 +1,54 @@
+{
+  "repository": "https://github.com/lscatfish/wavelet_study",
+  "branch": "o9-v1-kk",
+  "commit": "c1fbd5ad5a8afa084cf15f9b294d62be080b7049",
+  "source_directory": "FaultDiagnosis/DG/o9",
+  "license": "Apache-2.0",
+  "files": {
+    "o9.py": {
+      "source_path": "FaultDiagnosis/DG/o9/o9.py",
+      "source_sha256": "e4898ab7fa2c2e84520cd388b98ca858533964c0cfaf1aae6de815d7cc634db7",
+      "local_sha256": "40198a0b07d2eee73db8ea8b96c242313b625c097aadfa577b1177b59e90f0d7",
+      "adaptations": [
+        "移除直接执行时调用旧训练器的入口",
+        "清理文件末尾多余空行"
+      ]
+    },
+    "o9_encoder.py": {
+      "source_path": "FaultDiagnosis/DG/o9/o9_encoder.py",
+      "source_sha256": "173154911e4f5ffff71da74fe78266831800df034604eee325c3f7a9e480152d",
+      "local_sha256": "173154911e4f5ffff71da74fe78266831800df034604eee325c3f7a9e480152d",
+      "adaptations": []
+    },
+    "o9_decoder.py": {
+      "source_path": "FaultDiagnosis/DG/o9/o9_decoder.py",
+      "source_sha256": "fdde00d208f1fe2ce3586f393a8fa08d7e220d2ee8a4542f9feb53e3f5512df9",
+      "local_sha256": "fdde00d208f1fe2ce3586f393a8fa08d7e220d2ee8a4542f9feb53e3f5512df9",
+      "adaptations": []
+    },
+    "fault_bank.py": {
+      "source_path": "FaultDiagnosis/DG/o9/fault_bank.py",
+      "source_sha256": "37d7437b47cef41ee98c6045b454fb33f3ebca733246b722bb1acd089d519bab",
+      "local_sha256": "c1a4e1659f4e7a71633971a244272579f292070da3a0630108b782f1ff94dd74",
+      "adaptations": [
+        "将旧项目绝对导入改为当前包内相对导入"
+      ]
+    },
+    "classifier.py": {
+      "source_path": "FaultDiagnosis/DG/o9/classifier.py",
+      "source_sha256": "67269342388aa68223f9eaf2226addfda772bff8819dcf09c80c1f03db38b7ec",
+      "local_sha256": "67269342388aa68223f9eaf2226addfda772bff8819dcf09c80c1f03db38b7ec",
+      "adaptations": []
+    },
+    "o9_tools.py": {
+      "source_path": "FaultDiagnosis/DG/o9/o9_tools.py",
+      "source_sha256": "c6e8dc7a3459dadf74c00dec50543f0542057d596dac0fbb8a0907bd39cadd46",
+      "local_sha256": "229160f39a99da6db107f61faedd7f5e717be4b9f532c771d9d345dcbb07ab7a",
+      "adaptations": [
+        "仅关闭自动torch.compile，保留张量计算和参数结构",
+        "清理两处行尾空白"
+      ]
+    }
+  },
+  "license_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+}
