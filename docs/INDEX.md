@@ -21,6 +21,7 @@
 | [操作手册](./操作手册.md) | `docs/操作手册.md` | 系统日常操作流程 |
 | [服务器命令速查](./服务器命令速查.md) | `docs/服务器命令速查.md` | SSH、服务、日志等常用命令 |
 | [O9 模型迁移说明](../training/o9/README.md) | `training/o9/README.md` | 固定模型来源、独立导入、权重兼容性与后续训练约定 |
+| [CQU 数据准备](../training/cqu/README.md) | `training/cqu/README.md` | 70份正式清单、三折整文件划分、通道与首轮预处理接口 |
 
 ---
 
