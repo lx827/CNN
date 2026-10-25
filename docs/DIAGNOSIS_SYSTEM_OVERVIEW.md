@@ -1,6 +1,6 @@
 # 风机齿轮箱智能故障诊断 — 算法体系全景
 
-> **定位**：本文档串联 5 个子系统，给出每个方法的数学逻辑与交互关系。经典理论细节（故障特征频率公式、TSA 数学推导等）参见 `ALGORITHMS.md`。
+> **定位**：本文档串联 5 个子系统，给出每个方法的数学逻辑与交互关系。经典理论细节（故障特征频率公式、TSA 数学推导等）参见 `docs/算法原理.md`。
 
 ---
 
@@ -457,7 +457,7 @@ health_score < 60：
 
 ## 附录 B：相关文档
 
-- **经典算法理论**：`ALGORITHMS.md` — 故障特征频率、包络分析、谱峭度、TSA、倒频谱、CPW 等详细数学推导
+- **经典算法理论**：`docs/算法原理.md` — 故障特征频率、包络分析、谱峭度、TSA、倒频谱、CPW 等详细数学推导
 - **API 文档**：`docs/api/backend_api.md`
 - **前端交互**：`docs/api/frontend_backend_interaction.md`
 - **行星箱诊断进展**：`docs/planetary_gearbox_diagnosis_progress.md`

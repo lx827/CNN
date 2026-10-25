@@ -227,7 +227,7 @@ def cascade_wavelet_vmd(
     """
     小波 + VMD 级联联合降噪
 
-    ALGORITHMS.md §4.2.5 推荐组合：
+    docs/算法原理.md §4.2.5 推荐组合：
     "强高斯白噪声：小波阈值 + VMD"
     小波先去除白噪声，VMD 再分离非平稳成分。
 
@@ -303,7 +303,7 @@ def cascade_wavelet_lms(
     """
     小波 + LMS 级联联合降噪
 
-    ALGORITHMS.md §4.2.5 推荐组合：
+    docs/算法原理.md §4.2.5 推荐组合：
     "强脉冲型干扰：LMS + 中值滤波"
     本实现用小波替代中值滤波（更通用），组成 wavelet+LMS 级联。
 
@@ -374,7 +374,7 @@ def joint_denoise(
     """
     联合降噪统一入口
 
-    ALGORITHMS.md §4.2.5 联合降噪策略推荐：
+    docs/算法原理.md §4.2.5 联合降噪策略推荐：
     | 场景 | 推荐组合 | 作用 |
     | 强高斯白噪声 | 小波阈值 + VMD | 小波去除白噪声，VMD分离非平稳成分 |
     | 强脉冲型干扰 | LMS + 中值滤波 | LMS 抑制平稳噪声，中值滤波剔除脉冲 |

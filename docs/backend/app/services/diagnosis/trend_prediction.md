@@ -1,7 +1,7 @@
 # `trend_prediction.py` — 趋势预测
 
 
-> **算法原理**: 详见 [小波与模态分解算法文档](../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../ALGORITHMS.md)。
+> **算法原理**: 详见 [小波与模态分解算法文档](../../../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../算法原理.md)。
 **对应源码**：`cloud/app/services/diagnosis/trend_prediction.py`
 
 ## 函数

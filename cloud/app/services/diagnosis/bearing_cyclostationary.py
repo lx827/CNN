@@ -6,7 +6,7 @@
 - 轴承谱相干 (Spectral Coherence, SCoh)
 - 循环频率搜索与故障判定
 
-ALGORITHMS.md §1.5 参考：
+docs/算法原理.md §1.5 参考：
 轴承故障信号具有二阶循环平稳性——其统计特性随轴转角周期变化。
 谱相关密度 S_x^α(f) 在循环频率 α 等于故障特征频率（BPFO/BPFI/BSF）
 处出现显著峰值。该方法对随机噪声和确定性干扰具有天然免疫力，
@@ -160,7 +160,7 @@ def bearing_sc_scoh_analysis(
     在循环频率轴搜索 BPFO/BPFI/BSF/FTF 对应的峰值，
     判断轴承故障类型。对随机噪声和确定性干扰天然免疫。
 
-    ALGORITHMS.md §1.5, §1.5.3:
+    docs/算法原理.md §1.5, §1.5.3:
     - 谱相干在循环频率 α=故障特征频率处出现显著峰值
     - 工程判据：SCoh > 0.3 为 warning，> 0.5 为 critical
 

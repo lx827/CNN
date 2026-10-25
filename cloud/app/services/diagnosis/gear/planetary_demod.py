@@ -92,7 +92,7 @@ def planetary_envelope_order_analysis(
     """
     Level 2: 行星齿轮箱窄带包络阶次分析
 
-    核心思路（Feng & Zuo 2012 / ALGORITHMS.md 2.7.3）：
+    核心思路（Feng & Zuo 2012 / docs/算法原理.md 2.7.3）：
     行星箱故障不应围绕 mesh_order 做边频带分析，
     而是对 mesh_order 频带做窄带滤波+包络，在包络阶次谱中
     搜索 sun_fault_order / planet_fault_order / carrier_order 峰值。
@@ -1154,7 +1154,7 @@ def planetary_msb_analysis(
     """
     Level 5: 调制信号双谱分析 (MSB — Modulation Signal Bispectrum)
 
-    核心理论（Guo, Xu, Tian et al. / ALGORITHMS.md 2.7.5）：
+    核心理论（Guo, Xu, Tian et al. / docs/算法原理.md 2.7.5）：
     MSB 利用相位关系解析二次相位耦合（QPC），从边频带中提取故障信息。
 
     MSB 定义：B(f1, f2) = E[X(f1) * X(f2) * X*(f1+f2)]
@@ -1734,7 +1734,7 @@ def evaluate_planetary_demod_results(
     - TSA residual_kurtosis：区分力 3.31×（健康 1.19, 故障 3.95）
     - fullband/hp sun_modulation_depth：区分力 1.55×/1.51×，overlap 0.35
 
-    === 融合策略（按 ALGORITHMS.md 2.7 推荐的 Level 1→2→3 分级诊断） ===
+    === 融合策略（按 docs/算法原理.md 2.7 推荐的 Level 1→2→3 分级诊断） ===
     Level 1: 时域证据门控 — envelope_kurtosis/residual_kurtosis 作为先决条件
     Level 2: 窄带包络阶次分析 — envelope_kurtosis 作为主要诊断指标
     Level 3: VMD联合解调（备选，Level 2 不够时启用）

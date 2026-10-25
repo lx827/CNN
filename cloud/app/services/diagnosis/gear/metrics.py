@@ -488,7 +488,7 @@ def analyze_sidebands_zoom_fft(
     """
     基于 ZOOM-FFT 细化谱的边频带分析
 
-    ALGORITHMS.md §2.5.1 Step2：
+    docs/算法原理.md §2.5.1 Step2：
     "采用 ZOOM-FFT 或细化谱分析，确保频率分辨率 Δf ≤ f_r/4（至少能分辨 4 根边频）"
 
     标准 FFT 的频率分辨率 Δf = fs/N，当 Δf > f_r/4 时边频带无法精确分辨。
