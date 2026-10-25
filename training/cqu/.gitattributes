@@ -1,0 +1,3 @@
+# 固定正式清单与处理代码的换行，便于跨平台复核。
+*.py text eol=lf
+*.json text eol=lf
