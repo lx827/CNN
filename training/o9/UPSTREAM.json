@@ -48,6 +48,14 @@
         "仅关闭自动torch.compile，保留张量计算和参数结构",
         "清理两处行尾空白"
       ]
+    },
+    "o9_loss.py": {
+      "source_path": "FaultDiagnosis/DG/o9/o9_loss.py",
+      "source_sha256": "31e5738cdae0cfae45b96921ff2ff309972b3a502d8bd2e04184b5cfeaa2e827",
+      "local_sha256": "1ec4ec932e1d3c49c80a953cf7d09df65e53514bd5ccea5de11cd207f6fc25c8",
+      "adaptations": [
+        "将旧项目绝对导入改为当前包内相对导入，损失计算保持原样"
+      ]
     }
   },
   "license_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
