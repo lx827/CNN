@@ -41,9 +41,10 @@ function node(tag,text,cls){const e=document.createElement(tag);if(text!=null)e.
 $('status').textContent=data.status_text;$('completed').textContent=data.completed+' / '+data.planned;$('partial').textContent=data.partial;$('remaining').textContent=Math.max(0,data.planned-data.runs.length);
 $('eta').textContent=data.context.estimated_remaining_minutes_text||'待估计';$('updated').textContent='日志最近更新：'+data.data_latest.replace('T',' ').slice(0,19)+'（北京时间）';
 $('fill').style.width=(data.planned?100*data.completed/data.planned:0)+'%';$('progress').setAttribute('aria-valuenow',data.completed);$('progress').setAttribute('aria-valuemax',data.planned);$('progress').setAttribute('aria-label','训练组数完成进度');
+const follow=node('option','自动跟随最新任务与阶段');follow.value='__latest__';$('runSelect').append(follow);
 for(const r of data.runs){const o=node('option',`${r.experiment} · 折${r.fold} · ${names[r.initialization]||r.initialization} · ${r.complete?'已完成':'未完成'}`);o.value=r.name;$('runSelect').append(o);}
 let hash=[];try{hash=decodeURIComponent(location.hash.slice(1)).split('|');}catch(e){}
-if(data.runs.some(r=>r.name===hash[0]))$('runSelect').value=hash[0];else if(data.latest_run)$('runSelect').value=data.latest_run;
+if(hash[0]==='__latest__'||data.runs.some(r=>r.name===hash[0]))$('runSelect').value=hash[0];
 if(['1','2'].includes(hash[1]))$('stageSelect').value=hash[1];
 function svgEl(tag,attrs,text){const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v]of Object.entries(attrs||{}))e.setAttribute(k,v);if(text!=null)e.textContent=text;return e;}
 function chart(target,rows,series,options={}){
@@ -61,17 +62,19 @@ function chart(target,rows,series,options={}){
  box.append(svg);const legend=node('div',null,'legend');for(const s of series){const item=node('span');const line=node('i',null,s.dashed?'dashed':'');line.style.borderColor=s.color;item.append(line,node('span',s.name));legend.append(item);}box.append(legend);
 }
 function render(){
- const run=data.runs.find(r=>r.name===$('runSelect').value);if(!run)return;
+ const automatic=$('runSelect').value==='__latest__';
+ const run=data.runs.find(r=>r.name===(automatic?data.latest_run:$('runSelect').value));if(!run)return;
+ $('stageSelect').disabled=automatic;if(automatic)$('stageSelect').value=String(run.epochs.at(-1)?.stage||2);
  const stage=Number($('stageSelect').value),rows=run.epochs.filter(e=>e.stage===stage),last=run.epochs.at(-1),best=run.best;
  $('selectedStats').replaceChildren();for(const [label,value]of [['最后记录',last?`S${last.stage} 第${last.epoch}轮`:'尚无完整轮次'],['选优轮次',best?`S2 第${best.epoch}轮`:'—'],['选优验证成绩',best?pct(best.val_balanced_accuracy):'—'],['类型',run.smoke_only?'短程检查':'完整轮次']]){const c=node('span');c.append(node('b',value),node('span',label,'muted'));$('selectedStats').append(c);}
- $('selectionNote').textContent=best?`选优轮次：正常误报 ${best.false_alarms} 份，故障漏报 ${best.misses} 份。曲线显示所有已保存轮次，不只显示最好的一轮。`:'尚无可用于选优的完整Stage2轮次。';
+ $('selectionNote').textContent=(automatic?`正在跟随 ${run.experiment} · 折${run.fold} · ${names[run.initialization]||run.initialization}。`:'')+(best?`选优轮次：正常误报 ${best.false_alarms} 份，故障漏报 ${best.misses} 份。曲线显示所有已保存轮次，不只显示最好的一轮。`:'尚无可用于选优的完整Stage2轮次。');
  chart('accuracyChart',rows,[{name:'文件级平衡准确率',value:e=>e.val_balanced_accuracy,color:'#1859a5'}],{percent:true,max:1,label:'逐轮验证平衡准确率'});
  chart('lossChart',rows,[{name:'重构损失',value:e=>e.losses.recon,color:'#1859a5'},{name:'原型损失',value:e=>e.losses.proto,color:'#b45309',dashed:true}],{label:'逐轮训练重构与原型损失'});
  chart('ceChart',rows,[{name:'验证六类交叉熵',value:e=>e.val_ce,color:'#14766a'}],{label:'逐轮验证六类交叉熵'});
  chart('errorChart',rows,[{name:'正常误报',value:e=>e.false_alarms,color:'#b45309'},{name:'故障漏报',value:e=>e.misses,color:'#1859a5',dashed:true}],{max:3,counts:true,label:'逐轮正常误报及故障漏报文件数'});
  $('epochCaption').textContent=`共${run.epochs.length}个已保存轮次；缺失指标显示为“—”，不会当作零。`;$('epochRows').replaceChildren();for(const e of run.epochs){const tr=node('tr',null,e.stage===2&&best&&e.epoch===best.epoch?'best':'');for(const value of [`S${e.stage} / ${e.epoch}`,e.batches,e.available==null?e.windows:`${e.windows} / ${e.available}`,fmt(e.losses.main_loss),fmt(e.losses.recon),fmt(e.losses.proto),fmt(e.losses.d_adv),fmt(e.val_ce),pct(e.val_balanced_accuracy),e.false_alarms??'—',e.misses??'—'])tr.append(node('td',value));$('epochRows').append(tr);}
  $('predictionRows').replaceChildren();for(const p of run.predictions){const tr=node('tr');for(const value of [p.rpm,p.actual,p.predicted,fmt(p.fault_score),p.binary_prediction])tr.append(node('td',value));$('predictionRows').append(tr);}
- try{history.replaceState(null,'','#'+encodeURIComponent(run.name+'|'+stage));}catch(e){}
+ try{history.replaceState(null,'','#'+encodeURIComponent($('runSelect').value+'|'+stage));}catch(e){}
 }
 $('runSelect').addEventListener('change',render);$('stageSelect').addEventListener('change',render);render();
 let paused=false;try{paused=sessionStorage.getItem('o9-refresh-paused')==='1';}catch(e){}
