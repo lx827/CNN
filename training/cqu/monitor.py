@@ -51,6 +51,44 @@ def _json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def summarize_groups(plan: list[dict], runs: list[dict]) -> tuple[list[dict], list[dict]]:
+    """按计划顺序保留每组入口；仅汇总已完成折，不将缺失成绩当零。"""
+    actual = {run["name"]: run for run in runs}
+    configs = plan or runs
+    groups = []
+    for index, config in enumerate(configs, 1):
+        name = f"{config['experiment']}_fold{config['fold']}_{config['initialization']}"
+        run = actual.get(name)
+        best = run["best"] if run else None
+        last = run["epochs"][-1] if run and run["epochs"] else None
+        predictions = run["predictions"] if run else []
+        groups.append({"index": index, "name": name, "experiment": config["experiment"],
+                       "fold": config["fold"], "initialization": config["initialization"],
+                       "started": run is not None, "complete": bool(run and run["complete"]),
+                       "last_stage": last["stage"] if last else None,
+                       "last_epoch": last["epoch"] if last else None,
+                       "best_epoch": best["epoch"] if best else None,
+                       "balanced_accuracy": best["val_balanced_accuracy"] if best else None,
+                       "false_alarms": best["false_alarms"] if best else None,
+                       "misses": best["misses"] if best else None,
+                       "val_ce": best["val_ce"] if best else None,
+                       "six_class_accuracy": sum(p["actual"] == p["predicted"] for p in predictions) / len(predictions)
+                                             if predictions else None})
+    comparisons = []
+    pairs = dict.fromkeys((g["experiment"], g["initialization"]) for g in groups)
+    for experiment, initialization in pairs:
+        selected = [g for g in groups if g["experiment"] == experiment and g["initialization"] == initialization
+                    and g["complete"] and g["balanced_accuracy"] is not None]
+        scores = [g["balanced_accuracy"] for g in selected]
+        comparisons.append({"experiment": experiment, "initialization": initialization, "folds": len(selected),
+                            "fold_scores": [{"fold": g["fold"], "score": g["balanced_accuracy"]} for g in selected],
+                            "mean_balanced_accuracy": sum(scores) / len(scores) if scores else None,
+                            "false_alarms": sum(g["false_alarms"] for g in selected) if selected else None,
+                            "misses": sum(g["misses"] for g in selected) if selected else None,
+                            "normal_evaluations": 3 * len(selected), "fault_evaluations": 3 * len(selected)})
+    return groups, comparisons
+
+
 def collect_progress(runs: Path) -> dict:
     """只读取指定目录的JSON，不导入PyTorch、不读取权重、不启动训练。"""
     runs = Path(runs).resolve()
@@ -101,8 +139,12 @@ def collect_progress(runs: Path) -> dict:
                       "epochs": epochs, "best": best, "predictions": predictions,
                       "last_updated": datetime.fromtimestamp(modified, ZoneInfo("Asia/Shanghai")).isoformat(),
                       "modified": modified})
+    groups, comparisons = summarize_groups(plan.get("runs", []), items)
+    order = {g["name"]: g["index"] for g in groups}
+    items.sort(key=lambda item: order.get(item["name"], len(order) + 1))
     completed = sum(item["complete"] for item in items)
     return {"runs": items, "planned": len(plan.get("runs", [])) or len(items), "completed": completed,
+            "groups": groups, "comparisons": comparisons,
             "partial": len(items) - completed, "status_text": status, "context": context,
             "latest_run": max(items, key=lambda r: r["modified"])["name"] if items else None,
             "data_latest": max((r["last_updated"] for r in items), default="尚无日志")}

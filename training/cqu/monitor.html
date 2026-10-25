@@ -16,6 +16,7 @@ select,button{font:inherit;color:var(--ink);background:white;border:1px solid #a
 .controls label:first-child{flex:1;min-width:220px}.chips{display:flex;gap:20px;flex-wrap:wrap;border-top:1px solid var(--line);margin-top:16px;padding-top:12px}.chips b{font-size:19px;margin-right:5px}
 .charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}.chart{background:white;border:1px solid var(--line);border-radius:8px;padding:16px 18px}.chart svg{display:block;width:100%;height:auto}.legend{display:flex;gap:16px;font-size:13px;color:var(--muted);margin-top:4px}.legend span{display:flex;align-items:center;gap:6px}.legend i{width:22px;border-top:3px solid}.legend i.dashed{border-top-style:dashed}
 .scroll{overflow:auto}table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}th{text-align:right;background:#f4f7fb;color:var(--muted);font-weight:600}td,th{padding:9px 11px;border-bottom:1px solid var(--line);text-align:right}td:first-child,th:first-child{text-align:left}tbody tr:hover{background:#f3f7fc}tr.best{background:#eaf3fc}caption{text-align:left;color:var(--muted);padding-bottom:10px}.note{border-left:3px solid #c59746;padding:10px 14px;background:#fffaf0;color:#69512c;font-size:13px;margin-top:16px}.empty{color:var(--muted);padding:50px 10px;text-align:center}footer{color:var(--muted);font-size:12px;margin-top:22px}
+.batch-state{font-size:17px;font-weight:650;margin-top:14px}.table-controls{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:12px 0;flex-wrap:wrap}.row-action{font-size:13px;padding:5px 10px;min-height:36px}.table-controls label{display:flex;align-items:center;gap:10px}button:disabled{cursor:default;opacity:.75}.detail-title{margin-top:24px}
 @media(max-width:800px){main{padding:18px 14px}.charts{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}header{display:block}header .status{margin-top:10px}h1{font-size:24px}.panel{padding:15px}.chips{gap:10px 16px}}
 </style>
 </head>
@@ -23,7 +24,11 @@ select,button{font:inherit;color:var(--ink);background:white;border:1px solid #a
 <header><div><div class="eyebrow">CQU · O9 TRAINING MONITOR</div><h1>训练进度与逐轮结果</h1><p class="muted" id="updated"></p></div><span id="status" class="status"></span></header>
 <div class="bar" role="progressbar" id="progress"><span id="fill"></span></div>
 <div class="stats"><div class="stat"><small>已完成 / 计划组数</small><strong id="completed"></strong></div><div class="stat"><small>已留下日志、尚未完成</small><strong id="partial"></strong></div><div class="stat"><small>尚未开始</small><strong id="remaining"></strong></div><div class="stat"><small>剩余训练估计</small><strong id="eta"></strong></div></div>
-<section class="panel"><div class="controls"><label>选择任务、折与初始化<select id="runSelect"></select></label><label>曲线阶段<select id="stageSelect"><option value="2">Stage2 · 故障训练</option><option value="1">Stage1 · 正常预训练</option></select></label><button id="autoRefresh" type="button">暂停页面刷新</button></div><div class="chips" id="selectedStats"></div><p class="muted" id="selectionNote"></p></section>
+<p id="batchState" class="batch-state"></p>
+<section class="panel"><h2>三折验证结果对比</h2><div class="scroll"><table><caption>仅汇总已完成折；均值来自开发验证选优成绩，误报／漏报分母是重复验证次数，不是独立新增文件数。</caption><thead><tr><th>任务</th><th>初始化</th><th>已完成折</th><th>各折平衡准确率</th><th>平均平衡准确率</th><th>正常误报</th><th>故障漏报</th></tr></thead><tbody id="comparisonRows"></tbody></table></div></section>
+<section class="panel"><h2>全部训练组 · 永久回看</h2><div class="table-controls"><p class="muted" id="groupCaption"></p><label>筛选任务<select id="taskFilter"><option value="all">全部任务</option></select></label></div><div class="scroll"><table><caption>按原执行顺序排列。每行是一个独立模型；进行中的选优分数为暂时结果。点击“查看详情”查看该组全部轮次和文件预测。</caption><thead><tr><th>组号</th><th>任务</th><th>折</th><th>初始化</th><th>本组状态</th><th>最后轮次</th><th>选优S2轮次</th><th>验证平衡准确率</th><th>正常误报/3</th><th>故障漏报/3</th><th>六类准确率</th><th>详情</th></tr></thead><tbody id="groupRows"></tbody></table></div></section>
+<h2 class="detail-title" id="detailTitle">单组训练详情</h2>
+<section class="panel" id="detailPanel"><div class="controls"><label>选择任务、折与初始化<select id="runSelect"></select></label><label>曲线阶段<select id="stageSelect"><option value="2">Stage2 · 故障训练</option><option value="1">Stage1 · 正常预训练</option></select></label><button id="autoRefresh" type="button">暂停页面刷新</button></div><div class="chips" id="selectedStats"></div><p class="muted" id="selectionNote"></p></section>
 <div class="charts"><section class="chart"><h2>验证平衡准确率</h2><div id="accuracyChart"></div></section><section class="chart"><h2>训练重构与原型损失</h2><div id="lossChart"></div></section><section class="chart"><h2>验证六类交叉熵</h2><div id="ceChart"></div></section><section class="chart"><h2>正常误报 / 故障漏报</h2><div id="errorChart"></div></section></div>
 <section class="panel"><h2>每一轮的结果</h2><p class="muted">蓝色行是验证集选出的 Stage2 最佳轮次；总损失包含负域熵，可以为负。</p><div class="scroll"><table><caption id="epochCaption"></caption><thead><tr><th>阶段 / 轮次</th><th>批次</th><th>训练窗数</th><th>总损失</th><th>重构</th><th>原型</th><th>域对抗</th><th>验证CE</th><th>平衡准确率</th><th>误报</th><th>漏报</th></tr></thead><tbody id="epochRows"></tbody></table></div></section>
 <section class="panel"><h2>选优权重在每份验证文件上的预测</h2><div class="scroll"><table><caption>保留六类预测与二分类判定，避免把“检出故障”误当成“类型识别正确”。</caption><thead><tr><th>名义电机转速 rpm</th><th>真实类别</th><th>六类预测</th><th>故障分数</th><th>二分类判定</th></tr></thead><tbody id="predictionRows"></tbody></table></div></section>
@@ -35,14 +40,25 @@ select,button{font:inherit;color:var(--ink);background:white;border:1px solid #a
 const data=__TRAINING_DATA__;
 const $=id=>document.getElementById(id);
 const names={scratch:'从零',epoch55:'第55轮 EMA',stage2:'Stage2 EMA',stage3:'Stage3 EMA'};
+const taskNames={device1_ch2:'设备1 CH2',device2_ch3:'设备2 CH3',device1_ch1:'设备1 CH1'};
 const fmt=(v,n=4)=>v==null?'—':Number(v).toFixed(n);
 const pct=v=>v==null?'—':(v*100).toFixed(1)+'%';
 function node(tag,text,cls){const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e;}
 $('status').textContent=data.status_text;$('completed').textContent=data.completed+' / '+data.planned;$('partial').textContent=data.partial;$('remaining').textContent=Math.max(0,data.planned-data.runs.length);
 $('eta').textContent=data.context.estimated_remaining_minutes_text||'待估计';$('updated').textContent='日志最近更新：'+data.data_latest.replace('T',' ').slice(0,19)+'（北京时间）';
 $('fill').style.width=(data.planned?100*data.completed/data.planned:0)+'%';$('progress').setAttribute('aria-valuenow',data.completed);$('progress').setAttribute('aria-valuemax',data.planned);$('progress').setAttribute('aria-label','训练组数完成进度');
+const finished=data.planned>0&&data.completed===data.planned;
+$('batchState').textContent=finished?'整批训练预算已完成。全部组、曲线和预测已嵌入本页，关闭终端后仍可离线回看。':`整批尚未完成：${data.completed}/${data.planned}组完成。下方“本组已完成”只表示这一组模型。`;
+for(const c of data.comparisons||[]){const tr=node('tr');for(const v of [taskNames[c.experiment]||c.experiment,names[c.initialization]||c.initialization,c.folds+'/3',c.fold_scores.map(f=>'折'+f.fold+' '+pct(f.score)).join(' · ')||'—',pct(c.mean_balanced_accuracy),c.false_alarms==null?'—':c.false_alarms+'/'+c.normal_evaluations,c.misses==null?'—':c.misses+'/'+c.fault_evaluations])tr.append(node('td',v));$('comparisonRows').append(tr);}
+for(const experiment of new Set((data.groups||[]).map(g=>g.experiment))){const o=node('option',taskNames[experiment]||experiment);o.value=experiment;$('taskFilter').append(o);}
+function renderGroups(){
+ const groups=(data.groups||[]).filter(g=>$('taskFilter').value==='all'||g.experiment===$('taskFilter').value);$('groupRows').replaceChildren();
+ $('groupCaption').textContent=`计划${data.planned}组，已完成${data.completed}组；当前显示${groups.length}组。`;
+ for(const g of groups){const tr=node('tr');tr.dataset.complete=String(g.complete);const status=g.complete?'本组已完成':g.started?'本组未完成':'尚未开始';for(const v of [g.index,taskNames[g.experiment]||g.experiment,g.fold,names[g.initialization]||g.initialization,status,g.last_epoch==null?'—':`S${g.last_stage} 第${g.last_epoch}轮`,g.best_epoch??'—',pct(g.balanced_accuracy),g.false_alarms??'—',g.misses??'—',pct(g.six_class_accuracy)])tr.append(node('td',v));const action=node('td'),button=node('button','查看详情','row-action');button.type='button';button.dataset.run=g.name;button.disabled=!g.started;button.setAttribute('aria-label',`查看第${g.index}组详情`);button.addEventListener('click',()=>{$('runSelect').value=g.name;$('stageSelect').value='2';render();$('detailTitle').scrollIntoView();});action.append(button);tr.append(action);$('groupRows').append(tr);}
+}
+$('taskFilter').addEventListener('change',renderGroups);renderGroups();
 const follow=node('option','自动跟随最新任务与阶段');follow.value='__latest__';$('runSelect').append(follow);
-for(const r of data.runs){const o=node('option',`${r.experiment} · 折${r.fold} · ${names[r.initialization]||r.initialization} · ${r.complete?'已完成':'未完成'}`);o.value=r.name;$('runSelect').append(o);}
+for(const r of data.runs){const o=node('option',`${taskNames[r.experiment]||r.experiment} · 折${r.fold} · ${names[r.initialization]||r.initialization} · ${r.complete?'本组已完成':'本组未完成'}`);o.value=r.name;$('runSelect').append(o);}
 let hash=[];try{hash=decodeURIComponent(location.hash.slice(1)).split('|');}catch(e){}
 if(hash[0]==='__latest__'||data.runs.some(r=>r.name===hash[0]))$('runSelect').value=hash[0];
 if(['1','2'].includes(hash[1]))$('stageSelect').value=hash[1];
@@ -79,7 +95,7 @@ function render(){
 $('runSelect').addEventListener('change',render);$('stageSelect').addEventListener('change',render);render();
 let paused=false;try{paused=sessionStorage.getItem('o9-refresh-paused')==='1';}catch(e){}
 let lastInteraction=0;for(const event of ['pointerdown','keydown'])document.addEventListener(event,()=>{lastInteraction=Date.now();});
-function refreshButton(){$('autoRefresh').textContent=paused?'恢复页面刷新':'暂停页面刷新';$('autoRefresh').setAttribute('aria-pressed',paused);}
+function refreshButton(){$('autoRefresh').textContent=finished?'全部结果已保存':paused?'恢复页面刷新':'暂停页面刷新';$('autoRefresh').disabled=finished;$('autoRefresh').setAttribute('aria-pressed',paused);}
 $('autoRefresh').addEventListener('click',()=>{paused=!paused;try{sessionStorage.setItem('o9-refresh-paused',paused?'1':'0');}catch(e){}refreshButton();});refreshButton();
-setInterval(()=>{if(!paused&&Date.now()-lastInteraction>10000)location.reload();},5000);
+setInterval(()=>{if(!finished&&!paused&&Date.now()-lastInteraction>10000)location.reload();},5000);
 </script></body></html>
