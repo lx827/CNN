@@ -57,7 +57,7 @@ python -m unittest discover -s ../tests/backend -p 'test_*.py' -v
 node --test tests/frontend/monitor_lifecycle.test.cjs tests/frontend/dashboard_lifecycle.test.cjs tests/frontend/websocket.test.cjs
 ```
 
-预期结果为后端 10 项、前端 16 项全部通过；P0 回归仍需按项目要求分别运行。测试运行环境和局限见 [架构整顿记录](../ARCHITECTURE_REFACTOR_20261021.md)。
+预期结果为后端 10 项、前端 16 项全部通过；P0 回归仍需按项目要求分别运行。测试运行环境和局限见 [架构整顿记录](../架构整顿记录_20261021.md)。
 
 ---
 
