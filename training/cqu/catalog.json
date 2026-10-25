@@ -1,0 +1,4729 @@
+{
+  "schema_version": 1,
+  "frozen_date": "2026-10-25",
+  "scope": "70_confirmed_records_42_primary_28_historical_fault_only",
+  "label_meaning": "normal仅指恢复对应人为故障，不保证所有部件均健康",
+  "authority": "用户确认的现场操作、通道映射与已核验CSV；不从信号强弱推断标签",
+  "shared_references": [
+    "docs/FIELD_DATA_HANDOFF_20261020.md",
+    "docs/FIELD_EQUIPMENT_20261023.md"
+  ],
+  "latest_supplement": "设备1于2026-10-24装回原配重后新增9份；每档连续采3份，未逐份停机重启",
+  "limitations": [
+    "共享交接文档61份为较早快照，本清单补齐后9份",
+    "同文件四通道不是独立采集；重复文件不代表独立重启或重装",
+    "设备2正常与故障涉及更换轴承，标签与安装状态相关",
+    "全部记录曾用于探索，本轮仅作开发评估，非独立盲测"
+  ],
+  "records": [
+    {
+      "record_id": "420ba3b56e4a107fb587f696a3f1239a3434d7d188c104d07615f6f1942cf619",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "device1_followup_9_20261024",
+      "sequence_group": "fault_reinstalled_followup",
+      "sequence_number_from_filename": 1,
+      "operation": "用户确认重新装回原来的配重；其他没有变动",
+      "installation_group": "device1_today_original_weight_reinstalled",
+      "capture_start_csv": "2026-10-24 21:23:59.746",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 1001
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "420ba3b56e4a107fb587f696a3f1239a3434d7d188c104d07615f6f1942cf619",
+      "numeric_sha256_prior_qc": "217e5a997c944353f465d58af5b49b5661894272ce814766a49ae4534d05aaff",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": false,
+      "repeated_capture_protocol": "每档连续运行采三份；未逐份停机重启",
+      "raw_file": "不平衡1001-1-1024.csv",
+      "split_group": "420ba3b56e4a107fb587f696a3f1239a3434d7d188c104d07615f6f1942cf619"
+    },
+    {
+      "record_id": "704ae09c2d39c5b8ac35a4e4930b84e02a8e9af914aa6039a275809dfa199daa",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "device1_followup_9_20261024",
+      "sequence_group": "fault_reinstalled_followup",
+      "sequence_number_from_filename": 2,
+      "operation": "用户确认重新装回原来的配重；其他没有变动",
+      "installation_group": "device1_today_original_weight_reinstalled",
+      "capture_start_csv": "2026-10-24 21:25:00.252",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 1001
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "704ae09c2d39c5b8ac35a4e4930b84e02a8e9af914aa6039a275809dfa199daa",
+      "numeric_sha256_prior_qc": "feefaede2324f19fab3ca0561ad48f2d3346bd8a61d16379e9115283a9b5394f",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": false,
+      "repeated_capture_protocol": "每档连续运行采三份；未逐份停机重启",
+      "raw_file": "不平衡1001-2-1024.csv",
+      "split_group": "704ae09c2d39c5b8ac35a4e4930b84e02a8e9af914aa6039a275809dfa199daa"
+    },
+    {
+      "record_id": "5159760c5ddf1a2ecdc63516df542374eeaaf03898a78fc19a2da19e0b5aeaf9",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "device1_followup_9_20261024",
+      "sequence_group": "fault_reinstalled_followup",
+      "sequence_number_from_filename": 3,
+      "operation": "用户确认重新装回原来的配重；其他没有变动",
+      "installation_group": "device1_today_original_weight_reinstalled",
+      "capture_start_csv": "2026-10-24 21:25:58.098",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 1001
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "5159760c5ddf1a2ecdc63516df542374eeaaf03898a78fc19a2da19e0b5aeaf9",
+      "numeric_sha256_prior_qc": "11644012f66534d5917c4be6c3dd74f539338f072ea0d7d36f94b952ae336c58",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": false,
+      "repeated_capture_protocol": "每档连续运行采三份；未逐份停机重启",
+      "raw_file": "不平衡1001-3-1024.csv",
+      "split_group": "5159760c5ddf1a2ecdc63516df542374eeaaf03898a78fc19a2da19e0b5aeaf9"
+    },
+    {
+      "record_id": "991647e1b6633756ea863d73b70a800750fb4651c672f35ac90a946a24a321af",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_today",
+      "sequence_number_from_filename": 4,
+      "operation": "拿掉配重前",
+      "installation_group": "device1_today_fault",
+      "capture_start_csv": "2026-10-24 16:39:22.490",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 1002
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "991647e1b6633756ea863d73b70a800750fb4651c672f35ac90a946a24a321af",
+      "numeric_sha256_prior_qc": "9f6588ec4e3ed5e7a03ca15119a8b584badb4864571f7b91e04e48d08da2810c",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡1002-4.csv",
+      "split_group": "991647e1b6633756ea863d73b70a800750fb4651c672f35ac90a946a24a321af"
+    },
+    {
+      "record_id": "2437e6d2288a5af781da04f7a02796dbe5f10f724b7ca8a2890f2ae5e542fd91",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "original_10",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": null,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-19 19:03:54.477",
+      "capture_date_csv": "2026-10-19",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "range",
+        "lower": 1003,
+        "upper": 1004
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "2437e6d2288a5af781da04f7a02796dbe5f10f724b7ca8a2890f2ae5e542fd91",
+      "numeric_sha256_prior_qc": "aa72ac635b300bb218d98a4c0c452b4501e7f11feff8ec587161f7d62e7ffc19",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡1003-1004.csv",
+      "split_group": "2437e6d2288a5af781da04f7a02796dbe5f10f724b7ca8a2890f2ae5e542fd91"
+    },
+    {
+      "record_id": "5a4c479d6619cba0cb8bf4c002f9052e6ff42fa6a987f8e4382010b05a81016b",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "device1_followup_9_20261024",
+      "sequence_group": "fault_reinstalled_followup",
+      "sequence_number_from_filename": 1,
+      "operation": "用户确认重新装回原来的配重；其他没有变动",
+      "installation_group": "device1_today_original_weight_reinstalled",
+      "capture_start_csv": "2026-10-24 21:16:44.359",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 201
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "5a4c479d6619cba0cb8bf4c002f9052e6ff42fa6a987f8e4382010b05a81016b",
+      "numeric_sha256_prior_qc": "53197feaa94c6e2e4d113fbe7b940544ee3e9cd03ab6d62d3b575e0f0d5e348a",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": false,
+      "repeated_capture_protocol": "每档连续运行采三份；未逐份停机重启",
+      "raw_file": "不平衡201-1-1024.csv",
+      "split_group": "5a4c479d6619cba0cb8bf4c002f9052e6ff42fa6a987f8e4382010b05a81016b"
+    },
+    {
+      "record_id": "3710169aec9b7b43685e85a31e9f0bbee6a3485d8e54c9b6d623aa5d7a0a5415",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": 1,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:07:15.012",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 201
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 303104,
+      "duration_seconds": 30.3104,
+      "source_sha256": "3710169aec9b7b43685e85a31e9f0bbee6a3485d8e54c9b6d623aa5d7a0a5415",
+      "numeric_sha256_prior_qc": "f81b8dc25c39aeb35df263de783c2b29ad1f3f20789286d4dbd10044aa27a17b",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡201-1.csv",
+      "split_group": "3710169aec9b7b43685e85a31e9f0bbee6a3485d8e54c9b6d623aa5d7a0a5415"
+    },
+    {
+      "record_id": "0763d1196e10e3f088ef2801d0abc19f63f7f13e5e9a3689600ea28c2ea5831f",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "device1_followup_9_20261024",
+      "sequence_group": "fault_reinstalled_followup",
+      "sequence_number_from_filename": 2,
+      "operation": "用户确认重新装回原来的配重；其他没有变动",
+      "installation_group": "device1_today_original_weight_reinstalled",
+      "capture_start_csv": "2026-10-24 21:17:45.624",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 201
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "0763d1196e10e3f088ef2801d0abc19f63f7f13e5e9a3689600ea28c2ea5831f",
+      "numeric_sha256_prior_qc": "fd44d726185244c627a1296c3fbfe49d7ba94d3189706cc5068934d723fea272",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": false,
+      "repeated_capture_protocol": "每档连续运行采三份；未逐份停机重启",
+      "raw_file": "不平衡201-2-1024.csv",
+      "split_group": "0763d1196e10e3f088ef2801d0abc19f63f7f13e5e9a3689600ea28c2ea5831f"
+    },
+    {
+      "record_id": "0037e751c82a29ce3b4da36f1badf834203b6c0c3eea91c02edee19f99543f77",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": 2,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:11:46.369",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 201
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 303104,
+      "duration_seconds": 30.3104,
+      "source_sha256": "0037e751c82a29ce3b4da36f1badf834203b6c0c3eea91c02edee19f99543f77",
+      "numeric_sha256_prior_qc": "c71e6048b368a054a886a53fe3498a76bfb2a9701a1de3f073b842f6b10ccbac",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡201-2.csv",
+      "split_group": "0037e751c82a29ce3b4da36f1badf834203b6c0c3eea91c02edee19f99543f77"
+    },
+    {
+      "record_id": "fbaaf9d3935adf152e7164861bc62f5a41b9659cd82d5ddbd95bc428b9a1d732",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "device1_followup_9_20261024",
+      "sequence_group": "fault_reinstalled_followup",
+      "sequence_number_from_filename": 3,
+      "operation": "用户确认重新装回原来的配重；其他没有变动",
+      "installation_group": "device1_today_original_weight_reinstalled",
+      "capture_start_csv": "2026-10-24 21:18:47.418",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 201
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "fbaaf9d3935adf152e7164861bc62f5a41b9659cd82d5ddbd95bc428b9a1d732",
+      "numeric_sha256_prior_qc": "c7dca1ef0541fc3f15a714699486f8714349556f6786acc91085ad768e7218b4",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": false,
+      "repeated_capture_protocol": "每档连续运行采三份；未逐份停机重启",
+      "raw_file": "不平衡201-3-1024.csv",
+      "split_group": "fbaaf9d3935adf152e7164861bc62f5a41b9659cd82d5ddbd95bc428b9a1d732"
+    },
+    {
+      "record_id": "0137b5f628a4ae8c2227bd5bc3d644ed0cbc9eb6324de6617d50e914667c8d42",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": 3,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:12:55.011",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 201
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "0137b5f628a4ae8c2227bd5bc3d644ed0cbc9eb6324de6617d50e914667c8d42",
+      "numeric_sha256_prior_qc": "a67f6af66541674c180e0f22b12dda4a7fc7949025767f6246cd2676291a5196",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡201-3.csv",
+      "split_group": "0137b5f628a4ae8c2227bd5bc3d644ed0cbc9eb6324de6617d50e914667c8d42"
+    },
+    {
+      "record_id": "ca5dbb142bc01a03f939c571399fe1aeaba32bcd53c6ba94365659920af2bde3",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_today",
+      "sequence_number_from_filename": 4,
+      "operation": "拿掉配重前",
+      "installation_group": "device1_today_fault",
+      "capture_start_csv": "2026-10-24 16:36:34.782",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 201
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "ca5dbb142bc01a03f939c571399fe1aeaba32bcd53c6ba94365659920af2bde3",
+      "numeric_sha256_prior_qc": "03c3f999a9a5917100b0483046c5792d74854e0f6ed33d404c6b5bbfecb7b8e0",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡201-4.csv",
+      "split_group": "ca5dbb142bc01a03f939c571399fe1aeaba32bcd53c6ba94365659920af2bde3"
+    },
+    {
+      "record_id": "52322cd3becaa30df9677c448f5be341bf18b604f2260502ff2ed7de499ef2f6",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "original_10",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": null,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-19 19:06:29.331",
+      "capture_date_csv": "2026-10-19",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "lower": 201,
+        "upper": 201
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "52322cd3becaa30df9677c448f5be341bf18b604f2260502ff2ed7de499ef2f6",
+      "numeric_sha256_prior_qc": "3bd8d7aa86dbcc50e20b51e62ddcc2234e0061976c6eb5f850697a14722f481c",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡201.csv",
+      "split_group": "52322cd3becaa30df9677c448f5be341bf18b604f2260502ff2ed7de499ef2f6"
+    },
+    {
+      "record_id": "43e94371429eef8f82f0f4c377a7e080ec986ee683bddfd70e2912052d4892fc",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "original_10",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": null,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-19 18:52:08.860",
+      "capture_date_csv": "2026-10-19",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 400,
+      "filename_rpm_reading": {
+        "kind": "range",
+        "lower": 400,
+        "upper": 401
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "43e94371429eef8f82f0f4c377a7e080ec986ee683bddfd70e2912052d4892fc",
+      "numeric_sha256_prior_qc": "5094003b820f48905f2bea72692c8a4539d0e2b698364151658e3f722c9a6ba3",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡400-401.csv",
+      "split_group": "43e94371429eef8f82f0f4c377a7e080ec986ee683bddfd70e2912052d4892fc"
+    },
+    {
+      "record_id": "bc4e1212cd9e6e97e5c2285ea624d23ff1ecaa0bd5df271a1150f4b78578402a",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_today",
+      "sequence_number_from_filename": 4,
+      "operation": "拿掉配重前",
+      "installation_group": "device1_today_fault",
+      "capture_start_csv": "2026-10-24 16:38:05.242",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 600
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "bc4e1212cd9e6e97e5c2285ea624d23ff1ecaa0bd5df271a1150f4b78578402a",
+      "numeric_sha256_prior_qc": "bc3be1098e7f3def67a913754c9c31962260af935e1e61f891a5570172e83c4a",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡600-4.csv",
+      "split_group": "bc4e1212cd9e6e97e5c2285ea624d23ff1ecaa0bd5df271a1150f4b78578402a"
+    },
+    {
+      "record_id": "40a0de2bf4529121144ef71eaa41c7354b487dd456f69480aecb4e16cf448296",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "device1_followup_9_20261024",
+      "sequence_group": "fault_reinstalled_followup",
+      "sequence_number_from_filename": 1,
+      "operation": "用户确认重新装回原来的配重；其他没有变动",
+      "installation_group": "device1_today_original_weight_reinstalled",
+      "capture_start_csv": "2026-10-24 21:20:39.949",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 601
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "40a0de2bf4529121144ef71eaa41c7354b487dd456f69480aecb4e16cf448296",
+      "numeric_sha256_prior_qc": "3826527a7f9d1e918626ede601eb9ed484c37d9cadb5f9106a8f63ffe574b467",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": false,
+      "repeated_capture_protocol": "每档连续运行采三份；未逐份停机重启",
+      "raw_file": "不平衡601-1-1024.csv",
+      "split_group": "40a0de2bf4529121144ef71eaa41c7354b487dd456f69480aecb4e16cf448296"
+    },
+    {
+      "record_id": "ae8384a1dfe31b8e6db4ebdd6d25ec8c3f1e25f3472ce23ef31fb7a21842548c",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "device1_followup_9_20261024",
+      "sequence_group": "fault_reinstalled_followup",
+      "sequence_number_from_filename": 2,
+      "operation": "用户确认重新装回原来的配重；其他没有变动",
+      "installation_group": "device1_today_original_weight_reinstalled",
+      "capture_start_csv": "2026-10-24 21:21:40.469",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 601
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "ae8384a1dfe31b8e6db4ebdd6d25ec8c3f1e25f3472ce23ef31fb7a21842548c",
+      "numeric_sha256_prior_qc": "c27b533e2d6450ea1df9adf2de3fd99cb1d10b1be67934b4709ef47130d4734d",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": false,
+      "repeated_capture_protocol": "每档连续运行采三份；未逐份停机重启",
+      "raw_file": "不平衡601-2-1024.csv",
+      "split_group": "ae8384a1dfe31b8e6db4ebdd6d25ec8c3f1e25f3472ce23ef31fb7a21842548c"
+    },
+    {
+      "record_id": "b161e49c631bec99f5908ef7417a7e87b098c5e40fa68d8dbf9a2ed4de8e8412",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "device1_followup_9_20261024",
+      "sequence_group": "fault_reinstalled_followup",
+      "sequence_number_from_filename": 3,
+      "operation": "用户确认重新装回原来的配重；其他没有变动",
+      "installation_group": "device1_today_original_weight_reinstalled",
+      "capture_start_csv": "2026-10-24 21:22:44.089",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 601
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "b161e49c631bec99f5908ef7417a7e87b098c5e40fa68d8dbf9a2ed4de8e8412",
+      "numeric_sha256_prior_qc": "13891f10a0959ce3e9187826224f0814ee3e12734e715756ec5f750d9fda5c92",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": false,
+      "repeated_capture_protocol": "每档连续运行采三份；未逐份停机重启",
+      "raw_file": "不平衡601-3-1024.csv",
+      "split_group": "b161e49c631bec99f5908ef7417a7e87b098c5e40fa68d8dbf9a2ed4de8e8412"
+    },
+    {
+      "record_id": "fac72938699e5b7e29cfba4458242b4b0268fd27ee6a0d0531829a062462dbf2",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "original_10",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": null,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-19 18:58:18.800",
+      "capture_date_csv": "2026-10-19",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "range",
+        "lower": 601,
+        "upper": 602
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "fac72938699e5b7e29cfba4458242b4b0268fd27ee6a0d0531829a062462dbf2",
+      "numeric_sha256_prior_qc": "b429e52f33cf6fabc47308a0731bd0fa3d4d06463f99256e68b056b939b3722b",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡601-602.csv",
+      "split_group": "fac72938699e5b7e29cfba4458242b4b0268fd27ee6a0d0531829a062462dbf2"
+    },
+    {
+      "record_id": "d05e466e300b11f40a59aea40d9f671dccf2546b76e27184e4da4c5aa1fc42db",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": 1,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:28:56.162",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 602
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "d05e466e300b11f40a59aea40d9f671dccf2546b76e27184e4da4c5aa1fc42db",
+      "numeric_sha256_prior_qc": "11dad90b89e643f877771e5f08673c6ba8abe8c40f3021ed403ea7e3ae90fe39",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡602-1.csv",
+      "split_group": "d05e466e300b11f40a59aea40d9f671dccf2546b76e27184e4da4c5aa1fc42db"
+    },
+    {
+      "record_id": "47b15bdfe8e7d8431d81e871a535342a670ecaa6f46f6f2eca7969c1b5012f67",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": 2,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:29:59.313",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 602
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "47b15bdfe8e7d8431d81e871a535342a670ecaa6f46f6f2eca7969c1b5012f67",
+      "numeric_sha256_prior_qc": "f810d26f2ac4c2c0e25b0b7be4a52ba6531919afcdf66abd717f85a72adbf206",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡602-2.csv",
+      "split_group": "47b15bdfe8e7d8431d81e871a535342a670ecaa6f46f6f2eca7969c1b5012f67"
+    },
+    {
+      "record_id": "78a854512244ac87e7402a159b1d57a71ce5de1eef65e9a0652ee76e2062ca43",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": 3,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:31:01.544",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 602
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "78a854512244ac87e7402a159b1d57a71ce5de1eef65e9a0652ee76e2062ca43",
+      "numeric_sha256_prior_qc": "f0ad388d1d99430293aad37e5a4dcc4fbede4ff602f5ec417fb219cd22072fa4",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡602-3.csv",
+      "split_group": "78a854512244ac87e7402a159b1d57a71ce5de1eef65e9a0652ee76e2062ca43"
+    },
+    {
+      "record_id": "8fafdadd4ff16c86ca8fab37b470958be8fbf16dfb722d4f26b509210e4c8175",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "original_10",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": null,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-19 19:01:43.745",
+      "capture_date_csv": "2026-10-19",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 800,
+      "filename_rpm_reading": {
+        "kind": "range",
+        "lower": 798,
+        "upper": 799
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "8fafdadd4ff16c86ca8fab37b470958be8fbf16dfb722d4f26b509210e4c8175",
+      "numeric_sha256_prior_qc": "7d3ae5ed6b810cd90b65a06835bd9ac5508732ddb1468ea4b3b92fb64f1566f8",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡798-799.csv",
+      "split_group": "8fafdadd4ff16c86ca8fab37b470958be8fbf16dfb722d4f26b509210e4c8175"
+    },
+    {
+      "record_id": "132de1949bc165eb349c795cbb122a850db29ffe4e44d8831349a1b7b320a7f7",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": 1,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:32:45.276",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 998
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "132de1949bc165eb349c795cbb122a850db29ffe4e44d8831349a1b7b320a7f7",
+      "numeric_sha256_prior_qc": "c96a8af0331dea63fa01c5bf5186e31a75467784ef04f961daead1fe6ff38d2f",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡998-1.csv",
+      "split_group": "132de1949bc165eb349c795cbb122a850db29ffe4e44d8831349a1b7b320a7f7"
+    },
+    {
+      "record_id": "f02b453d1899b8696f1c65389d06c67a0c3d3c2c5f51c2444b8d63988e243870",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": 2,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:33:48.685",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 998
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "f02b453d1899b8696f1c65389d06c67a0c3d3c2c5f51c2444b8d63988e243870",
+      "numeric_sha256_prior_qc": "a461d1b20dca960996404fb7067b3f78eb5cccefee8f9741ab3b2cd4ab69b425",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡998-2.csv",
+      "split_group": "f02b453d1899b8696f1c65389d06c67a0c3d3c2c5f51c2444b8d63988e243870"
+    },
+    {
+      "record_id": "61c1567bc5a5883c5f35f20087f4c91be887fe8b950d6f0cf9a26098e52c63cb",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "imbalance",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_earlier",
+      "sequence_number_from_filename": 3,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device1_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:34:33.595",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 998
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "61c1567bc5a5883c5f35f20087f4c91be887fe8b950d6f0cf9a26098e52c63cb",
+      "numeric_sha256_prior_qc": "1efdfa2fb705abedb557b441ea66cd6a29e3608a516401927c419430b69afa8e",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "不平衡998-3.csv",
+      "split_group": "61c1567bc5a5883c5f35f20087f4c91be887fe8b950d6f0cf9a26098e52c63cb"
+    },
+    {
+      "record_id": "0b9af099e671b11a989df18805cee348e0b62404e32474c0cce6b2c26fc336db",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_followup",
+      "sequence_number_from_filename": 1,
+      "operation": "装回原故障轴承后；后续组之间未调整",
+      "installation_group": "device2_today_fault",
+      "capture_start_csv": "2026-10-24 19:04:33.133",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 1000
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "0b9af099e671b11a989df18805cee348e0b62404e32474c0cce6b2c26fc336db",
+      "numeric_sha256_prior_qc": "6d3e56f057c222e8feba527e16fb78bf582026402f019c46fbab9afaf20be163",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈1000-1-1024.csv",
+      "split_group": "0b9af099e671b11a989df18805cee348e0b62404e32474c0cce6b2c26fc336db"
+    },
+    {
+      "record_id": "f33d2c95e20b7eb3556939188432b33d8616376396ee0bab37e822113057a53e",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_followup",
+      "sequence_number_from_filename": 2,
+      "operation": "装回原故障轴承后；后续组之间未调整",
+      "installation_group": "device2_today_fault",
+      "capture_start_csv": "2026-10-24 19:05:30.301",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 1000
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "f33d2c95e20b7eb3556939188432b33d8616376396ee0bab37e822113057a53e",
+      "numeric_sha256_prior_qc": "65e77c2e2bbf8235846f32bf43a9a3261b913d76aa095fe89f6187697c0faf81",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈1000-2-1024.csv",
+      "split_group": "f33d2c95e20b7eb3556939188432b33d8616376396ee0bab37e822113057a53e"
+    },
+    {
+      "record_id": "bc6bb5328ef57b3b42be2189210bd3c38bba6617f4877b647291291adefa070a",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_followup",
+      "sequence_number_from_filename": 3,
+      "operation": "装回原故障轴承后；后续组之间未调整",
+      "installation_group": "device2_today_fault",
+      "capture_start_csv": "2026-10-24 19:06:28.957",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 1000
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "bc6bb5328ef57b3b42be2189210bd3c38bba6617f4877b647291291adefa070a",
+      "numeric_sha256_prior_qc": "83939a828ab270bf863fa1f0233b35909ae6baeb993c3e7e3da5b15c54c9840f",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈1000-3-1024.csv",
+      "split_group": "bc6bb5328ef57b3b42be2189210bd3c38bba6617f4877b647291291adefa070a"
+    },
+    {
+      "record_id": "090c00bbff948557e3e8777e799bf13f772f99822b98804e2b714d3f33c0f6da",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "original_10",
+      "sequence_group": "fault_original",
+      "sequence_number_from_filename": null,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-19 19:37:59.720",
+      "capture_date_csv": "2026-10-19",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "range",
+        "lower": 1002,
+        "upper": 1005
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "090c00bbff948557e3e8777e799bf13f772f99822b98804e2b714d3f33c0f6da",
+      "numeric_sha256_prior_qc": "369f6622d8d369204639ce4d5d04deed708a5d91d8e62b551e5df86ef3efda59",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈1002-1005.csv",
+      "split_group": "090c00bbff948557e3e8777e799bf13f772f99822b98804e2b714d3f33c0f6da"
+    },
+    {
+      "record_id": "3496dbe959ef9feb9fa5827325b45acf1575b3bb0e2801a601dd1cc642e1391d",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_followup",
+      "sequence_number_from_filename": 1,
+      "operation": "装回原故障轴承后；后续组之间未调整",
+      "installation_group": "device2_today_fault",
+      "capture_start_csv": "2026-10-24 18:57:25.658",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 200
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "3496dbe959ef9feb9fa5827325b45acf1575b3bb0e2801a601dd1cc642e1391d",
+      "numeric_sha256_prior_qc": "e9d0ddccf7ccfd9d9d83a8e158702f708c74d36f0b31c38ea02bd63605fbbb8b",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈200-1-1024.csv",
+      "split_group": "3496dbe959ef9feb9fa5827325b45acf1575b3bb0e2801a601dd1cc642e1391d"
+    },
+    {
+      "record_id": "7f6f9451f66475f5a5b09620df93071109e7abc7cc77e27d39bb61037be3fbef",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_recent",
+      "sequence_number_from_filename": 1,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:46:37.928",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 200
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "7f6f9451f66475f5a5b09620df93071109e7abc7cc77e27d39bb61037be3fbef",
+      "numeric_sha256_prior_qc": "a97dde34ecf4e88fd35539ac1e6400349b48b6808df84cf8682c4098851c0ed2",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈200-1.csv",
+      "split_group": "7f6f9451f66475f5a5b09620df93071109e7abc7cc77e27d39bb61037be3fbef"
+    },
+    {
+      "record_id": "05107a6b85d1d59fafd41dc2b6305de519809fc45904063537486b634a86524c",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_followup",
+      "sequence_number_from_filename": 2,
+      "operation": "装回原故障轴承后；后续组之间未调整",
+      "installation_group": "device2_today_fault",
+      "capture_start_csv": "2026-10-24 18:58:30.374",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 200
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "05107a6b85d1d59fafd41dc2b6305de519809fc45904063537486b634a86524c",
+      "numeric_sha256_prior_qc": "eacb2bda98ff19624856747690f66889dd629cfb70a8fcccaeb79648e2595907",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈200-2-1024.csv",
+      "split_group": "05107a6b85d1d59fafd41dc2b6305de519809fc45904063537486b634a86524c"
+    },
+    {
+      "record_id": "aa62ebbc849237a650a7ce8ecb6c97f959204b5cd5b8a1dca4e4e6b106ffb8c6",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_recent",
+      "sequence_number_from_filename": 2,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:47:37.031",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 200
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "aa62ebbc849237a650a7ce8ecb6c97f959204b5cd5b8a1dca4e4e6b106ffb8c6",
+      "numeric_sha256_prior_qc": "9377fac80eb45621d5b661bd326956f28d8d3f25e612fffdf7263a81b3bd2ad5",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈200-2.csv",
+      "split_group": "aa62ebbc849237a650a7ce8ecb6c97f959204b5cd5b8a1dca4e4e6b106ffb8c6"
+    },
+    {
+      "record_id": "d715282173449ad9c672fe7a01d4568a5524d8a6cafa7d13bbef5af85eac5b50",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_followup",
+      "sequence_number_from_filename": 3,
+      "operation": "装回原故障轴承后；后续组之间未调整",
+      "installation_group": "device2_today_fault",
+      "capture_start_csv": "2026-10-24 18:59:32.443",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 200
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "d715282173449ad9c672fe7a01d4568a5524d8a6cafa7d13bbef5af85eac5b50",
+      "numeric_sha256_prior_qc": "ec56ce3912403103f5394d27fcaaeea1e80ea99159f27390561a8abab5493726",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈200-3-1024.csv",
+      "split_group": "d715282173449ad9c672fe7a01d4568a5524d8a6cafa7d13bbef5af85eac5b50"
+    },
+    {
+      "record_id": "b1f9ba8918349cbc6a9251938772c4407f0ee2c7f2a908012325e5820040cc0e",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_recent",
+      "sequence_number_from_filename": 3,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:48:38.450",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 200
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "b1f9ba8918349cbc6a9251938772c4407f0ee2c7f2a908012325e5820040cc0e",
+      "numeric_sha256_prior_qc": "ab5f2363cf0a5fff83e105c50633412a3bdf20181c5d935f94677c2c082852dc",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈200-3.csv",
+      "split_group": "b1f9ba8918349cbc6a9251938772c4407f0ee2c7f2a908012325e5820040cc0e"
+    },
+    {
+      "record_id": "084c950bf5b9f6f4d2c7dcd1e684cbac2b4ec6505e24a89649b91645dd79228f",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_reinstalled",
+      "sequence_number_from_filename": 4,
+      "operation": "装回原故障轴承后；后续组之间未调整",
+      "installation_group": "device2_today_fault",
+      "capture_start_csv": "2026-10-24 18:27:36.273",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 202
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "084c950bf5b9f6f4d2c7dcd1e684cbac2b4ec6505e24a89649b91645dd79228f",
+      "numeric_sha256_prior_qc": "f352ba3dcfd6659da745f293aef97463780b55d219a172f756932c64a491276f",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈202-4.csv",
+      "split_group": "084c950bf5b9f6f4d2c7dcd1e684cbac2b4ec6505e24a89649b91645dd79228f"
+    },
+    {
+      "record_id": "a536d4d592a442f49519f90aab5ba63e0fde187b7419a22b29417a1f09f2392e",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "original_10",
+      "sequence_group": "fault_original",
+      "sequence_number_from_filename": null,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-19 19:21:05.854",
+      "capture_date_csv": "2026-10-19",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "lower": 202,
+        "upper": 202
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "a536d4d592a442f49519f90aab5ba63e0fde187b7419a22b29417a1f09f2392e",
+      "numeric_sha256_prior_qc": "d5e2c8ccfbd398ec64987d07ec93b5d91702b152014c20b386386b16f36d8b70",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈202.csv",
+      "split_group": "a536d4d592a442f49519f90aab5ba63e0fde187b7419a22b29417a1f09f2392e"
+    },
+    {
+      "record_id": "d7d04eebf28f617f37de61280c79f494a24371dcfb6b3e567ac92166d5be08f3",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "original_10",
+      "sequence_group": "fault_original",
+      "sequence_number_from_filename": null,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-19 19:25:09.648",
+      "capture_date_csv": "2026-10-19",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 400,
+      "filename_rpm_reading": {
+        "kind": "range",
+        "lower": 397,
+        "upper": 402
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "d7d04eebf28f617f37de61280c79f494a24371dcfb6b3e567ac92166d5be08f3",
+      "numeric_sha256_prior_qc": "f5cb9e048a117f19da328a9c1e620d8c1ebbed6d51603603abb7675e060037c7",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈397-402.csv",
+      "split_group": "d7d04eebf28f617f37de61280c79f494a24371dcfb6b3e567ac92166d5be08f3"
+    },
+    {
+      "record_id": "0801ba67d0c5b7b437d1be9cfa0b1e39323366776b35ef6693628b3506cecbd8",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_reinstalled",
+      "sequence_number_from_filename": 4,
+      "operation": "装回原故障轴承后；后续组之间未调整",
+      "installation_group": "device2_today_fault",
+      "capture_start_csv": "2026-10-24 18:28:55.113",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 600
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "0801ba67d0c5b7b437d1be9cfa0b1e39323366776b35ef6693628b3506cecbd8",
+      "numeric_sha256_prior_qc": "5f2f296e2a0ad81d03a060f5d0caa1b7469fb97d5ddcde958a634c5b45352942",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈600-4.csv",
+      "split_group": "0801ba67d0c5b7b437d1be9cfa0b1e39323366776b35ef6693628b3506cecbd8"
+    },
+    {
+      "record_id": "6fa4587824db3f260d0ad6bf683b8979c1141b29b615d8e696f6c1f3153d5e0e",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_followup",
+      "sequence_number_from_filename": 1,
+      "operation": "装回原故障轴承后；后续组之间未调整",
+      "installation_group": "device2_today_fault",
+      "capture_start_csv": "2026-10-24 19:00:53.915",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 601
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "6fa4587824db3f260d0ad6bf683b8979c1141b29b615d8e696f6c1f3153d5e0e",
+      "numeric_sha256_prior_qc": "d30abfdb9b71d2881364167008580b0f859f9700292dde38d384bddbfef89ab1",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈601-1-1024.csv",
+      "split_group": "6fa4587824db3f260d0ad6bf683b8979c1141b29b615d8e696f6c1f3153d5e0e"
+    },
+    {
+      "record_id": "278ff5c3cc7fce8cb460065eafd54468960567741fe472ffbf7fc6a55f7d9b79",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_followup",
+      "sequence_number_from_filename": 2,
+      "operation": "装回原故障轴承后；后续组之间未调整",
+      "installation_group": "device2_today_fault",
+      "capture_start_csv": "2026-10-24 19:01:52.353",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 601
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "278ff5c3cc7fce8cb460065eafd54468960567741fe472ffbf7fc6a55f7d9b79",
+      "numeric_sha256_prior_qc": "31efd35db091eb82ca06a13b56ad72ae386e17b863ace1dcaaf2bb97b728009a",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈601-2-1024.csv",
+      "split_group": "278ff5c3cc7fce8cb460065eafd54468960567741fe472ffbf7fc6a55f7d9b79"
+    },
+    {
+      "record_id": "edb5e4373db499643fcd05be99ededeffbbdc426c18e629000b695538ab31bcf",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_followup",
+      "sequence_number_from_filename": 3,
+      "operation": "装回原故障轴承后；后续组之间未调整",
+      "installation_group": "device2_today_fault",
+      "capture_start_csv": "2026-10-24 19:02:53.818",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 601
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "edb5e4373db499643fcd05be99ededeffbbdc426c18e629000b695538ab31bcf",
+      "numeric_sha256_prior_qc": "7617db06b03f5291be1e818c763c6438de833f847a2209b41f2d2abc588b2814",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈601-3-1024.csv",
+      "split_group": "edb5e4373db499643fcd05be99ededeffbbdc426c18e629000b695538ab31bcf"
+    },
+    {
+      "record_id": "bf6dc9ec74db845f0102d9e1d849419d53a00e1c55ae022840cd6a4b46c11a43",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "original_10",
+      "sequence_group": "fault_original",
+      "sequence_number_from_filename": null,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-19 19:30:47.701",
+      "capture_date_csv": "2026-10-19",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "range",
+        "lower": 601,
+        "upper": 605
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 303104,
+      "duration_seconds": 30.3104,
+      "source_sha256": "bf6dc9ec74db845f0102d9e1d849419d53a00e1c55ae022840cd6a4b46c11a43",
+      "numeric_sha256_prior_qc": "4adec7268b7576da96cf399bfd64452e268ab476c83fdc38af2ba7d9e350a7ca",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈601-605.csv",
+      "split_group": "bf6dc9ec74db845f0102d9e1d849419d53a00e1c55ae022840cd6a4b46c11a43"
+    },
+    {
+      "record_id": "aeca48195cf0a3c1b8084f00f5c1aa3ea325089b597c94f50f5f7c8e69e0a059",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_recent",
+      "sequence_number_from_filename": 1,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:50:04.697",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 602
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "aeca48195cf0a3c1b8084f00f5c1aa3ea325089b597c94f50f5f7c8e69e0a059",
+      "numeric_sha256_prior_qc": "637bb1cf9fc32412f139815c858d3f449dd5b33093390f748941649b03d248fc",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈602-1.csv",
+      "split_group": "aeca48195cf0a3c1b8084f00f5c1aa3ea325089b597c94f50f5f7c8e69e0a059"
+    },
+    {
+      "record_id": "b76e98c54be84546f6c9dcd4737c72c7d4741be5268cc40f40299b031e02ed2b",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_recent",
+      "sequence_number_from_filename": 2,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:51:04.088",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 602
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "b76e98c54be84546f6c9dcd4737c72c7d4741be5268cc40f40299b031e02ed2b",
+      "numeric_sha256_prior_qc": "063442713018346f5e7759d4c2522dc75262c92854be8ae911d35ca8c0eb22c2",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈602-2.csv",
+      "split_group": "b76e98c54be84546f6c9dcd4737c72c7d4741be5268cc40f40299b031e02ed2b"
+    },
+    {
+      "record_id": "5150d6e285b16f6d088019069d5489d701605bfe8eb246e2d25a7fb2efd50118",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_recent",
+      "sequence_number_from_filename": 3,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:52:02.308",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 602
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "5150d6e285b16f6d088019069d5489d701605bfe8eb246e2d25a7fb2efd50118",
+      "numeric_sha256_prior_qc": "2479825e1b7dfd601fe7cc74c4fff3e4dd51253a1eb78ff33f33ba0990bb82c8",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈602-3.csv",
+      "split_group": "5150d6e285b16f6d088019069d5489d701605bfe8eb246e2d25a7fb2efd50118"
+    },
+    {
+      "record_id": "10239c1b43379626c3682bade418367c586b33b0cf9d25684dc9af365b023141",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "original_10",
+      "sequence_group": "fault_original",
+      "sequence_number_from_filename": null,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-19 19:33:30.250",
+      "capture_date_csv": "2026-10-19",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 800,
+      "filename_rpm_reading": {
+        "kind": "range",
+        "lower": 799,
+        "upper": 803
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "10239c1b43379626c3682bade418367c586b33b0cf9d25684dc9af365b023141",
+      "numeric_sha256_prior_qc": "4bcc8991f970c18a2d9cda9fc07936b6ac46635b6df115511c79bef5bbf5f0b5",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈799-803.csv",
+      "split_group": "10239c1b43379626c3682bade418367c586b33b0cf9d25684dc9af365b023141"
+    },
+    {
+      "record_id": "e3c1f820c6cb8949a133dc5a1adb0143d718bab31ea43162bff91c7d4edba1ac",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_recent",
+      "sequence_number_from_filename": 1,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:53:28.903",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 999
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "e3c1f820c6cb8949a133dc5a1adb0143d718bab31ea43162bff91c7d4edba1ac",
+      "numeric_sha256_prior_qc": "419040c697c5205ec1604ef0b736afa85c57330d309b9c8159ffd26fb46e49bd",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈999-1.csv",
+      "split_group": "e3c1f820c6cb8949a133dc5a1adb0143d718bab31ea43162bff91c7d4edba1ac"
+    },
+    {
+      "record_id": "88f3fbf225b8f51e8c9e187a592cd676bbe09f1337c84410e64eb177eb6227fe",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_recent",
+      "sequence_number_from_filename": 2,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:54:25.609",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 999
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "88f3fbf225b8f51e8c9e187a592cd676bbe09f1337c84410e64eb177eb6227fe",
+      "numeric_sha256_prior_qc": "cace77c54c0c29d7d8fad7ec3f68561a42d72a09b2830c51a0db24027d3517f2",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈999-2.csv",
+      "split_group": "88f3fbf225b8f51e8c9e187a592cd676bbe09f1337c84410e64eb177eb6227fe"
+    },
+    {
+      "record_id": "448e1633b2bc0227f40138a171193465415bc1d583faafe414355a7f84d8b188",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "historical_batch_check_only",
+      "collection_batch": "additional_18",
+      "sequence_group": "fault_recent",
+      "sequence_number_from_filename": 3,
+      "operation": "历史故障；与今日安装及设置是否完全一致未确认",
+      "installation_group": "device2_historical_unknown",
+      "capture_start_csv": "2026-10-23 17:55:25.177",
+      "capture_date_csv": "2026-10-23",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 999
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "448e1633b2bc0227f40138a171193465415bc1d583faafe414355a7f84d8b188",
+      "numeric_sha256_prior_qc": "3320bf2dd87ddd1aa8e7460347e40bd383a13c0e29be59e9c8c17b20adb08757",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈999-3.csv",
+      "split_group": "448e1633b2bc0227f40138a171193465415bc1d583faafe414355a7f84d8b188"
+    },
+    {
+      "record_id": "8b1c593d44334c4ed327190ada31522e62d563fd6d65899a0d6e3b768559aa5e",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "outer_race",
+      "binary_label": 1,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "fault_reinstalled",
+      "sequence_number_from_filename": 4,
+      "operation": "装回原故障轴承后；后续组之间未调整",
+      "installation_group": "device2_today_fault",
+      "capture_start_csv": "2026-10-24 18:30:26.069",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 999
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "8b1c593d44334c4ed327190ada31522e62d563fd6d65899a0d6e3b768559aa5e",
+      "numeric_sha256_prior_qc": "9a01fd1911f9d072d01299cc42ea763109b13b06fa2dd302ed00e5102513ff52",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "外圈999-4.csv",
+      "split_group": "8b1c593d44334c4ed327190ada31522e62d563fd6d65899a0d6e3b768559aa5e"
+    },
+    {
+      "record_id": "6baa4aca8e7138491c4b73d89f7b795015a4f7031697a7727aa1af109e747453",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 1,
+      "operation": "拿掉配重后",
+      "installation_group": "device1_today_normal",
+      "capture_start_csv": "2026-10-24 16:41:27.347",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 200
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "6baa4aca8e7138491c4b73d89f7b795015a4f7031697a7727aa1af109e747453",
+      "numeric_sha256_prior_qc": "63aaa4a611c4773aca99948af417642a7fa5682b202853777967746ed6392925",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备1正常200-1.csv",
+      "split_group": "6baa4aca8e7138491c4b73d89f7b795015a4f7031697a7727aa1af109e747453"
+    },
+    {
+      "record_id": "f8c16d3f27d1ea36d54c9680a09f3f2d8e1ff87c3d66ef6b8bd8891d847c163e",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 2,
+      "operation": "拿掉配重后",
+      "installation_group": "device1_today_normal",
+      "capture_start_csv": "2026-10-24 16:42:34.274",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 200
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "f8c16d3f27d1ea36d54c9680a09f3f2d8e1ff87c3d66ef6b8bd8891d847c163e",
+      "numeric_sha256_prior_qc": "f44f71678bec667b22de85a9cd87b24f8ec2803bef2ff39794ad0a21b1e2010f",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备1正常200-2.csv",
+      "split_group": "f8c16d3f27d1ea36d54c9680a09f3f2d8e1ff87c3d66ef6b8bd8891d847c163e"
+    },
+    {
+      "record_id": "b509fe2195516693fe5863d703c33942a06c6b3b080353dff8aa172ae2b32154",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 3,
+      "operation": "拿掉配重后",
+      "installation_group": "device1_today_normal",
+      "capture_start_csv": "2026-10-24 16:43:31.620",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 200
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "b509fe2195516693fe5863d703c33942a06c6b3b080353dff8aa172ae2b32154",
+      "numeric_sha256_prior_qc": "e6e4c1f9e58ef31e6203515d50c61ebeeeb23ba6de949fb91952be7dec54bbe5",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备1正常200-3.csv",
+      "split_group": "b509fe2195516693fe5863d703c33942a06c6b3b080353dff8aa172ae2b32154"
+    },
+    {
+      "record_id": "e25c17eecd8310b6e3dc73399d4f3b1a302992b0e35eb5510a04d647088c3588",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 1,
+      "operation": "拿掉配重后",
+      "installation_group": "device1_today_normal",
+      "capture_start_csv": "2026-10-24 16:45:02.709",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 603
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "e25c17eecd8310b6e3dc73399d4f3b1a302992b0e35eb5510a04d647088c3588",
+      "numeric_sha256_prior_qc": "f93eeb9d994f100929f20e6a1232ad5cabc44d6a1bf05064ba58d5da178efd6c",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备1正常603-1.csv",
+      "split_group": "e25c17eecd8310b6e3dc73399d4f3b1a302992b0e35eb5510a04d647088c3588"
+    },
+    {
+      "record_id": "19934c74dc96b0fdb3d0cdfc271f1fc24ce483bf2c2a0afb5f18b6258842f186",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 2,
+      "operation": "拿掉配重后",
+      "installation_group": "device1_today_normal",
+      "capture_start_csv": "2026-10-24 16:46:03.337",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 603
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "19934c74dc96b0fdb3d0cdfc271f1fc24ce483bf2c2a0afb5f18b6258842f186",
+      "numeric_sha256_prior_qc": "d65f110840d0085928f6a2b1f8d7f63eb4dc7eaec395a916d2ec7277d8122948",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备1正常603-2.csv",
+      "split_group": "19934c74dc96b0fdb3d0cdfc271f1fc24ce483bf2c2a0afb5f18b6258842f186"
+    },
+    {
+      "record_id": "74738d2b996c06b8e9eb537a6e726d42c2a9c81bc9546d98e75eae04c67f09d2",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 3,
+      "operation": "拿掉配重后",
+      "installation_group": "device1_today_normal",
+      "capture_start_csv": "2026-10-24 16:47:03.378",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 603
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "74738d2b996c06b8e9eb537a6e726d42c2a9c81bc9546d98e75eae04c67f09d2",
+      "numeric_sha256_prior_qc": "fc45db2561470eb67eb6ab1ccb0caa7323b1d764438cec8c1a36e64dceb7f627",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备1正常603-3.csv",
+      "split_group": "74738d2b996c06b8e9eb537a6e726d42c2a9c81bc9546d98e75eae04c67f09d2"
+    },
+    {
+      "record_id": "c4e18480593c125840d5a98ae13c838282b716a27e4db46481dd2a59b423c307",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 1,
+      "operation": "拿掉配重后",
+      "installation_group": "device1_today_normal",
+      "capture_start_csv": "2026-10-24 16:48:51.464",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 999
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "c4e18480593c125840d5a98ae13c838282b716a27e4db46481dd2a59b423c307",
+      "numeric_sha256_prior_qc": "f3907893457dc540f0d2a0779455c8cf61b76de2657b3fcb362b02b448d1a7e2",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备1正常999-1.csv",
+      "split_group": "c4e18480593c125840d5a98ae13c838282b716a27e4db46481dd2a59b423c307"
+    },
+    {
+      "record_id": "fc6db1784f14d8334a9513a9b8d10e857f42fe91a4248724eed89ddec954cf34",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 2,
+      "operation": "拿掉配重后",
+      "installation_group": "device1_today_normal",
+      "capture_start_csv": "2026-10-24 16:49:50.817",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 999
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "fc6db1784f14d8334a9513a9b8d10e857f42fe91a4248724eed89ddec954cf34",
+      "numeric_sha256_prior_qc": "65872789c439108e806acdbbc009de18d4bdaeedda7f86cab79035f3316153be",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备1正常999-2.csv",
+      "split_group": "fc6db1784f14d8334a9513a9b8d10e857f42fe91a4248724eed89ddec954cf34"
+    },
+    {
+      "record_id": "f3e97a8b67623cb58afb9197c59eced73b48c8192d71d7a51a614c7104bab9dc",
+      "device": 1,
+      "task": "device1_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 3,
+      "operation": "拿掉配重后",
+      "installation_group": "device1_today_normal",
+      "capture_start_csv": "2026-10-24 16:50:48.371",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 999
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "f3e97a8b67623cb58afb9197c59eced73b48c8192d71d7a51a614c7104bab9dc",
+      "numeric_sha256_prior_qc": "c272e41600a38422c38edc06f968ea7ba6aad003f305c9cb6eb32a5c91cb4cdd",
+      "original_header": [
+        "time",
+        "4-1[m/s^2]",
+        "4-2[g]",
+        "4-3[g]",
+        "4-4[g]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧"
+        },
+        {
+          "channel": 2,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        },
+        {
+          "channel": 3,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 4,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备1正常999-3.csv",
+      "split_group": "f3e97a8b67623cb58afb9197c59eced73b48c8192d71d7a51a614c7104bab9dc"
+    },
+    {
+      "record_id": "ad110234a80011e5ecda98099b86990f64c381ad3ebd2ed50961a5e403b6b2d2",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 1,
+      "operation": "换正常轴承后",
+      "installation_group": "device2_today_normal",
+      "capture_start_csv": "2026-10-24 17:49:27.502",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 1000
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "ad110234a80011e5ecda98099b86990f64c381ad3ebd2ed50961a5e403b6b2d2",
+      "numeric_sha256_prior_qc": "e18d4c55c5390cc7a31f8a45ee918754c0e7a034b288f180742d5ecfe8e013be",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备2正常1000-1.csv",
+      "split_group": "ad110234a80011e5ecda98099b86990f64c381ad3ebd2ed50961a5e403b6b2d2"
+    },
+    {
+      "record_id": "302fc7394bc6d4e6301fe999062829f78a18394b024a381d317dae4d4ea54c85",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 2,
+      "operation": "换正常轴承后",
+      "installation_group": "device2_today_normal",
+      "capture_start_csv": "2026-10-24 17:50:25.184",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 1000
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "302fc7394bc6d4e6301fe999062829f78a18394b024a381d317dae4d4ea54c85",
+      "numeric_sha256_prior_qc": "8c1c3a1e5644fb3da724159b0c03b04e5b7353dc3a9db0b4580cbecb634d9d4f",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备2正常1000-2.csv",
+      "split_group": "302fc7394bc6d4e6301fe999062829f78a18394b024a381d317dae4d4ea54c85"
+    },
+    {
+      "record_id": "497be68cd26fac9a239583b83155e37fa54677f64962764c426dd1f57b952480",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 3,
+      "operation": "换正常轴承后",
+      "installation_group": "device2_today_normal",
+      "capture_start_csv": "2026-10-24 17:51:23.794",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 1000,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 1000
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "497be68cd26fac9a239583b83155e37fa54677f64962764c426dd1f57b952480",
+      "numeric_sha256_prior_qc": "4f57760150e71c184df3473c4f115c0d8e017326559e0c4f27a641456e5a94fd",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备2正常1000-3.csv",
+      "split_group": "497be68cd26fac9a239583b83155e37fa54677f64962764c426dd1f57b952480"
+    },
+    {
+      "record_id": "d31ae892440a6909c543c0ed8fc645a40b4701cbca42752f42eba2f7fdadd0ce",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 1,
+      "operation": "换正常轴承后",
+      "installation_group": "device2_today_normal",
+      "capture_start_csv": "2026-10-24 17:37:49.589",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 202
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "d31ae892440a6909c543c0ed8fc645a40b4701cbca42752f42eba2f7fdadd0ce",
+      "numeric_sha256_prior_qc": "30a2aaefaa7de6283fe0ee25d051ad60e9bfa66edfdd3be02f7065886175667f",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备2正常202-1.csv",
+      "split_group": "d31ae892440a6909c543c0ed8fc645a40b4701cbca42752f42eba2f7fdadd0ce"
+    },
+    {
+      "record_id": "0eacdc05312eda87ce63fdb87e16350a722b9544d80dce9842d445c4bb8f340b",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 2,
+      "operation": "换正常轴承后",
+      "installation_group": "device2_today_normal",
+      "capture_start_csv": "2026-10-24 17:38:50.609",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 202
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "0eacdc05312eda87ce63fdb87e16350a722b9544d80dce9842d445c4bb8f340b",
+      "numeric_sha256_prior_qc": "75be26c4432051f2e2fe77e8c693006c5ae7c7d9f2bea0e42bc43d841c48ace4",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备2正常202-2.csv",
+      "split_group": "0eacdc05312eda87ce63fdb87e16350a722b9544d80dce9842d445c4bb8f340b"
+    },
+    {
+      "record_id": "cd7c2a4acf91b1964379563982db4ba490cdb240c4c4e1dbf35d5970d73484d2",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 3,
+      "operation": "换正常轴承后",
+      "installation_group": "device2_today_normal",
+      "capture_start_csv": "2026-10-24 17:39:57.123",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 200,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 202
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 327680,
+      "duration_seconds": 32.768,
+      "source_sha256": "cd7c2a4acf91b1964379563982db4ba490cdb240c4c4e1dbf35d5970d73484d2",
+      "numeric_sha256_prior_qc": "50ee55251fc292fd91db129fae849154e070b7b81baf0703a162742f13052c71",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备2正常202-3.csv",
+      "split_group": "cd7c2a4acf91b1964379563982db4ba490cdb240c4c4e1dbf35d5970d73484d2"
+    },
+    {
+      "record_id": "79460c42af88c97833bc9a28c63171e8321776d0caf2277678f08c0aa852f93f",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 1,
+      "operation": "换正常轴承后",
+      "installation_group": "device2_today_normal",
+      "capture_start_csv": "2026-10-24 17:41:36.165",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 601
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "79460c42af88c97833bc9a28c63171e8321776d0caf2277678f08c0aa852f93f",
+      "numeric_sha256_prior_qc": "53c0dba6bae847499465ea2c068be3e2cd2b9df563fc63f4509ec40899fdef93",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备2正常601-1.csv",
+      "split_group": "79460c42af88c97833bc9a28c63171e8321776d0caf2277678f08c0aa852f93f"
+    },
+    {
+      "record_id": "2d4ec462a6dc73895963251a62a52c7e9a9f84a60b055965fa313492aa05fec4",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 2,
+      "operation": "换正常轴承后",
+      "installation_group": "device2_today_normal",
+      "capture_start_csv": "2026-10-24 17:42:38.033",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 601
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 311296,
+      "duration_seconds": 31.1296,
+      "source_sha256": "2d4ec462a6dc73895963251a62a52c7e9a9f84a60b055965fa313492aa05fec4",
+      "numeric_sha256_prior_qc": "111983aef5b5e6a6a5a09d48d7ec5d6cbab237d5fe15c04eafa82151caa17b31",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备2正常601-2.csv",
+      "split_group": "2d4ec462a6dc73895963251a62a52c7e9a9f84a60b055965fa313492aa05fec4"
+    },
+    {
+      "record_id": "e97f8df1fe7c6ef700bf035cde81915a79583209d9527f7ad17fd2edf62aca1a",
+      "device": 2,
+      "task": "device2_normal_vs_fault",
+      "label": "normal",
+      "binary_label": 0,
+      "label_source": "用户现场操作确认；正常仅指恢复对应人为故障",
+      "role": "primary_candidate",
+      "collection_batch": "today_33",
+      "sequence_group": "normal_today",
+      "sequence_number_from_filename": 3,
+      "operation": "换正常轴承后",
+      "installation_group": "device2_today_normal",
+      "capture_start_csv": "2026-10-24 17:43:34.160",
+      "capture_date_csv": "2026-10-24",
+      "date_source": "CSV首行原始时间；未独立校准采集器时钟",
+      "nominal_motor_rpm": 600,
+      "filename_rpm_reading": {
+        "kind": "single",
+        "value": 601
+      },
+      "filename_rpm_is_synchronous_trace": false,
+      "sample_rate_hz": 10000,
+      "unit": "m/s²",
+      "unit_policy": "用户指定；保留原始数值；不按旧g表头换算",
+      "samples_per_channel": 319488,
+      "duration_seconds": 31.9488,
+      "source_sha256": "e97f8df1fe7c6ef700bf035cde81915a79583209d9527f7ad17fd2edf62aca1a",
+      "numeric_sha256_prior_qc": "55b803ab7f0871258042ba2d10daf360cca153e3efa7251b6077b7eec62728aa",
+      "original_header": [
+        "time",
+        "6-1[m/s^2]",
+        "6-2[m/s^2]",
+        "6-3[m/s^2]",
+        "6-4[m/s^2]",
+        ""
+      ],
+      "channels": [
+        {
+          "channel": 1,
+          "color": "白",
+          "shaft": "电机直连轴",
+          "position": "远离电机"
+        },
+        {
+          "channel": 2,
+          "color": "黄",
+          "shaft": "电机直连轴",
+          "position": "靠近电机"
+        },
+        {
+          "channel": 3,
+          "color": "蓝",
+          "shaft": "第二根轴",
+          "position": "与黄色测点同侧；用户确认的故障轴承"
+        },
+        {
+          "channel": 4,
+          "color": "红",
+          "shaft": "第二根轴",
+          "position": "与白色测点同侧"
+        }
+      ],
+      "independent_restart_confirmed": null,
+      "raw_file": "设备2正常601-3.csv",
+      "split_group": "e97f8df1fe7c6ef700bf035cde81915a79583209d9527f7ad17fd2edf62aca1a"
+    }
+  ]
+}
