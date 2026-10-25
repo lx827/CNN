@@ -1,4 +1,4 @@
-"""完整O9的分阶段短程试运行；输出一律标记smoke_only，不自动跑正式实验。"""
+"""完整O9分阶段训练；默认遍历全部训练窗，显式批次上限才标记短程检查。"""
 
 import argparse
 from dataclasses import asdict, dataclass
@@ -25,19 +25,28 @@ from .train import WindowDataset, seed_training
 
 
 @dataclass(frozen=True)
-class FullSmokeConfig:
-    """显式单任务短程预算，旧权重跳过S1，从零依次通过S1和S2。"""
+class FullTrainConfig:
+    """单任务完整训练预算，旧权重跳过S1，从零依次通过S1和S2。"""
 
     experiment: str
     fold: int
     initialization: str
-    stage1_epochs: int = 1
-    stage2_epochs: int = 2
-    max_train_batches: int = 2
+    stage1_epochs: int = 5
+    stage2_epochs: int = 20
+    max_train_batches: int | None = None
     batch_size: int = 8
     seed: int = 42
     parameters: str = "ema"
     device: str = "cpu"
+
+
+@dataclass(frozen=True)
+class FullSmokeConfig(FullTrainConfig):
+    """保留先前短程调用接口，不能误当成完整训练。"""
+
+    stage1_epochs: int = 1
+    stage2_epochs: int = 2
+    max_train_batches: int | None = 2
 
 
 def evaluate_full(trainer: FullStageTrainer, dataset: WindowDataset, experiment: str,
@@ -96,15 +105,18 @@ def evaluate_full(trainer: FullStageTrainer, dataset: WindowDataset, experiment:
         ema.restore_online(model)
 
 
-def run_smoke(prepared: Path, output: Path, config: FullSmokeConfig,
-              checkpoint: Path | None = None) -> dict:
-    """只执行短程预算，保存完整模型/双优化器/EMA/调度器及阶段状态。"""
+def run_training(prepared: Path, output: Path, config: FullTrainConfig,
+                 checkpoint: Path | None = None) -> dict:
+    """执行完整或显式限批预算，保存完整模型/双优化器/EMA/调度器及阶段状态。"""
     if config.experiment not in EXPERIMENTS or config.fold not in (0, 1, 2):
         raise ValueError("未知实验/折")
     if config.initialization not in INITIALIZATIONS or config.parameters not in ("ema", "model"):
         raise ValueError("未知初始化")
-    if min(config.stage1_epochs, config.stage2_epochs, config.max_train_batches, config.batch_size) < 1:
-        raise ValueError("短程轮数、批量和批次上限必须为正数")
+    if min(config.stage1_epochs, config.stage2_epochs, config.batch_size) < 1:
+        raise ValueError("轮数和批量必须为正数")
+    if config.max_train_batches is not None and config.max_train_batches < 1:
+        raise ValueError("显式批次上限必须为正数")
+    smoke_only = config.max_train_batches is not None
     if config.device not in ("cpu", "cuda") or (config.device == "cuda" and not torch.cuda.is_available()):
         raise ValueError("设备必须为可用的cpu/cuda，不自动降级")
     prepared, output = Path(prepared).resolve(), Path(output).resolve()
@@ -139,7 +151,7 @@ def run_smoke(prepared: Path, output: Path, config: FullSmokeConfig,
     run = {
         "started_at_beijing": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(),
         "config": asdict(config), "full_protocol": FULL_PROTOCOL, "input_protocol": PROTOCOL,
-        "initialization": initialization, "stages": stages, "smoke_only": True,
+        "initialization": initialization, "stages": stages, "smoke_only": smoke_only,
         "prepared_sha256": sha256_file(prepared / "prepared.json"),
         "source_sha256": {p.relative_to(REPO_ROOT).as_posix(): sha256_file(p) for p in sources},
         "upstream": json.loads((PACKAGE.parent / "o9/UPSTREAM.json").read_text(encoding="utf-8")),
@@ -179,8 +191,11 @@ def run_smoke(prepared: Path, output: Path, config: FullSmokeConfig,
                 batch_logs.append(log)
                 main_updates += 1
                 disc_updates += int(log["discriminator_updated"])
-                if len(batch_logs) >= config.max_train_batches:
+                if config.max_train_batches is not None and len(batch_logs) >= config.max_train_batches:
                     break
+            windows_seen = sum(b["windows"] for b in batch_logs)
+            if not smoke_only and (len(batch_logs) != len(loader) or windows_seen != len(selected)):
+                raise ValueError("完整轮次没有覆盖全部训练窗口")
             evaluation = evaluate_full(trainer, validation, config.experiment, config.batch_size, adversarial_weight)
             write_json(output / f"validation_s{stage}_epoch{epoch:03d}.json", evaluation)
             score = evaluation["record_balanced_accuracy"]
@@ -193,11 +208,19 @@ def run_smoke(prepared: Path, output: Path, config: FullSmokeConfig,
                 sched_disc.step()
             metrics = {"stage": stage, "epoch": epoch, "batches": batch_logs,
                        "main_updates_total": main_updates, "discriminator_updates_total": disc_updates,
-                       "validation_record_balanced_accuracy": score, "smoke_only": True}
+                       "train_windows_used": windows_seen, "train_windows_available": len(selected),
+                       "train_batches": len(batch_logs),
+                       "train_mean_losses": {name: sum(b[name] * b["windows"] for b in batch_logs) / windows_seen
+                                             for name in ("main_loss", "recon", "kl", "orth")},
+                       "validation_six_class_cross_entropy": loss,
+                       "validation_normal_false_alarms": evaluation["normal_false_alarms"],
+                       "validation_fault_misses": evaluation["fault_misses"],
+                       "validation_record_balanced_accuracy": score, "smoke_only": smoke_only}
             with (output / "metrics.jsonl").open("a", encoding="utf-8") as stream:
                 stream.write(json.dumps(metrics, ensure_ascii=False, allow_nan=False) + "\n")
             state = {
-                "format": "cqu_o9_full_smoke_v1", "config": asdict(config), "smoke_only": True,
+                "format": "cqu_o9_full_smoke_v1" if smoke_only else "cqu_o9_full_train_v1",
+                "config": asdict(config), "smoke_only": smoke_only,
                 "full_protocol": FULL_PROTOCOL, "input_protocol": PROTOCOL,
                 "prepared_sha256": run["prepared_sha256"], "initialization": initialization,
                 "stage": stage, "epoch_in_stage": epoch, "steps_in_stage": trainer.steps,
@@ -217,19 +240,28 @@ def run_smoke(prepared: Path, output: Path, config: FullSmokeConfig,
             if improved:
                 torch.save(state, output / "best.pt")
             print(json.dumps({k: v for k, v in metrics.items() if k != "batches"}), flush=True)
-    summary = {"complete": True, "smoke_only": True, "experiment": config.experiment,
+    summary = {"complete": True, "smoke_only": smoke_only, "experiment": config.experiment,
                "fold": config.fold, "initialization": config.initialization,
                "main_updates_total": main_updates, "discriminator_updates_total": disc_updates,
                "best_stage2_epoch": best_epoch, "best_checkpoint": str(output / "best.pt"),
                "held_out_or_historical_evaluated": False,
+               "full_training_budget_completed": not smoke_only,
                "formal_accuracy_experiment_completed": False,
                "cuda_peak_allocated_bytes": torch.cuda.max_memory_allocated() if device.type == "cuda" else None}
     write_json(output / "summary.json", summary)
     return summary
 
 
+def run_smoke(prepared: Path, output: Path, config: FullSmokeConfig,
+              checkpoint: Path | None = None) -> dict:
+    """兼容原短程接口，要求显式限批，拒绝伪装成完整训练。"""
+    if config.max_train_batches is None:
+        raise ValueError("run_smoke必须配置短程批次上限；完整训练使用run_training")
+    return run_training(prepared, output, config, checkpoint)
+
+
 def main() -> None:
-    """显式指定单个任务，不自动批量训练；所有结果保留短程标记。"""
+    """显式指定单个任务；默认完整轮次，传批次上限时自动标记短程。"""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--prepared", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -238,15 +270,15 @@ def main() -> None:
     parser.add_argument("--init", dest="initialization", choices=INITIALIZATIONS, required=True)
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--parameters", choices=("ema", "model"), default="ema")
-    parser.add_argument("--stage1-epochs", type=int, default=1)
-    parser.add_argument("--stage2-epochs", type=int, default=2)
-    parser.add_argument("--max-train-batches", type=int, default=2)
+    parser.add_argument("--stage1-epochs", type=int, default=5)
+    parser.add_argument("--stage2-epochs", type=int, default=20)
+    parser.add_argument("--max-train-batches", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     args = vars(parser.parse_args())
     prepared, output, checkpoint = (args.pop(k) for k in ("prepared", "output", "checkpoint"))
-    run_smoke(prepared, output, FullSmokeConfig(**args), checkpoint)
+    run_training(prepared, output, FullTrainConfig(**args), checkpoint)
 
 
 if __name__ == "__main__":
