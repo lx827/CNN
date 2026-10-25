@@ -99,6 +99,9 @@ coverage.xml
 *.ckpt
 *.safetensors
 
+# Historical O9 training artifacts supplied locally (weights, indexes, logs, figures)
+/o9v1/
+
 # ========== Misc ==========
 *.local
 wind-turbine-diagnosis/package-lock.json
