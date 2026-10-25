@@ -1,6 +1,8 @@
-# 完整 O9 的 CQU 适配与短程试运行
+# 完整 O9 的 CQU 适配与训练
 
-本入口保留O9编码器的设备/故障两分支、解码器、故障原型库、原型组合器和域判别器，用分阶段的多目标训练进行现场适配。[编码器加二分类头](TRAINING.md)保留为简化对照，不能代替完整O9的效果评估。本轮仅验证完整训练链路，所有输出固定标记`smoke_only: true`，不开展正式识别率或候选排名实验。
+本入口保留O9编码器的设备/故障两分支、解码器、故障原型库、原型组合器和域判别器，用分阶段的多目标训练进行现场适配。[编码器加二分类头](TRAINING.md)保留为简化对照，不能代替完整O9的效果评估。初版只支持短程检查；后续增加完整轮次入口。默认遍历全部训练窗口，只有显式配置`--max-train-batches`才标记`smoke_only: true`。完成训练预算仍不等于完成外层留出评估或证明泛化能力。
+
+当前状态：2026-10-25已完成设备1CH2折0四组实际训练，第五组中途按用户要求停止。36组计划未完成，后续不自动恢复。具体训练量、验证结果和停止位置见[工作日志](../../docs/CQU_O9_WORK_LOG.md)。本文后续“短程验证”的重载结论针对此前12次链路检查，不冒充本轮所有实际训练产物的重新推理审计。
 
 ## 用户确认的适配范围
 
@@ -44,7 +46,7 @@ Stage2每个批次均更新主网络，每三个批次中的前两个先更新�
 
 每个窗口按故障特征均值与六原型的余弦相似度/0.1计算六类Softmax分数，每份文件平均60窗分数。保存六类预测和混淆矩阵；二分类分数为`1－正常分数`，即其他五类合计，阈值0.5。二分类检出故障不代表识别对了故障子类，必须结合六类预测看。分数未经概率校准。
 
-只在Stage2选`best.pt`：验证文件级二分类平衡准确率最高，同分时取六类窗口交叉熵最低。Stage1分数仅供排查，不用于挑最佳故障模型。所有短程分数只检验数值及选优流程，不报告为正式成绩，也不用于挑选初始化候选。
+只在Stage2选`best.pt`：验证文件级二分类平衡准确率最高，同分时取六类窗口交叉熵最低。Stage1分数仅供排查，不用于挑最佳故障模型。所有短程分数只检验数值及选优流程，不报告为正式成绩，也不用于挑选初始化候选。完整轮次分数属于当前采集内的开发验证结果，须同时报告训练预算、误报和漏报，不将验证选优成绩当独立测试成绩。
 
 所有输出写入`tmp/cqu/`下不存在的新目录，保存`run.json`、含每批全部损失的`metrics.jsonl`、逐轮完整验证分数、`last.pt`、`best.pt`和从零训练的`stage1_last.pt`。检查点含完整模型、EMA、两个优化器、两个调度器、阶段/轮次/步数、随机状态及配置/输入身份；成功完成请求预算后才写`summary.json`。本轮验证所有best/last状态可重载，并验证CPU状态重载后的下一次更新其模型、EMA、双优化器和随机状态逐值一致；**尚未提供完整任务续训CLI，也未证明整轮/跨阶段中断续训与连续训练逐参数一致**，不能套用简化版的续训结论。
 
@@ -60,8 +62,10 @@ Stage2每个批次均更新主网络，每三个批次中的前两个先更新�
 | `full_model.py` | `FullObjective(stage, domain_weights)` | 原分项损失、权重及修正后域目标 |
 | `full_model.py` | `FullStageTrainer(model, stage, domain_weights, ema, lr_main=1e-4, lr_disc=5e-5)`、`step(x, labels, domains, adversarial_weight)` | 一个阶段的优化状态及单批更新 |
 | `full_train.py` | `FullSmokeConfig(experiment, fold, initialization, ...)` | 短程配置，默认S1一轮/S2两轮/每轮两批 |
+| `full_train.py` | `FullTrainConfig(experiment, fold, initialization, ...)` | 完整轮次配置，默认S1五轮/S2二十轮，批次上限为None |
 | `full_train.py` | `evaluate_full(trainer, dataset, experiment, batch_size, adversarial_weight)` | 新EMA完整记录级验证及分项损失 |
 | `full_train.py` | `run_smoke(prepared, output, config, checkpoint=None)`、`main()` | 单个任务的完整短程运行 |
+| `full_train.py` | `run_training(prepared, output, config, checkpoint=None)` | 单任务完整或显式限批训练；完整轮次逐轮检查窗口覆盖，记录实际批量、窗口数和平均损失 |
 
 ## 本机调用示例
 
@@ -80,4 +84,4 @@ python -X utf8 -m training.cqu.full_train --prepared tmp/cqu/o9_data_prep_202610
 Get-Content -Encoding UTF8 tmp/cqu/full_example_stage2/summary.json
 ```
 
-`-X utf8`固定Python文本编码，`-m`按包执行入口；`--prepared`指定只读缓存，`--output`指定新结果目录，`--experiment/--fold`固定任务与整文件分组，`--init/--checkpoint/--parameters`选择初始化来源，轮数/批量/批次上限限制短程预算。任何完整预算、旧类保留训练或10kHz输入对照均属于后续实验。
+`-X utf8`固定Python文本编码，`-m`按包执行入口；`--prepared`指定只读缓存，`--output`指定新结果目录，`--experiment/--fold`固定任务与整文件分组，`--init/--checkpoint/--parameters`选择初始化来源，轮数/批量/批次上限限制短程预算。以上两条示例都显式限批，保留为短程用法；完整训练移除`--max-train-batches`并明确轮数。例如S2二十轮、batch8对应每轮480窗/60批，共1200次主更新，仅读train/validation。实际项目实验预算及完成状态以[工作日志](../../docs/CQU_O9_WORK_LOG.md)为准。旧类保留训练或10kHz输入对照均属于后续实验。
