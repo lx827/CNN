@@ -66,6 +66,9 @@ Stage2每个批次均更新主网络，每三个批次中的前两个先更新�
 | `full_train.py` | `evaluate_full(trainer, dataset, experiment, batch_size, adversarial_weight)` | 新EMA完整记录级验证及分项损失 |
 | `full_train.py` | `run_smoke(prepared, output, config, checkpoint=None)`、`main()` | 单个任务的完整短程运行 |
 | `full_train.py` | `run_training(prepared, output, config, checkpoint=None)` | 单任务完整或显式限批训练；完整轮次逐轮检查窗口覆盖，记录实际批量、窗口数和平均损失 |
+| `monitor.py` | `read_epochs(path)`、`collect_progress(runs)` | 仅读取训练JSON日志；容忍正在写入的末行，汇总完成组数、逐轮指标、选优及验证文件预测，不导入PyTorch |
+| `monitor.py` | `write_page(output, progress)`、`monitor(runs, output, watch=False, history=False, interval=2.)` | 原子更新本机`tmp/cqu/`内的HTML；可持续输出新增完整轮次，不控制训练进程 |
+| `watch_training.ps1` | `-Runs <目录> -Output <页面> [-History]` | 激活本项目cloud环境并在当前终端持续监视；`-History`同时打印已有全部轮次 |
 
 ## 本机调用示例
 
@@ -85,3 +88,22 @@ Get-Content -Encoding UTF8 tmp/cqu/full_example_stage2/summary.json
 ```
 
 `-X utf8`固定Python文本编码，`-m`按包执行入口；`--prepared`指定只读缓存，`--output`指定新结果目录，`--experiment/--fold`固定任务与整文件分组，`--init/--checkpoint/--parameters`选择初始化来源，轮数/批量/批次上限限制短程预算。以上两条示例都显式限批，保留为短程用法；完整训练移除`--max-train-batches`并明确轮数。例如S2二十轮、batch8对应每轮480窗/60批，共1200次主更新，仅读train/validation。实际项目实验预算及完成状态以[工作日志](../../docs/CQU_O9_WORK_LOG.md)为准。旧类保留训练或10kHz输入对照均属于后续实验。
+
+## 用户可见的训练监视
+
+在本机Windows PowerShell、仓库根目录`E:/A-codehub/CNN`执行以下命令，可重新打开只读监视窗口。无需管理员、不联网、不安装依赖；只读取指定训练目录并更新忽略目录中的页面，不启动、恢复或停止模型训练。
+
+```powershell
+# 创建可见的独立PowerShell窗口；-NoProfile不加载用户配置，-NoExit在监视结束后保留窗口，-ExecutionPolicy Bypass只对这个子进程生效；-File指定监视脚本，-Runs为已有训练目录，-Output为本机页面，-History输出已有全部轮次。
+Start-Process powershell.exe -WindowStyle Normal -WorkingDirectory 'E:/A-codehub/CNN' -ArgumentList '-NoProfile -NoExit -ExecutionPolicy Bypass -File E:/A-codehub/CNN/training/cqu/watch_training.ps1 -Runs E:/A-codehub/CNN/tmp/cqu/o9_first_training_20261025/runs -Output E:/A-codehub/CNN/tmp/cqu/o9_first_training_20261025/monitor.html -History'
+# 用默认浏览器打开已生成的离线曲线页面；监视窗口运行时会持续更新该文件，没有日志变化时保持原结果。
+Start-Process 'E:/A-codehub/CNN/tmp/cqu/o9_first_training_20261025/monitor.html'
+```
+
+终端每轮一行，包含任务/折/初始化、阶段轮次、批次数、窗口数、总损失/重构/原型、验证交叉熵、平衡准确率、正常误报和故障漏报。`Ctrl+C`只退出监视器。去掉`-History`可只打印每组最新轮次，再继续显示新增轮次。
+
+HTML由同目录`monitor.html`模板生成，无外部资源。可切换任务和阶段，查看四类曲线、所有完整轮次表、最佳轮次的逐文件六类/二分类预测。页面明确区分最后记录与选优轮次；验证成绩仍属于开发选优成绩，不代表独立测试结果。每2秒检查日志、页面默认每5秒刷新，可暂停页面刷新；选择项保存在地址片段中。页面开着但监视器关闭时不会获取新日志。
+
+当前训练器在一轮结束后才写入指标，因此监视器显示**完整轮次进度，不提供轮内实时批次进度**；未完成的一轮不会被伪造为完成。缺失指标显示为横线，完整损坏行会明确报错并保留上一版页面。输出只允许写入本仓库`tmp/cqu/`内的`.html`文件，不读写模型权重。
+
+组数优先来自训练目录上一级的`expanded_plan.json`，其次为`plan.json`，没有计划时以已发现目录为准。可选`monitor_context.json`提供人工核实的`status_text`和`estimated_remaining_minutes_text`；它不是进程检测结果，下一次启动训练前须更新或移除旧状态。没有人工状态时，存在`stop_status.json`则显示已停止，否则明确显示运行状态未确认。监视刷新本身不构成训练已运行的证据。

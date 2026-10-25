@@ -23,7 +23,7 @@
 | [O9 模型迁移说明](../training/o9/README.md) | `training/o9/README.md` | 固定模型来源、独立导入、权重兼容性与后续训练约定 |
 | [CQU 数据准备](../training/cqu/README.md) | `training/cqu/README.md` | 70份正式清单、三折整文件划分、通道与首轮预处理接口 |
 | [CQU 二分类训练](../training/cqu/TRAINING.md) | `training/cqu/TRAINING.md` | O9故障分支适配、训练参数、保存恢复与短程验证边界 |
-| [CQU 完整O9训练](../training/cqu/FULL_TRAINING.md) | `training/cqu/FULL_TRAINING.md` | 六类原型、三个转速域、完整轮次/短程入口、EMA及训练状态边界 |
+| [CQU 完整O9训练](../training/cqu/FULL_TRAINING.md) | `training/cqu/FULL_TRAINING.md` | 六类原型、三个转速域、完整轮次/短程入口、EMA、可见终端与离线曲线监视 |
 
 ---
 
