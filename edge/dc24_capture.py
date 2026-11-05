@@ -19,11 +19,13 @@ import time
 HOST = "192.168.2.100"
 PEER = "192.168.2.101"
 PORT = 6800
-RATE = 5000
+RATE = 10000
 SAMPLES_PER_FRAME = 254
-CONFIG_B2 = bytes.fromhex("00000000000000000001000000")
-CONFIG_B5 = bytes.fromhex("0000fe00d00700000f000000")
-# 2026-11-05逐档抓取的完整原厂配置，未知字段原样保留，不推算任意整数采样率。
+CONFIG_B2 = bytes.fromhex("00010001000100010301000000")
+INPUT_CONFIGURATION = {"measurement": "IEPE", "coupling": "AC0.2Hz", "upper_frequency": "PASS",
+                       "profile_id": "iepe-ac02-pass-20261106"}
+# 原厂2026-11-06有效10kHz B5为基准，只替换已验证的采样率字段；未知字段原样保留。
+# 频率仅限此前原厂逐档确认的12档，不把其他档位冒充本次逐档新抓包。
 B5_PROFILES = {int(k): bytes.fromhex(v) for k, v in json.loads(
     (Path(__file__).resolve().parents[1]/"shared/dc24_profiles.json").read_text()).items()}
 
@@ -152,8 +154,9 @@ def record(output: Path, seconds: float, host=HOST, peer=PEER, wait=45, sample_r
     metadata = {
         "profile": f"DC24_observed_{sample_rate}Hz_four_channels",
         "host_ip": host, "device_ip": peer, "host_tcp_port": PORT,
-        "sample_rate_hz": sample_rate, "sample_rate_source": "verified captured native B5 profile",
+        "sample_rate_hz": sample_rate, "sample_rate_source": "native supported rate; IEPE/PASS base captured at 10000Hz; verified rate field",
         "b5_payload_hex": B5_PROFILES[sample_rate].hex(),
+        "b2_payload_hex": CONFIG_B2.hex(), "input_configuration": dict(INPUT_CONFIGURATION),
         "channel_tags": [0, 1, 2, 3], "value_unit": "signed_24_bit_ADC_counts",
         "physical_scaling": "NOT VERIFIED; no voltage/acceleration conversion applied",
         "time_axis": f"relative sample index / {sample_rate}; not a device UTC timestamp",
@@ -289,7 +292,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seconds", type=float, default=5, help="最少样本时长，默认 5 秒；按完整帧收尾")
     parser.add_argument("--rate", type=int, choices=sorted(B5_PROFILES), default=RATE,
-                        help="采用原厂抓包验证的采样率，默认 5000 Hz")
+                        help="采用原厂支持的采样率，默认 10000 Hz；IEPE/AC0.2Hz/PASS配置")
     parser.add_argument("--output", type=Path, required=True, help="新目录，不覆盖旧结果")
     args = parser.parse_args()
     if not math.isfinite(args.seconds) or args.seconds <= 0:

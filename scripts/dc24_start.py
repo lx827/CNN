@@ -89,8 +89,8 @@ def main():
             else:
                 raise RuntimeError('后端启动超时')
         agents = call('/agents', key)
-        if any(a['id'] == AGENT and a['online'] and a['state'].get('version', 0) < 2 for a in agents):
-            raise RuntimeError('旧版边端仍在运行，请先退出旧边端窗口，再双击start_dc24.bat；未停止已有进程')
+        if any(a['id'] == AGENT and a['online'] and a['state'].get('version', 0) < 3 for a in agents):
+            raise RuntimeError('旧输入配置的边端仍在运行，请先退出旧边端窗口，再双击start_dc24.bat加载IEPE配置；未停止已有进程')
         if not any(a['id'] == AGENT and a['online'] for a in agents):
             output = ROOT/'tmp/dc24_live'; output.mkdir(parents=True, exist_ok=True)
             log = (output/'local-edge.log').open('ab'); logs.append(log)

@@ -95,6 +95,11 @@ class DriverTests(unittest.TestCase):
                                      [-8388608, 8388607, -1, 12345])
                     self.assertEqual(len(rows), meta["samples_per_channel"])
                 self.assertIn((0xB5, driver.B5_PROFILES[rate]), commands)
+                # 固定为用户2026-11-06确认有效的原厂IEPE/AC0.2Hz/PASS报文，
+                # 不能用“等于实现自身常量”掩盖再次发送旧电压配置。
+                self.assertIn((0xB2, bytes.fromhex('00010001000100010301000000')), commands)
+                if rate == 10000:
+                    self.assertIn((0xB5, bytes.fromhex('00001c00102700000f000000')), commands)
                 self.assertGreaterEqual(sum(c == 0xB8 for c, _ in commands), 2 if not gap else 1)
             finally:
                 done.set()
@@ -105,6 +110,9 @@ class DriverTests(unittest.TestCase):
         for rate in (2000, 5000):
             with self.subTest(rate=rate):
                 self.run_device(rate)
+
+    def test_confirmed_iepe_pass_configuration_on_wire(self):
+        self.run_device(10000)
 
     def test_stop_saves_partial_data(self):
         self.run_device(cancel=True)

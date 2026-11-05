@@ -19,7 +19,7 @@ import zipfile
 from dotenv import load_dotenv
 import requests
 
-from dc24_capture import record, B5_PROFILES
+from dc24_capture import record, B5_PROFILES, INPUT_CONFIGURATION
 
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(Path(__file__).with_name(".env"))
@@ -69,7 +69,8 @@ class Agent:
             raise ValueError("请在边端 .env 配置与云端一致的 EDGE_API_KEY")
         self.state = {"stage": "idle", "hardware_connected": False,
                       "sample_rates": sorted(B5_PROFILES), "channel_count": 4,
-                      "save_directory": str(self.output.resolve()), "version": 2}
+                      "save_directory": str(self.output.resolve()), "version": 3,
+                      "input_configuration": dict(INPUT_CONFIGURATION)}
         self.picker = None
         self.picker_id = None
         if replay_dir:

@@ -34,7 +34,7 @@ class LiveTests(unittest.TestCase):
         self.user, self.edge = self.fixture.user, self.fixture.edge
         live.sessions.clear(); live.pickers.clear()
         self.client.post('/api/acquisition/agents/heartbeat', headers=self.edge,
-            json={'agent_id': 'test', 'source': 'dc24_tcp', 'state': {'version': 2}}).raise_for_status()
+            json={'agent_id': 'test', 'source': 'dc24_tcp', 'state': {'version': 3}}).raise_for_status()
 
     def tearDown(self):
         live.sessions.clear(); live.pickers.clear()
@@ -59,6 +59,14 @@ class LiveTests(unittest.TestCase):
             json={'agent_id': 'replay', 'source': 'recording_replay', 'state': {}})
         self.assertEqual(self.client.post('/api/acquisition/sessions', headers=self.user,
             json={'agent_id': 'replay', 'sample_rate': 5000}).status_code, 409)
+
+    def test_old_voltage_configuration_agent_cannot_start_live_session(self):
+        self.client.post('/api/acquisition/agents/heartbeat', headers=self.edge,
+            json={'agent_id': 'old', 'source': 'dc24_tcp', 'state': {'version': 2}})
+        r = self.client.post('/api/acquisition/sessions', headers=self.user,
+            json={'agent_id': 'old', 'sample_rate': 10000})
+        self.assertEqual(r.status_code, 409)
+        self.assertIn('旧输入配置', r.json()['detail'])
 
     def test_preview_realtime_has_no_saved_job_and_matches_counts(self):
         sid = self.session(5000)

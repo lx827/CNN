@@ -9,7 +9,7 @@ import socket
 import threading
 import time
 import numpy as np
-from dc24_capture import HOST, PEER, PORT, B5_PROFILES, CONFIG_B2, Link
+from dc24_capture import HOST, PEER, PORT, B5_PROFILES, CONFIG_B2, INPUT_CONFIGURATION, Link
 
 
 def decode(frame):
@@ -58,6 +58,7 @@ class Recording:
                          requested_duration_s=self.duration, value_unit='signed_24_bit_ADC_counts',
                          physical_scaling='未确认传感器标定；保留原始计数', channel_tags=[0, 1, 2, 3],
                          b5_payload_hex=B5_PROFILES[self.rate].hex(), sequence_gaps=[],
+                         b2_payload_hex=CONFIG_B2.hex(), input_configuration=dict(INPUT_CONFIGURATION),
                          raw_content='所保存样本对应的完整设备协议帧；示波开始前样本未保存',
                          saved_directory=str(self.path), complete=False)
 

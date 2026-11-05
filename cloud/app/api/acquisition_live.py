@@ -36,6 +36,8 @@ def online_agent(db, agent_id):
         raise HTTPException(409, '请先启动连接采集器的现场边端')
     if a.source != 'dc24_tcp':
         raise HTTPException(409, '实时示波必须使用DC24硬件边端，不能使用文件回放')
+    if a.state.get('version', 0) < 3:
+        raise HTTPException(409, '现场边端仍使用旧输入配置，请重启新版DC24边端后再示波')
     return a
 
 

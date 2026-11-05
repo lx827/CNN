@@ -8,6 +8,7 @@
           <el-form-item label="采样率（每通道）"><el-select v-model="form.sample_rate" :disabled="sessionActive" filterable aria-label="采样率"><el-option v-for="rate in rates" :key="rate" :value="rate" :label="`${rate.toLocaleString()} Hz`" /></el-select><p class="help">原厂支持的全部档位。更改采样率前先停止示波。</p></el-form-item>
           <div class="actions"><el-button type="primary" :disabled="sessionActive || !selectedAgent?.online" :loading="starting" @click="startPreview">示波</el-button><el-button :disabled="!sessionActive" :loading="stopping" @click="stopPreview">停止示波</el-button></div>
           <p class="help">示波只更新画面，不保存采样文件。</p>
+          <p v-if="selectedAgent?.state?.input_configuration" class="help">输入：{{ selectedAgent.state.input_configuration.measurement }} · {{ selectedAgent.state.input_configuration.coupling }} · {{ selectedAgent.state.input_configuration.upper_frequency }}。频谱：汉宁窗。</p>
           <el-divider /><strong>显示内容 · 可随时切换</strong>
           <div class="display-options"><el-checkbox v-model="show.waveform">原始信号</el-checkbox><el-checkbox v-model="show.fft">原始信号频谱</el-checkbox><el-checkbox v-model="show.rms">RMS / 均值</el-checkbox><el-checkbox v-model="show.envelope">包络谱</el-checkbox></div>
           <el-form-item label="波形时间窗（秒）"><el-input-number v-model="form.wave_seconds" :min=".01" :max="2" :step=".05" :precision="2" controls-position="right" aria-label="波形时间窗" /></el-form-item>
@@ -28,7 +29,7 @@
         <div class="source-line"><span>来源：DC24 192.168.2.101 → TCP 192.168.2.100:6800</span><span v-if="session?.received_at">最后收到：{{ new Date(session.received_at).toLocaleTimeString() }}</span></div>
         <template v-if="view?.channels?.length">
           <p class="help">实时分析窗口：{{ view.window_start.toFixed(3) }}～{{ view.window_end.toFixed(3) }} 秒。波形仅展开最近 {{ form.wave_seconds }} 秒，频谱使用上述连续窗口；长图保留极值显示，保存文件不抽点。</p>
-          <el-table v-if="show.rms" :data="view.channels" size="small"><el-table-column prop="label" label="通道" min-width="150" /><el-table-column label="均值（counts）"><template #default="{row}">{{ row.mean.toFixed(3) }}</template></el-table-column><el-table-column label="去均值 RMS（counts）"><template #default="{row}">{{ row.rms?.toFixed(3) }}</template></el-table-column></el-table>
+          <el-table v-if="show.rms" :data="view.channels" size="small"><el-table-column prop="label" label="通道" min-width="150" /><el-table-column label="均值（counts）"><template #default="{row}">{{ row.mean.toFixed(5) }}</template></el-table-column><el-table-column label="去均值 RMS（counts）"><template #default="{row}">{{ row.rms?.toFixed(5) }}</template></el-table-column></el-table>
           <section v-for="kind in visibleKinds" :key="kind.key"><h2>{{ kind.label }}</h2><div class="channel-grid"><div v-for="channel in view.channels" :key="channel.channel" class="channel-scope"><div :ref="el => bindChart(kind.key, channel.channel, el)" class="chart" :aria-label="`${channel.label}${kind.label}`" /></div></div></section>
           <el-empty v-if="!visibleKinds.length" description="显示项已全部关闭，采样和原始保存仍照常进行" :image-size="65" />
         </template>
@@ -48,9 +49,9 @@ import { getAcquisitionAgents, getAcquisitionJobs, downloadAcquisitionFile, getA
 const agents = ref([]), jobs = ref([]), session = ref(null), view = ref(null), nativeRates = ref([])
 const connectionError = ref('')
 const starting = ref(false), stopping = ref(false), saving = ref(false), selectingDirectory = ref(false), directoryEdited = ref(false)
-const form = reactive({ agent_id: '', sample_rate: 5000, duration: 60, manual: false, save_directory: '', wave_seconds: .2, band_low: undefined, band_high: undefined })
+const form = reactive({ agent_id: '', sample_rate: 10000, duration: 60, manual: false, save_directory: '', wave_seconds: .2, band_low: undefined, band_high: undefined })
 const show = reactive({ waveform: true, fft: true, rms: false, envelope: false })
-const realAgents = computed(() => agents.value.filter(a => a.source === 'dc24_tcp' && a.state?.version >= 2))
+const realAgents = computed(() => agents.value.filter(a => a.source === 'dc24_tcp' && a.state?.version >= 3))
 const selectedAgent = computed(() => realAgents.value.find(a => a.id === form.agent_id))
 const rates = computed(() => selectedAgent.value?.state?.sample_rates || nativeRates.value)
 const sessionActive = computed(() => session.value && !['stopped', 'failed'].includes(session.value.status))

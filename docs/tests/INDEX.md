@@ -3,7 +3,7 @@
 ## DC24 实际采集（2026-11-05）
 
 - `tests/backend/test_dc24_acquisition.py`：隔离SQLite认证、任务领取/取消、完整四通道CSV上传下载、无分析模式、FFT/RMS/包络频带及错误归档拒绝。
-- `tests/backend/test_dc24_driver.py`：本机回环TCP仿真DC24，验证两组采样配置、半包、24位符号、B8停止、取消保存和序号缺口报错；不连接实际硬件。
+- `tests/backend/test_dc24_driver.py`：本机回环TCP仿真DC24，验证采样配置、半包、24位符号、B8停止、取消保存和序号缺口报错；固定断言2026-11-06新IEPE/PASS的实际B2/B5，防止重新发送旧电压模板；不连接实际硬件。
 - `tests/backend/test_dc24_live.py`：原厂12档、长时长/手动参数、拒绝回放示波、不落采样文件、实时数值、变长帧、保存首帧、流式传输、缓存上限、统计缺口和上传完成后才发布停止终态。
 - `tests/frontend/acquisition_lifecycle.test.cjs`：实际Vue setup/watch/卸载，验证不自动回放、示波中保存与停止、长时长/手动、显示与频带开关、目录选择结果和卸载；API/ECharts为替身，不覆盖像素。
 - `tests/frontend/acquisition_navigation.test.cjs`：实际路由守卫与登录组件，验证一键采集入口登录后返回采集页。
