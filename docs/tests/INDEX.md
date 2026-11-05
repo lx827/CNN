@@ -1,5 +1,22 @@
 # Tests — 回归测试与评估套件
 
+## DC24 实际采集（2026-11-05）
+
+- `tests/backend/test_dc24_acquisition.py`：隔离SQLite认证、任务领取/取消、完整四通道CSV上传下载、无分析模式、FFT/RMS/包络频带及错误归档拒绝。
+- `tests/backend/test_dc24_driver.py`：本机回环TCP仿真DC24，验证两组采样配置、半包、24位符号、B8停止、取消保存和序号缺口报错；不连接实际硬件。
+- `tests/frontend/acquisition_lifecycle.test.cjs`：实际Vue setup/watch/卸载，验证分析开关、参数/包络频带、图表释放及区间请求乱序；API/ECharts为替身，不覆盖浏览器像素。
+
+本机 Windows PowerShell，在CNN根目录运行，无需管理员权限，不访问远端或采集现场数据：
+
+```powershell
+# 激活已有云端虚拟环境，提供SQLAlchemy、NumPy、SciPy和FastAPI；不安装依赖。
+& .\cloud\venv\Scripts\Activate.ps1
+# unittest扫描backend目录，-p只匹配DC24测试文件，-v逐项输出；临时产物位于忽略目录。
+python -m unittest discover -s tests/backend -p 'test_dc24_*.py' -v
+# Node内置运行器执行采集页状态测试，依赖已有前端包，不启动浏览器或硬件。
+node --test tests/frontend/acquisition_lifecycle.test.cjs
+```
+
 ## 数据集启动回归（2026-10-23）
 
 - `tests/edge/test_browser_open.py`（2026-10-24）：两项测试覆盖新启动 Vite 和复用已有前端。真实 Vite 使用 `open:true` 和浏览器脚本探针，修复前复现额外打开、修复后只剩启动器的一次打开请求；新服务使用临时端口，不占用用户 3000 端口，不打开实际浏览器、不联网到云端或上传。需 Windows、Node.js 和 Vite。

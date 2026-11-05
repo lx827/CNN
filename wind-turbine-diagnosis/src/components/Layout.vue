@@ -27,6 +27,10 @@
               <el-icon><Cpu /></el-icon>
               <span>高级诊断</span>
             </el-menu-item>
+            <el-menu-item index="/acquisition">
+              <el-icon><VideoPlay /></el-icon>
+              <span>真实采集</span>
+            </el-menu-item>
             <el-menu-item index="/alarm">
               <el-icon><Bell /></el-icon>
               <span>告警记录</span>
