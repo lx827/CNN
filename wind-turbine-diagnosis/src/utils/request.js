@@ -34,6 +34,9 @@ request.interceptors.response.use(
     return data
   },
   error => {
+    if (error.config?.silentError && error.response?.status !== 401) {
+      return Promise.reject(error)
+    }
     if (error.response?.status === 401) {
       ElMessage.error('登录已过期，请重新登录')
       localStorage.removeItem('access_token')

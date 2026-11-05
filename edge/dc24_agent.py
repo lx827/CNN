@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 import re
 import socket
+import subprocess
+import sys
 import threading
 import time
 import zipfile
@@ -17,7 +19,7 @@ import zipfile
 from dotenv import load_dotenv
 import requests
 
-from dc24_capture import record
+from dc24_capture import record, B5_PROFILES
 
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(Path(__file__).with_name(".env"))
@@ -66,7 +68,10 @@ class Agent:
         if not self.headers["X-Edge-Key"]:
             raise ValueError("请在边端 .env 配置与云端一致的 EDGE_API_KEY")
         self.state = {"stage": "idle", "hardware_connected": False,
-                      "sample_rates": [2000, 5000], "channel_count": 4}
+                      "sample_rates": sorted(B5_PROFILES), "channel_count": 4,
+                      "save_directory": str(self.output.resolve()), "version": 2}
+        self.picker = None
+        self.picker_id = None
         if replay_dir:
             meta = json.loads((replay_dir/"metadata.json").read_text(encoding="utf-8"))
             self.state.update(sample_rate=meta["sample_rate_hz"], sample_rates=[meta["sample_rate_hz"]])
@@ -87,6 +92,25 @@ class Agent:
             state = dict(self.state)
         self.call("POST", "/agents/heartbeat", json={"agent_id": self.agent_id,
                   "source": self.source, "state": state})
+
+    def get_control(self):
+        result = self.call('GET', f'/agents/{self.agent_id}/control')
+        picker = result.get('picker')
+        if picker and picker['status'] == 'pending' and picker['id'] != self.picker_id and self.picker is None:
+            self.picker_id = picker['id']
+            self.picker = subprocess.Popen([sys.executable, str(ROOT/'scripts/dc24_select_directory.py')],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        if self.picker and self.picker.poll() is not None:
+            try:
+                selected = json.loads(self.picker.stdout.read().decode('utf-8'))
+            except Exception:
+                selected = {'error': '无法打开目录选择器，请直接填写绝对路径'}
+            self.call('POST', f'/agents/{self.agent_id}/directory-result', json={'id': self.picker_id, **selected})
+            if selected.get('directory'):
+                self.progress({'save_directory': selected['directory']})
+            self.picker.stdout.close(); self.picker = None
+        return result
 
     def report(self, job_id, stage=None, message=""):
         with self.lock:
@@ -161,6 +185,13 @@ class Agent:
         while True:
             try:
                 self.heartbeat()
+                control = self.get_control()
+                if control.get('session'):
+                    from dc24_live import SessionRunner
+                    SessionRunner(self, control['session']).run()
+                    if once:
+                        return
+                    continue
                 job = self.call("GET", f"/agents/{self.agent_id}/next")
                 if job:
                     self.execute(job)

@@ -1,6 +1,6 @@
 """DC24 独立采集验证脚本：仅标准库，不加载厂商软件或 DLL。
 
-只实现本机实测的配置：2000/5000 Hz、四个信号通道、示波模式。
+实现原厂支持的采样率档位、四个信号通道、示波模式。
 保存原始 TCP 字节、原始有符号 24 位 ADC 计数和命令记录，不冒充物理单位。
 协议依据及未确认字段见 ../docs/DC24_PROTOCOL.md。运行前让原厂软件脱机以释放 TCP 6800。
 """
@@ -23,11 +23,9 @@ RATE = 5000
 SAMPLES_PER_FRAME = 254
 CONFIG_B2 = bytes.fromhex("00000000000000000001000000")
 CONFIG_B5 = bytes.fromhex("0000fe00d00700000f000000")
-# 完整保留两组原厂实测配置。5000 Hz 时第二个字段也变化，不能只替换采样率。
-B5_PROFILES = {
-    2000: CONFIG_B5,
-    5000: bytes.fromhex("0000f500881300000f000000"),
-}
+# 2026-11-05逐档抓取的完整原厂配置，未知字段原样保留，不推算任意整数采样率。
+B5_PROFILES = {int(k): bytes.fromhex(v) for k, v in json.loads(
+    (Path(__file__).resolve().parents[1]/"shared/dc24_profiles.json").read_text()).items()}
 
 
 class CaptureCancelled(Exception):
@@ -76,8 +74,8 @@ class Frames:
 
 def samples(frame: bytes):
     """返回 (帧序号, 四通道原始计数组)；拒绝未验证的帧尺寸和通道排列。"""
-    if frame[3] != 0x80 or len(frame) != 4071:
-        raise ValueError("Only the verified 4071-byte 4-channel data profile is supported")
+    if frame[3] != 0x80 or len(frame) < 23 or (len(frame)-7) % 16:
+        raise ValueError("Invalid four-channel data frame size")
     sequence = int.from_bytes(frame[4:6], "little")
     data = frame[6:-1]
     rows = []
@@ -148,7 +146,7 @@ class Link:
 def record(output: Path, seconds: float, host=HOST, peer=PEER, wait=45, sample_rate=RATE,
            on_progress=None, should_stop=None):
     if sample_rate not in B5_PROFILES:
-        raise ValueError("Only captured 2000/5000 Hz profiles are supported")
+        raise ValueError("Sampling rate must be a supported native profile")
     target_samples = math.ceil(seconds * sample_rate)
     output.mkdir(parents=True, exist_ok=False)  # 永不覆盖已有采集结果。
     metadata = {
@@ -170,6 +168,7 @@ def record(output: Path, seconds: float, host=HOST, peer=PEER, wait=45, sample_r
     previous_sequence = None
     current_index = 0
     first_frame_time = None
+    first_frame_samples = 0
     last_frame_time = None
     stopping = should_stop or (lambda: False)
 
@@ -212,11 +211,12 @@ def record(output: Path, seconds: float, host=HOST, peer=PEER, wait=45, sample_r
                 link = Link(connection, raw, events)
 
                 def consume(frame):
-                    nonlocal previous_sequence, current_index, first_frame_time, last_frame_time
+                    nonlocal previous_sequence, current_index, first_frame_time, last_frame_time, first_frame_samples
                     sequence, rows = samples(frame)
                     now = time.monotonic()
                     if first_frame_time is None:
                         first_frame_time = now
+                        first_frame_samples = len(rows)
                     last_frame_time = now
                     if previous_sequence is None:
                         if sequence != 0:
@@ -279,7 +279,7 @@ def record(output: Path, seconds: float, host=HOST, peer=PEER, wait=45, sample_r
         if first_frame_time is not None and last_frame_time > first_frame_time:
             span = last_frame_time-first_frame_time
             metadata["data_frame_arrival_span_s"] = span
-            metadata["arrival_rate_estimate_hz"] = (metadata["data_frames"]-1)*SAMPLES_PER_FRAME/span
+            metadata["arrival_rate_estimate_hz"] = (current_index-first_frame_samples)/span
         (output/"metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
         print(json.dumps(metadata, ensure_ascii=False), flush=True)
     return metadata

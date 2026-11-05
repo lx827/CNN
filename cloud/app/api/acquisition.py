@@ -24,6 +24,7 @@ ACTIVE = ("pending", "waiting_device", "configuring", "capturing", "uploading", 
 INPUT_FILES = {"samples.csv", "metadata.json", "rx_stream.bin", "commands.jsonl"}
 DOWNLOAD_FILES = INPUT_FILES | {"analysis.json", "analysis_arrays.npz"}
 ANALYSIS_LOCK = asyncio.Semaphore(1)
+NATIVE_RATES = sorted(int(k) for k in json.loads((Path(__file__).resolve().parents[3]/"shared/dc24_profiles.json").read_text()))
 
 
 def now():
@@ -81,13 +82,13 @@ class AnalysisOptions(BaseModel):
 class CreateJob(BaseModel):
     agent_id: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,64}$")
     sample_rate: int = 5000
-    duration: int = Field(default=60, ge=1, le=60)
+    duration: int = Field(default=60, ge=1)
     analysis: AnalysisOptions = Field(default_factory=AnalysisOptions)
 
     @model_validator(mode="after")
     def validate_profile(self):
-        if self.sample_rate not in (2000, 5000):
-            raise ValueError("仅支持已实测的2000或5000 Hz完整配置")
+        if self.sample_rate not in NATIVE_RATES:
+            raise ValueError("采样率必须为原厂支持的档位")
         a = self.analysis
         if a.envelope and (a.band_low is None or a.band_high is None or
                            not 0 < a.band_low < a.band_high < self.sample_rate/2):
@@ -197,6 +198,8 @@ def progress(job_id: str, body: Progress, agent_id: str, db: Session = Depends(g
 
 def load_values(job_id):
     p = directory(job_id)
+    if (p/'counts.i32').is_file():
+        return np.memmap(p/'counts.i32', dtype='<i4', mode='r').reshape(-1, 4)
     with np.load(p/"counts.npz", allow_pickle=False) as a:
         return a["counts"]
 

@@ -97,7 +97,7 @@ class AcquisitionTests(unittest.TestCase):
     def test_validation_auth_and_claim(self):
         self.assertEqual(self.client.get("/api/acquisition/agents").status_code, 401)
         self.assertEqual(self.create(sample_rate=6000).status_code, 422)
-        self.assertEqual(self.create(duration=61).status_code, 422)
+        self.assertEqual(self.create(duration=0).status_code, 422)
         self.assertEqual(self.create(analysis={"envelope": True, "band_low": 200, "band_high": 1000}).status_code, 422)
         job = self.create().json()["data"]["id"]
         self.assertEqual(self.create().status_code, 409)

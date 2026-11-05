@@ -47,11 +47,12 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { login } from '../api/index'
 
 const router = useRouter()
+const route = useRoute()
 const formRef = ref()
 const loading = ref(false)
 
@@ -75,7 +76,8 @@ const handleLogin = async () => {
     if (res.access_token) {
       localStorage.setItem('access_token', res.access_token)
       ElMessage.success('登录成功')
-      router.push('/dashboard')
+      const target = route.query.redirect
+      router.push(typeof target === 'string' && target.startsWith('/') && !target.startsWith('//') && target !== '/login' ? target : '/dashboard')
     } else {
       ElMessage.error(res.message || '登录失败')
     }
