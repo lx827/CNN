@@ -20,6 +20,7 @@
 | [DC24 采集操作与实现](./DC24_ACQUISITION.md) | `docs/DC24_ACQUISITION.md` | 真实采集页面、边端启动、可选分析、文件与验证边界 |
 | [从传感器到 CSV](./DC24_SIGNAL_TO_CSV.md) | `docs/DC24_SIGNAL_TO_CSV.md` | 面向有基础读者解释完整采集链路 |
 | [DC24 实测协议](./DC24_PROTOCOL.md) | `docs/DC24_PROTOCOL.md` | TCP角色、命令、四通道拆帧及原厂同段对照 |
+| [DC24 工作交接说明](./DC24_HANDOFF_20261107.md) | `docs/DC24_HANDOFF_20261107.md` | 已完成链路、现行协议、双接收方式、实测证据和树莓派兼容边界 |
 | [部署指南](./部署指南.md) | `docs/部署指南.md` | 阿里云 ECS 部署步骤 |
 | [操作手册](./操作手册.md) | `docs/操作手册.md` | 系统日常操作流程 |
 | [服务器命令速查](./服务器命令速查.md) | `docs/服务器命令速查.md` | SSH、服务、日志等常用命令 |
