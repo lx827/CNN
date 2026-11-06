@@ -369,6 +369,10 @@ GET /api/collect/history?device_id={device_id}&limit={limit}
 
 ---
 
+### 5.6 DC24 实时采集边端
+
+`POST /api/acquisition/agents/heartbeat` 的 `state.transport` 可选，真实边端上报 `jmserver` 或 `python_tcp`。`GET /api/acquisition/agents` 返回该字段供本机启动器识别连接方式。没有该字段的旧真实边端按 `python_tcp` 处理。两种方式的采集来源均为 `dc24_tcp`，已保存记录在 `metadata.transport` 中标记本次连接方式。操作见 [DC24 现场采集](../DC24_ACQUISITION.md)。
+
 ## 6. 数据查看与诊断 (data_view)
 
 > Router Prefix: `/api/data`

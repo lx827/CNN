@@ -8,6 +8,7 @@
 - `tests/frontend/acquisition_lifecycle.test.cjs`：实际Vue setup/watch/卸载，验证不自动回放、示波中保存与停止、长时长/手动、显示与频带开关、目录选择结果和卸载；API/ECharts为替身，不覆盖像素。
 - `tests/frontend/acquisition_navigation.test.cjs`：实际路由守卫与登录组件，验证一键采集入口登录后返回采集页。
 - `tests/edge/test_dc24_start.py`：实际Windows cmd调用批处理的`--check`模式，覆盖真实启动入口的编码/行尾，不启动服务或采集。
+- `tests/edge/test_dc24_vendor.py`：配置原厂 DLL 后，用真实 32 位连接进程和回环模拟采集器核对控制帧、分片接收、四路计数和停止释放。未配置 DLL 时跳过，不连接现场设备。
 
 本机 Windows PowerShell，在CNN根目录运行，无需管理员权限，不访问远端或采集现场数据：
 
