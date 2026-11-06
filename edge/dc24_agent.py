@@ -63,6 +63,7 @@ class Agent:
         self.cloud = cloud.rstrip("/") + "/api/acquisition"
         self.agent_id, self.output, self.replay_dir = agent_id, Path(output), replay_dir
         self.source = "recording_replay" if replay_dir else "dc24_tcp"
+        self.vendor_root = None if replay_dir else os.getenv('DC24_VENDOR_ROOT') or None
         # 与既有 edge_client/cloud 保持同一认证配置约定。
         self.headers = {"X-Edge-Key": os.getenv("EDGE_API_KEY", "turbine-edge-secret")}
         if not self.headers["X-Edge-Key"]:
@@ -71,6 +72,8 @@ class Agent:
                       "sample_rates": sorted(B5_PROFILES), "channel_count": 4,
                       "save_directory": str(self.output.resolve()), "version": 3,
                       "input_configuration": dict(INPUT_CONFIGURATION)}
+        if not replay_dir:
+            self.state['transport'] = 'jmserver' if self.vendor_root else 'python_tcp'
         self.picker = None
         self.picker_id = None
         if replay_dir:
@@ -189,7 +192,7 @@ class Agent:
                 control = self.get_control()
                 if control.get('session'):
                     from dc24_live import SessionRunner
-                    SessionRunner(self, control['session']).run()
+                    SessionRunner(self, control['session'], self.vendor_root).run()
                     if once:
                         return
                     continue

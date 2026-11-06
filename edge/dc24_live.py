@@ -1,6 +1,6 @@
 """真正的连续示波：预览只驻留内存，开始保存后从下一完整帧记录。"""
 from collections import deque
-from contextlib import nullcontext
+from contextlib import closing, contextmanager
 import csv
 import io
 import json
@@ -10,6 +10,7 @@ import threading
 import time
 import numpy as np
 from dc24_capture import HOST, PEER, PORT, B5_PROFILES, CONFIG_B2, INPUT_CONFIGURATION, Link
+from dc24_vendor import VendorConnection
 
 
 def decode(frame):
@@ -85,8 +86,9 @@ class Recording:
 
 
 class SessionRunner:
-    def __init__(self, agent, session):
+    def __init__(self, agent, session, vendor_root=None):
         self.agent, self.session = agent, session
+        self.vendor_root = vendor_root
         self.lock = threading.RLock()
         self.stop = threading.Event()
         self.finished = threading.Event()
@@ -166,6 +168,7 @@ class SessionRunner:
                 try:
                     self.recording = Recording(command, self.session, self.events)
                     self.recording.meta['session_sample_start'] = self.count-len(values)
+                    self.recording.meta['transport'] = 'jmserver' if self.vendor_root else 'python_tcp'
                 except Exception as exc:
                     self.record_state = dict(id=command['id'], status='failed', error=str(exc))
                     self.agent.call('POST', f"/jobs/{command['id']}/progress", params={'agent_id': self.agent.agent_id},
@@ -212,48 +215,66 @@ class SessionRunner:
                 pass  # 网络暂时断开不影响正在进行的本地完整保存。
             self.finished.wait(.25)
 
+    @contextmanager
+    def _connection(self):
+        if self.vendor_root:
+            with closing(VendorConnection(self.vendor_root, HOST, PORT, PEER)) as connection:
+                yield connection if connection.wait_for_device(self.stop, 45) else None
+            return
+        with socket.socket() as server:
+            if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            server.bind((HOST, PORT)); server.listen(1); server.settimeout(.25)
+            deadline = time.monotonic()+45
+            while not self.stop.is_set() and time.monotonic() < deadline:
+                try:
+                    candidate, address = server.accept()
+                except socket.timeout:
+                    continue
+                with candidate:
+                    if address[0] == PEER:
+                        yield candidate
+                        return
+            if not self.stop.is_set():
+                raise TimeoutError('45秒内未收到采集器连接，请检查网线、IP和原厂软件是否脱机')
+            yield None
+
     def run(self):
         monitor = threading.Thread(target=self.monitor, daemon=True)
         monitor.start()
-        link = connection = None
-        started = False
         try:
-            with socket.socket() as server:
-                if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
-                    server.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-                server.bind((HOST, PORT)); server.listen(1); server.settimeout(.25)
-                self.update('waiting_device')
-                deadline = time.monotonic()+45
-                while not self.stop.is_set() and time.monotonic() < deadline:
-                    try:
-                        candidate, address = server.accept()
-                    except socket.timeout:
-                        continue
-                    if address[0] != PEER:
-                        candidate.close(); continue
-                    connection = candidate; break
+            self.update('waiting_device')
+            with self._connection() as connection:
                 if connection is None:
-                    if self.stop.is_set():
-                        return
-                    raise TimeoutError('45秒内未收到采集器连接，请检查网线、IP和原厂软件是否脱机')
-                with nullcontext(connection):  # 异常时先发B8，再由finally关闭socket。
+                    return
+                started = False
+                link = Link(connection, Discard(), self.events)
+                try:
                     self.update('configuring')
-                    link = Link(connection, Discard(), self.events)
                     link.exchange(0xBA, status=False)
                     link.exchange(0xB8); link.exchange(0xB2, CONFIG_B2)
                     link.exchange(0xB5, B5_PROFILES[self.session['sample_rate']])
+                    if self.stop.is_set():
+                        return
                     link.on_data = self.consume
                     started = True
                     link.exchange(0xB7, b'\x00')
                     self.update('streaming')
                     while not self.stop.is_set():
-                        link.pump()
+                        if any(frame[3] == 0xB8 for frame in link.pump()):
+                            raise RuntimeError('设备在示波期间应答了未请求的停止命令')
                         with self.lock:
                             if self.recording and self.control.get('recording', {}).get('stop_requested'):
                                 self.end_record()
                     with self.lock:
                         self.end_record()
                     link.exchange(0xB8); started = False
+                finally:
+                    if started:
+                        try:
+                            link.send(0xB8)
+                        except OSError:
+                            pass
         except BaseException as exc:
             self.error = f'{type(exc).__name__}: {exc}'
             if isinstance(exc, OSError) and getattr(exc, 'winerror', None) in (10013, 10048):
@@ -261,13 +282,6 @@ class SessionRunner:
             with self.lock:
                 self.end_record(self.error)
         finally:
-            if started and link:
-                try:
-                    link.send(0xB8)
-                except OSError:
-                    pass
-            if connection:
-                connection.close()
             self.update('stopping')
             # 停止期间继续报告上传状态；副本完成后才发布终态，避免启动器过早结束边端。
             for t in self.upload_threads:

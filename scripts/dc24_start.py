@@ -43,7 +43,14 @@ def main():
     for path in (cloud_python, edge_python):
         if not path.exists():
             raise RuntimeError('缺少虚拟环境：'+str(path))
+    vendor_root = os.environ.get('DC24_VENDOR_ROOT', dotenv_values(ROOT/'edge/.env').get('DC24_VENDOR_ROOT')) or ''
+    if vendor_root:
+        vendor_path = Path(vendor_root).expanduser()
+        if not vendor_path.is_absolute() or not (vendor_path/'dll/JMServer.dll').is_file():
+            raise RuntimeError('DC24_VENDOR_ROOT 必须指向包含 dll/JMServer.dll 的原厂安装目录')
+    transport = 'jmserver' if vendor_root else 'python_tcp'
     print('依赖路径检查通过；前端'+('需要首次构建' if bundle_stale() else '可直接复用'), flush=True)
+    print('边端采集模块：'+('原厂 JMServer.dll' if vendor_root else 'Python TCP'), flush=True)
     if args.check:
         return
     if bundle_stale():
@@ -89,12 +96,15 @@ def main():
             else:
                 raise RuntimeError('后端启动超时')
         agents = call('/agents', key)
-        if any(a['id'] == AGENT and a['online'] and a['state'].get('version', 0) < 3 for a in agents):
+        online = next((a for a in agents if a['id'] == AGENT and a['online']), None)
+        if online and online['state'].get('version', 0) < 3:
             raise RuntimeError('旧输入配置的边端仍在运行，请先退出旧边端窗口，再双击start_dc24.bat加载IEPE配置；未停止已有进程')
-        if not any(a['id'] == AGENT and a['online'] for a in agents):
+        if online and online['state'].get('transport', 'python_tcp') != transport:
+            raise RuntimeError('已运行的边端使用另一种采集模块，请先退出其启动窗口，再双击start_dc24.bat')
+        if not online:
             output = ROOT/'tmp/dc24_live'; output.mkdir(parents=True, exist_ok=True)
             log = (output/'local-edge.log').open('ab'); logs.append(log)
-            edge_env = {**env, 'VIRTUAL_ENV': str(ROOT/'edge/venv')}
+            edge_env = {**env, 'VIRTUAL_ENV': str(ROOT/'edge/venv'), 'DC24_VENDOR_ROOT': vendor_root}
             p = subprocess.Popen([str(edge_python), str(ROOT/'edge/dc24_agent.py'), '--cloud', BASE, '--agent-id', AGENT,
                                   '--output', str(ROOT/'data/dc24_recordings')], cwd=ROOT, env=edge_env,
                                  stdout=log, stderr=subprocess.STDOUT,
