@@ -111,6 +111,8 @@ tests/diagnosis/output/**.png
 
 # Datasets — consolidated under data/ (not committed)
 /data/
+# CW bearing dataset (variable-speed, stored locally under CW/)
+/CW/
 
 tests/diagnosis/planetary_demod_results.json
 tests/diagnosis/planetary_e2e_results.json
@@ -125,6 +127,7 @@ tests/diagnosis/foundation/layer2/output/
 tests/diagnosis/foundation/layer3/output/
 tests/diagnosis/foundation/layer4/output/
 tests/diagnosis/foundation/layer5/output/
+tests/diagnosis/eval_plots/output/
 
 # Local project document
 /docs/dc_modified.docx
