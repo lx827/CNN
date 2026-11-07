@@ -17,6 +17,7 @@
 8. [系统日志](#8-系统日志)
 9. [边端数据接入](#9-边端数据接入)
 10. [WebSocket 实时推送](#10-websocket-实时推送)
+11. [OpenAPI 契约与端点使用清点](#11-openapi-契约与端点使用清点)
 
 ---
 
@@ -52,6 +53,16 @@
 | 边端采集 | API Key | `X-Edge-Key: <EDGE_API_KEY>` |
 | 部分公共接口 | 可选认证 | `optional_auth` 依赖，兼容以上两种 |
 
+### OpenAPI 契约（唯一事实源）
+
+机器可读契约入库于 [`docs/api/openapi.json`](./openapi.json)，由 FastAPI 自动生成。**修改任何后端路由后**，在仓库根执行以下命令刷新并随代码提交：
+
+```bash
+uv run python scripts/export_openapi.py
+```
+
+> 新鲜度机制（issue #49 决策）：采用手动导出命令，不做 CI 校验——本项目无 CI 流水线，端点变更频率低，文档评审时核对 openapi.json diff 即可。
+
 ---
 
 ## 1. 认证接口
@@ -75,7 +86,7 @@ POST /api/auth/login
 | `access_token` | `string` | JWT Token |
 | `token_type` | `string` | 固定 `"bearer"` |
 
-**调用方**：`views/Login.vue` → `api/index.js::login()`
+**调用方**：`views/Login.vue` → `api/auth.js::login()`
 
 **非路由公共函数**（`auth.py`）：
 
@@ -115,7 +126,7 @@ GET /api/dashboard/
 
 > **2026-05-19 修复**：`health_score` 不再因设备离线而返回 `None`。离线仅影响 `status` 标签（显示 "offline"），已存储的诊断数据正常返回。
 
-**调用方**：`views/Dashboard.vue` → `api/index.js::getDeviceInfo()`
+**调用方**：`views/Dashboard.vue` → `api/dashboard.js::getDeviceInfo()`
 
 ---
 
@@ -135,7 +146,7 @@ GET /api/devices/
 
 **返回字段包含**：`id`, `device_id`, `name`, `location`, `channel_count`, `channel_names`, `sample_rate`, `window_seconds`, `health_score`, `status`, `runtime_hours`, `upload_interval`, `task_poll_interval`, `alarm_thresholds`, `gear_teeth`, `bearing_params`, `compression_enabled`, `downsample_ratio`, `is_online`, `last_seen_at`
 
-**调用方**：`views/Settings.vue`, `views/Alarm.vue`, `views/Monitor.vue` → `api/device.js::getDevices()`
+**调用方**：`views/Settings.vue`, `views/Alarm.vue`, `views/Monitor.vue` → `api/devices.js::getDevices()`
 
 ---
 
@@ -153,7 +164,7 @@ GET /api/devices/{device_id}/config
 
 **响应**：设备完整配置（含 `gear_teeth`, `bearing_params`, `channel_names` 等）
 
-**调用方**：`views/Settings.vue` → `api/device.js::getDeviceConfig(deviceId)`
+**调用方**：`views/Settings.vue` → `api/devices.js::getDeviceConfig(deviceId)`
 
 ---
 
@@ -180,7 +191,7 @@ PUT /api/devices/{device_id}/config
 | `compression_enabled` | `int` | 压缩开关 (0/1) |
 | `downsample_ratio` | `int` | 降采样压缩比 |
 
-**调用方**：`views/Settings.vue` → `api/device.js::updateDeviceConfig(deviceId, payload)`
+**调用方**：`views/Settings.vue` → `api/devices.js::updateDeviceConfig(deviceId, payload)`
 
 ---
 
@@ -194,7 +205,7 @@ PUT /api/devices/batch-config
 
 **响应**：`{ updated_count, updated_fields }`
 
-**调用方**：`views/Settings.vue` → `api/device.js::updateBatchDeviceConfig(payload)`
+**调用方**：`views/Settings.vue` → `api/devices.js::updateBatchDeviceConfig(payload)`
 
 ---
 
@@ -238,7 +249,7 @@ GET /api/devices/{device_id}/alarm-thresholds
 
 **可配置指标**：`rms`, `peak`, `kurtosis`, `crest_factor`（每项含 `warning` / `critical` 两级）
 
-**调用方**：`views/Settings.vue` → `api/device.js::getAlarmThresholds(deviceId)`
+**调用方**：`views/Settings.vue` → `api/devices.js::getAlarmThresholds(deviceId)`
 
 ---
 
@@ -250,7 +261,7 @@ PUT /api/devices/{device_id}/alarm-thresholds
 
 **请求体** (`dict`)：阈值配置对象
 
-**调用方**：`views/Settings.vue` → `api/device.js::updateAlarmThresholds(deviceId, payload)`
+**调用方**：`views/Settings.vue` → `api/devices.js::updateAlarmThresholds(deviceId, payload)`
 
 ---
 
@@ -280,7 +291,7 @@ GET /api/monitor/latest?device_id={device_id}&prefer_special={prefer_special}&li
 - `FFT_POINTS = 25600`（FFT用1秒数据）
 - `FFT_MAX_FREQ = 5000`（FFT最高返回频率）
 
-**调用方**：`views/Monitor.vue` → `api/index.js::getRealtimeVibrationData()`
+**调用方**：`views/Monitor.vue` → `api/monitor.js::getRealtimeVibrationData()`
 
 ---
 
@@ -709,7 +720,7 @@ GET /api/alarms/?page={page}&size={size}&level={level}&resolved={resolved}&devic
 
 **响应**：`{ code, data: { items, total, page, size } }`
 
-**调用方**：`views/Alarm.vue` → `api/alarm.js::getHistoryAlarmList()`
+**调用方**：`views/Alarm.vue` → `api/alarms.js::getHistoryAlarmList()`
 
 ---
 
@@ -719,7 +730,7 @@ GET /api/alarms/?page={page}&size={size}&level={level}&resolved={resolved}&devic
 POST /api/alarms/{alarm_id}/resolve
 ```
 
-**调用方**：`views/Alarm.vue` → `api/alarm.js::updateAlarmStatus(alarmId)`
+**调用方**：`views/Alarm.vue` → `api/alarms.js::updateAlarmStatus(alarmId)`
 
 ---
 
@@ -729,7 +740,7 @@ POST /api/alarms/{alarm_id}/resolve
 DELETE /api/alarms/{alarm_id}
 ```
 
-**调用方**：`views/Alarm.vue` → `api/alarm.js::deleteAlarm(alarmId)`
+**调用方**：`views/Alarm.vue` → `api/alarms.js::deleteAlarm(alarmId)`
 
 ---
 
@@ -884,3 +895,50 @@ WS /ws/monitor?token={token}
 | 路径 | 函数名 | 文件 |
 |------|--------|------|
 | `/ws/monitor?token={token}` | `websocket_endpoint` | `main.py` |
+
+---
+
+## 11. OpenAPI 契约与端点使用清点
+
+> 2026-11-08（issue #49）：以 `docs/api/openapi.json` 为准，对照前端 `src/api/` 按域模块清点端点使用情况。**只记录，不删除任何后端端点。**
+
+### 11.1 总量
+
+| 分类 | 数量 |
+|------|------|
+| OpenAPI 路径总数 | 69 |
+| 前端 `src/api/` 已封装 | 54 |
+| 前端未封装（边端/系统专用） | 15 |
+
+### 11.2 前端未封装的端点（15 个）
+
+以下端点无任何前端 `src/api/` 模块引用，调用方为 Rust 边端（`edge/`）、已退役的旧边端脚本或运维场景，**保留不动**：
+
+| 方法 | 路径 | 实际调用方 |
+|------|------|-----------|
+| `GET` | `/` | 浏览器/运维手动访问的服务信息页 |
+| `POST` | `/api/ingest/` | 边端数据上报（Rust `edge/`） |
+| `GET` | `/api/devices/edge/config` | 边端拉取采集配置（Rust `edge/`） |
+| `GET` | `/api/collect/tasks` | 待领采集任务列表（边端轮询） |
+| `POST` | `/api/collect/tasks/{task_id}/complete` | 边端完成任务回报 |
+| `POST` | `/api/acquisition/agents/heartbeat` | DC24 边端心跳 |
+| `GET` | `/api/acquisition/agents/{agent_id}/next` | DC24 边端领取任务 |
+| `GET` | `/api/acquisition/agents/{agent_id}/control` | DC24 边端控制轮询（`edge_only`） |
+| `POST` | `/api/acquisition/agents/{agent_id}/directory-result` | DC24 边端回传目录选择结果（`edge_only`） |
+| `POST` | `/api/acquisition/jobs/{job_id}/progress` | DC24 边端任务进度上报 |
+| `POST` | `/api/acquisition/jobs/{job_id}/upload` | DC24 边端整包上传 |
+| `PUT` | `/api/acquisition/jobs/{job_id}/stream-files/{name}` | DC24 边端流式上传（`edge_only`） |
+| `POST` | `/api/acquisition/jobs/{job_id}/finish-stream` | DC24 边端完成流式上传（`edge_only`） |
+| `POST` | `/api/acquisition/sessions/{session_id}/frames` | DC24 边端示波帧上报（`edge_only`，HTTP 保持不变） |
+| `POST` | `/api/acquisition/sessions/{session_id}/state` | DC24 边端会话状态上报（`edge_only`） |
+
+### 11.3 已封装但当前无视图调用的函数（预留）
+
+以下前端 api 模块函数无任何视图消费，属预留能力，端点本身有其他价值（调试、后续功能），保留：
+
+| 函数 | 模块 | 端点 |
+|------|------|------|
+| `getMonitorHistory` | `api/monitor.js` | `GET /api/monitor/history` |
+| `getDeviceBatches` | `api/data.js` | `GET /api/data/{device_id}/batches` |
+| `getCollectionHistory` | `api/system.js` | `GET /api/collect/history` |
+| `createAcquisition` / `getAcquisition` / `stopAcquisition` / `getAcquisitionAnalysis` / `getAcquisitionWaveform` | `api/acquisition.js` | `POST/GET /api/acquisition/jobs*`（回放任务族） |

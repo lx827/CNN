@@ -9,11 +9,17 @@
 
 1. [Axios 基础配置](#1-axios-基础配置)
 2. [API 层](#2-api-层)
-   - 2.1 [api/index.js — 认证与监控](#21-apiindexjs--认证与监控)
-   - 2.2 [api/data.js — 数据查看与诊断](#22-apidatajs--数据查看与诊断)
-   - 2.3 [api/device.js — 设备配置](#23-apidevicejs--设备配置)
-   - 2.4 [api/alarm.js — 告警管理](#24-apialarmjs--告警管理)
-   - 2.5 [api/system.js — 系统与采集](#25-apisystemjs--系统与采集)
+   - 2.1 [api/index.js — 按域模块汇总出口](#21-apiindexjs--按域模块汇总出口)
+   - 2.2 [api/auth.js — 认证](#22-apiauthjs--认证)
+   - 2.3 [api/dashboard.js — 设备总览](#23-apidashboardjs--设备总览)
+   - 2.4 [api/monitor.js — 实时监测](#24-apimonitorjs--实时监测)
+   - 2.5 [api/data.js — 数据查看](#25-apidatajs--数据查看)
+   - 2.6 [api/diagnosis.js — 诊断](#26-apidagnosisjs--诊断)
+   - 2.7 [api/devices.js — 设备配置](#27-apidevicesjs--设备配置)
+   - 2.8 [api/alarms.js — 告警管理](#28-apialarmsjs--告警管理)
+   - 2.9 [api/system.js — 系统与采集](#29-apisystemjs--系统与采集)
+   - 2.10 [api/acquisition.js — DC24 采集与实时示波](#210-apiacquisitionjs--dc24-采集与实时示波)
+   - 2.11 [api/ingest.js — 边端数据接入（预留）](#211-apiingestjs--边端数据接入预留)
 3. [Views 页面组件](#3-views-页面组件)
    - 3.1 [Dashboard.vue](#31-dashboardvue)
    - 3.2 [DataView.vue](#32-dataviewvue)
@@ -55,81 +61,102 @@ request.get('/api/dashboard/').then(res => { ... });
 ## 2. API 层
 
 > 所有 API 函数均位于 `src/api/` 目录下，统一通过 `request` 实例发起 HTTP 请求。参数中的 `deviceId`、`batchIndex`、`channel` 等在后端路径中以模板变量形式填充。
+>
+> **2026-11-08（issue #49）重组**：api 层按后端路由域拆分为独立模块，`api/index.js` 仅作汇总出口（re-export）。视图优先从具体域模块导入（如 `import { getChannelFFT } from '../api/data'`），跨域批量导入可用 `from '../api'`。旧 `api/device.js`、`api/alarm.js` 已分别更名为 `api/devices.js`、`api/alarms.js`。
 
-### 2.1 api/index.js — 认证与监控
+### 2.1 api/index.js — 按域模块汇总出口
 
 **文件路径**：`src/api/index.js`
+
+汇总 re-export 以下全部域模块，不定义任何函数：`auth` / `dashboard` / `monitor` / `data` / `diagnosis` / `devices` / `alarms` / `system` / `acquisition` / `ingest`。
+
+### 2.2 api/auth.js — 认证
+
+**文件路径**：`src/api/auth.js`
 
 | 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
 |--------|------|--------|----------|----------|
 | `login(password)` | `password: string` | `{ token: string }` | `POST /api/auth/login` | `Login.vue` |
-| `getDeviceInfo()` | 无 | 设备总览数据对象 | `GET /api/dashboard/` | `Dashboard.vue` |
 
-> **2026-05-19 修复**：离线设备的 `health` 和 `components[].health` 不再设为 `null`，始终从诊断数据计算。离线仅标记 `status: 'offline'`。
-| `getRealtimeVibrationData(device_id, prefer_special)` | `device_id: string`<br>`prefer_special?: boolean`（默认 `false`） | 实时振动数据数组 | `GET /api/monitor/latest?device_id=...&prefer_special=...` | `Monitor.vue` |
-| `getMonitorHistory(device_id, channel, batches, include_special)` | `device_id: string`<br>`channel?: number`（默认 `1`）<br>`batches?: number`（默认 `16`）<br>`include_special?: boolean`（默认 `true`） | `{ device_id, channel, items: [{batch_index, ...}] }` | `GET /api/monitor/history?device_id=...&channel=...&batches=...&include_special=...` | `Monitor.vue` |
+### 2.3 api/dashboard.js — 设备总览
 
-```javascript
-// 使用示例
-import { login, getDeviceInfo, getRealtimeVibrationData, getMonitorHistory } from '@/api';
-
-await login('admin123');
-const info = await getDeviceInfo();
-const data = await getRealtimeVibrationData('WTG-001', true);
-const history = await getMonitorHistory('WTG-001', 1, 16, true);
-```
-
----
-
-### 2.2 api/data.js — 数据查看与诊断
-
-**文件路径**：`src/api/data.js`
+**文件路径**：`src/api/dashboard.js`
 
 | 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
 |--------|------|--------|----------|----------|
-| `getDeviceBatches(deviceId)` | `deviceId: string` | 批次列表 | `GET /api/data/{deviceId}/batches` | `DataView.vue`, `DeviceTable.vue` |
+| `getDeviceInfo()` | 无 | 设备总览数据对象 | `GET /api/dashboard/` | `Dashboard.vue`, `stores/deviceStore.js` |
+
+> **2026-05-19 修复**：离线设备的 `health` 和 `components[].health` 不再设为 `null`，始终从诊断数据计算。离线仅标记 `status: 'offline'`。
+
+### 2.4 api/monitor.js — 实时监测
+
+**文件路径**：`src/api/monitor.js`
+
+| 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
+|--------|------|--------|----------|----------|
+| `getRealtimeVibrationData(device_id, prefer_special)` | `device_id: string`<br>`prefer_special?: boolean`（默认 `false`） | 实时振动数据数组 | `GET /api/monitor/latest?device_id=...&prefer_special=...` | `Monitor.vue` |
+| `getMonitorHistory(device_id, channel, batches, include_special)` | `device_id: string`<br>`channel?: number`（默认 `1`）<br>`batches?: number`（默认 `16`）<br>`include_special?: boolean`（默认 `true`） | `{ device_id, channel, items: [{batch_index, ...}] }` | `GET /api/monitor/history?device_id=...&channel=...&batches=...&include_special=...` | 预留（当前无视图调用） |
+
+```javascript
+// 使用示例
+import { getRealtimeVibrationData } from '@/api/monitor';
+
+const data = await getRealtimeVibrationData('WTG-001', true);
+```
+
+### 2.5 api/data.js — 数据查看
+
+**文件路径**：`src/api/data.js`
+
+设备/批次列表、原始波形、各频谱计算、数据删除与 CSV 导出。
+
+| 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
+|--------|------|--------|----------|----------|
+| `getAllDeviceData()` | 无 | 所有设备及批次数据 | `GET /api/data/devices` | `DataView.vue`, `ResearchDiagnosis.vue` |
+| `getDeviceBatches(deviceId)` | `deviceId: string` | 批次列表 | `GET /api/data/{deviceId}/batches` | 预留（当前无视图调用） |
 | `getChannelData(deviceId, batchIndex, channel, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`detrend?: bool`<br>`denoise?: string` | 时域数据点数组 | `GET /api/data/{deviceId}/{batchIndex}/{channel}` | `DataView.vue` |
 | `getChannelFFT(deviceId, batchIndex, channel, max_freq, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`max_freq?: number`<br>`detrend?: bool`<br>`denoise?: string` | FFT 频谱数据 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/fft?...` | `DataView.vue` |
 | `getChannelSTFT(deviceId, batchIndex, channel, max_freq, nperseg, noverlap, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`max_freq?: number`<br>`nperseg?: number`<br>`noverlap?: number`<br>`detrend?: bool`<br>`denoise?: string` | STFT 时频图数据 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/stft?...` | `DataView.vue` |
 | `getChannelEnvelope(deviceId, batchIndex, channel, max_freq, method, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`max_freq?: number`<br>`method?: string`<br>`denoise?: string` | 包络谱数据 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/envelope?...` | `DataView.vue` |
 | `getChannelGear(deviceId, batchIndex, channel, method, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`method?: string`<br>`denoise?: string` | 齿轮诊断指标 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/gear?...` | `DataView.vue` |
-| `getChannelAnalyze(deviceId, batchIndex, channel, strategy, bearing_method, gear_method, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`strategy?: string`<br>`bearing_method?: string`<br>`gear_method?: string`<br>`denoise?: string` | 综合分析结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/analyze?...` | `DataView.vue` |
-| `getChannelFullAnalysis(deviceId, batchIndex, channel, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`denoise?: string` | 全算法分析结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/full-analysis?denoise=...` | `DataView.vue` |
-| `getChannelResearchAnalysis(deviceId, batchIndex, channel, profile, denoise, max_seconds)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`profile?: string`<br>`denoise?: string`<br>`max_seconds?: number` | 研究级分析结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/research-analysis?...` | `ResearchDiagnosis.vue` |
-| `getChannelDiagnosis(deviceId, batchIndex, channel, denoise_method)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`denoise_method?: string` | 诊断缓存结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/diagnosis?denoise_method=...` | `DataView.vue`, `DiagnosisDetail.vue` |
 | `getChannelOrder(deviceId, batchIndex, channel, freq_min, freq_max, samples_per_rev, max_order, rot_freq, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`freq_min?: number`<br>`freq_max?: number`<br>`samples_per_rev?: number`<br>`max_order?: number`<br>`rot_freq?: number`<br>`detrend?: bool`<br>`denoise?: string` | 阶次谱数据 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/order?...` | `DataView.vue` |
 | `getChannelCepstrum(deviceId, batchIndex, channel, max_quefrency, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`max_quefrency?: number`<br>`detrend?: bool`<br>`denoise?: string` | 倒谱数据 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/cepstrum?...` | `DataView.vue` |
 | `getChannelStats(deviceId, batchIndex, channel, window_size, step, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`window_size?: number`<br>`step?: number`<br>`detrend?: bool`<br>`denoise?: string` | 统计指标数据 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/stats?...` | `DataView.vue` |
+| `deleteBatch(deviceId, batchIndex)` | `deviceId: string`<br>`batchIndex: number` | 删除结果 | `DELETE /api/data/{deviceId}/{batchIndex}` | `DataView.vue`, `DeviceTable.vue` |
+| `deleteSpecialBatches(deviceId)` | `deviceId: string` | 删除结果 | `DELETE /api/data/{deviceId}/special` | `DataView.vue`, `DeviceTable.vue` |
+| `exportChannelCSV(deviceId, batchIndex, channel, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`detrend?: bool`<br>`denoise?: string` | 无（`window.open` 触发下载） | `GET /api/data/{deviceId}/{batchIndex}/{channel}/export` | `DataView.vue` |
+
+### 2.6 api/diagnosis.js — 诊断
+
+**文件路径**：`src/api/diagnosis.js`
+
+诊断缓存读取、综合/全量/研究级分析、方法级分析、诊断更新与重新诊断。
+
+| 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
+|--------|------|--------|----------|----------|
+| `getChannelDiagnosis(deviceId, batchIndex, channel, denoise_method)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`denoise_method?: string` | 诊断缓存结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/diagnosis?denoise_method=...` | `DataView.vue`, `DiagnosisDetail.vue` |
+| `getChannelAnalyze(deviceId, batchIndex, channel, strategy, bearing_method, gear_method, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`strategy?: string`<br>`bearing_method?: string`<br>`gear_method?: string`<br>`denoise?: string` | 综合分析结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/analyze?...` | `DataView.vue` |
+| `getChannelFullAnalysis(deviceId, batchIndex, channel, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`denoise?: string` | 全算法分析结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/full-analysis?denoise=...` | `DataView.vue` |
+| `getChannelResearchAnalysis(deviceId, batchIndex, channel, profile, denoise, max_seconds)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`profile?: string`<br>`denoise?: string`<br>`max_seconds?: number` | 研究级分析结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/research-analysis?...` | `ResearchDiagnosis.vue` |
 | `getMethodInfo()` | 无 | 可用分析方法列表 | `GET /api/data/method-info` | `ResearchDiagnosis.vue` |
 | `getChannelMethodAnalysis(deviceId, batchIndex, channel, method, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`method: string`<br>`denoise?: string` | 单方法分析结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/method-analysis?method=...&denoise=...` | `ResearchDiagnosis.vue` |
 | `updateBatchDiagnosis(deviceId, batchIndex, order_analysis, rot_freq)` | `deviceId: string`<br>`batchIndex: number`<br>`order_analysis: object`<br>`rot_freq?: number` | 更新结果 | `PUT /api/data/{deviceId}/{batchIndex}/diagnosis` | `DataView.vue` |
 | `reanalyzeBatch(deviceId, batchIndex)` | `deviceId: string`<br>`batchIndex: number` | 重新诊断结果 | `POST /api/data/{deviceId}/{batchIndex}/reanalyze` | `DataView.vue` |
 | `reanalyzeAllDevice(deviceId)` | `deviceId: string` | 批量重新诊断汇总 | `POST /api/data/{deviceId}/reanalyze-all` | `DataView.vue` |
-| `getAllDeviceData()` | 无 | 所有设备及批次数据 | `GET /api/data/devices` | `ResearchDiagnosis.vue` |
-| `deleteBatch(deviceId, batchIndex)` | `deviceId: string`<br>`batchIndex: number` | 删除结果 | `DELETE /api/data/{deviceId}/{batchIndex}` | `DataView.vue` |
-| `deleteSpecialBatches(deviceId)` | `deviceId: string` | 删除结果 | `DELETE /api/data/{deviceId}/special` | `DataView.vue` |
-| `exportChannelCSV(deviceId, batchIndex, channel, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`detrend?: bool`<br>`denoise?: string` | Blob（CSV 文件流） | `GET /api/data/{deviceId}/{batchIndex}/{channel}/export` | `DataView.vue` |
 
 ```javascript
 // 典型调用示例
-import {
-  getChannelFFT,
-  getChannelFullAnalysis,
-  reanalyzeBatch,
-  exportChannelCSV
-} from '@/api/data';
+import { getChannelFFT } from '@/api/data';
+import { getChannelFullAnalysis, reanalyzeBatch } from '@/api/diagnosis';
 
 const fft = await getChannelFFT('WTG-001', 1, 1, 5000);
-const full = await getChannelFullAnalysis('WTG-001', 1, 1, 'wavelet');
+const full = await getChannelFullAnalysis('WTG-001', 1, 1, { denoise: 'wavelet' });
 await reanalyzeBatch('WTG-001', 1);
-const blob = await exportChannelCSV('WTG-001', 1, 1);
 ```
 
----
+### 2.7 api/devices.js — 设备配置
 
-### 2.3 api/device.js — 设备配置
-
-**文件路径**：`src/api/device.js`
+**文件路径**：`src/api/devices.js`（原 `api/device.js`，2026-11 更名）
 
 | 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
 |--------|------|--------|----------|----------|
@@ -142,18 +169,16 @@ const blob = await exportChannelCSV('WTG-001', 1, 1);
 
 ```javascript
 // 使用示例
-import { getDevices, getDeviceConfig, updateDeviceConfig } from '@/api/device';
+import { getDevices, getDeviceConfig, updateDeviceConfig } from '@/api/devices';
 
 const devices = await getDevices();
 const config = await getDeviceConfig('WTG-001');
 await updateDeviceConfig('WTG-001', { sample_rate: 25600 });
 ```
 
----
+### 2.8 api/alarms.js — 告警管理
 
-### 2.4 api/alarm.js — 告警管理
-
-**文件路径**：`src/api/alarm.js`
+**文件路径**：`src/api/alarms.js`（原 `api/alarm.js`，2026-11 更名）
 
 | 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
 |--------|------|--------|----------|----------|
@@ -163,35 +188,63 @@ await updateDeviceConfig('WTG-001', { sample_rate: 25600 });
 
 ```javascript
 // 使用示例
-import { getHistoryAlarmList, updateAlarmStatus, deleteAlarm } from '@/api/alarm';
+import { getHistoryAlarmList, updateAlarmStatus, deleteAlarm } from '@/api/alarms';
 
 const alarms = await getHistoryAlarmList(1, 20, 'critical', false, 'WTG-001');
 await updateAlarmStatus(42);
 await deleteAlarm(42);
 ```
 
----
-
-### 2.5 api/system.js — 系统与采集
+### 2.9 api/system.js — 系统与采集
 
 **文件路径**：`src/api/system.js`
 
 | 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
 |--------|------|--------|----------|----------|
 | `getSystemLogs(lines)` | `lines?: number`（默认 `100`） | 日志文本数组 | `GET /api/logs/?lines=...` | `Logs.vue` |
-| `requestCollection(deviceId, sample_rate, duration)` | `deviceId: string`<br>`sample_rate?: number`<br>`duration?: number` | 任务对象 `{ task_id }` | `POST /api/collect/request` | `Monitor.vue` |
+| `requestCollection(deviceId)` | `deviceId: string` | 任务对象 `{ task_id }` | `POST /api/collect/request?device_id=...` | `Monitor.vue` |
 | `getTaskStatus(taskId)` | `taskId: string` | 任务状态对象 | `GET /api/collect/tasks/{taskId}/status` | `Monitor.vue` |
-| `getCollectionHistory(deviceId, limit)` | `deviceId?: string`（默认 `null`，不传则查所有设备）<br>`limit?: number`（默认 `20`） | `{ code, data: [{task_id, device_id, status, ...}] }` | `GET /api/collect/history?device_id=...&limit=...` | 待接入页面 |
+| `getCollectionHistory(deviceId, limit)` | `deviceId?: string`（默认 `null`，不传则查所有设备）<br>`limit?: number`（默认 `20`） | `{ code, data: [{task_id, device_id, status, ...}] }` | `GET /api/collect/history?device_id=...&limit=...` | 预留（当前无视图调用） |
 
 ```javascript
 // 使用示例
-import { getSystemLogs, requestCollection, getTaskStatus, getCollectionHistory } from '@/api/system';
+import { getSystemLogs, requestCollection, getTaskStatus } from '@/api/system';
 
 const logs = await getSystemLogs(200);
-const task = await requestCollection('WTG-001', 25600, 10);
+const task = await requestCollection('WTG-001');
 const status = await getTaskStatus(task.task_id);
-const collectionHistory = await getCollectionHistory('WTG-001', 20);
 ```
+
+### 2.10 api/acquisition.js — DC24 采集与实时示波
+
+**文件路径**：`src/api/acquisition.js`
+
+| 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
+|--------|------|--------|----------|----------|
+| `getAcquisitionAgents()` | 无 | 边端代理列表 | `GET /api/acquisition/agents` | `Acquisition.vue` |
+| `getAcquisitionCapabilities()` | 无 | 服务能力（原厂采样率档位等） | `GET /api/acquisition/capabilities` | `Acquisition.vue` |
+| `startLiveSession(data)` | `{ agent_id, sample_rate }` | 示波会话 | `POST /api/acquisition/sessions` | `Acquisition.vue` |
+| `getLiveSession(id)` | `id: string` | 会话状态（404 静默） | `GET /api/acquisition/sessions/{id}` | `Acquisition.vue` |
+| `getCurrentLiveSession(agent)` | `agent: string` | 边端当前会话（可为 `null`） | `GET /api/acquisition/agents/{agent}/session` | `Acquisition.vue` |
+| `stopLiveSession(id)` | `id: string` | 停止后会话状态 | `POST /api/acquisition/sessions/{id}/stop` | `Acquisition.vue` |
+| `getLiveView(id, params)` | `id: string`<br>`params: object`（波形/频谱/RMS/包络开关） | 实时窗口分析结果（错误静默） | `GET /api/acquisition/sessions/{id}/view` | `Acquisition.vue` |
+| `startLiveRecording(id, data)` | `{ duration, save_directory, analysis }` | 保存任务 | `POST /api/acquisition/sessions/{id}/record` | `Acquisition.vue` |
+| `stopLiveRecording(id)` | `id: string` | 停止保存 | `POST /api/acquisition/sessions/{id}/record/stop` | `Acquisition.vue` |
+| `selectAcquisitionDirectory(agent)` | `agent: string` | 目录选择器 `{ id, status }` | `POST /api/acquisition/agents/{agent}/select-directory` | `Acquisition.vue` |
+| `getAcquisitionDirectory(agent)` | `agent: string` | 目录选择结果 | `GET /api/acquisition/agents/{agent}/directory` | `Acquisition.vue` |
+| `getAcquisitionJobs()` | 无 | 已保存任务列表 | `GET /api/acquisition/jobs` | `Acquisition.vue` |
+| `createAcquisition(data)` | 任务参数 | 新任务 | `POST /api/acquisition/jobs` | 预留（回放任务族，当前无视图调用） |
+| `getAcquisition(id)` | `id: string` | 任务详情 | `GET /api/acquisition/jobs/{id}` | 预留 |
+| `stopAcquisition(id)` | `id: string` | 取消结果 | `POST /api/acquisition/jobs/{id}/cancel` | 预留 |
+| `getAcquisitionAnalysis(id)` | `id: string` | 任务分析结果 | `GET /api/acquisition/jobs/{id}/analysis` | 预留 |
+| `getAcquisitionWaveform(id, params)` | `id: string`<br>`params: object` | 波形数据 | `GET /api/acquisition/jobs/{id}/waveform` | 预留 |
+| `downloadAcquisitionFile(id, name)` | `id: string`<br>`name: string` | 无（Blob 触发下载） | `GET /api/acquisition/jobs/{id}/files/{name}` | `Acquisition.vue` |
+
+### 2.11 api/ingest.js — 边端数据接入（预留）
+
+**文件路径**：`src/api/ingest.js`
+
+`/api/ingest/` 由边端客户端（Rust `edge/`）调用，前端暂不直接调用；模块保留为占位说明，无导出函数。
 
 ---
 
