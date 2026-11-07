@@ -1,10 +1,9 @@
 """
 评估图表绘制 — 读 JSON 生成专业 SVG/PNG
 
-用法:
-    cd d:/code/CNN/cloud
-    . venv/Scripts/activate
-    python ../tests/diagnosis/eval_plots/plot_all.py
+用法(uv-only,见 AGENTS.md §2/§4):
+    cd cloud
+    uv run python tests/diagnosis/eval_plots/plot_all.py
 """
 import json, sys
 from pathlib import Path

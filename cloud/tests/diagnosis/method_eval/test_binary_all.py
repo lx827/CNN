@@ -7,7 +7,7 @@
 - 汇总 Markdown 报告
 
 运行方式：
-    d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\method_eval\test_binary_all.py
+    cd cloud && uv run python tests/diagnosis/method_eval/test_binary_all.py
 """
 import sys
 import time

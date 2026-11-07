@@ -2,9 +2,9 @@
 测试 CPW 包络分析在各种边界参数下的鲁棒性
 覆盖修复：rot_freq 为 None 时不会传入 cepstrum_pre_whitening 导致崩溃
 
-运行方式:
-    cd d:/code/CNN
-    python tests/diagnosis/test_cpw_robustness.py
+运行方式(uv-only,见 AGENTS.md §2/§4):
+    cd cloud
+    uv run python tests/diagnosis/regression/test_cpw_robustness.py
 """
 import sys
 import os

@@ -10,10 +10,9 @@ r"""
   - fault_probabilities: "齿轮磨损" 概率的区分力
   - ensemble confidence: gear_confidence 的检出率
 
-用法：
-  cd /d D:\code\CNN\cloud
-  . venv\Scripts\activate
-  PYTHONPATH=D:\code\CNN\cloud python ..\tests\diagnosis\test_planetary_e2e.py
+用法（uv-only，见 AGENTS.md §2/§4）：
+  cd cloud
+  uv run python tests/diagnosis/planetary/test_planetary_e2e.py
 """
 import sys
 import os

@@ -4,8 +4,8 @@ CW 健康数据误判原因诊断脚本
 逐项打印健康度评分的每个中间值和扣分项，
 揭示为什么 kurtosis < 5 的数据仍得到 59-77 的健康度。
 
-运行方式:
-    cd /d D:\code\CNN\cloud && venv\Scripts\activate && python ../tests/diagnosis/debug_cw_fp.py
+运行方式（uv-only，见 AGENTS.md §2/§4）：
+    cd cloud && uv run python tests/diagnosis/debug/debug_cw_fp.py
 """
 import sys
 import os

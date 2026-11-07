@@ -8,7 +8,7 @@ WTgearbox 行星齿轮箱数据集，恒速工况 20~55 Hz。
 - Ensemble：五类分类（基于 D-S 融合）+ 二分类
 
 运行方式：
-    d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\method_eval\test_gear_wtgearbox.py
+    cd cloud && uv run python tests/diagnosis/method_eval/test_gear_wtgearbox.py
 """
 import sys
 import time

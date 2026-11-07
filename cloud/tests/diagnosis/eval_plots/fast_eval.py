@@ -1,6 +1,6 @@
 """
 快速综合评估 — 每类取少量样本，重点覆盖所有方法×数据集
-用法: & d:\code\CNN\cloud\venv\Scripts\python.exe d:\code\CNN\tests\diagnosis\eval_plots\fast_eval.py
+用法(uv-only,见 AGENTS.md §2/§4): cd cloud && uv run python tests/diagnosis/eval_plots/fast_eval.py
 """
 import sys, json, time, warnings, os
 from pathlib import Path

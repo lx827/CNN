@@ -3,9 +3,10 @@ import os
 import re
 from pathlib import Path
 
-API_DIR = Path("D:/code/CNN/cloud/app/api")
-DOCS_DIR = Path("D:/code/CNN/docs/backend/app/api")
-ALGO_DIR = Path("D:/code/CNN/docs/algorithms")
+_REPO_ROOT = Path(__file__).resolve().parents[2]   # docs/internal/ -> 仓库根
+API_DIR = _REPO_ROOT / "cloud" / "app" / "api"
+DOCS_DIR = _REPO_ROOT / "docs" / "backend" / "app" / "api"
+ALGO_DIR = _REPO_ROOT / "docs" / "algorithms"
 
 # 算法相关文件
 ALGO_FILES = {"gear.py", "envelope.py", "order.py", "cepstrum.py", "diagnosis_ops.py"}
@@ -171,7 +172,7 @@ def format_signature(item, is_class=False):
 
 def main():
     import sys
-    out_path = Path("D:/code/CNN/check_api_docs_report.md")
+    out_path = _REPO_ROOT / "check_api_docs_report.md"
     with open(out_path, "w", encoding="utf-8") as out:
         sys.stdout = out
         py_files = sorted(API_DIR.rglob("*.py"))

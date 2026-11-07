@@ -1,7 +1,7 @@
 """
 综合评估脚本 — 覆盖文档 4.2~4.7 所有实验
 生成 JSON 到 tests/output/eval_plots/
-用法: d:\code\CNN\cloud\venv\Scripts\python.exe d:\code\CNN\tests\diagnosis\eval_plots\run_all.py
+用法(uv-only,见 AGENTS.md §2/§4): cd cloud && uv run python tests/diagnosis/eval_plots/run_all.py
 """
 import sys, json, time, warnings, os
 from pathlib import Path

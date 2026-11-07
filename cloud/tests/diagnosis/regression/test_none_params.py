@@ -5,9 +5,9 @@
 - bearing_params 中 alpha/d/D/n 为 None 时 np.radians / 比较不崩溃
 - gear_teeth 中 input/output 为 None 时比较运算不崩溃
 
-运行方式:
-    cd d:/code/CNN
-    python tests/diagnosis/test_none_params.py
+运行方式(uv-only,见 AGENTS.md §2/§4):
+    cd cloud
+    uv run python tests/diagnosis/regression/test_none_params.py
 """
 import sys
 import os

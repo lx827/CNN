@@ -8,7 +8,7 @@ CW 数据集全部为变速工况（升速/降速/升降/降升），转速范�
 - Ensemble：三分类 + 二分类（基于 D-S 融合）
 
 运行方式：
-    d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\method_eval\test_bearing_cw.py
+    cd cloud && uv run python tests/diagnosis/method_eval/test_bearing_cw.py
 """
 import sys
 import time
