@@ -27,8 +27,8 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py   # 需 HUS
 
 - `cloud/tests/test_dc24_acquisition.py`:隔离SQLite认证、任务领取/取消、完整四通道CSV上传下载、无分析模式、FFT/RMS/包络频带及错误归档拒绝。
 - `cloud/tests/test_dc24_driver.py`:本机回环TCP仿真DC24,验证采样配置、半包、24位符号、B8停止、取消保存和序号缺口报错;固定断言2026-11-06新IEPE/PASS的实际B2/B5,防止重新发送旧电压模板;不连接实际硬件。
-- `cloud/tests/test_dc24_live.py`:原厂12档、长时长/手动参数、拒绝回放示波、不落采样文件、实时数值、变长帧、保存首帧、流式传输、缓存上限、统计缺口和上传完成后才发布停止终态。
-- `wind-turbine-diagnosis/tests/acquisition_lifecycle.test.cjs`:实际Vue setup/watch/卸载,验证不自动回放、示波中保存与停止、长时长/手动、显示与频带开关、目录选择结果和卸载;API/ECharts为替身,不覆盖像素。
+- `cloud/tests/test_dc24_live.py`:原厂12档、长时长/手动参数、拒绝回放示波、不落采样文件、实时数值、变长帧、保存首帧、流式传输、缓存上限、统计缺口和上传完成后才发布停止终态;WS 实时窗口(鉴权拒绝/4404/推送与选项与心跳,2026-11 #51)。
+- `wind-turbine-diagnosis/tests/acquisition_lifecycle.test.cjs`:实际Vue setup/watch/卸载,验证不自动回放、示波中保存与停止、长时长/手动、显示与频带开关、目录选择结果和卸载;含 WS 推送路径(打开期间不 REST 轮询、view 绘制、选项上报,2026-11 #51);API/ECharts/WS 为替身,不覆盖像素。
 - `wind-turbine-diagnosis/tests/acquisition_navigation.test.cjs`:实际路由守卫与登录组件,验证一键采集入口登录后返回采集页。
 - `dc24/tests/test_dc24_start.py`:实际Windows cmd调用批处理的`--check`模式,覆盖真实启动入口的编码/行尾,不启动服务或采集。
 - `dc24/tests/test_dc24_vendor.py`:配置原厂 DLL 后,用真实 32 位连接进程和回环模拟采集器核对控制帧、分片接收、四路计数和停止释放。未配置 DLL 时跳过,不连接现场设备。
@@ -72,7 +72,7 @@ uv run python -m unittest tests.test_hustbear_registration -v
 | `cloud/tests/test_analysis_worker_json.py`(2026-10-23) | 实际后台 worker 的 NumPy 结果入库,通道缓存新增/更新,批次已分析标记、健康度、告警输入及严格 JSON 推送(2 项) | 内存 SQLite,算法替身;不访问云端或业务数据库 |
 | `wind-turbine-diagnosis/tests/monitor_lifecycle.test.cjs` | 生命周期、推送合并、设备切换竞争、在途刷新、慢轮询(7 项) | 已安装前端依赖 |
 | `wind-turbine-diagnosis/tests/dashboard_lifecycle.test.cjs` | 卸载释放、异步卸载、选中对象刷新、critical 显示、推送/轮询串行合并、失败恢复(6 项) | 已安装前端依赖 |
-| `wind-turbine-diagnosis/tests/websocket.test.cjs` | 握手幂等、迟到回调、重连去重(3 项) | Node 自带 test/vm;WebSocket 替身 |
+| `wind-turbine-diagnosis/tests/websocket.test.cjs` | 握手幂等、迟到回调、重连去重、单例/工厂端点隔离(5 项) | Node 自带 test/vm;WebSocket 替身 |
 
 后端整组(30 项,本机 Windows):
 
