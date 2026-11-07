@@ -32,6 +32,7 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 - `wind-turbine-diagnosis/tests/acquisition_navigation.test.cjs`:实际路由守卫与登录组件,验证一键采集入口登录后返回采集页。
 - `dc24/tests/test_dc24_start.py`:实际Windows cmd调用批处理的`--check`模式,覆盖真实启动入口的编码/行尾,不启动服务或采集。
 - `dc24/tests/test_dc24_vendor.py`:配置原厂 DLL 后,用真实 32 位连接进程和回环模拟采集器核对控制帧、分片接收、四路计数和停止释放。未配置 DLL 时跳过,不连接现场设备。
+- `dc24/tests/test_dc24_edge_pi.py`:树莓派驱动(`dc24_edge_pi.py`+`dc24_ffi.py`)回归——窗口缺口/清单重试状态机/心跳字段等纯逻辑单测,加回环集成:加载真实 `dc24_edge_core` cdylib、socket 假设备走完 BA/B8/B2/B5/B7→80帧→B8、假云端复刻 finish-stream 校验并注入 503 重试,断言五件套与云端收件逐字节一致。库定位 `DC24_EDGE_LIB`→`edge/target`→`cargo build` 兜底,无 Rust 工具链时跳过集成部分。
 
 本机 Windows PowerShell,在CNN根目录运行,无需管理员权限,不访问远端或采集现场数据:
 
@@ -40,10 +41,11 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 # 后端 DC24 三件(unittest 模块形式,自 cloud/tests 包加载):
 cd cloud
 uv run python -m unittest tests.test_dc24_acquisition tests.test_dc24_driver tests.test_dc24_live -v
-# DC24 工具链两件(直跑文件;start 件会真实调用 start_dc24.bat --check):
+# DC24 工具链三件(直跑文件;start 件会真实调用 start_dc24.bat --check):
 cd ../dc24
 uv run python tests/test_dc24_start.py -v
 uv run python tests/test_dc24_vendor.py -v
+uv run python tests/test_dc24_edge_pi.py -v
 # Node内置运行器执行采集页状态测试,依赖已有前端包,不启动浏览器或硬件。
 cd ../wind-turbine-diagnosis
 node --test tests/acquisition_lifecycle.test.cjs tests/acquisition_navigation.test.cjs
