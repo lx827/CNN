@@ -5,15 +5,16 @@
 
 import { getWebSocketURL } from './backend'
 
-const buildWebSocketURL = () => {
+const buildWebSocketURL = (path = '/ws/monitor') => {
   const token = localStorage.getItem('access_token')
-  const url = new URL(getWebSocketURL(), window.location.href)
+  const url = new URL(getWebSocketURL(path), window.location.href)
   if (token) url.searchParams.set('token', token)
   return url.toString()
 }
 
 class WebSocketClient {
-  constructor() {
+  constructor(path = '/ws/monitor') {
+    this.path = path
     this.ws = null
     this.reconnectTimer = null
     this.heartbeatTimer = null
@@ -34,7 +35,7 @@ class WebSocketClient {
     }
 
     try {
-      const socket = new WebSocket(buildWebSocketURL())
+      const socket = new WebSocket(buildWebSocketURL(this.path))
       this.ws = socket
 
       this.ws.onopen = () => {
@@ -161,7 +162,7 @@ class WebSocketClient {
   }
 }
 
-// 单例导出
+// 单例导出(实时监测 /ws/monitor)
 let client = null
 export const getWebSocketClient = () => {
   if (!client) {
@@ -169,3 +170,7 @@ export const getWebSocketClient = () => {
   }
   return client
 }
+
+// 按端点新建独立客户端(如 DC24 实时窗口 /ws/acquisition/sessions/{id}/view):
+// 连接/心跳/重连复用同一套逻辑,生命周期由调用方管理(close() 后不可复用)。
+export const createWebSocketClient = (path) => new WebSocketClient(path)

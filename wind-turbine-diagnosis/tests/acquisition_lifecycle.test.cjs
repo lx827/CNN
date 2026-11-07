@@ -38,7 +38,10 @@ function harness(overrides = {}) {
     stopLiveSession: async () => { stops++; current.status = 'stopped'; return { data: copy(current) } },
     selectAcquisitionDirectory: async () => ({ data: { id: 'picker' } }),
     getAcquisitionDirectory: async () => ({ data: { id: 'picker', status: 'done', directory: 'E:/field recordings' } }),
-    downloadAcquisitionFile: async () => {}, ...overrides }
+    downloadAcquisitionFile: async () => {},
+    // 默认 WS 桩:建连但永不 open → 页面走 REST 轮询回退(既有断言路径)
+    createWebSocketClient: () => ({ connect() {}, close() {}, on() {}, send() {} }),
+    ...overrides }
   vm.runInNewContext(script, context, { filename: 'Acquisition.vue' })
   context.Component.render = function () {
     const state = vue.getCurrentInstance().setupState
@@ -124,4 +127,61 @@ test('后端重启后旧会话404，自动关联现有新会话而不创建替�
   assert.equal(h.state.session.id, 'replacement')
   await h.tick(); assert.equal(h.charts.length, 8)
   assert.equal(h.sessions.length, 1, '重新关联不自动开始新硬件会话')
+})
+
+// —— WS 推送路径(issue #51):view 数据经 WebSocket 到达,WS 打开期间不再 REST 轮询 ——
+function liveSocketFactory() {
+  const sockets = []
+  const make = path => {
+    const handlers = new Map(), sent = []
+    const sock = {
+      path, closed: false,
+      connect() {},
+      close() { sock.closed = true; (handlers.get('close') || []).forEach(cb => cb({})) },
+      on(event, cb) { if (!handlers.has(event)) handlers.set(event, []); handlers.get(event).push(cb) },
+      send(data) { sent.push(copy(data)) },
+      emit(event, data) { (handlers.get(event) || []).forEach(cb => cb(copy(data))) },
+      sent,
+    }
+    sockets.push(sock)
+    return sock
+  }
+  return { make, sockets }
+}
+
+test('WS 连接后按当前选项订阅,view 推送驱动图表,不再发起 REST 轮询', async t => {
+  const ws = liveSocketFactory()
+  const h = harness({ createWebSocketClient: ws.make })
+  t.after(() => h.app.unmount()); await flush()
+  await h.state.startPreview(); await h.tick()
+  assert.equal(ws.sockets.length, 1)
+  assert.match(ws.sockets[0].path, /\/ws\/acquisition\/sessions\/session\/view$/)
+  ws.sockets[0].emit('open', {})
+  assert.equal(ws.sockets[0].sent[0].type, 'options', '连接建立即上报当前分析选项')
+  assert.equal(ws.sockets[0].sent[0].waveform, true)
+  assert.equal(ws.sockets[0].sent[0].wave_seconds, .2)
+  const viewsBefore = h.views.length
+  await h.tick()
+  assert.equal(h.views.length, viewsBefore, 'WS 打开期间不得再走 REST view 轮询')
+  ws.sockets[0].emit('view', { fresh: true, window_start: 0, window_end: .2,
+    session: copy(h.state.session), channels: [0, 1, 2, 3].map(channel => ({ channel, label: `CH${channel + 1}`, waveform: [[0, channel + 1]] })) })
+  await flush()
+  assert.equal(h.charts.length, 8, 'view 推送到达即绘制四通道波形')
+  assert.ok(h.charts.every(c => !c.disposed))
+})
+
+test('切换显示项即时经 WS 更新选项;会话快照推送更新页面状态', async t => {
+  const ws = liveSocketFactory()
+  const h = harness({ createWebSocketClient: ws.make })
+  t.after(() => h.app.unmount()); await flush()
+  await h.state.startPreview(); await h.tick()
+  ws.sockets[0].emit('open', {})
+  h.state.show.rms = true
+  await flush()
+  const last = ws.sockets[0].sent.at(-1)
+  assert.equal(last.type, 'options'); assert.equal(last.rms, true)
+  assert.equal(last.envelope, false)
+  ws.sockets[0].emit('session', Object.assign(copy(h.state.session), { stop_requested: true, status: 'stopping' }))
+  await flush()
+  assert.equal(h.state.session.status, 'stopping', '会话快照推送更新页面状态')
 })

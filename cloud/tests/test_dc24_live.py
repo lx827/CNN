@@ -34,6 +34,7 @@ class LiveTests(unittest.TestCase):
         self.fixture.setUp()
         self.client = self.fixture.client
         self.client.app.include_router(api.router)
+        self.client.app.include_router(api.ws_router)
         self.user, self.edge = self.fixture.user, self.fixture.edge
         live.sessions.clear(); live.pickers.clear()
         self.client.post('/api/acquisition/agents/heartbeat', headers=self.edge,
@@ -109,6 +110,78 @@ class LiveTests(unittest.TestCase):
                          (r.path/'samples.csv').read_bytes())
         wave = self.client.get(f"/api/acquisition/jobs/{request['id']}/waveform?channel=0&seconds=.01", headers=self.user).json()['data']
         self.assertEqual(wave[0][1], -8388608)
+
+    def test_ws_view_rejects_bad_token_and_unknown_session(self):
+        from starlette.testclient import WebSocketDisconnect
+        from app.api.auth import create_access_token
+        sid = self.session(5000)
+        with self.assertRaises(WebSocketDisconnect):
+            with self.client.websocket_connect(f'/ws/acquisition/sessions/{sid}/view?token=bad') as ws:
+                ws.receive_json()
+        token = create_access_token({'sub': 'test'})
+        with self.assertRaises(WebSocketDisconnect) as ctx:
+            with self.client.websocket_connect(f'/ws/acquisition/sessions/nonexistent/view?token={token}') as ws:
+                ws.receive_json()
+        self.assertEqual(ctx.exception.code, 4404)
+
+    def test_ws_view_pushes_session_and_window_and_supports_options_ping(self):
+        from starlette.testclient import WebSocketDisconnect
+        from app.api.auth import create_access_token
+        token = create_access_token({'sub': 'test'})
+        sid = self.session(2000)
+        # 无效令牌不能通过 WS 鉴权
+        with self.assertRaises(WebSocketDisconnect):
+            with self.client.websocket_connect(f'/ws/acquisition/sessions/{sid}/view?token=nope') as ws:
+                ws.receive_json()
+        with self.client.websocket_connect(f'/ws/acquisition/sessions/{sid}/view?token={token}') as ws:
+            # 连接即推:session 快照 + waiting view(尚无帧)
+            first = ws.receive_json()
+            self.assertEqual(first['type'], 'session')
+            self.assertEqual(first['data']['id'], sid)
+            second = ws.receive_json()
+            self.assertEqual(second['type'], 'view')
+            self.assertTrue(second['data']['waiting'])
+            self.assertEqual(second['data']['channels'], [])
+            # 边端经 HTTP 上报帧(链路保持 HTTP 不变)
+            x = np.arange(1024, dtype=np.int32)
+            values = np.column_stack((x, -x, 2 * x, -2 * x)).astype('<i4')
+            r = self.client.post(f'/api/acquisition/sessions/{sid}/frames?agent_id=test&start=0&sequence=1',
+                                 headers=self.edge, content=values.tobytes())
+            self.assertEqual(r.status_code, 200)
+            ws.send_json({'type': 'ping'})
+            # 收齐 pong 与新窗口 view(顺序不限)
+            seen = {}
+            for _ in range(4):
+                msg = ws.receive_json()
+                if msg['type'] == 'view':
+                    seen.setdefault('view', []).append(msg['data'])
+                else:
+                    seen.setdefault(msg['type'], []).append(msg)
+                if 'pong' in seen and any(not d.get('waiting') for d in seen.get('view', [])):
+                    break
+            self.assertIn('pong', seen)
+            views = [d for d in seen['view'] if not d.get('waiting')]
+            self.assertEqual(len(views[0]['channels']), 4)
+            self.assertTrue(views[0]['channels'][0]['waveform'])
+            # 选项更新:关闭 fft,收到不含 fft 的新窗口
+            ws.send_json({'type': 'options', 'fft': False})
+            updated = None
+            for _ in range(4):
+                msg = ws.receive_json()
+                if msg['type'] == 'view' and not msg['data'].get('waiting'):
+                    updated = msg['data']
+                    if 'fft' not in updated['channels'][0]:
+                        break
+            self.assertNotIn('fft', updated['channels'][0])
+            # 非法包络频带:推送 error 且不改选项
+            ws.send_json({'type': 'options', 'envelope': True, 'band_low': 900, 'band_high': 100})
+            got_error = False
+            for _ in range(6):
+                msg = ws.receive_json()
+                if msg['type'] == 'error':
+                    got_error = True
+                    break
+            self.assertTrue(got_error)
 
     def test_gaps_are_not_joined_and_memory_window_is_bounded(self):
         sid = self.session(1000)
