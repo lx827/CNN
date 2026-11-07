@@ -1,0 +1,4 @@
+# UV workspace 根(ADR-0001):单一 UV 托管 Python 3.13,uv.lock 为唯一依赖事实源。
+# Rust 边端 edge/ 不参与 Python workspace。
+[tool.uv.workspace]
+members = ["cloud", "dc24"]

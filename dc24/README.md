@@ -20,7 +20,7 @@ dc24/
 ├── dc24_vendor.py             # 原厂 DLL 校验(SHA-256)
 ├── dc24_vendor_bridge.ps1     # 32 位 PowerShell/C# 桥接调用 JMServer.dll
 ├── dc24_profiles.json         # 原厂 12 档完整 B5 命令负载(云端与现场工具共用)
-├── requirements.txt           # Python 依赖
+├── pyproject.toml             # 成员依赖(uv workspace,根目录 uv sync 统一安装)
 └── .env                       # 本机配置(不入库):DC24_VENDOR_ROOT 指向原厂安装目录则走 DLL,留空走 Python TCP
 ```
 

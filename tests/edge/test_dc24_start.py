@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[2]
 class DC24StartTests(unittest.TestCase):
     @unittest.skipUnless(os.name == 'nt', 'Windows批处理入口')
     def test_batch_check_entry_runs_real_launcher_without_starting_services(self):
-        if not (ROOT/'cloud/venv/Scripts/python.exe').exists():
-            self.skipTest('本机cloud虚拟环境不存在')
+        if not (ROOT/'.venv/Scripts/python.exe').exists():
+            self.skipTest('本机 uv workspace 环境不存在（先 uv sync）')
         result = subprocess.run(['cmd', '/d', '/c', 'start_dc24.bat', '--check'], cwd=ROOT,
                                 capture_output=True, timeout=20)
         output = result.stdout.decode('utf-8', errors='replace')
