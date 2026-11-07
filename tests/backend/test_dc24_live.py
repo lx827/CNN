@@ -9,7 +9,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT/'cloud'))
-sys.path.insert(0, str(ROOT/'edge'))
+sys.path.insert(0, str(ROOT/'dc24'))
 from app.api import acquisition_live as api
 from app.services.acquisition_live import live
 from dc24_live import Recording, EventBuffer, decode
