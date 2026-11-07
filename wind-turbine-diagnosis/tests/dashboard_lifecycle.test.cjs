@@ -12,6 +12,11 @@ const { descriptor } = parse(readFileSync(path.resolve(__dirname, '../src/views/
 const script = compileScript(descriptor, { id: 'dashboard-test' }).content
   .replace(/^import .* from ['"].*['"]\r?\n/gm, '')
   .replace('export default', 'globalThis.Dashboard =')
+// 视图逻辑抽至 composables/useDashboard.js,测试在同一上下文装载其源码
+const composable = readFileSync(path.resolve(__dirname, '../src/composables/useDashboard.js'), 'utf8')
+  .replace(/^import .*\r?\n/gm, '')
+  .replace(/^export /gm, '')
+  .replace(/^function useDashboard/m, 'globalThis.useDashboard = function useDashboard')
 const renderer = vue.createRenderer({
   createElement: () => ({ children: [] }), createText: () => ({}), createComment: () => ({}),
   insert: (child, parent) => parent.children.push(child), remove() {}, setText() {}, setElementText() {},
@@ -24,6 +29,8 @@ function harness(fetchData) {
   const context = {
     ...vue, console,
     getDeviceInfo: fetchData,
+    // 视图拆分后 __returned__ 引用子组件标识符(import 已剥离),提供空壳桩
+    SummaryCards: {}, DeviceCardList: {},
     setInterval: callback => { timers.add(callback); return callback },
     clearInterval: callback => timers.delete(callback),
     window: { addEventListener: (_, cb) => resize.add(cb), removeEventListener: (_, cb) => resize.delete(cb) },
@@ -37,6 +44,7 @@ function harness(fetchData) {
       return chart
     } }
   }
+  vm.runInNewContext(composable, context)
   vm.runInNewContext(script, context)
   context.Dashboard.render = () => {
     const state = vue.getCurrentInstance().setupState
