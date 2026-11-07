@@ -95,9 +95,11 @@ dc24/                       # DC24 现场采集工具链(uv workspace 成员,Win
 ├── dc24_profiles.json      # 原厂 12 档 B5 命令负载
 └── tests/                  # test_dc24_start / test_dc24_vendor
 
-edge/                       # Rust 边端(开发稿,目标树莓派;cargo 管理,不经 uv;源码零改动)
+edge/                       # Rust 边端(开发稿,目标树莓派;cargo 管理,不经 uv)
 ├── src/ tests/ Cargo.toml / Cargo.lock
+│   └── ffi.rs              # C ABI 网络接收核心(cdylib dc24_edge_core,树莓派主路线)
 ├── deploy/dc24-edge.service    # 未安装的 systemd 模板
+├── FFI.md                  # FFI 契约(Python 驱动接入文档)
 └── README.md               # 开发稿说明(可调配置、验证状态、部署限制)
 
 deploy/                     # 部署资产:cloud/CNN.service(systemd 模板)、
