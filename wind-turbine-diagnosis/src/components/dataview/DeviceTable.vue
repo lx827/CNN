@@ -87,7 +87,7 @@
 <script setup>
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { deleteBatch, deleteSpecialBatches } from '../../api'
+import { deleteBatch, deleteSpecialBatches } from '../../api/data'
 import { formatTime } from '../../utils/format'
 import { getStatusText, getStatusType } from '../../utils/status'
 

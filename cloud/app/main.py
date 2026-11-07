@@ -48,6 +48,8 @@ app.include_router(collect.router, dependencies=[Depends(optional_auth)])
 app.include_router(system.router, dependencies=[Depends(optional_auth)])
 app.include_router(acquisition.router)
 app.include_router(acquisition_live.router)
+# 实时示波 WS 推送(token 查询参数鉴权,与 /ws/monitor 相同模式)
+app.include_router(acquisition_live.ws_router)
 
 
 # WebSocket 实时推送端点

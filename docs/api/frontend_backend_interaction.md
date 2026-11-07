@@ -28,7 +28,7 @@
 
 | 前端调用点 | API 函数 | HTTP 方法 + URL | 后端处理函数 | 说明 |
 |-----------|---------|----------------|-------------|------|
-| `Login.vue` → 登录提交 | `api/index.js::login(password)` | `POST /api/auth/login` | `auth.py::login` | ⚠️ 影响前端：返回 JWT Token，前端存入 `localStorage` |
+| `Login.vue` → 登录提交 | `api/auth.js::login(password)` | `POST /api/auth/login` | `auth.py::login` | ⚠️ 影响前端：返回 JWT Token，前端存入 `localStorage` |
 | `request.js` → 请求拦截器 | — | 自动注入 `Authorization: Bearer <token>` | — | 所有 HTTP 请求自动携带 Token |
 | `request.js` → 响应拦截器 | — | 处理 `401 Unauthorized` | — | ⚠️ 影响前端：Token 过期或无效时自动跳转登录页 |
 
@@ -42,7 +42,7 @@
 
 | 前端调用点 | API 函数 | HTTP 方法 + URL | 后端处理函数 | 说明 |
 |-----------|---------|----------------|-------------|------|
-| `Dashboard.vue::loadData()` | `api/index.js::getDeviceInfo()` | `GET /api/dashboard/` | `dashboard.py::get_dashboard` | 获取设备总览信息 |
+| `Dashboard.vue::loadData()` | `api/dashboard.js::getDeviceInfo()` | `GET /api/dashboard/` | `dashboard.py::get_dashboard` | 获取设备总览信息 |
 | `Dashboard.vue` → WebSocket | — | `WS /ws/monitor` | `main.py` WebSocket 端点 | 🌐 WebSocket 推送：`device_online`, `device_offline` |
 
 ---
@@ -61,11 +61,11 @@
 | `DataView.vue::computeOrder()` | `api/data.js::getChannelOrder()` | `GET /api/data/{id}/{batch}/{ch}/order` | `data_view/order.py::get_channel_order` | ⏳ async：计算阶次跟踪谱 |
 | `DataView.vue::computeCepstrum()` | `api/data.js::getChannelCepstrum()` | `GET /api/data/{id}/{batch}/{ch}/cepstrum` | `data_view/cepstrum.py::get_channel_cepstrum` | ⏳ async：计算倒频谱 |
 | `DataView.vue::computeGear()` | `api/data.js::getChannelGear()` | `GET /api/data/{id}/{batch}/{ch}/gear` | `data_view/gear.py::get_channel_gear` | ⏳ async：齿轮诊断分析 |
-| `DataView.vue::computeFullAnalysis()` | `api/data.js::getChannelFullAnalysis()` | `GET /api/data/{id}/{batch}/{ch}/full-analysis` | `data_view/gear.py::get_channel_full_analysis` | ⏳ async：全算法综合分析 |
-| `DataView.vue::computeStrategyAnalyze()` | `api/data.js::getChannelAnalyze()` | `GET /api/data/{id}/{batch}/{ch}/analyze` | `data_view/gear.py::get_channel_analyze` | ⏳ async：策略分析（综合诊断） |
+| `DataView.vue::computeFullAnalysis()` | `api/diagnosis.js::getChannelFullAnalysis()` | `GET /api/data/{id}/{batch}/{ch}/full-analysis` | `data_view/gear.py::get_channel_full_analysis` | ⏳ async：全算法综合分析 |
+| `DataView.vue::computeStrategyAnalyze()` | `api/diagnosis.js::getChannelAnalyze()` | `GET /api/data/{id}/{batch}/{ch}/analyze` | `data_view/gear.py::get_channel_analyze` | ⏳ async：策略分析（综合诊断） |
 | `DataView.vue::computeStats()` | `api/data.js::getChannelStats()` | `GET /api/data/{id}/{batch}/{ch}/stats` | `data_view/spectrum.py::get_channel_stats` | 计算时域统计指标 |
-| `DataView.vue::onReanalyze()` | `api/data.js::reanalyzeBatch()` | `POST /api/data/{id}/{batch}/reanalyze` | `data_view/diagnosis_ops.py::reanalyze_batch` | ⏳ async：单批次重新诊断 |
-| `DataView.vue::onReanalyzeAll()` | `api/data.js::reanalyzeAllDevice()` | `POST /api/data/{id}/reanalyze-all` | `data_view/diagnosis_ops.py::reanalyze_all_batches` | ⏳ async：全部批次重新诊断 |
+| `DataView.vue::onReanalyze()` | `api/diagnosis.js::reanalyzeBatch()` | `POST /api/data/{id}/{batch}/reanalyze` | `data_view/diagnosis_ops.py::reanalyze_batch` | ⏳ async：单批次重新诊断 |
+| `DataView.vue::onReanalyzeAll()` | `api/diagnosis.js::reanalyzeAllDevice()` | `POST /api/data/{id}/reanalyze-all` | `data_view/diagnosis_ops.py::reanalyze_all_batches` | ⏳ async：全部批次重新诊断 |
 | `DataView.vue::onDeleteBatch()` | `api/data.js::deleteBatch()` | `DELETE /api/data/{id}/{batch}` | `data_view/core.py::delete_batch` | 删除指定批次数据 |
 | `DataView.vue::exportChannelCSV()` | `window.open()` 直接打开 | `GET /api/data/{id}/{batch}/{ch}/export` | `data_view/export.py::export_channel_csv` | 导出通道数据为 CSV 文件 |
 | `DataView.vue::gotoResearchDiagnosis()` | — | 路由跳转带 query 参数 | — | 跳转到高级诊断页面，携带设备/批次/通道参数 |
@@ -79,9 +79,9 @@
 | 前端调用点 | API 函数 | HTTP 方法 + URL | 后端处理函数 | 说明 |
 |-----------|---------|----------------|-------------|------|
 | `ResearchDiagnosis.vue::loadDevices()` | `api/data.js::getAllDeviceData()` | `GET /api/data/devices` | `data_view/core.py::get_all_device_data` | 加载设备列表（复用 DataView API） |
-| `ResearchDiagnosis.vue::loadMethodInfo()` | `api/data.js::getMethodInfo()` | `GET /api/data/method-info` | `data_view/research.py::get_method_info` | 获取可用分析方法列表 |
-| `ResearchDiagnosis.vue::runAnalysis()` | `api/data.js::getChannelMethodAnalysis()` | `GET /api/data/{id}/{batch}/{ch}/method-analysis` | `data_view/research.py` | ⏳ async：指定方法单分析 |
-| `ResearchDiagnosis.vue::runAnalysis()` | `api/data.js::getChannelResearchAnalysis()` | `GET /api/data/{id}/{batch}/{ch}/research-analysis` | `data_view/research.py` | ⏳ async：集成诊断（返回 ensemble 投票/置信度/D-S 融合） |
+| `ResearchDiagnosis.vue::loadMethodInfo()` | `api/diagnosis.js::getMethodInfo()` | `GET /api/data/method-info` | `data_view/research.py::get_method_info` | 获取可用分析方法列表 |
+| `ResearchDiagnosis.vue::runAnalysis()` | `api/diagnosis.js::getChannelMethodAnalysis()` | `GET /api/data/{id}/{batch}/{ch}/method-analysis` | `data_view/research.py` | ⏳ async：指定方法单分析 |
+| `ResearchDiagnosis.vue::runAnalysis()` | `api/diagnosis.js::getChannelResearchAnalysis()` | `GET /api/data/{id}/{batch}/{ch}/research-analysis` | `data_view/research.py` | ⏳ async：集成诊断（返回 ensemble 投票/置信度/D-S 融合） |
 
 **数据流说明**：
 
@@ -101,8 +101,8 @@
 
 | 前端调用点 | API 函数 | HTTP 方法 + URL | 后端处理函数 | 说明 |
 |-----------|---------|----------------|-------------|------|
-| `Monitor.vue::loadLatestData()` | `api/index.js::getRealtimeVibrationData()` | `GET /api/monitor/latest` | `monitor.py::get_latest_monitor` | 获取最新监测数据 |
-| `Monitor.vue::loadHistory()` | `api/index.js::getMonitorHistory()` | `GET /api/monitor/history` | `monitor.py::get_monitor_history` | 获取某通道最近N批次历史数据 |
+| `Monitor.vue::loadLatestData()` | `api/monitor.js::getRealtimeVibrationData()` | `GET /api/monitor/latest` | `monitor.py::get_latest_monitor` | 获取最新监测数据 |
+| `Monitor.vue::loadHistory()` | `api/monitor.js::getMonitorHistory()` | `GET /api/monitor/history` | `monitor.py::get_monitor_history` | 获取某通道最近N批次历史数据 |
 | `Monitor.vue::requestCollect()` | `api/system.js::requestCollection()` | `POST /api/collect/request` | `collect.py::request_collection` | 发起手动采集任务 |
 | `Monitor.vue::startPolling()` | `api/system.js::getTaskStatus()` | `GET /api/collect/tasks/{id}/status` | `collect.py::get_task_status` | 轮询采集任务状态 |
 | 待接入页面 | `api/system.js::getCollectionHistory()` | `GET /api/collect/history` | `collect.py::get_collection_history` | 查询采集历史记录 |
@@ -120,10 +120,10 @@
 
 | 前端调用点 | API 函数 | HTTP 方法 + URL | 后端处理函数 | 说明 |
 |-----------|---------|----------------|-------------|------|
-| `Alarm.vue::loadData()` | `api/alarm.js::getHistoryAlarmList()` | `GET /api/alarms/` | `alarms.py::get_alarms` | 获取告警历史列表 |
-| `Alarm.vue::handleResolve()` | `api/alarm.js::updateAlarmStatus()` | `POST /api/alarms/{id}/resolve` | `alarms.py::resolve_alarm` | 将告警标记为已处理 |
-| `Alarm.vue::handleDelete()` | `api/alarm.js::deleteAlarm()` | `DELETE /api/alarms/{id}` | `alarms.py::delete_alarm` | 删除告警记录 |
-| `Alarm.vue::loadDeviceList()` | `api/device.js::getDevices()` | `GET /api/devices/` | `devices/core.py::get_devices` | 加载设备列表用于筛选 |
+| `Alarm.vue::loadData()` | `api/alarms.js::getHistoryAlarmList()` | `GET /api/alarms/` | `alarms.py::get_alarms` | 获取告警历史列表 |
+| `Alarm.vue::handleResolve()` | `api/alarms.js::updateAlarmStatus()` | `POST /api/alarms/{id}/resolve` | `alarms.py::resolve_alarm` | 将告警标记为已处理 |
+| `Alarm.vue::handleDelete()` | `api/alarms.js::deleteAlarm()` | `DELETE /api/alarms/{id}` | `alarms.py::delete_alarm` | 删除告警记录 |
+| `Alarm.vue::loadDeviceList()` | `api/devices.js::getDevices()` | `GET /api/devices/` | `devices/core.py::get_devices` | 加载设备列表用于筛选 |
 
 > **⚠️ 影响前端**：`Alarm.vue` 中告警状态流转（未处理 → 已处理）依赖响应数据实时更新列表。
 
@@ -133,11 +133,11 @@
 
 | 前端调用点 | API 函数 | HTTP 方法 + URL | 后端处理函数 | 说明 |
 |-----------|---------|----------------|-------------|------|
-| `Settings.vue::loadDevices()` | `api/device.js::getDevices()` | `GET /api/devices/` | `devices/core.py::get_devices` | 加载设备列表 |
-| `Settings.vue::onDeviceChange()` | `api/device.js::getDeviceConfig()` | `GET /api/devices/{id}/config` | `devices/config.py::get_device_config` | 获取指定设备配置 |
-| `Settings.vue::onSaveEdgeConfig()` | `api/device.js::updateDeviceConfig()` | `PUT /api/devices/{id}/config` | `devices/config.py::update_device_config` | 保存边端采集配置 |
-| `Settings.vue::onSaveMechanical()` | `api/device.js::updateDeviceConfig()` | `PUT /api/devices/{id}/config` | `devices/config.py::update_device_config` | 保存机械参数（轴承/齿轮参数） |
-| `Settings.vue::onSaveThresholds()` | `api/device.js::updateAlarmThresholds()` | `PUT /api/devices/{id}/alarm-thresholds` | `devices/config.py::update_alarm_thresholds` | 保存告警阈值 |
+| `Settings.vue::loadDevices()` | `api/devices.js::getDevices()` | `GET /api/devices/` | `devices/core.py::get_devices` | 加载设备列表 |
+| `Settings.vue::onDeviceChange()` | `api/devices.js::getDeviceConfig()` | `GET /api/devices/{id}/config` | `devices/config.py::get_device_config` | 获取指定设备配置 |
+| `Settings.vue::onSaveEdgeConfig()` | `api/devices.js::updateDeviceConfig()` | `PUT /api/devices/{id}/config` | `devices/config.py::update_device_config` | 保存边端采集配置 |
+| `Settings.vue::onSaveMechanical()` | `api/devices.js::updateDeviceConfig()` | `PUT /api/devices/{id}/config` | `devices/config.py::update_device_config` | 保存机械参数（轴承/齿轮参数） |
+| `Settings.vue::onSaveThresholds()` | `api/devices.js::updateAlarmThresholds()` | `PUT /api/devices/{id}/alarm-thresholds` | `devices/config.py::update_alarm_thresholds` | 保存告警阈值 |
 
 > **⚠️ 影响前端**：`Settings.vue` 中机械参数（轴承 `n/d/D`、齿轮齿数等）直接影响后端诊断引擎的 `skip_bearing` / `skip_gear` 逻辑，前端表单校验需与后端参数有效性校验保持一致。
 
@@ -163,6 +163,19 @@
 | 边端（Rust `edge/`） | — | `POST /api/collect/tasks/{id}/complete` | `collect.py::complete_task` | 边端上报采集任务完成 |
 
 > **⚠️ 注意**：边端与 `ingest.py` 之间的数据格式（msgpack + zlib 压缩结构）变更时，必须同步修改边端实现（旧 `edge_client.py`/`compressor.py` 已随 2026-11 布局重构退役）和后端 `ingest.py` 的解压逻辑。
+
+---
+
+## 10. DC24 实时采集 (Acquisition)
+
+> 2026-11-08（issue #51）：实时窗口读取从 HTTP 轮询迁到 WebSocket 推送；边端上报链路保持 HTTP。
+
+| 调用方 | API/工具 | 方式 | 说明 |
+|--------|---------|------|------|
+| `Acquisition.vue` | `api/acquisition.js::getAcquisitionAgents/getAcquisitionJobs` | REST 轮询(每 2s) | 边端列表与保存记录 |
+| `Acquisition.vue` | `api/acquisition.js::startLiveSession/stopLiveSession/...` | REST | 会话生命周期、录制、目录选择 |
+| `Acquisition.vue` | `utils/websocket.js::createWebSocketClient('/ws/acquisition/sessions/{id}/view')` | **WS 推送** | 连接即上报 options；`view` 推送驱动图表、`session` 推送更新状态;WS 未连上回退 `getLiveView` REST 轮询,断线指数退避重连 |
+| 边端（DC24） | — | HTTP 不变 | `POST /api/acquisition/sessions/{id}/frames` 原始计数帧上报、`POST .../state` 状态上报 |
 
 ---
 

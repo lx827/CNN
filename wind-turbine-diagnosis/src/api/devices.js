@@ -1,3 +1,7 @@
+/**
+ * 设备配置接口(/api/devices)
+ * 设备列表、边端采集配置、机械参数、告警阈值
+ */
 import request from '../utils/request'
 
 export const getDevices = async () => {

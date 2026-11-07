@@ -7,6 +7,7 @@ const vm = require('node:vm')
 const source = fs.readFileSync(path.resolve(__dirname, '../src/utils/websocket.js'), 'utf8')
   .replace(/^import .*\r?\n/gm, '')
   .replace('export const getWebSocketClient', 'globalThis.getWebSocketClient')
+  .replace('export const createWebSocketClient', 'globalThis.createWebSocketClient')
 
 function harness() {
   const sockets = [], timeouts = new Map(), intervals = new Map()
@@ -14,20 +15,20 @@ function harness() {
   class Socket {
     static CONNECTING = 0
     static OPEN = 1
-    constructor() { this.readyState = 0; sockets.push(this) }
+    constructor(url) { this.readyState = 0; this.url = url || ''; sockets.push(this) }
     close() { this.readyState = 3 }
     send() {}
     open() { this.readyState = 1; this.onopen() }
   }
   const context = {
-    WebSocket: Socket, URL, getWebSocketURL: () => 'ws://localhost/ws/monitor',
+    WebSocket: Socket, URL, getWebSocketURL: (p = '/ws/monitor') => `ws://localhost${p}`,
     localStorage: { getItem: () => null }, window: { location: { href: 'http://localhost' } },
     console: { log() {}, warn() {}, error() {} },
     setTimeout: cb => { timeouts.set(++id, cb); return id }, clearTimeout: key => timeouts.delete(key),
     setInterval: cb => { intervals.set(++id, cb); return id }, clearInterval: key => intervals.delete(key)
   }
   vm.runInNewContext(source, context)
-  return { client: context.getWebSocketClient(), sockets, timeouts, intervals }
+  return { client: context.getWebSocketClient(), factory: context.createWebSocketClient, sockets, timeouts, intervals }
 }
 
 test('握手期间重复 connect 不创建多条连接', () => {
@@ -58,4 +59,30 @@ test('重连定时器去重，主动关闭阻止后续重连', () => {
   h.client.close()
   h.client.scheduleReconnect()
   assert.equal(h.timeouts.size, 0)
+})
+
+test('getWebSocketClient 单例固定 /ws/monitor;createWebSocketClient 按端点新建独立客户端', () => {
+  const h = harness()
+  h.client.connect()
+  const a = h.factory('/ws/acquisition/sessions/s1/view')
+  const b = h.factory('/ws/acquisition/sessions/s2/view')
+  assert.notEqual(a, h.client)
+  assert.notEqual(a, b, '工厂必须每次返回新实例,不复用单例')
+  a.connect()
+  b.connect()
+  assert.equal(h.sockets.length, 3, '单例与两个工厂实例各自建连')
+  assert.match(h.sockets[1].url, /\/ws\/acquisition\/sessions\/s1\/view$/)
+  assert.match(h.sockets[2].url, /\/ws\/acquisition\/sessions\/s2\/view$/)
+  assert.match(h.sockets[0].url, /\/ws\/monitor$/, '默认单例仍指向 /ws/monitor')
+})
+
+test('工厂实例连接/心跳/重连复用同一套逻辑,互不影响', () => {
+  const h = harness()
+  const a = h.factory('/ws/acquisition/sessions/s1/view')
+  a.connect()
+  h.sockets[0].open()
+  assert.equal(h.intervals.size, 1, '工厂实例启动心跳')
+  a.close()
+  a.scheduleReconnect()
+  assert.equal(h.timeouts.size, 0, '主动关闭后不重连')
 })

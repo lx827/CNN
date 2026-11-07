@@ -27,7 +27,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { getSystemLogs } from '../api'
+import { getSystemLogs } from '../api/system'
 
 const logs = ref('')
 const error = ref('')

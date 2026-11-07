@@ -1,144 +1,29 @@
 /**
- * API 接口层
- * 负责调用云端 FastAPI 后端服务，并将后端数据转换为前端需要的格式
+ * API 接口层 —— 按域模块汇总出口
+ * 负责调用云端 FastAPI 后端服务,并将后端数据转换为前端需要的格式
  *
- * 后端地址通过 vite.config.js 的 proxy 配置代理到 localhost:8000
+ * 模块划分(与后端路由一一对应,契约事实源 docs/api/openapi.json):
+ *   auth.js        认证(/api/auth)
+ *   dashboard.js   设备总览(/api/dashboard)
+ *   monitor.js     实时监测(/api/monitor)
+ *   data.js        数据查看(/api/data 数据与频谱部分)
+ *   diagnosis.js   诊断(/api/data 诊断与分析部分)
+ *   devices.js     设备配置(/api/devices)
+ *   alarms.js      告警(/api/alarms)
+ *   system.js      系统日志与手动采集(/api/logs、/api/collect)
+ *   acquisition.js DC24 采集与实时示波(/api/acquisition)
+ *   ingest.js      边端数据接入(/api/ingest,前端暂不直接调用)
+ *
+ * 后端地址通过 vite.config.js 的 proxy 配置代理;视图优先从具体域模块导入,
+ * 汇总出口供需要跨域批量导入的场合使用。
  */
-import request from '../utils/request'
-
-// ==================== 认证 ====================
-export const login = (data) => request.post('/api/auth/login', data)
-
-import { formatDateTime } from '../utils/format'
-import { calcRms, calcPeak } from '../utils/math'
-
-// ==================== Dashboard ====================
-
-export const getDeviceInfo = async () => {
-  const res = await request.get('/api/dashboard/')
-  const backend = res.data || {}
-  const devices = backend.devices || []
-  const diag = backend.diagnosis || {}
-  const alarmStats = backend.alarm_stats || {}
-
-  const deviceList = devices.map((device, idx) => {
-    const isOffline = device.status === 'offline'
-    const dDiag = diag[device.device_id] || {}
-    const health = dDiag.health_score || device.health_score || 87
-    const status = isOffline ? 'offline' : (dDiag.status || device.status || 'normal')
-
-    const getComponentInfo = (channelName) => {
-      const name = (channelName || '').toLowerCase()
-      if (name.includes('轴承')) return { type: '轴承系统', offset: 8 }
-      if (name.includes('齿轮') || name.includes('驱动')) return { type: '齿轮系统', offset: 5 }
-      if (name.includes('风扇')) return { type: '风扇系统', offset: 0 }
-      if (name.includes('轴')) return { type: '轴系', offset: 3 }
-      if (name.includes('底座') || name.includes('基础') || name.includes('松动')) return { type: '底座/基础', offset: -2 }
-      return { type: channelName || '通用部件', offset: 0 }
-    }
-
-    const channelNames = device.channel_names || {}
-    const channelCount = device.channel_count || 3
-    const components = []
-    for (let i = 1; i <= channelCount; i++) {
-      const chName = channelNames[String(i)] || `通道${i}`
-      const compInfo = getComponentInfo(chName)
-      if (isOffline) {
-        const compHealth = Math.min(100, Math.max(0, health + compInfo.offset))
-        const compStatus = compHealth > 80 ? 'normal' : compHealth > 60 ? 'warning' : 'fault'
-        components.push({
-          id: i,
-          name: `${compInfo.type}（${chName}）`,
-          status: compStatus,
-          health: compHealth
-        })
-      } else {
-        const compHealth = Math.min(100, Math.max(0, health + compInfo.offset))
-        const compStatus = compHealth > 80 ? 'normal' : compHealth > 60 ? 'warning' : 'fault'
-        components.push({
-          id: i,
-          name: `${compInfo.type}（${chName}）`,
-          status: compStatus,
-          health: compHealth
-        })
-      }
-    }
-
-    return {
-      deviceId: device.device_id,
-      deviceName: device.name,
-      status: device.status,
-      healthScore: device.health_score,
-      runHours: device.runtime_hours,
-      location: device.location,
-      diagnosis: dDiag,
-      components,
-      alarmCount: alarmStats.total || 0,
-    }
-  })
-
-  return {
-    code: 200,
-    data: {
-      devices: deviceList,
-      alarmStats,
-      selectedDevice: deviceList[0] || null,
-    }
-  }
-}
-
-// ==================== Monitor ====================
-
-export const getRealtimeVibrationData = async (deviceId = 'WTG-001', preferSpecial = false) => {
-  const res = await request.get('/api/monitor/latest', {
-    params: { device_id: deviceId, prefer_special: preferSpecial }
-  })
-  const backendList = res.data || []
-  const sensorParams = res.sensor_params || {}
-
-  const defaultChannelNames = ['通道1-轴承附近', '通道2-驱动端', '通道3-风扇端']
-
-  const channels = backendList.map((item, idx) => {
-    const data = item.data || []
-    const fftFreq = item.fft_freq || []
-    const fftAmp = item.fft_amp || []
-
-    return {
-      id: item.channel || idx + 1,
-      name: item.channel_name || defaultChannelNames[idx] || `通道${idx + 1}`,
-      channel_name: item.channel_name || defaultChannelNames[idx] || `通道${idx + 1}`,
-      unit: 'mm/s',
-      sampleRate: item.sample_rate || 25600,
-      timeDomain: data,
-      frequency: fftAmp,
-      fftFreq: fftFreq,
-      rms: parseFloat(calcRms(data).toFixed(2)),
-      peak: parseFloat(calcPeak(data).toFixed(2))
-    }
-  })
-
-  return {
-    code: 200,
-    data: {
-      timestamp: backendList[0]?.timestamp || new Date().toISOString(),
-      channels,
-      sensorParams
-    }
-  }
-}
-
-// ==================== Monitor 历史数据 ====================
-
-export const getMonitorHistory = async (deviceId = 'WTG-001', channel = 1, batches = 16, includeSpecial = true) => {
-  const res = await request.get('/api/monitor/history', {
-    params: { device_id: deviceId, channel, batches, include_special: includeSpecial }
-  })
-  return res
-}
-
-// ==================== 子模块统一导出 ====================
-
+export * from './auth'
+export * from './dashboard'
+export * from './monitor'
 export * from './data'
-export * from './device'
-export * from './alarm'
+export * from './diagnosis'
+export * from './devices'
+export * from './alarms'
 export * from './system'
+export * from './acquisition'
+export * from './ingest'

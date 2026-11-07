@@ -14,6 +14,11 @@ const { descriptor } = parse(source)
 const script = compileScript(descriptor, { id: 'monitor-lifecycle-test' }).content
   .replace(/^import .* from ['"].*['"]\r?\n/gm, '')
   .replace('export default', 'globalThis.Monitor =')
+// 视图逻辑抽至 composables/useMonitor.js,测试在同一上下文装载其源码
+const composable = readFileSync(path.resolve(__dirname, '../src/composables/useMonitor.js'), 'utf8')
+  .replace(/^import .*\r?\n/gm, '')
+  .replace(/^export /gm, '')
+  .replace(/^function useMonitor/m, 'globalThis.useMonitor = function useMonitor')
 
 const renderer = vue.createRenderer({
   createElement: () => ({ children: [] }),
@@ -97,8 +102,11 @@ function createHarness({ devicesPromise, fetchData, taskStatus, timers = {} } = 
     requestCollection: async () => { throw new Error('本测试禁止创建采集任务') },
     getTaskStatus: taskStatus || (async () => { throw new Error('本测试禁止查询采集任务') }),
     getWebSocketClient: () => socket,
-    ElMessage: { success() {}, warning() {}, error() {} }
+    ElMessage: { success() {}, warning() {}, error() {} },
+    // 视图拆分后 __returned__ 引用子组件标识符(import 已剥离),提供空壳桩
+    SensorStatusCard: {}, RunParamsCard: {}, CollectionProgress: {}
   }
+  vm.runInNewContext(composable, context, { filename: 'useMonitor.js' })
   vm.runInNewContext(script, context, { filename: 'Monitor.vue' })
   // 只替换模板容器；setup、异步挂载、watch 和卸载使用实际组件代码与 Vue 运行时。
   context.Monitor.render = function () {

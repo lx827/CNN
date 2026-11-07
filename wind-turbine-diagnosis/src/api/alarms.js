@@ -1,3 +1,7 @@
+/**
+ * 告警接口(/api/alarms)
+ * 历史告警分页查询、标记处理、删除
+ */
 import request from '../utils/request'
 
 function formatDateTime(dt) {

@@ -46,6 +46,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } 
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import { getAcquisitionAgents, getAcquisitionJobs, downloadAcquisitionFile, getAcquisitionCapabilities, startLiveSession, getLiveSession, getCurrentLiveSession, stopLiveSession, getLiveView, startLiveRecording, stopLiveRecording, selectAcquisitionDirectory, getAcquisitionDirectory } from '../api/acquisition'
+import { createWebSocketClient } from '../utils/websocket'
 const agents = ref([]), jobs = ref([]), session = ref(null), view = ref(null), nativeRates = ref([])
 const connectionError = ref('')
 const starting = ref(false), stopping = ref(false), saving = ref(false), selectingDirectory = ref(false), directoryEdited = ref(false)
@@ -65,6 +66,50 @@ const visibleKinds = computed(() => kinds.filter(k => show[k.key]))
 const containers = new Map(), charts = new Map()
 let disposed = false, timer, turn = 0, lastRevision = -1, lastOptions = '', pickerId = '', pollCount = 0
 function analysisOptions() { return { fft: show.fft, rms: show.rms, envelope: show.envelope, band_low: show.envelope ? form.band_low : null, band_high: show.envelope ? form.band_high : null } }
+
+// —— 实时窗口订阅(issue #51):view 数据优先经 WS 推送;WS 未连上时回退 REST 轮询 ——
+let viewSocket = null, viewSocketOpen = false, viewSocketId = ''
+function viewOptions() {
+  const options = { ...analysisOptions(), waveform: show.waveform, wave_seconds: form.wave_seconds }
+  if (bandError.value) options.envelope = false
+  return options
+}
+function closeViewSocket() {
+  viewSocketId = ''
+  if (viewSocket) {
+    viewSocketOpen = false
+    const sock = viewSocket
+    viewSocket = null
+    sock.close()
+  }
+}
+function sendViewOptions() {
+  if (viewSocket && viewSocketOpen) viewSocket.send({ type: 'options', ...viewOptions() })
+}
+function openViewSocket(id) {
+  if (viewSocketId === id && viewSocket) return
+  closeViewSocket()
+  viewSocketId = id
+  const sock = createWebSocketClient(`/ws/acquisition/sessions/${id}/view`)
+  viewSocket = sock
+  sock.on('open', () => { if (viewSocket !== sock) return; viewSocketOpen = true; sendViewOptions() })
+  sock.on('view', data => {
+    if (disposed || viewSocket !== sock || session.value?.id !== id) return
+    view.value = data
+    if (data?.session) { session.value = data.session; lastRevision = data.session.revision ?? lastRevision }
+    lastOptions = JSON.stringify(viewOptions())
+    draw()
+  })
+  sock.on('session', data => {
+    if (disposed || viewSocket !== sock || session.value?.id !== id) return
+    session.value = data
+  })
+  sock.on('close', () => { if (viewSocket === sock) viewSocketOpen = false })
+  sock.connect()
+}
+watch(() => session.value && !['stopped', 'failed'].includes(session.value.status) ? session.value.id : null,
+  id => { if (id) openViewSocket(id); else closeViewSocket() })
+watch([show, () => form.wave_seconds, () => form.band_low, () => form.band_high], sendViewOptions, { deep: true })
 async function refreshAgents() {
   const [a, j] = await Promise.all([getAcquisitionAgents(), getAcquisitionJobs()])
   if (disposed) return
@@ -133,13 +178,18 @@ async function poll() {
       if (disposed || version !== turn || session.value?.id !== id) return
       connectionError.value = ''
       session.value = r.data
-      const options = { ...analysisOptions(), waveform: show.waveform, wave_seconds: form.wave_seconds }
-      if (bandError.value) options.envelope = false
-      const key = JSON.stringify(options)
-      if (r.data.revision !== lastRevision || key !== lastOptions) {
-        const result = await getLiveView(id, options); if (disposed || version !== turn || session.value?.id !== id) return
-        view.value = result.data; lastRevision = r.data.revision; lastOptions = key; await draw()
-      } else if (view.value) view.value.fresh = r.data.status === 'streaming' && Date.now()-new Date(r.data.received_at).getTime() < Math.max(3000, 508000/r.data.sample_rate)
+      if (viewSocketOpen) {
+        // view 数据经 WS 推送到达;轮询只负责会话状态与新鲜度回退显示
+        if (view.value) view.value.fresh = r.data.status === 'streaming' && Date.now()-new Date(r.data.received_at).getTime() < Math.max(3000, 508000/r.data.sample_rate)
+      } else {
+        const options = { ...analysisOptions(), waveform: show.waveform, wave_seconds: form.wave_seconds }
+        if (bandError.value) options.envelope = false
+        const key = JSON.stringify(options)
+        if (r.data.revision !== lastRevision || key !== lastOptions) {
+          const result = await getLiveView(id, options); if (disposed || version !== turn || session.value?.id !== id) return
+          view.value = result.data; lastRevision = r.data.revision; lastOptions = key; await draw()
+        } else if (view.value) view.value.fresh = r.data.status === 'streaming' && Date.now()-new Date(r.data.received_at).getTime() < Math.max(3000, 508000/r.data.sample_rate)
+      }
     }
   } catch { if (!disposed) { connectionError.value = '实时连接中断，正在重试；当前显示最后收到的数据'; if (view.value) view.value.fresh = false } } finally { if (!disposed) timer = setTimeout(poll, 500) }
 }
@@ -149,7 +199,7 @@ watch(() => form.agent_id, async id => {
   try { const r = await getCurrentLiveSession(id); if (disposed || version !== turn) return; session.value = r.data; view.value = null; lastRevision = -1; disposeCharts(); if (r.data) form.sample_rate = r.data.sample_rate } catch {}
 })
 onMounted(async () => { window.addEventListener('resize', resize); try { const c = await getAcquisitionCapabilities(); if (!disposed) nativeRates.value = c.data.sample_rates; await refreshAgents() } finally { if (!disposed) poll() } })
-onBeforeUnmount(() => { disposed = true; turn++; clearTimeout(timer); window.removeEventListener('resize', resize); disposeCharts() })
+onBeforeUnmount(() => { disposed = true; turn++; clearTimeout(timer); closeViewSocket(); window.removeEventListener('resize', resize); disposeCharts() })
 </script>
 
 <style scoped>
