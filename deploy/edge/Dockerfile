@@ -28,14 +28,16 @@ FROM ${RUST_IMAGE} AS builder
 #   x86_64-unknown-linux-gnu  —— x64 本机构建(WSL/ECS 上试跑)
 ARG TARGET_TRIPLE=aarch64-unknown-linux-gnu
 
-# 交叉目标需要 aarch64 的 gcc/binutils:
+# 交叉目标需要 aarch64 的 gcc/binutils 与 libc 头文件/库:
 # - 链接器(rustc 只调用 linker,自身不带 C 工具链)
-# - ring 0.17(rustls 后端)含 C/汇编,由 cc 构建脚本编译,同样走交叉 gcc
+# - ring 0.17(rustls 后端)含 C/汇编,由 cc 构建脚本编译,同样走交叉 gcc;
+#   缺 libc6-dev-arm64-cross 时会误用宿主 x86 头文件(bits/libc-header-start.h 缺失)
 RUN set -eux; \
     if [ "$TARGET_TRIPLE" = "aarch64-unknown-linux-gnu" ]; then \
         apt-get update; \
         apt-get install -y --no-install-recommends \
-            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu; \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            libc6-dev-arm64-cross; \
         rm -rf /var/lib/apt/lists/*; \
     fi; \
     rustup target add "$TARGET_TRIPLE"
