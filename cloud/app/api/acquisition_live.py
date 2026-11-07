@@ -1,17 +1,23 @@
-"""实时示波、示波中保存和逐文件流式接收。复用现有认证与采集任务。"""
+"""实时示波、示波中保存和逐文件流式接收。复用现有认证与采集任务。
+
+网页读取实时窗口:REST GET /sessions/{id}/view 轮询(保留兼容)与
+WS /ws/acquisition/sessions/{id}/view 推送(2026-11 新增,issue #51)共用同一套
+窗口计算;边端 POST /sessions/{id}/frames 上报保持 HTTP 不变。
+"""
 import asyncio
 from datetime import timedelta
 import json
 from pathlib import Path
 import socket
+import time
 import uuid
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.auth import optional_auth
+from app.api.auth import optional_auth, verify_token_string
 from app.api.acquisition import (NATIVE_RATES, ACTIVE, AnalysisOptions, directory, edge_only,
                                 job_or_404, owned, now, snapshot)
 from app.database import get_db
@@ -190,15 +196,16 @@ async def frames(session_id: str, request: Request, agent_id: str, start: int = 
     return {'code': 200}
 
 
-@router.get('/sessions/{session_id}/view')
-async def view(session_id: str, waveform: bool = True, fft: bool = True, rms: bool = True,
-               envelope: bool = False, band_low: float | None = None, band_high: float | None = None,
-               wave_seconds: float = Query(.2, gt=0, le=2)):
-    s = get_session(session_id)
+async def build_view_payload(s, options, wave_seconds):
+    """实时窗口计算(REST view 与 WS 推送共用)。
+
+    options: dict(waveform/fft/rms/envelope/band_low/band_high)
+    wave_seconds: 波形显示区间秒数
+    返回 view 端点的 data 部分(含 waiting 短数据分支)。
+    """
     start, values = live.window(s)
     if len(values) < 64:
-        return {'code': 200, 'data': {'session': live.snapshot(s), 'channels': [], 'waiting': True}}
-    options = dict(fft=fft, rms=rms, envelope=envelope, band_low=band_low, band_high=band_high)
+        return {'session': live.snapshot(s), 'channels': [], 'waiting': True}
     try:
         result, _ = await asyncio.to_thread(analyze_counts, values, s['sample_rate'], options)
     except ValueError as exc:
@@ -207,14 +214,24 @@ async def view(session_id: str, waveform: bool = True, fft: bool = True, rms: bo
     for c in result['channels']:
         y = values[-n:, c['channel']]
         c['mean'] = float(values[:, c['channel']].mean())
-        c['waveform'] = display_points(np.arange(len(values)-len(y), len(values))/s['sample_rate']+start/s['sample_rate'], y, 12000) if waveform else []
-        if rms:
+        c['waveform'] = display_points(np.arange(len(values)-len(y), len(values))/s['sample_rate']+start/s['sample_rate'], y, 12000) if options.get('waveform', True) else []
+        if options.get('rms', True):
             with live.lock:
                 c['rms_curve'] = [[r[0], r[c['channel']+1]] for r in s['rms_history']]
     result.update(session=live.snapshot(s), window_start=start/s['sample_rate'],
                   window_end=(start+len(values))/s['sample_rate'],
-                  fresh=s['status'] == 'streaming' and __import__('time').monotonic()-s['last_upload'] < max(3, 508/s['sample_rate']),
+                  fresh=s['status'] == 'streaming' and time.monotonic()-s['last_upload'] < max(3, 508/s['sample_rate']),
                   scope='最近连续2秒以内的实时窗口；波形显示所选区间，原始保存不抽点')
+    return result
+
+
+@router.get('/sessions/{session_id}/view')
+async def view(session_id: str, waveform: bool = True, fft: bool = True, rms: bool = True,
+               envelope: bool = False, band_low: float | None = None, band_high: float | None = None,
+               wave_seconds: float = Query(.2, gt=0, le=2)):
+    s = get_session(session_id)
+    options = dict(fft=fft, rms=rms, envelope=envelope, band_low=band_low, band_high=band_high)
+    result = await build_view_payload(s, options, wave_seconds)
     return {'code': 200, 'data': result}
 
 
@@ -260,3 +277,109 @@ def finish(job_id: str, agent_id: str, db: Session = Depends(get_db)):
                 s['recording'].update(status=job.status, samples_per_channel=count,
                                        saved_directory=meta.get('saved_directory'))
     return {'code': 200, 'data': snapshot(job)}
+
+
+# ==================== WebSocket 实时窗口推送 ====================
+# 独立路由:不挂 router 级 optional_auth(HTTP 头依赖,浏览器 WS 无法携带),
+# 与 /ws/monitor 相同地用 token 查询参数 + verify_token_string 鉴权。
+
+ws_router = APIRouter()
+
+# 推送限频:与原 500ms HTTP 轮询同节奏,防止高频 revision 触发过密计算(2G 红线)
+WS_PUSH_INTERVAL = 0.4
+# 单次 receive 等待:兼听客户端消息(选项/心跳),超时进入推送判定
+WS_RECEIVE_TIMEOUT = 0.2
+
+
+@ws_router.websocket('/ws/acquisition/sessions/{session_id}/view')
+async def ws_view(websocket: WebSocket, session_id: str, token: str = Query(default=''),
+                  waveform: bool = True, fft: bool = True, rms: bool = True, envelope: bool = False,
+                  band_low: float | None = None, band_high: float | None = None,
+                  wave_seconds: float = Query(0.2, gt=0, le=2)):
+    try:
+        verify_token_string(token)
+    except Exception:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    try:
+        s = get_session(session_id)
+    except HTTPException:
+        # 会话不存在(后端可能已重启):接受握手后以 4404 关闭,前端走 REST 恢复路径
+        await websocket.accept()
+        await websocket.close(code=4404)
+        return
+    await websocket.accept()
+
+    options = dict(fft=fft, rms=rms, envelope=envelope, band_low=band_low, band_high=band_high)
+    seconds = wave_seconds
+    last_revision = None
+    last_snapshot_json = None
+    last_session_push = 0.0
+    last_view_push = 0.0
+
+    def _send(obj):
+        return websocket.send_text(json.dumps(obj, ensure_ascii=False, default=str))
+
+    try:
+        while True:
+            # 1) 消化客户端消息:心跳 pong / 选项更新
+            try:
+                raw = await asyncio.wait_for(websocket.receive_text(), timeout=WS_RECEIVE_TIMEOUT)
+                try:
+                    msg = json.loads(raw)
+                except ValueError:
+                    msg = {}
+                if msg.get('type') == 'ping':
+                    await _send({'type': 'pong'})
+                elif msg.get('type') == 'options':
+                    new_options = dict(options)
+                    for key in ('fft', 'rms', 'envelope'):
+                        if key in msg:
+                            new_options[key] = bool(msg[key])
+                    for key in ('band_low', 'band_high'):
+                        if key in msg:
+                            new_options[key] = msg[key]
+                    if 'wave_seconds' in msg:
+                        try:
+                            seconds = min(2, max(.01, float(msg['wave_seconds'])))
+                            last_revision = None  # 显示区间变化,立即重推
+                        except (TypeError, ValueError):
+                            pass
+                    # 包络频带校验与 REST 一致:0 < 下限 < 上限 < 采样率/2
+                    if new_options.get('envelope'):
+                        lo, hi = new_options.get('band_low'), new_options.get('band_high')
+                        if not (lo is not None and hi is not None and 0 < lo < hi < s['sample_rate']/2):
+                            await _send({'type': 'error', 'data': {'detail': '包络频带须满足 0 < 下限 < 上限 < 采样率/2'}})
+                        else:
+                            options = new_options
+                            last_revision = None
+                    else:
+                        options = new_options
+                        last_revision = None
+            except asyncio.TimeoutError:
+                pass
+
+            now = time.monotonic()
+            # 2) 会话快照变化(状态/录制进度)→ 推送 session(限频)
+            snap = live.snapshot(s)
+            snap_json = json.dumps(snap, ensure_ascii=False, default=str)
+            if snap_json != last_snapshot_json and now - last_session_push >= WS_PUSH_INTERVAL:
+                last_snapshot_json = snap_json
+                last_session_push = now
+                await _send({'type': 'session', 'data': snap})
+            # 3) 新数据(revision 变化)或选项变化 → 计算并推送 view(限频)
+            if s['revision'] != last_revision and now - last_view_push >= WS_PUSH_INTERVAL:
+                last_view_push = now
+                last_revision = s['revision']
+                payload = await build_view_payload(s, options, seconds)
+                await _send({'type': 'view', 'data': payload})
+            await asyncio.sleep(0.1)
+    except WebSocketDisconnect:
+        return
+    except Exception:
+        # 计算失败(HTTPException 422 等):关闭连接,前端回退 REST 轮询
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+        return
