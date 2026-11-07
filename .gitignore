@@ -111,27 +111,26 @@ coverage.xml
 wind-turbine-diagnosis/package-lock.json
 .qwen
 wind-turbine-diagnosis/vite.config.js
-tests/diagnosis/output/**.png
+cloud/tests/diagnosis/output/**.png
 
 # Datasets — consolidated under data/ (not committed)
 /data/
 # CW bearing dataset (variable-speed, stored locally under CW/)
 /CW/
 
-tests/diagnosis/planetary_demod_results.json
-tests/diagnosis/planetary_e2e_results.json
-tests/diagnosis/output
-tests/output
+cloud/tests/diagnosis/planetary_demod_results.json
+cloud/tests/diagnosis/planetary_e2e_results.json
+cloud/tests/diagnosis/output
+cloud/tests/output
 figures/
-tests/diagnosis/planetary/planetary_e2e_results.json
-.githubtests/diagnosis/foundation/output/	
-tests/diagnosis/foundation/output/
-tests/diagnosis/foundation/layer1/output/
-tests/diagnosis/foundation/layer2/output/
-tests/diagnosis/foundation/layer3/output/
-tests/diagnosis/foundation/layer4/output/
-tests/diagnosis/foundation/layer5/output/
-tests/diagnosis/eval_plots/output/
+cloud/tests/diagnosis/planetary/planetary_e2e_results.json
+cloud/tests/diagnosis/foundation/output/
+cloud/tests/diagnosis/foundation/layer1/output/
+cloud/tests/diagnosis/foundation/layer2/output/
+cloud/tests/diagnosis/foundation/layer3/output/
+cloud/tests/diagnosis/foundation/layer4/output/
+cloud/tests/diagnosis/foundation/layer5/output/
+cloud/tests/diagnosis/eval_plots/output/
 
 # Local project document
 /docs/dc_modified.docx
