@@ -809,9 +809,9 @@ def run_46_robustness(n_mc=10):
         print("  未找到足够样本")
         return None
 
-    # 使用全部可用样本（各5个），每个样本每个SNR跑 n_mc 次
-    or_files = or_files[:5]
-    h_files = h_files[:5]
+    # 使用3个样本，每个样本每个SNR跑 n_mc 次（平衡统计量与耗时）
+    or_files = or_files[:3]
+    h_files = h_files[:3]
     snr_levels = [20, 10, 5, 0, -5]
 
     methods = [

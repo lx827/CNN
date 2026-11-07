@@ -14,8 +14,8 @@ from plot_comparison import plot_robustness
 # 确保输出目录存在
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# 运行鲁棒性评估: 5样本 × 10次 Monte-Carlo
-results = run_46_robustness(n_mc=10)
+# 运行鲁棒性评估: 3样本 × 5次 Monte-Carlo
+results = run_46_robustness(n_mc=5)
 
 # 绘图
 plot_robustness()

@@ -459,8 +459,9 @@ def plot_robustness():
             ax.text(j, i, text, ha="center", va="center", fontsize=9,
                     fontweight="bold", color=color)
 
+    total_tests = methods_data[method_names[0]][0].get('total_fault_tests', 0)
     ax.set_title("鲁棒性评估 — 强噪声环境下的故障检出率\n"
-                 f"（5样本 × {methods_data[method_names[0]][0].get('total_fault_tests', 0) // 5}次/MC，绿色=高检出率 红色=低检出率）",
+                 f"（每SNR {total_tests} 次测试 = 3样本×5次Monte-Carlo，绿色=高检出率 红色=低检出率）",
                  fontsize=13, fontweight="bold", pad=18)
 
     fig.tight_layout()
