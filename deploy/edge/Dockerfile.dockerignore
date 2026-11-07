@@ -1,0 +1,6 @@
+# Dockerfile.dockerignore —— 与 deploy/edge/Dockerfile 同名匹配(BuildKit 特性),
+# 作用于"构建上下文"(Rust 边端源码目录),不是本目录。
+# 放这里而不是源码目录:对 Rust 源码目录零改动(工单 #52 铁律)。
+target/
+.git/
+out/

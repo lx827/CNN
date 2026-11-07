@@ -4,6 +4,9 @@ node_modules/
 # ========== Build output ==========
 dist/
 
+# 边端交叉编译产物(deploy/edge/build.sh|ps1 导出)
+deploy/edge/out/
+
 # ========== OS ==========
 .DS_Store
 Thumbs.db
