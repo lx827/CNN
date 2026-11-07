@@ -2,12 +2,13 @@
 
 > 最后更新: 2026-11-06 | 详见 AGENTS.md §14
 
-## 未修复 (2)
+## 未修复 (3)
 
 | # | 文件 | 描述 |
 |---|------|------|
 | 11d | `ensemble.py`, `health_score.py` | D-S 证据融合未生效（0/30 样本被覆盖）|
 | 13d | `ensemble.py` | **WTG 五分类断齿检出 0%** — gear_abnormal 标签映射缺失 |
+| 25 | `Settings.vue`(现 `components/settings/MechanicalParamsCard.vue`) | **设置页首渲染即崩、整页空白** — `form.gear_teeth` 初始为 {},模板无守卫直接访问 `form.gear_teeth[String(i)].input`;挂载中止致 onMounted 不执行、无法自愈(396cf64 引入)。T5 拆分按视觉零变化要求保留该行为 |
 
 ## 已修复 (29)
 
