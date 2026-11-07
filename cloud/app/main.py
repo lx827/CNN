@@ -8,6 +8,8 @@ from fastapi import FastAPI, Depends, WebSocket, Query, status
 from app.core.memory_log import setup_memory_logging
 
 from app.api import ingest, dashboard, monitor, alarms, devices, collect, auth, system
+from app.api import acquisition
+from app.api import acquisition_live
 from app.api.data_view import router as data_view_router
 from app.api.auth import optional_auth, verify_token_string
 from app.lifespan import lifespan
@@ -44,6 +46,8 @@ app.include_router(devices.router, dependencies=[Depends(optional_auth)])
 app.include_router(data_view_router, dependencies=[Depends(optional_auth)])
 app.include_router(collect.router, dependencies=[Depends(optional_auth)])
 app.include_router(system.router, dependencies=[Depends(optional_auth)])
+app.include_router(acquisition.router)
+app.include_router(acquisition_live.router)
 
 
 # WebSocket 实时推送端点

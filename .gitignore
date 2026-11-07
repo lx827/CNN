@@ -102,6 +102,10 @@ coverage.xml
 # Historical O9 training artifacts supplied locally (weights, indexes, logs, figures)
 /o9v1/
 
+# Training development lives in lx827/wavelet_study; keep local historical copies.
+/training/
+/docs/CQU_O9_WORK_LOG.md
+
 # ========== Misc ==========
 *.local
 wind-turbine-diagnosis/package-lock.json

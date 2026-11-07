@@ -136,3 +136,30 @@ class CollectionTask(Base):
     completed_at = Column(DateTime, nullable=True, comment="完成时间")
     result_batch_index = Column(Integer, nullable=True, comment="完成后关联的batch_index")
     error_message = Column(String(500), nullable=True, comment="错误信息")
+
+
+class AcquisitionAgent(Base):
+    """真实采集边端独立身份，不复用已有回放设备。"""
+    __tablename__ = "acquisition_agents"
+    id = Column(String(64), primary_key=True)
+    source = Column(String(32), nullable=False)
+    last_seen_at = Column(DateTime, nullable=False)
+    state = Column(JSON, nullable=False)
+
+
+class AcquisitionJob(Base):
+    """原始计数采集任务；不进入物理量诊断和告警流水线。"""
+    __tablename__ = "acquisition_jobs"
+    id = Column(String(32), primary_key=True)
+    agent_id = Column(String(64), nullable=False, index=True)
+    source = Column(String(32), nullable=False)
+    status = Column(String(24), nullable=False, index=True)
+    sample_rate = Column(Integer, nullable=False)
+    duration = Column(Integer, nullable=False)
+    analysis_options = Column(JSON, nullable=False)
+    progress = Column(JSON, nullable=False)
+    result_metadata = Column(JSON, nullable=True)
+    cancel_requested = Column(Integer, default=0, nullable=False)
+    error_message = Column(String(500), nullable=True)
+    created_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False)

@@ -26,6 +26,12 @@ const routes = [
         meta: { title: '实时监测' }
       },
       {
+        path: '/acquisition',
+        name: 'Acquisition',
+        component: () => import('../views/Acquisition.vue'),
+        meta: { title: '真实采集' }
+      },
+      {
         path: '/research-diagnosis',
         name: 'ResearchDiagnosis',
         component: () => import('../views/ResearchDiagnosis.vue'),
@@ -68,7 +74,7 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('access_token')
   if (!to.meta?.public && !token) {
-    next('/login')
+    next({ path: '/login', query: { redirect: to.fullPath } })
   } else {
     next()
   }
