@@ -147,3 +147,6 @@ data/
 .playwright-mcp/
 baseline-*.png
 check_api_docs_report.md
+
+# ========== 测试运行产物(图/JSON/输出目录,不入库) ==========
+cloud/tests/**/output/

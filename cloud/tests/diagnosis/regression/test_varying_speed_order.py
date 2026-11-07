@@ -121,7 +121,10 @@ def test_varying_speed_tracking():
 
 
 def plot_comparison():
-    """生成阶次谱对比图"""
+    """生成阶次谱对比图(可选:设 TEST_PLOT=1 才画;回归默认纯断言,不出图)"""
+    if os.environ.get("TEST_PLOT") != "1":
+        print("\n=== 跳过对比图(默认关闭;TEST_PLOT=1 开启)===")
+        return
     if plt is None:
         print("\n=== 跳过对比图:未安装 matplotlib ===")
         return
