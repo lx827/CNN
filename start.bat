@@ -1,15 +1,5 @@
 @echo off
 setlocal
-rem Use this file's directory so it works when launched by double-click.
-cd /d "%~dp0"
-if not exist "edge\venv\Scripts\activate.bat" (
-    echo Missing edge virtual environment: edge\venv
-    pause
-    exit /b 1
-)
-call "edge\venv\Scripts\activate.bat"
-set "PYTHONUTF8=1"
-python "edge\replay.py" %*
-set "REPLAY_EXIT=%ERRORLEVEL%"
-if not "%REPLAY_EXIT%"=="0" pause
-exit /b %REPLAY_EXIT%
+rem 旧数据集回放链(edge_client/replay.py)已随重构 #46 退役;一键入口统一为 DC24 实机链路。
+call "%~dp0start_dc24.bat" %*
+exit /b %ERRORLEVEL%
