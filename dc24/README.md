@@ -21,6 +21,7 @@ dc24/
 ├── dc24_vendor_bridge.ps1     # 32 位 PowerShell/C# 桥接调用 JMServer.dll
 ├── dc24_profiles.json         # 原厂 12 档完整 B5 命令负载(云端与现场工具共用)
 ├── pyproject.toml             # 成员依赖(uv workspace,根目录 uv sync 统一安装)
+├── tests/                     # 工具链测试(test_dc24_start 入口冒烟 / test_dc24_vendor DLL 回环,未配置原厂 DLL 时跳过)
 └── .env                       # 本机配置(不入库):DC24_VENDOR_ROOT 指向原厂安装目录则走 DLL,留空走 Python TCP
 ```
 

@@ -16,8 +16,9 @@ python ../scripts/register_hustbear_devices.py
 
 预期输出新增 5 台,重复运行新增 0 台。`CNN_CLOUD_DIR` 可指定后端目录。
 
-本地回归(仓库根目录,cloud venv):
+本地回归(仓库根目录,uv workspace):
 
 ```bash
-python -m unittest discover -s tests/backend -p test_hustbear_registration.py -v
+cd cloud
+uv run python -m unittest tests.test_hustbear_registration -v
 ```

@@ -31,14 +31,13 @@
 
 ```
 CNN/
-├── cloud/                     # 云端 FastAPI 后端
-├── wind-turbine-diagnosis/    # Vue 3 前端
+├── cloud/                     # 云端 FastAPI 后端（测试在 cloud/tests/）
+├── wind-turbine-diagnosis/    # Vue 3 前端（测试在 wind-turbine-diagnosis/tests/）
 ├── edge/                      # Rust 边端（开发中，目标树莓派）
-├── dc24/                      # DC24 现场采集工具链（Windows Python）
+├── dc24/                      # DC24 现场采集工具链（Windows Python，测试在 dc24/tests/）
 ├── data/                      # 数据集（不提交 Git）
 ├── docs/                      # 项目文档
 ├── scripts/                   # 运维调试脚本
-├── tests/                     # 回归与评估测试
 ├── start.bat                  # Windows 一键启动（转调 start_dc24.bat）
 └── deploy.sh                  # 服务器一键部署
 ```
