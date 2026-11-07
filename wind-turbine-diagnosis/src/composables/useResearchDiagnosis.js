@@ -1,0 +1,361 @@
+/**
+ * ResearchDiagnosis 高级诊断页数据与运行逻辑
+ *
+ * 职责:设备/批次/通道选择、方法元信息加载、单方法/全方法/集成三种模式
+ *       的分析与结果派生(投票行、D-S 融合行、全方法摘要行)、路由联动。
+ */
+import { computed, onMounted, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
+import { getAllDeviceData } from '../api/data'
+import { getMethodInfo, getChannelMethodAnalysis, getChannelResearchAnalysis } from '../api/diagnosis'
+
+export const runModeOptions = [
+  { label: '单方法', value: 'single' },
+  { label: '全部方法', value: 'all' },
+  { label: '集成诊断', value: 'ensemble' },
+]
+
+export const fmt = value => {
+  const num = Number(value)
+  return Number.isFinite(num) ? num.toFixed(4) : '-'
+}
+
+export const percent = value => {
+  const num = Number(value)
+  return Number.isFinite(num) ? `${(num * 100).toFixed(1)}%` : '-'
+}
+
+export const statusType = status => {
+  if (status === 'fault' || status === 'critical') return 'danger'
+  if (status === 'warning') return 'warning'
+  return 'success'
+}
+
+export const statusText = status => {
+  if (status === 'fault' || status === 'critical') return '故障'
+  if (status === 'warning') return '预警'
+  return '正常'
+}
+
+const voteRows = (votes = {}) => Object.entries(votes).map(([method, value]) => ({
+  method,
+  confidence: value.confidence ?? 0,
+  param_hits: value.param_hits ?? '-',
+  stat_hits: value.stat_hits ?? '-',
+  critical_hits: value.critical_hits ?? '-',
+  warning_hits: value.warning_hits ?? '-',
+  strongest_snr: value.strongest_snr ?? '-',
+  hits: Array.isArray(value.hits) ? value.hits.join(', ') : '',
+}))
+
+const appendIndicators = (rows, source, indicators = {}) => {
+  Object.entries(indicators || {}).forEach(([name, value]) => {
+    if (!value || typeof value !== 'object') return
+    const isCritical = value.critical || value.significant
+    const isWarning = value.warning
+    rows.push({
+      source,
+      name,
+      value: value.value ?? value.snr ?? value.detected_hz ?? '-',
+      state: isCritical ? '命中' : isWarning ? '预警' : '正常',
+      type: isCritical ? 'danger' : isWarning ? 'warning' : 'success',
+    })
+  })
+}
+
+export function useResearchDiagnosis() {
+  const route = useRoute()
+  const router = useRouter()
+  const devices = ref([])
+  const selectedDeviceId = ref('')
+  const selectedBatchIndex = ref(null)
+  const selectedChannel = ref(1)
+  const runMode = ref('single')
+  const selectedMethod = ref('envelope')
+  const denoise = ref('none')
+  const profile = ref('balanced')
+  const loading = ref(false)
+  const result = ref(null)
+  const methodInfoData = ref({})
+
+  const currentDevice = computed(() => devices.value.find(d => d.device_id === selectedDeviceId.value))
+  const currentBatches = computed(() => currentDevice.value?.batches || [])
+  const currentChannels = computed(() => {
+    const count = currentDevice.value?.channel_count || 3
+    const names = currentDevice.value?.channel_names || {}
+    return Array.from({ length: count }, (_, i) => ({
+      value: i + 1,
+      label: names[String(i + 1)] || `通道 ${i + 1}`,
+    }))
+  })
+  const canRun = computed(() => selectedDeviceId.value && selectedBatchIndex.value != null && selectedChannel.value)
+
+  // 方法分组
+  const bearingMethodGroup = computed(() =>
+    Object.entries(methodInfoData.value).filter(([_, m]) => m.category === 'bearing').map(([k, m]) => ({ key: k, label: m.label }))
+  )
+  const gearMethodGroup = computed(() =>
+    Object.entries(methodInfoData.value).filter(([_, m]) => m.category === 'gear').map(([k, m]) => ({ key: k, label: m.label }))
+  )
+  const planetaryMethodGroup = computed(() =>
+    Object.entries(methodInfoData.value).filter(([_, m]) => m.category === 'planetary').map(([k, m]) => ({ key: k, label: m.label }))
+  )
+
+  const selectedMethodInfo = computed(() => methodInfoData.value[selectedMethod.value] || null)
+  const methodCategoryTag = computed(() => {
+    const cat = selectedMethodInfo.value?.category
+    if (cat === 'bearing') return 'primary'
+    if (cat === 'gear') return 'warning'
+    if (cat === 'planetary') return 'danger'
+    return 'info'
+  })
+
+  // 行星箱判断
+  const hasPlanetary = computed(() => {
+    const d = currentDevice.value
+    if (!d) return false
+    const gt = d.gear_teeth
+    if (!gt) return false
+    // 通道级格式
+    for (const [, v] of Object.entries(gt)) {
+      if (typeof v === 'object' && (v?.planet_count >= 3 || (v?.sun > 0 && v?.ring > 0))) return true
+    }
+    if (gt.planet_count >= 3 || (gt.sun > 0 && gt.ring > 0)) return true
+    return false
+  })
+
+  // 行星箱方法结果过滤（排除大数组/不可展示字段）
+  const filterPlanetaryResult = computed(() => {
+    if (!result.value || selectedMethodInfo.value?.category !== 'planetary') return {}
+    const filtered = {}
+    for (const [k, v] of Object.entries(result.value)) {
+      if (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') {
+        filtered[k] = v
+      }
+    }
+    return filtered
+  })
+
+  // 投票行数据
+  const bearingVoteRows = computed(() => voteRows(result.value?.ensemble?.bearing_votes))
+  const gearVoteRows = computed(() => voteRows(result.value?.ensemble?.gear_votes))
+
+  const bestIndicatorRows = computed(() => {
+    const rows = []
+    appendIndicators(rows, '轴承', result.value?.bearing?.fault_indicators)
+    appendIndicators(rows, '齿轮', result.value?.gear?.fault_indicators)
+    return rows
+  })
+
+  // D-S 融合故障概率行
+  const dsFaultProbRows = computed(() => {
+    const bpa = result.value?.ensemble?.ds_fusion?.fused_bpa
+    const belief = result.value?.ensemble?.ds_fusion?.fused_belief
+    const plaus = result.value?.ensemble?.ds_fusion?.fused_plausibility
+    if (!bpa) return []
+    return Object.entries(bpa)
+      .filter(([k]) => k !== 'Θ')
+      .map(([fault, prob]) => ({
+        fault,
+        bpa: prob,
+        belief: belief?.[fault] ?? 0,
+        plausibility: plaus?.[fault] ?? 0,
+      }))
+      .sort((a, b) => b.bpa - a.bpa)
+  })
+
+  // ── 全部方法模式：从 bearing_results / gear_results 提取表格数据 ──
+  const isAllMode = computed(() => runMode.value === 'all')
+  const hasAllResults = computed(() => result.value?.bearing_results || result.value?.gear_results)
+
+  // 全部方法-轴承方法摘要行
+  const allBearingRows = computed(() => {
+    const br = result.value?.bearing_results
+    if (!br || isAllMode.value === false) return []
+    return Object.entries(br).map(([method, r]) => {
+      if (!r || r.error) return { method, faults: [], params: r?.error || '执行失败', _error: true }
+      const fi = r.fault_indicators || {}
+      const faults = Object.entries(fi)
+        .filter(([, v]) => v && typeof v === 'object' && (v.significant || v.critical))
+        .map(([name, v]) => ({ fault_type: name, snr: v.snr?.toFixed?.(1) ?? v.value ?? '?' }))
+      const params = [
+        r.rot_freq_hz != null ? `${r.rot_freq_hz?.toFixed?.(2) ?? r.rot_freq_hz}Hz` : '',
+        r.band_center != null ? `频带${r.band_center?.toFixed?.(0) ?? r.band_center}Hz` : '',
+      ].filter(Boolean).join(', ')
+      return { method, faults, params: params || '-' }
+    })
+  })
+
+  // 全部方法-齿轮方法摘要行
+  const allGearRows = computed(() => {
+    const gr = result.value?.gear_results
+    if (!gr || isAllMode.value === false) return []
+    return Object.entries(gr).map(([method, r]) => {
+      if (!r || r.error) return { method, ser: '-', car: '-', fm0: '-', fm4: '-', sideband_count: '-', alerts: [], _error: true, _errMsg: r?.error }
+      const fi = r.fault_indicators || {}
+      const alerts = Object.entries(fi)
+        .filter(([, v]) => v && typeof v === 'object' && (v.critical || v.warning))
+        .map(([name, v]) => ({ indicator: name, level: v.critical ? 'critical' : 'warning' }))
+      return {
+        method,
+        ser: r.ser != null ? Number(r.ser) : null,
+        car: r.car != null ? Number(r.car) : null,
+        fm0: r.fm0 != null ? Number(r.fm0) : null,
+        fm4: r.fm4 != null ? Number(r.fm4) : null,
+        sideband_count: r.sidebands?.length ?? (r.sideband_count ?? 0),
+        alerts,
+      }
+    })
+  })
+
+  // 全部方法-最佳算法指标（从所有方法中提取故障指示器）
+  const allBestIndicatorRows = computed(() => {
+    if (isAllMode.value === false) return []
+    const rows = []
+    const bearingResults = result.value?.bearing_results || {}
+    const gearResults = result.value?.gear_results || {}
+    for (const [method, r] of Object.entries(bearingResults)) {
+      if (!r || r.error) continue
+      appendIndicators(rows, method, r.fault_indicators)
+    }
+    for (const [method, r] of Object.entries(gearResults)) {
+      if (!r || r.error) continue
+      appendIndicators(rows, method, r.fault_indicators)
+    }
+    return rows
+  })
+
+  watch(selectedDeviceId, () => {
+    selectedBatchIndex.value = currentBatches.value[0]?.batch_index ?? null
+    selectedChannel.value = currentChannels.value[0]?.value ?? 1
+    result.value = null
+  })
+
+  watch(runMode, () => { result.value = null })
+
+  const loadDevices = async () => {
+    const res = await getAllDeviceData()
+    devices.value = res.data || []
+    // 从路由 query 参数预选设备/批次/通道（联动跳转）
+    const qDevice = route.query.device_id
+    const qBatch = route.query.batch_index
+    const qChannel = route.query.channel
+    if (qDevice && devices.value.length > 0) {
+      selectedDeviceId.value = qDevice
+      const dev = devices.value.find(d => d.device_id === qDevice)
+      if (dev) {
+        const batch = dev.batches?.find(b => String(b.batch_index) === String(qBatch))
+        if (batch) {
+          selectedBatchIndex.value = batch.batch_index
+        }
+        if (qChannel) {
+          const ch = parseInt(qChannel)
+          const count = dev.channel_count || 3
+          if (ch >= 1 && ch <= count) {
+            selectedChannel.value = ch
+          }
+        }
+      }
+    } else if (devices.value.length > 0 && !selectedDeviceId.value) {
+      selectedDeviceId.value = devices.value[0].device_id
+    }
+  }
+
+  const loadMethodInfo = async () => {
+    try {
+      const res = await getMethodInfo()
+      methodInfoData.value = res.data || {}
+    } catch (e) {
+      methodInfoData.value = {}
+    }
+  }
+
+  const runAnalysis = async () => {
+    if (!canRun.value) return
+    loading.value = true
+    result.value = null
+    try {
+      if (runMode.value === 'single') {
+        const res = await getChannelMethodAnalysis(
+          selectedDeviceId.value,
+          selectedBatchIndex.value,
+          selectedChannel.value,
+          selectedMethod.value,
+          { denoise: denoise.value },
+        )
+        result.value = res.data
+      } else if (runMode.value === 'all') {
+        const res = await getChannelMethodAnalysis(
+          selectedDeviceId.value,
+          selectedBatchIndex.value,
+          selectedChannel.value,
+          'all',
+          { denoise: denoise.value },
+        )
+        result.value = res.data
+      } else if (runMode.value === 'ensemble') {
+        const res = await getChannelResearchAnalysis(
+          selectedDeviceId.value,
+          selectedBatchIndex.value,
+          selectedChannel.value,
+          { profile: profile.value, denoise: denoise.value },
+        )
+        result.value = res.data
+      }
+    } catch (error) {
+      ElMessage.error(error?.response?.data?.detail || error?.message || '诊断失败')
+    } finally {
+      loading.value = false
+    }
+  }
+
+  onMounted(() => {
+    loadDevices()
+    loadMethodInfo()
+  })
+
+  // 跳转到数据查看页面，携带当前设备/批次参数
+  const gotoDataView = () => {
+    if (!selectedDeviceId.value || selectedBatchIndex.value == null) return
+    router.push({
+      path: '/data',
+      query: {
+        device_id: selectedDeviceId.value,
+        batch_index: selectedBatchIndex.value,
+      }
+    })
+  }
+
+  return {
+    devices,
+    selectedDeviceId,
+    selectedBatchIndex,
+    selectedChannel,
+    runMode,
+    selectedMethod,
+    denoise,
+    profile,
+    loading,
+    result,
+    currentBatches,
+    currentChannels,
+    canRun,
+    bearingMethodGroup,
+    gearMethodGroup,
+    planetaryMethodGroup,
+    selectedMethodInfo,
+    methodCategoryTag,
+    filterPlanetaryResult,
+    bearingVoteRows,
+    gearVoteRows,
+    bestIndicatorRows,
+    dsFaultProbRows,
+    hasAllResults,
+    allBearingRows,
+    allGearRows,
+    allBestIndicatorRows,
+    runAnalysis,
+    gotoDataView,
+  }
+}
