@@ -3,54 +3,55 @@
 面向 AI Agent 的操作手册:环境、命令、红线、代码导航。人类用户请读 `README.md`。
 若仓库根目录存在 `AGENTS.local.md`,先读并遵守其中本机约定(该文件仅存本机,不入库)。
 
-> **占位说明(2026-11 布局重构,地图 #45)**:`edge/` 已是 Rust 边端(开发稿),DC24 Python 工具链在 `dc24/`,旧 `edge_client.py` 上云回放链已退役(#46);Python 环境已迁 uv workspace(T2/#47,`uv sync`/`uv run`),测试已分立各端(T3/#48:P0 在 `cloud/tests/diagnosis/regression/`)。§2/§3/§6 的 venv 激活与边端命令、§4 的测试路径已失效,现役一键入口为 `start_dc24.bat`;本文相关段落统一改写归 T9,详见重构地图 #45。
+> **占位说明(2026-11 布局重构,地图 #45)**:`edge/` 已是 Rust 边端(开发稿),DC24 Python 工具链在 `dc24/`,旧 `edge_client.py` 上云回放链已退役(#46);Python 环境已迁 uv workspace(T2/#47,§2-§4 已是 uv/新布局口径);测试已分立各端(T3/#48)。其余段落的路径核对与全量改写归 T9,详见重构地图 #45。
 
 ## 1. 环境
 
 | 环境 | OS / Python | 说明 |
 |------|------------|------|
-| 本地开发 | Windows / 3.13 | 主开发环境 |
-| 生产服务器 | Ubuntu 22.04 / 3.10 | 阿里云 ECS,**2核2G** |
+| 本地开发 | Windows / 3.13(uv 托管) | 主开发环境 |
+| 生产服务器 | Ubuntu 22.04 / 3.13(uv 托管) | 阿里云 ECS,**2核2G** |
 
 生产环境:IP `8.137.96.104`,systemd 服务 `CNN.service`,部署路径 `/opt/CNN`,一键部署 `bash /opt/CNN/deploy.sh`。前端 `vite.config.js` 代理固定指向 `8.137.96.104:8000`,打包后靠 Nginx 反代 — 保持原样。
 
-## 2. 虚拟环境(每模块独立 venv,跑任何 Python 前先激活)
+## 2. Python 环境(uv workspace —— **uv-only,铁律**)
+
+**只允许 uv 命令:`uv sync`、`uv run`、`uv add`、`uv lock`。禁止 `pip`(含 `pip install`/`pip freeze`)、禁止 conda/mamba、禁止手工创建/激活 venv。** 依赖唯一事实源是根 `uv.lock`。
 
 ```bash
-cd cloud && . venv/Scripts/activate     # 后端(Windows 写法,无 source)
-cd edge && . venv/Scripts/activate      # 边端
-# 服务器 Ubuntu: source venv/bin/activate
+uv sync                        # 仓库根:安装全部成员(cloud + dc24)
+uv run <命令>                   # 在成员目录内运行任何 Python(见 §3)
+uv add <包名>                   # 加依赖:在对应成员目录内执行,写入其 pyproject
 ```
+
+- workspace 定义在根 `pyproject.toml`,成员:`cloud`、`dc24`;Rust 边端 `edge/` 由 cargo 管理,不经 uv
+- Python 版本锁定 `.python-version`(3.13),由 uv 自动下载托管,不依赖系统 Python
 
 ## 3. 开发命令
 
 ```bash
 # 后端(http://localhost:8000,API 文档 /docs)
-cd cloud && . venv/Scripts/activate
-pip install -r requirements.txt         # 首次
-python -m app.main
+cd cloud && uv sync && uv run python -m app.main
 
 # 前端(http://localhost:3000)
 cd wind-turbine-diagnosis && npm install && npm run dev   # build 产出 dist/
 
-# 边端采集客户端
-cd edge && . venv/Scripts/activate && python edge_client.py
+# DC24 现场采集(Windows,实机链路)
+start_dc24.bat                 # 一键入口(等价:uv run python scripts/dc24_start.py)
 ```
-
-仓库根目录 `start.bat` 一键启动。
 
 ## 4. 测试
 
 **P0 回归(合成信号,无需数据集)— 修改 `cloud/app/services/diagnosis/` 下任何文件后,三件全绿才算完成:**
 
 ```bash
-cd cloud && . venv/Scripts/activate
-python ../tests/diagnosis/regression/test_none_params.py
-python ../tests/diagnosis/regression/test_cpw_robustness.py
-python ../tests/diagnosis/regression/test_varying_speed_order.py
+cd cloud
+uv run python tests/diagnosis/regression/test_none_params.py
+uv run python tests/diagnosis/regression/test_cpw_robustness.py
+uv run python tests/diagnosis/regression/test_varying_speed_order.py
 ```
 
-扩展测试按目录选:正确性验证 `tests/diagnosis/foundation/layer1~5/`(如 `layer2/test_order_tracking_correctness.py`)、方法评估 `method_eval/`、行星箱端到端 `planetary/`、效果 `effectiveness/`、引擎回归 `algorithms/`;改 API 路由另加手动调用验证。backend/edge/frontend 测试套件及运行方式见 `docs/tests/INDEX.md`。
+扩展测试按目录选:正确性验证 `cloud/tests/diagnosis/foundation/layer1~5/`(如 `layer2/test_order_tracking_correctness.py`)、方法评估 `method_eval/`、行星箱端到端 `planetary/`、效果 `effectiveness/`、引擎回归 `algorithms/`;改 API 路由另加手动调用验证。cloud/dc24/前端测试套件及运行方式见 `docs/tests/INDEX.md`。
 
 ## 5. 2G 红线(违反即生产 OOM)
 
