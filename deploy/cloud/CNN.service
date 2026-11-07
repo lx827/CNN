@@ -1,0 +1,24 @@
+# 云端后端 systemd 服务模板(deploy.sh 首次部署/更新时安装到 /etc/systemd/system/CNN.service)
+#
+# - ExecStart 直指 uv workspace 产出的解释器 /opt/CNN/.venv/bin/python(uv sync --frozen 生成),
+#   服务本身不依赖 uv 命令,启动更快也不受 PATH 影响(ADR-0001)。
+# - WorkingDirectory 必须是 /opt/CNN/cloud:uvicorn 的 app.main 模块路径与
+#   SQLite 相对路径(turbine.db)都以该目录为基准。
+# - 2G 内存红线(AGENTS.md §5)在应用层实现(线程池 max_workers=2、后台分析
+#   ANALYSIS_SEM 串行、DataView 5 秒截断),本单元不引入任何新并发。
+[Unit]
+Description=CNN 云端后端(风机齿轮箱智能故障诊断系统,uv workspace)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/CNN/cloud
+ExecStart=/opt/CNN/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+Environment=PYTHONUTF8=1
+Environment=PATH=/opt/CNN/.venv/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target
