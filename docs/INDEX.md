@@ -13,6 +13,10 @@
 |------|------|------|
 | [README](../README.md) | `README.md` | 项目概述、快速开始 |
 | [AGENTS](../AGENTS.md) | `AGENTS.md` | AI Agent 环境配置、开发命令、关键代码路径 |
+| [词汇表](../GLOSSARY.md) | `GLOSSARY.md` | 域词汇表（与 `docs/adr/` 共同构成域文档） |
+| [cloud 服务说明](../cloud/README.md) | `cloud/README.md` | 云端后端架构、模块、配置与运行 |
+| [dc24 工具链说明](../dc24/README.md) | `dc24/README.md` | DC24 工具链结构、`.env` 配置与测试 |
+| [scripts 脚本说明](../scripts/README.md) | `scripts/README.md` | 运维脚本用途与运行方式 |
 | [系统架构](./系统架构.md) | `docs/系统架构.md` | 整体架构、模块职责与目录结构 |
 | [算法原理](./算法原理.md) | `docs/算法原理.md` | 轴承与齿轮诊断的经典理论、公式与参数 |
 | [诊断算法体系全景](./诊断算法体系全景.md) | `docs/诊断算法体系全景.md` | 5 子系统串联：方法公式、投票逻辑、评分机制 |
@@ -149,6 +153,8 @@ docs/
 ├── frontend/                         # 前端文档
 ├── algorithms/                       # 专项算法文档
 ├── tests/                            # 测试文档
+├── adr/                              # 架构决策记录（ADR）
+├── agents/                           # Agent 协作约定（issue 跟踪 / triage / 域文档）
 └── internal/                         # 文档检查工具
 ```
 
@@ -157,5 +163,5 @@ docs/
 ---
 
 *文档生成时间：2026-05-17*
-*最近更新：2026-10-25*
+*最近更新：2026-11-08（T9/#54：补二级 README 与域文档入口，结构总览补 adr/、agents/）*
 *维护者：AI Agent（修改代码或文档结构时请务必同步更新）*

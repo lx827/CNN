@@ -10,8 +10,8 @@
 | `DATABASE_URL` | str | sqlite:///./turbine.db | 连接 URL |
 | `API_HOST` | str | 0.0.0.0 | 监听地址 |
 | `API_PORT` | int | 8000 | 监听端口 |
-| `CORS_ORIGINS` | list | 多个 localhost | CORS 源 |
-| `ANALYZE_INTERVAL_SECONDS` | int | 30 | 后台分析间隔 |
+| `CORS_ORIGINS` | list | 多个 localhost | CORS 源（逗号分隔 env 键，默认含 localhost:3000/4173、生产 IP 与 `null`） |
+| `ANALYZE_INTERVAL_SECONDS` | int | 30 | 后台分析间隔（**代码常量，不读 .env**） |
 | `SENSOR_SAMPLE_RATE` | int | 25600 | 默认采样率 |
 | `SENSOR_WINDOW_SECONDS` | int | 10 | 采集窗口秒数 |
 | `ANALYZE_DENOISE_METHOD` | str | wavelet | 默认去噪方法 |

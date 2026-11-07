@@ -20,10 +20,10 @@
 
 ## 开发与部署
 
-- 开发环境、虚拟环境、测试命令：见 [AGENTS.md](AGENTS.md)
+- 开发命令（uv workspace，**uv-only**）：仓库根 `uv sync` 一次，后端 `cd cloud && uv run python -m app.main`，前端 `cd wind-turbine-diagnosis && npm install && npm run dev`；环境红线与测试命令见 [AGENTS.md](AGENTS.md)
 - 系统架构与目录结构：见 [系统架构](docs/系统架构.md)
 - 算法原理：见 [算法原理](docs/算法原理.md)
-- 服务器部署：见 [部署指南](docs/部署指南.md)
+- 服务器部署：`bash /opt/CNN/deploy.sh` 一键部署（`--dry-run` 演练零改动，`-s` 跳过前端构建），详见 [部署指南](docs/部署指南.md)
 - 日常操作与运维命令：见 [操作手册](docs/操作手册.md)、[服务器命令速查](docs/服务器命令速查.md)
 - 全部文档索引：见 [docs/INDEX.md](docs/INDEX.md)
 
@@ -33,15 +33,17 @@
 
 ```
 CNN/
-├── cloud/                     # 云端 FastAPI 后端（测试在 cloud/tests/）
+├── cloud/                     # 云端 FastAPI 后端（uv workspace 成员，测试在 cloud/tests/）
 ├── wind-turbine-diagnosis/    # Vue 3 前端（测试在 wind-turbine-diagnosis/tests/）
-├── edge/                      # Rust 边端（开发中，目标树莓派）
-├── dc24/                      # DC24 现场采集工具链（Windows Python，测试在 dc24/tests/）
+├── edge/                      # Rust 边端（开发中，目标树莓派，cargo 管理）
+├── dc24/                      # DC24 现场采集工具链（uv workspace 成员，测试在 dc24/tests/）
+├── deploy/                    # 部署资产：cloud/CNN.service 模板、edge/ 交叉编译构建
+├── scripts/                   # 运维调试脚本（dc24_start、export_openapi 等）
 ├── data/                      # 数据集（不提交 Git）
 ├── docs/                      # 项目文档
-├── scripts/                   # 运维调试脚本
-├── start.bat                  # Windows 一键启动（转调 start_dc24.bat）
-└── deploy.sh                  # 服务器一键部署
+├── pyproject.toml / uv.lock / .python-version   # uv workspace 根（Python 3.13）
+├── start_dc24.bat             # DC24 一键启动（start.bat 为其转发壳）
+└── deploy.sh                  # 服务器一键部署（支持 --dry-run / -s）
 ```
 
 ## 许可

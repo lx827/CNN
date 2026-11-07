@@ -3,8 +3,6 @@
 面向 AI Agent 的操作手册:环境、命令、红线、代码导航。人类用户请读 `README.md`。
 若仓库根目录存在 `AGENTS.local.md`,先读并遵守其中本机约定(该文件仅存本机,不入库)。
 
-> **占位说明(2026-11 布局重构,地图 #45)**:`edge/` 已是 Rust 边端(开发稿),DC24 Python 工具链在 `dc24/`,旧 `edge_client.py` 上云回放链已退役(#46);Python 环境已迁 uv workspace(T2/#47,§2-§4 已是 uv/新布局口径);测试已分立各端(T3/#48)。其余段落的路径核对与全量改写归 T9,详见重构地图 #45。
-
 ## 1. 环境
 
 | 环境 | OS / Python | 说明 |
@@ -61,23 +59,57 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 
 ## 6. 配置
 
-键名与默认值以代码为准:`cloud/app/core/config.py`、`edge/edge_client.py`。生产必改 `ADMIN_PASSWORD`、`SECRET_KEY`、`EDGE_API_KEY`(`cloud/.env`)。
+- `cloud/.env`(不入库):云端配置,键定义以 `cloud/app/core/config.py` 为准;生产必改 `ADMIN_PASSWORD`、`SECRET_KEY`、`EDGE_API_KEY`。可选键 `CORS_ORIGINS`(逗号分隔跨域白名单,默认含 localhost:3000/4173 与生产 IP)
+- `dc24/.env`(不入库):DC24 边端本机配置,由 `dc24/dc24_agent.py` 读取——`DC24_VENDOR_ROOT`(原厂软件目录,配了走 DLL、留空走纯 Python TCP)、`CLOUD_BASE_URL`、`EDGE_API_KEY`,详见 `dc24/README.md`
+- `ACQUISITION_DATA_DIR`:可选环境变量,采集任务落盘根目录(默认 `<仓库根>/data/acquisitions`),读取处 `cloud/app/api/acquisition.py`
+- 生产部署(`CNN.service`、Nginx、dry-run 演练)见 `docs/部署指南.md`
 
 ## 7. 代码导航
 
 ```
-cloud/app/
-├── api/                  # 路由:data_view/(频谱+诊断+重新诊断)、devices/、ingest、dashboard、alarms…
-├── services/
-│   ├── analyzer.py       # 后台分析入口(多通道综合,lifespan worker 调用)
-│   └── diagnosis/        # 诊断算法库
-│       ├── engine.py     # 调度器:轴承/齿轮/综合分析入口
-│       ├── ensemble.py   # 多算法集成诊断(run_research_ensemble)
-│       ├── features.py   # 特征提取;has_bearing_params/has_gear_params 参数门控
-│       ├── health_score.py / recommendation.py   # 评分与建议(全项目单一评分源)
-│       ├── bearing.py / gear/metrics.py / order_tracking.py
-│       └── preprocessing.py / vmd_denoise.py 等  # 去噪族(wavelet/VMD/MED/MCKD/EMD…)
-└── lifespan.py           # 线程池 + 后台分析 worker
+cloud/                      # 云端后端(uv workspace 成员)
+├── app/
+│   ├── api/                # 路由:data_view/(频谱+诊断+重新诊断)、devices/、
+│   │                       # acquisition(DC24 任务/上传)+ acquisition_live(实时示波+WS)、
+│   │                       # ingest、dashboard、alarms、monitor、auth、collect、system
+│   ├── core/               # config / websocket / json_utils / memory_log / thresholds
+│   ├── services/
+│   │   ├── analyzer.py     # 后台分析入口(多通道综合,lifespan worker 调用)
+│   │   ├── acquisition_analysis.py / acquisition_live.py   # DC24 原始计数分析 / 示波内存窗口
+│   │   ├── diagnosis_queries.py   # 诊断摘要读模型(最新记录统一规则)
+│   │   └── diagnosis/      # 诊断算法库
+│   │       ├── engine.py   # 调度器:轴承/齿轮/综合分析入口
+│   │       ├── ensemble.py # 多算法集成诊断(run_research_ensemble)
+│   │       ├── features.py # 特征提取;has_bearing_params/has_gear_params 参数门控
+│   │       ├── health_score.py / recommendation.py   # 评分与建议(全项目单一评分源)
+│   │       ├── bearing.py / gear/metrics.py / order_tracking.py
+│   │       └── preprocessing.py / vmd_denoise.py 等  # 去噪族(wavelet/VMD/MED/MCKD/EMD…)
+│   └── lifespan.py         # 线程池 + 后台分析 worker
+└── tests/                  # 后端测试 + 诊断测试套件(含 P0 回归)
+
+dc24/                       # DC24 现场采集工具链(uv workspace 成员,Windows)
+├── dc24_capture.py         # 协议重组、控制命令、单次采集
+├── dc24_agent.py           # 心跳、控制轮询与采集入口(读 dc24/.env)
+├── dc24_live.py            # 连续示波、保存与上传
+├── dc24_vendor.py / dc24_vendor_bridge.ps1   # 原厂 DLL 校验与 32 位桥接
+├── dc24_profiles.json      # 原厂 12 档 B5 命令负载
+└── tests/                  # test_dc24_start / test_dc24_vendor
+
+edge/                       # Rust 边端(开发稿,目标树莓派;cargo 管理,不经 uv;源码零改动)
+├── src/ tests/ Cargo.toml / Cargo.lock
+├── deploy/dc24-edge.service    # 未安装的 systemd 模板
+└── README.md               # 开发稿说明(可调配置、验证状态、部署限制)
+
+deploy/                     # 部署资产:cloud/CNN.service(systemd 模板)、
+│                           # edge/(交叉编译 Dockerfile + build 脚本;out/ 产物不入库)
+scripts/                    # dc24_start.py(一键入口)、dc24_select_directory.py、
+│                           # register_hustbear_devices.py、export_openapi.py
+wind-turbine-diagnosis/     # Vue3 前端
+├── src/api/                # 按域模块(acquisition/monitor/dashboard/data/diagnosis/alarms/devices/…)
+├── src/composables/        # useMonitor / useDashboard / useDataView / useSettings 等页面逻辑
+├── src/components/<view>/  # 按页面分组(dashboard/monitor/dataview/research/settings/charts)
+├── src/views/              # 页面组件(Acquisition/Monitor/Dashboard/DataView/Settings…)
+└── tests/                  # *.test.cjs(node --test 运行)
 ```
 
 逐文件接口:`docs/backend/app/INDEX.md`;服务层函数:`docs/backend/services.md`。

@@ -10,16 +10,16 @@
 >
 > Python 环境统一为 uv workspace(#47):仓库根目录 `uv sync` 一次,所有 Python 测试用 `uv run` 执行;前端测试用 `node --test`(Node ≥18)。
 
-## P0 回归(合成信号为主,每次修改 `cloud/app/services/diagnosis/` 后必跑)
+## P0 回归(全部合成信号、无数据集依赖;每次修改 `cloud/app/services/diagnosis/` 后必跑)
 
 ```bash
 cd cloud
 uv run python tests/diagnosis/regression/test_none_params.py
 uv run python tests/diagnosis/regression/test_cpw_robustness.py
-uv run python tests/diagnosis/regression/test_varying_speed_order.py   # 需 HUSTbear 数据集
+uv run python tests/diagnosis/regression/test_varying_speed_order.py
 ```
 
-> `test_varying_speed_order.py` 依赖 `data/HUSTbear/down8192`(可用 `CNN_DATA_ROOT` 指向仓库外数据);前两件仅需合成信号。
+> 三件均使用合成信号,不需要任何数据集。出图默认关闭:设 `TEST_PLOT=1` 才绘制对比图,产物写入 `cloud/tests/diagnosis/regression/output/`(已 gitignore,不入库)。
 
 扩展测试按目录选:正确性验证 `cloud/tests/diagnosis/foundation/layer1~5/`(如 `layer2/test_order_tracking_correctness.py`)、方法评估 `method_eval/`、行星箱端到端 `planetary/`、效果 `effectiveness/`、引擎回归 `algorithms/`;改 API 路由另加手动调用验证。
 
@@ -186,8 +186,9 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 | 项目 | 说明 |
 |------|------|
 | **目的** | 验证变速工况下阶次跟踪算法正确性 |
-| **数据集** | 需要 HUSTbear 数据集 `data/HUSTbear/down8192`(相对仓库根目录) |
+| **数据集** | 不需要(2026-11-08 起改用合成变速信号,无数据集依赖) |
 | **通过标准** | 转频估计在合理范围,多帧 vs 单帧阶次谱差异可接受 |
+| **出图** | 默认关闭;`TEST_PLOT=1` 开启,产物在 `tests/diagnosis/regression/output/`(不入库) |
 
 ### 1.4 一键回归测试
 
@@ -288,7 +289,7 @@ uv run python tests/diagnosis/evaluation/main.py
 | WTgearbox | `data/WTgearbox/down8192` | 齿轮诊断评估 |
 
 > 路径均相对仓库根目录,由 `cloud/tests/diagnosis/data_paths.py` 统一解析;可用 `CNN_DATA_ROOT` 指向仓库外数据目录。
-> P0 前两件回归不需要数据集,使用合成信号即可运行;`test_varying_speed_order.py` 需 HUSTbear。
+> P0 三件回归全部使用合成信号,无需数据集即可运行;数据集仅评估类套件(method_eval/planetary/evaluation 等)需要。
 
 ---
 
@@ -306,5 +307,5 @@ uv run python tests/diagnosis/evaluation/main.py
 
 ---
 
-*文档更新:2026-11-07(测试分立各端 #48、uv workspace #47;原 venv 激活与 pip 命令已由 `uv run` 取代)*
+*文档更新:2026-11-08(T9/#54:P0 三件确认全部合成信号化、补 TEST_PLOT 出图开关说明;此前 2026-11-07 测试分立各端 #48、uv workspace #47)*
 *维护者:AI Agent(新增测试文件时请务必同步更新)*

@@ -21,7 +21,7 @@
 
 | 组件 | 说明 |
 |------|------|
-| Python 3.10+ | 运行环境 |
+| Python 3.13 | 运行环境（uv workspace 托管，见仓库根 `pyproject.toml` / `uv.lock`） |
 | FastAPI | Web 框架 / API 服务 |
 | Uvicorn | ASGI 服务器 |
 | SQLAlchemy 2.0 | ORM 数据库操作 |
@@ -45,19 +45,23 @@ cloud/
 │   ├── database.py          # 数据库引擎与会话管理
 │   ├── core/
 │   │   ├── config.py        # 全局配置（数据库、认证、分析参数等）
-│   │   └── websocket.py     # WebSocket 连接管理器
+│   │   └── websocket.py 等  # WebSocket 管理器 / 严格 JSON / 阈值 / 内存日志
 │   ├── api/                 # RESTful 路由（按功能模块拆分）
 │   │   ├── auth.py          # 登录认证 / JWT Token
 │   │   ├── ingest.py        # 边端数据接入（含解压与批次管理）
 │   │   ├── dashboard.py     # 设备总览统计
 │   │   ├── monitor.py       # 实时监测数据查询
-│   │   ├── diagnosis.py     # 诊断结果查询
 │   │   ├── alarms.py        # 告警列表与处理
+│   │   ├── acquisition.py   # DC24 完整原始采集任务（领取/上传/分析/下载）
+│   │   ├── acquisition_live.py  # 实时示波、示波中保存、WS 实时窗口
 │   │   ├── devices/         # 设备 CRUD 与管理
-│   │   ├── data_view/       # 原始数据 / 频谱 / 特征查看
+│   │   ├── data_view/       # 原始数据 / 频谱 / 诊断缓存与重新诊断
 │   │   └── collect.py       # 采集任务下发（前端 → 边端）
 │   └── services/
 │       ├── analyzer.py      # 故障分析引擎主入口（NN + DiagnosisEngine + 回退）
+│       ├── acquisition_analysis.py  # DC24 原始计数可选分析
+│       ├── acquisition_live.py      # 示波有界内存窗口（LiveStore）
+│       ├── diagnosis_queries.py     # 诊断摘要读模型
 │       ├── nn_predictor.py  # 神经网络预测器（ONNX 等格式）
 │       ├── diagnosis/       # 诊断算法库
 │       │   ├── engine.py    # DiagnosisEngine 主调度器
@@ -69,8 +73,11 @@ cloud/
 │           ├── device.py    # 设备级综合告警
 │           └── diagnosis.py # 诊断结果告警
 ├── models/                  # 神经网络模型文件存放目录（.gitignore 忽略）
-│   └── README.md
-├── requirements.txt         # Python 依赖
+│   └── README.md            # 模型放置说明
+├── tests/                   # 后端测试 + 诊断测试套件（含 P0 回归，uv run 执行）
+├── pyproject.toml           # workspace 成员依赖清单（依赖统一由根 uv.lock 锁定）
+├── turbine.db               # SQLite 数据库（运行时自动生成，不入库）
+├── .env                     # 配置文件（不入库，可选）
 └── README.md                # 本文档
 ```
 
@@ -78,11 +85,17 @@ cloud/
 
 ## 4. 环境搭建
 
-### 4.1 安装依赖
+### 4.1 安装依赖（uv workspace）
+
+后端是仓库根 uv workspace 的成员（依赖统一由根 `uv.lock` 锁定，**uv-only**）：
 
 ```bash
+# 仓库根执行一次，创建根 .venv 并安装全部成员（cloud + dc24）
+uv sync
+
+# 之后在 cloud 目录用 uv run 启动
 cd cloud
-pip install -r requirements.txt
+uv run python -m app.main
 ```
 
 ### 4.2 数据库配置（可选）
@@ -97,7 +110,7 @@ pip install -r requirements.txt
    CREATE DATABASE turbine_db CHARACTER SET utf8mb4;
    ```
 
-2. 在项目根目录创建 `.env` 文件：
+2. 在 `cloud/` 目录创建 `.env` 文件：
 
    ```ini
    USE_SQLITE=false
@@ -120,9 +133,12 @@ pip install -r requirements.txt
 | `DATABASE_URL` | `sqlite:///./turbine.db` | 数据库连接串 |
 | `API_HOST` | `0.0.0.0` | 服务监听地址 |
 | `API_PORT` | `8000` | 服务端口 |
-| `ANALYZE_INTERVAL_SECONDS` | `30` | 后台分析轮询间隔（秒） |
+| `CORS_ORIGINS` | localhost:3000/4173 等 | 跨域白名单（逗号分隔；换域名/端口访问前端时需添加） |
+| `ANALYZE_INTERVAL_SECONDS` | `30` | 后台分析轮询间隔（**代码常量，不读 .env**） |
 | `SENSOR_SAMPLE_RATE` | `25600` | 振动采样率（Hz） |
 | `SENSOR_WINDOW_SECONDS` | `10` | 单次采集时长（秒） |
+| `ANALYZE_DENOISE_METHOD` | `wavelet` | 后台自动诊断默认去噪方法（wavelet/none/vmd） |
+| `ACQUISITION_DATA_DIR` | `<仓库根>/data/acquisitions` | DC24 采集任务落盘根目录（读取处在 `api/acquisition.py`） |
 | `NN_ENABLED` | `false` | 是否启用神经网络预测 |
 | `NN_MODEL_PATH` | `./models/turbine_fault_model.onnx` | 模型文件路径 |
 | `ADMIN_PASSWORD` | `admin123` | 网页登录密码 |
@@ -263,20 +279,24 @@ pip install -r requirements.txt
 
 ```bash
 cd cloud
-python -m app.main
+uv run python -m app.main
 ```
 
 或
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 生产模式
+### 生产模式（systemd 单进程）
 
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+生产由 systemd 拉起单进程 uvicorn（模板 `deploy/cloud/CNN.service`，`deploy.sh` 自动安装）：
+
+```ini
+ExecStart=/opt/CNN/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+> **不要用 `--workers` 多进程**：服务器 2核2G 内存红线（AGENTS.md §5），多进程会各自占用分析内存导致 OOM。
 
 启动成功后访问：
 
@@ -332,13 +352,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 
 ## 10. 部署建议
 
-1. **使用虚拟环境**：`python -m venv venv`，避免依赖冲突
+1. **依赖管理**：uv workspace（仓库根 `uv sync`，`uv.lock` 为唯一事实源；禁 pip / 手工 venv，见 AGENTS.md §2）
 2. **反向代理**：生产环境使用 Nginx 反向代理到 Uvicorn，处理 HTTPS 与静态资源
 3. **数据库迁移**：SQLite 适合开发与小型部署；生产环境建议 MySQL + Alembic 正式迁移
 4. **模型部署**：将训练好的 `.onnx` 模型放入 `models/` 目录，开启 `NN_ENABLED=true`
 5. **安全配置**：
    - 修改 `SECRET_KEY`、`EDGE_API_KEY`、`ADMIN_PASSWORD`
-   - 关闭 `allow_origins=["*"]`，限定前端域名
+   - 跨域白名单走 `CORS_ORIGINS`（逗号分隔，默认已限定 localhost 与生产 IP，不要放开为 `*`）
 6. **日志与监控**：配置 Uvicorn/FastAPI 日志级别，接入 Prometheus/Grafana（可选）
 
 ---
@@ -355,4 +375,4 @@ A: 检查边端 `EDGE_API_KEY` 与云端 `.env` 中配置是否一致。
 A: 确认 `NN_ENABLED=true`，且模型文件路径正确。查看控制台日志中 `[NN]` 前缀的加载信息。
 
 **Q: 如何添加新设备？**  
-A: 调用 `POST /api/devices/` 接口，或在 `main.py` 的 `lifespan` 中预定义默认设备。
+A: 调用 `POST /api/devices/` 接口，或经 `scripts/register_hustbear_devices.py` 批量注册（默认设备在 `startup.py` 启动时创建）。

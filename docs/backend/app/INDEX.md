@@ -20,6 +20,8 @@ docs/backend/app/
 │
 ├── api/                     ← API 路由层
 │   ├── __init__.md
+│   ├── acquisition.md       ← DC24 采集任务(领取/上传/分析/下载)
+│   ├── acquisition_live.md  ← 实时示波、示波中保存与 WS 实时窗口
 │   ├── auth.md              ← 认证接口
 │   ├── dashboard.md         ← 设备总览
 │   ├── alarms.md            ← 告警管理
@@ -47,7 +49,7 @@ docs/backend/app/
 │
 ├── core/                    ← 核心配置层
 │   ├── __init__.md
-│   ├── config.py            ← 全局配置
+│   ├── config.md            ← 全局配置
 │   ├── memory_log.md        ← 内存日志
 │   ├── json_utils.md        ← 严格 JSON/NumPy/非有限值转换
 │   ├── thresholds.md        ← 全局阈值配置
@@ -56,6 +58,8 @@ docs/backend/app/
 └── services/                ← 服务层
     ├── __init__.md
     ├── analyzer.md          ← 综合分析引擎
+    ├── acquisition_analysis.md ← DC24 原始计数可选分析(FFT/RMS/包络)
+    ├── acquisition_live.md  ← 示波有界内存窗口(LiveStore)
     ├── diagnosis_queries.md ← 诊断摘要读模型与统一最新记录规则
     ├── nn_predictor.md      ← 神经网络预留接口
     ├── offline_monitor.md   ← 离线监测
@@ -114,16 +118,16 @@ docs/backend/app/
 | 目录 | 文件数 |
 |------|--------|
 | `app/` 根目录 | 8 |
-| `app/api/` | 8 |
+| `app/api/` | 10 |
 | `app/api/data_view/` | 10 |
 | `app/api/devices/` | 3 |
 | `app/core/` | 5 |
-| `app/services/` | 4 |
+| `app/services/` | 6 |
 | `app/services/alarms/` | 4 |
 | `app/services/diagnosis/` | 20 |
 | `app/services/diagnosis/gear/` | 5 |
 | `app/services/diagnosis/fusion/` | 2 |
-| **总计** | **69** |
+| **总计** | **73** |
 
 ---
 
