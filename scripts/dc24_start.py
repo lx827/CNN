@@ -38,10 +38,15 @@ def main():
     parser.add_argument('--check', action='store_true', help='只检查依赖，不启动服务或采集')
     parser.add_argument('--no-browser', action='store_true', help='启动服务但不自动打开浏览器')
     args = parser.parse_args()
-    workspace_python = ROOT/'.venv/Scripts/python.exe'
+    # 解释器:优先当前进程所在的 workspace 环境(uv run 启动时即如此),
+    # 否则按平台回退到仓库根 .venv 内的解释器(uv sync 产出)
+    fallback = ROOT/'.venv/Scripts/python.exe' if os.name == 'nt' else ROOT/'.venv/bin/python'
+    running = Path(sys.executable).resolve()
+    workspace_python = running if (ROOT/'.venv').resolve() in running.parents else fallback
     if not workspace_python.exists():
-        raise RuntimeError('缺少 uv workspace 环境：'+str(workspace_python)
-                           +'；请先在仓库根目录运行 uv sync（或双击 start_dc24.bat 自动创建）')
+        raise RuntimeError('缺少 uv workspace 环境：'+str(fallback)
+                           +'；请在仓库根目录运行 uv sync（或双击 start_dc24.bat，'
+                             '它会经 uv run 自动创建环境后再启动）')
     vendor_root = os.environ.get('DC24_VENDOR_ROOT', dotenv_values(ROOT/'dc24/.env').get('DC24_VENDOR_ROOT')) or ''
     if vendor_root:
         vendor_path = Path(vendor_root).expanduser()
