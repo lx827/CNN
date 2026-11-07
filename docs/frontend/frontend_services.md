@@ -8,9 +8,24 @@
 ## 目录
 
 1. [状态管理 (Stores)](#1-状态管理-stores)
+0. [组合式函数 (Composables)](#0-组合式函数-composables)
 2. [工具函数 (Utils)](#2-工具函数-utils)
 3. [通用组件 (Components)](#3-通用组件-components)
 4. [路由配置](#4-路由配置)
+
+---
+
+## 0. 组合式函数 (Composables)
+
+> 2026-11-08（issue #50）五大视图拆分引入,位于 `src/composables/`,详细返回值与配套子组件见 `docs/frontend/frontend_api.md` 第 6 节。
+
+| 文件 | 服务视图 | 职责 |
+|------|---------|------|
+| `useDashboard.js` | Dashboard | 总览拉取(推送/轮询共享串行刷新)、状态统计、仪表盘/饼图 |
+| `useMonitor.js` | Monitor | 最新数据拉取、传感器状态、采集任务下发与轮询、时域/频域图 |
+| `useSettings.js` | Settings | 设备/配置/阈值加载与保存、机械参数同步 |
+| `useResearchDiagnosis.js` | ResearchDiagnosis | 三模式分析运行、结果行派生、路由联动 |
+| `useDataView.js` | DataView | 批次选择、七类频谱按需计算、特征频率标注、删除/重诊 |
 
 ---
 

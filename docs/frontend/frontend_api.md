@@ -36,6 +36,7 @@
    - 4.4 [DetailHeader.vue](#44-detailheadervue)
    - 4.5 [DeviceTable.vue](#45-devicetablevue)
 5. [WebSocket 事件汇总](#5-websocket-事件汇总)
+6. [Composables 组合式函数（2026-11 拆分）](#6-composables-组合式函数2026-11-拆分)
 
 ---
 
@@ -251,6 +252,8 @@ const status = await getTaskStatus(task.task_id);
 ## 3. Views 页面组件
 
 > 所有页面组件位于 `src/views/` 目录下，通过 Vue Router 进行路由切换。以下按字母顺序列出。
+>
+> **2026-11-08（issue #50）拆分**：五大超长视图（DataView 2268 行、ResearchDiagnosis 778、Settings 693、Monitor 690、Dashboard 640）已拆分为「视图(薄壳) + `src/composables/` 逻辑 + `src/components/<view>/` 子组件」，视觉与行为零变化。下文各视图条目中的"关键状态/关键方法"已移入对应 composable（见第 6 节），视图本身仅保留组合与布局。
 
 ### 3.1 Alarm.vue
 
@@ -283,8 +286,8 @@ const status = await getTaskStatus(task.task_id);
 **调用 API**
 
 ```javascript
-import { getHistoryAlarmList, updateAlarmStatus, deleteAlarm } from '@/api/alarm';
-import { getDevices } from '@/api/device';
+import { getHistoryAlarmList, updateAlarmStatus, deleteAlarm } from '@/api/alarms';
+import { getDevices } from '@/api/devices';
 ```
 
 ---
@@ -389,13 +392,18 @@ import {
   getChannelOrder,
   getChannelCepstrum,
   getChannelStats,
-  updateBatchDiagnosis,
-  reanalyzeBatch,
-  reanalyzeAllDevice,
   deleteBatch,
   deleteSpecialBatches,
   exportChannelCSV
 } from '@/api/data';
+import {
+  getChannelAnalyze,
+  getChannelFullAnalysis,
+  getChannelDiagnosis,
+  updateBatchDiagnosis,
+  reanalyzeBatch,
+  reanalyzeAllDevice
+} from '@/api/diagnosis';
 ```
 
 ---
@@ -423,7 +431,7 @@ import {
 **调用 API**
 
 ```javascript
-import { login } from '@/api';
+import { login } from '@/api/auth';
 ```
 
 ---
@@ -503,9 +511,9 @@ import { getSystemLogs } from '@/api/system';
 **调用 API**
 
 ```javascript
-import { getRealtimeVibrationData } from '@/api';
+import { getRealtimeVibrationData } from '@/api/monitor';
 import { requestCollection, getTaskStatus } from '@/api/system';
-import { getDevices } from '@/api/device';
+import { getDevices } from '@/api/devices';
 ```
 
 **WebSocket 事件**
@@ -549,11 +557,13 @@ import { getDevices } from '@/api/device';
 
 ```javascript
 import {
-  getAllDeviceData,
+  getAllDeviceData
+} from '@/api/data';
+import {
   getMethodInfo,
   getChannelMethodAnalysis,
   getChannelResearchAnalysis
-} from '@/api/data';
+} from '@/api/diagnosis';
 ```
 
 ---
@@ -594,12 +604,14 @@ import {
   updateBatchDeviceConfig,
   getAlarmThresholds,
   updateAlarmThresholds
-} from '@/api/device';
+} from '@/api/devices';
 ```
 
 ---
 
 ## 4. Components 通用组件
+
+> 2026-11-08 起组件目录分两层：`src/components/` 通用组件（本节）与 `src/components/<view>/` 页面专属子组件（dashboard/、monitor/、settings/、research/、dataview/ 下各节，Props/Emits 见源码头部 defineProps/defineEmits/defineModel 声明）。
 
 > 所有通用组件位于 `src/components/` 目录下，供多个页面复用。
 
@@ -759,3 +771,21 @@ import {
 ---
 
 > **文档结束**。如有接口变更，请务必同步更新本文件，保持与代码的一致性。
+
+---
+
+## 6. Composables 组合式函数（2026-11 拆分）
+
+> 五大视图的业务逻辑层，位于 `src/composables/`。均在视图 `setup` 中调用一次，内部注册生命周期钩子（挂载加载/卸载清理），返回响应式状态与方法；模块级具名导出为跨组件共享的常量与工具。
+
+| 文件 | 服务视图 | 返回内容(概要) | 模块级导出 |
+|------|---------|---------------|-----------|
+| `useDashboard.js` | `Dashboard.vue` | `devices/selectedDevice` 等状态、`loadData()`(推送+轮询共享串行刷新)、`selectDevice()`、图表 ref(`gaugeChart/pieChart`)、状态映射工具 | `getStatusType/getStatusText/getHealthColor`(Dashboard 专属口径:critical 计故障、85/60 分档,勿与 utils/status.js 混用) |
+| `useMonitor.js` | `Monitor.vue` | `channels/params/sensors/collectDevices`、`requestCollect()`、`startPolling(taskId)`、`refreshLatestData()`(推送合并串行)、`onMonitorDeviceChange()`、图表 ref | — |
+| `useSettings.js` | `Settings.vue` | `form/channelNames/thresholds/thresholdEnabled`、三级加载、`onSaveEdgeConfig/onSaveMechanical/onSaveThresholds/onSyncMechanical`、`intervalValue/intervalUnit` 与 `computedSeconds` | `unitOptions`(采集间隔单位)、`thresholdItems`(阈值指标定义) |
+| `useResearchDiagnosis.js` | `ResearchDiagnosis.vue` | 三级选择器、`runAnalysis()`(single/all/ensemble)、`gotoDataView()`、投票行/D-S 融合行/全方法摘要行等派生 computed | `runModeOptions`、`fmt/percent/statusType/statusText` |
+| `useDataView.js` | `DataView.vue` | 设备批次表格数据与选择、时域自动加载、FFT/STFT/包络/阶次/倒谱/统计/齿轮 `computeX/clearX`、`computeFullAnalysis/computeStrategyAnalyze`、删除/重新诊断/导出、路由联动 | `bearingMethodLabel`、`statsGroups`、`statsDisplay`(预留) |
+
+**配套子组件目录**：`src/components/dashboard/`(SummaryCards、DeviceCardList)、`src/components/monitor/`(SensorStatusCard、RunParamsCard、CollectionProgress)、`src/components/settings/`(EdgeConfigCard、MechanicalParamsCard、ThresholdsCard、ConfigNotesCard)、`src/components/research/`(ResearchToolbar、SingleResultPanels、EnsembleResultPanels)、`src/components/dataview/`(StatsSection、FftEnvelopeSection、GearSection、ComprehensiveSection、OrderSection、CepstrumSection、StftSection、DiagnosisDetailSection)。
+
+**回归测试约定**：`tests/dashboard_lifecycle.test.cjs`、`tests/monitor_lifecycle.test.cjs` 在同一 VM 上下文装载 composable 源码并以空壳桩替换子组件标识符,断言语义与拆分前一致;修改 composable 时两套测试必须保持全绿。
