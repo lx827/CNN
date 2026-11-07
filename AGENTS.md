@@ -3,6 +3,8 @@
 面向 AI Agent 的操作手册:环境、命令、红线、代码导航。人类用户请读 `README.md`。
 若仓库根目录存在 `AGENTS.local.md`,先读并遵守其中本机约定(该文件仅存本机,不入库)。
 
+> **占位说明(2026-11 布局重构,地图 #45)**:`edge/` 已是 Rust 边端(开发稿),DC24 Python 工具链在 `dc24/`,旧 `edge_client.py` 上云回放链已退役(#46)。§2/§3/§6 中 edge venv 激活、`python edge_client.py` 等命令已失效;现役一键入口为 `start_dc24.bat`。本文相关段落统一改写归 T9,详见重构地图 #45。
+
 ## 1. 环境
 
 | 环境 | OS / Python | 说明 |

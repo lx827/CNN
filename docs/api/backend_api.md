@@ -219,7 +219,7 @@ GET /api/devices/edge/config?device_id={device_id}
 | `compression_enabled` | `int` | 压缩开关 |
 | `downsample_ratio` | `int` | 降采样比 |
 
-**调用方**：边端 `edge_client.py` 启动时拉取
+**调用方**：边端（Rust `edge/`；旧 `edge_client.py` 已随 2026-11 布局重构退役）启动时拉取
 
 ---
 
@@ -333,7 +333,7 @@ GET /api/collect/tasks?device_id={device_id}
 
 **响应**：`{ has_task, task_id, device_id, sample_rate, duration }`
 
-**调用方**：边端 `edge_client.py`
+**调用方**：边端（Rust `edge/`；旧 `edge_client.py` 已退役）
 
 ---
 
@@ -343,7 +343,7 @@ GET /api/collect/tasks?device_id={device_id}
 POST /api/collect/tasks/{task_id}/complete?batch_index={batch_index}
 ```
 
-**调用方**：边端 `edge_client.py`
+**调用方**：边端（Rust `edge/`；旧 `edge_client.py` 已退役）
 
 ---
 
@@ -772,7 +772,7 @@ POST /api/ingest/
 - `_decompress_channels(payload)`：支持 `compressed_data`（base64+zlib+msgpack/json）和原图模式
 - `_get_next_batch_index(db, device_id, is_special)`：普通数据 1~16 循环覆盖，特殊数据从 101 起自增永不覆盖
 
-**调用方**：边端 `edge_client.py`
+**调用方**：边端（Rust `edge/`；旧 `edge_client.py` 已退役）
 
 ---
 

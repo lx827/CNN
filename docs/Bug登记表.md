@@ -28,13 +28,13 @@
 | 22 | `utils/websocket.js` | **重复握手、旧 close 破坏新心跳、多个重连定时器** — OPEN/CONNECTING 幂等，校验连接实例，定时器去重 |
 | 23 | `Dashboard.vue` | **总览推送与轮询并发，慢响应可覆盖新数据** — 多个入口直接查询且无串行约束；共用在途 Promise，保留一次后续查询，卸载丢弃排队事件 |
 | 24 | `lifespan.py` | **后台诊断入库 JSON 序列化失败，批次长期未分析** — 仅转换通道缓存，遗漏批次结果中的 NumPy 类型；现于算法返回后统一转换完整结果（本地及云端验证通过） |
-| 25 | `edge/replay.py` | **启动器退出后遗留 Vite 子进程** — 持有 cmd/npm 包装进程且忽略终止失败，无法可靠确认 Node 已退出；改为直接持有 Vite 的 Node 进程，终止失败时回退并等待退出 |
-| 26 | `edge/replay.py` | **快速启动重复打开两个页面** — Vite 的 `open:true` 与启动器的 `webbrowser.open` 同时执行；仅对子进程设置 `BROWSER=none`，统一由启动器打开一次 |
-| 27 | `edge/dc24_vendor_bridge.ps1` | **厂商 DLL 连接在首个采样帧后自动停止**。边端经 DLL 套接字发送 B7 前先同步该设备在 DLL 中的采集状态。实机重测及网页网卡抓包确认连续收样与正常停止。见 [DC24 工作记录](DC24_ACQUISITION_WORKLOG.md)。 |
+| 25 | `dc24/replay.py`（已退役） | **启动器退出后遗留 Vite 子进程** — 持有 cmd/npm 包装进程且忽略终止失败，无法可靠确认 Node 已退出；改为直接持有 Vite 的 Node 进程，终止失败时回退并等待退出 |
+| 26 | `dc24/replay.py`（已退役） | **快速启动重复打开两个页面** — Vite 的 `open:true` 与启动器的 `webbrowser.open` 同时执行；仅对子进程设置 `BROWSER=none`，统一由启动器打开一次 |
+| 27 | `dc24/dc24_vendor_bridge.ps1` | **厂商 DLL 连接在首个采样帧后自动停止**。边端经 DLL 套接字发送 B7 前先同步该设备在 DLL 中的采集状态。实机重测及网页网卡抓包确认连续收样与正常停止。见 [DC24 工作记录](DC24_ACQUISITION_WORKLOG.md)。 |
 
-**Bug #26 验证（2026-10-24）**：`tests/edge/test_browser_open.py` 使用真实 Vite、临时端口和浏览器脚本探针，在修复前确认 Vite 额外打开，修复后探针不再触发且启动器只打开一次；复用已有前端同样只打开一次。父进程浏览器环境保持原值，不修改前端代理或 `open:true` 配置，不访问云端、不上传数据。
+**Bug #26 验证（2026-10-24）**：`tests/edge/test_browser_open.py`（已随旧回放链退役）使用真实 Vite、临时端口和浏览器脚本探针，在修复前确认 Vite 额外打开，修复后探针不再触发且启动器只打开一次；复用已有前端同样只打开一次。父进程浏览器环境保持原值，不修改前端代理或 `open:true` 配置，不访问云端、不上传数据。
 
-**Bug #25 验证（2026-10-23）**：清理工作区前确认残留 Node 占用本机 3000 端口。`tests/edge/test_frontend_lifecycle.py` 使用真实 Vite，覆盖正常返回及 Ctrl+C 两条路径；修复后均确认所创建 Node 退出、3000 端口不再提供服务。不访问云端或上传数据，已运行的用户前端仍直接复用。
+**Bug #25 验证（2026-10-23）**：清理工作区前确认残留 Node 占用本机 3000 端口。`tests/edge/test_frontend_lifecycle.py`（已随旧回放链退役）使用真实 Vite，覆盖正常返回及 Ctrl+C 两条路径；修复后均确认所创建 Node 退出、3000 端口不再提供服务。不访问云端或上传数据，已运行的用户前端仍直接复用。
 
 **Bug #24 验证（2026-10-23）**：
 

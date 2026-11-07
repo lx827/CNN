@@ -17,12 +17,11 @@
 | [算法原理](./算法原理.md) | `docs/算法原理.md` | 轴承与齿轮诊断的经典理论、公式与参数 |
 | [诊断算法体系全景](./诊断算法体系全景.md) | `docs/诊断算法体系全景.md` | 5 子系统串联：方法公式、投票逻辑、评分机制 |
 | [数据集说明](./datasets.md) | `docs/datasets.md` | 四数据集路径、命名规则与机械参数 |
-| [快速启动说明](./快速启动说明.md) | `docs/快速启动说明.md` | 本机启动后端、前端与数据回放 |
 | [DC24 采集操作与实现](./DC24_ACQUISITION.md) | `docs/DC24_ACQUISITION.md` | 真实采集页面、边端启动、可选分析、文件与验证边界 |
 | [从传感器到 CSV](./DC24_SIGNAL_TO_CSV.md) | `docs/DC24_SIGNAL_TO_CSV.md` | 面向有基础读者解释完整采集链路 |
 | [DC24 实测协议](./DC24_PROTOCOL.md) | `docs/DC24_PROTOCOL.md` | TCP角色、命令、四通道拆帧及原厂同段对照 |
 | [DC24 工作交接说明](./DC24_HANDOFF_20261107.md) | `docs/DC24_HANDOFF_20261107.md` | 已完成链路、现行协议、双接收方式、实测证据和树莓派兼容边界 |
-| [Rust 边端开发说明](../edge-rust/README.md) | `edge-rust/README.md` | Rust 边端开发稿、可调配置、验证状态与部署限制 |
+| [Rust 边端开发说明](../edge/README.md) | `edge/README.md` | Rust 边端开发稿、可调配置、验证状态与部署限制 |
 | [部署指南](./部署指南.md) | `docs/部署指南.md` | 阿里云 ECS 部署步骤 |
 | [操作手册](./操作手册.md) | `docs/操作手册.md` | 系统日常操作流程 |
 | [服务器命令速查](./服务器命令速查.md) | `docs/服务器命令速查.md` | SSH、服务、日志等常用命令 |
@@ -105,7 +104,7 @@
 | 修改前端组件/工具 | `docs/frontend/frontend_services.md` |
 | 定位前端代码位置 | `docs/frontend/INDEX.md` |
 | 部署到服务器 | `docs/部署指南.md`, `docs/操作手册.md` |
-| 启动本机环境 | `docs/快速启动说明.md` |
+| 启动本机环境 | `docs/DC24_ACQUISITION.md`（`start_dc24.bat` 一键入口） |
 | 查找服务器命令 | `docs/服务器命令速查.md` |
 | 处理现场设备数据 | `docs/FIELD_DATA_HANDOFF_20261020.md`, `docs/FIELD_EQUIPMENT_20261023.md` |
 | 运行/编写测试 | `docs/tests/INDEX.md` |
@@ -133,7 +132,6 @@ docs/
 ├── 算法原理.md                       # 经典诊断算法理论
 ├── 诊断算法体系全景.md               # 5 子系统串联说明
 ├── datasets.md                       # 数据集路径、命名与机械参数
-├── 快速启动说明.md                   # 本机启动步骤
 ├── 部署指南.md                       # 服务器部署
 ├── 操作手册.md                       # 日常操作
 ├── 服务器命令速查.md                 # 运维常用命令

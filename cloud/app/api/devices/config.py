@@ -15,7 +15,7 @@ router = APIRouter()
 @router.get("/edge/config")
 def get_edge_config(device_id: str, db: Session = Depends(get_db)):
     """
-    边端拉取配置接口（edge_client.py 调用）
+    边端拉取配置接口（边端启动时调用）
     返回该设备的全部运行参数
     """
     device = db.query(Device).filter(Device.device_id == device_id).first()
