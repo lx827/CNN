@@ -813,6 +813,34 @@ WS /ws/monitor?token={token}
 
 **前端订阅**：`views/Dashboard.vue`, `views/Monitor.vue`
 
+### 10.2 DC24 实时示波窗口推送（2026-11 新增，issue #51）
+
+```
+WS /ws/acquisition/sessions/{session_id}/view?token={token}
+```
+
+网页读取实时窗口的主通道：边端 `POST /sessions/{id}/frames` 上报保持 HTTP 不变；原 REST `GET /sessions/{id}/view` 轮询保留作兼容与回退，两者共用 `build_view_payload()` 同一套窗口计算。
+
+**连接**：`token` 查询参数经 `verify_token_string` 校验（浏览器 WS 无法携带 Authorization 头）；无效令牌以 `WS_1008` 拒绝；会话不存在（后端可能已重启）接受握手后以 `4404` 关闭，前端走既有 REST 恢复路径（`GET /agents/{agent_id}/session`）。
+
+**连接查询参数**（与 REST view 一致的初始选项）：`waveform/fft/rms/envelope/band_low/band_high/wave_seconds`。
+
+**客户端消息**：
+
+| 消息 | 说明 |
+|------|------|
+| `{"type":"ping"}` | 心跳，服务端回 `{"type":"pong"}` |
+| `{"type":"options", fft?, rms?, envelope?, band_low?, band_high?, wave_seconds?}` | 更新分析选项；包络频带校验与 REST 一致（`0 < 下限 < 上限 < 采样率/2`），非法频带回 `{"type":"error","data":{"detail":...}}` 且不改选项 |
+
+**服务端推送**（限频 0.4s，与原 500ms 轮询同节奏；计算走共享两线程池）：
+
+| 消息 | 触发 | data |
+|------|------|------|
+| `{"type":"session","data":{...}}` | 会话快照变化（状态/录制进度/错误） | `live.snapshot()` |
+| `{"type":"view","data":{...}}` | 连接即推 + `revision` 变化（新帧）或选项变化 | 与 REST view 的 `data` 完全同构（含 `waiting` 短数据分支、`fresh` 标记） |
+
+**前端订阅**：`views/Acquisition.vue`（`utils/websocket.js::createWebSocketClient`，WS 未连上时回退 REST 轮询，断线自动重连）
+
 ---
 
 ## 附录 A：API 端点总表
@@ -895,6 +923,7 @@ WS /ws/monitor?token={token}
 | 路径 | 函数名 | 文件 |
 |------|--------|------|
 | `/ws/monitor?token={token}` | `websocket_endpoint` | `main.py` |
+| `/ws/acquisition/sessions/{id}/view?token={token}` | `ws_view` | `acquisition_live.py` |
 
 ---
 

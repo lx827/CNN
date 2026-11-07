@@ -100,34 +100,27 @@ request.post('/api/auth/login', { password: 'xxx' }).then(res => { ... });
 
 **文件路径**：`src/utils/websocket.js`
 
-| 函数/属性 | 类型 | 说明 |
-|-----------|------|------|
-| `ws` | `WebSocket \| null` | WebSocket 实例 |
-| `wsConnected` | `ref<boolean>` | 连接状态 |
-| `getWebSocketClient` | `() -> WebSocketClient` | 获取单例 WebSocket 客户端实例 |
-| `connect()` | `Function` | 建立 WebSocket 连接 |
-| `disconnect()` | `Function` | 断开连接 |
-| `send(data)` | `Function` | 发送消息 |
-| `on(event, callback)` | `Function` | 注册事件监听器 |
-| `off(event, callback)` | `Function` | 移除事件监听器 |
+带断线自动重连(指数退避,最大 30s,最多 20 次)与 30s 心跳(ping/pong)的 WebSocket 客户端。
 
-**支持的事件类型**：
+| 导出 | 类型 | 说明 |
+|------|------|------|
+| `getWebSocketClient()` | `() -> WebSocketClient` | 单例客户端,固定端点 `/ws/monitor`(Dashboard/Monitor 使用) |
+| `createWebSocketClient(path)` | `(path: string) -> WebSocketClient` | 按端点新建独立客户端(2026-11 新增,Acquisition 实时窗口使用);连接/心跳/重连逻辑与单例一致,生命周期由调用方管理 |
 
-| 事件名 | 说明 |
-|--------|------|
-| `device_online` | 设备上线 |
-| `device_offline` | 设备离线 |
-| `sensor_update` | 传感器数据更新 |
-| `diagnosis_update` | 诊断结果更新 |
-| `alarm_new` | 新告警 |
+**实例方法**:`connect()`(幂等,OPEN/CONNECTING 期间不重复建连)、`close()`(主动关闭,阻止后续重连)、`send(data)`(对象自动 JSON 序列化)、`on(event, cb)`(返回解绑函数)、`off(event, cb)`。
+
+**事件**:连接层 `open`/`close`/`error`/`max_retries`;消息层按服务端 `type` 字段分发(如 `sensor_update`、`device_online`、`view`、`session`、`pong`);非 JSON 消息进 `message`。
 
 ```javascript
-// 使用方式
-import { connect, on, send } from '@/utils/websocket';
+import { getWebSocketClient, createWebSocketClient } from '@/utils/websocket';
 
-connect();
-on('device_online', (data) => { console.log('设备上线:', data); });
-send({ type: 'ping' });
+const monitor = getWebSocketClient();
+monitor.connect();
+monitor.on('device_online', (data) => { console.log('设备上线:', data); });
+
+const view = createWebSocketClient(`/ws/acquisition/sessions/${id}/view`);
+view.on('view', (data) => render(data));
+view.connect();
 ```
 
 ### 2.3 后端交互工具 (`backend.js`)

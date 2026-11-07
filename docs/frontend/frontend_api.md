@@ -609,6 +609,19 @@ import {
 
 ---
 
+### 3.9 Acquisition.vue
+
+| 属性 | 说明 |
+|------|------|
+| **文件路径** | `src/views/Acquisition.vue` |
+| **用途** | DC24 实时示波与采集:选择现场边端与采样率开始示波,四通道波形/频谱/RMS/包络实时显示,随时开始/停止原始数据保存 |
+
+**实时窗口数据流（2026-11-08,issue #51）**：会话激活时经 `utils/websocket.js::createWebSocketClient` 订阅 `WS /ws/acquisition/sessions/{id}/view`;连接建立即发送当前分析选项(显示开关/时间窗/包络带),`view` 推送驱动 ECharts 绘制,`session` 推送更新会话状态;WS 未连上时回退 `api/acquisition.js::getLiveView` REST 轮询,断线由客户端指数退避重连,会话停止/404 恢复/页面卸载时关闭订阅。
+
+**调用 API**：`api/acquisition.js` 全部函数(见 2.10 节)。
+
+---
+
 ## 4. Components 通用组件
 
 > 2026-11-08 起组件目录分两层：`src/components/` 通用组件（本节）与 `src/components/<view>/` 页面专属子组件（dashboard/、monitor/、settings/、research/、dataview/ 下各节，Props/Emits 见源码头部 defineProps/defineEmits/defineModel 声明）。

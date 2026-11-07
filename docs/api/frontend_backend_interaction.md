@@ -166,6 +166,19 @@
 
 ---
 
+## 10. DC24 实时采集 (Acquisition)
+
+> 2026-11-08（issue #51）：实时窗口读取从 HTTP 轮询迁到 WebSocket 推送；边端上报链路保持 HTTP。
+
+| 调用方 | API/工具 | 方式 | 说明 |
+|--------|---------|------|------|
+| `Acquisition.vue` | `api/acquisition.js::getAcquisitionAgents/getAcquisitionJobs` | REST 轮询(每 2s) | 边端列表与保存记录 |
+| `Acquisition.vue` | `api/acquisition.js::startLiveSession/stopLiveSession/...` | REST | 会话生命周期、录制、目录选择 |
+| `Acquisition.vue` | `utils/websocket.js::createWebSocketClient('/ws/acquisition/sessions/{id}/view')` | **WS 推送** | 连接即上报 options；`view` 推送驱动图表、`session` 推送更新状态;WS 未连上回退 `getLiveView` REST 轮询,断线指数退避重连 |
+| 边端（DC24） | — | HTTP 不变 | `POST /api/acquisition/sessions/{id}/frames` 原始计数帧上报、`POST .../state` 状态上报 |
+
+---
+
 ## 图例说明
 
 | 标记 | 含义 |
