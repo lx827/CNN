@@ -8,16 +8,7 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-if not exist ".venv\Scripts\python.exe" (
-  echo First run: creating workspace environment with uv sync...
-  uv sync
-  if errorlevel 1 (
-    echo uv sync failed.
-    pause
-    exit /b 1
-  )
-)
-call ".venv\Scripts\activate.bat"
+rem uv run auto-syncs the workspace env (equiv. uv sync) before launching
 set "PYTHONUTF8=1"
-python scripts\dc24_start.py %*
+uv run python scripts\dc24_start.py %*
 if errorlevel 1 pause
