@@ -24,7 +24,7 @@ ACTIVE = ("pending", "waiting_device", "configuring", "capturing", "uploading", 
 INPUT_FILES = {"samples.csv", "metadata.json", "rx_stream.bin", "commands.jsonl"}
 DOWNLOAD_FILES = INPUT_FILES | {"analysis.json", "analysis_arrays.npz"}
 ANALYSIS_LOCK = asyncio.Semaphore(1)
-NATIVE_RATES = sorted(int(k) for k in json.loads((Path(__file__).resolve().parents[3]/"shared/dc24_profiles.json").read_text()))
+NATIVE_RATES = sorted(int(k) for k in json.loads((Path(__file__).resolve().parents[3]/"dc24/dc24_profiles.json").read_text()))
 
 
 def now():

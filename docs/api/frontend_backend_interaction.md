@@ -157,12 +157,12 @@
 
 | 调用方 | API 函数 | HTTP 方法 + URL | 后端处理函数 | 说明 |
 |--------|---------|----------------|-------------|------|
-| `edge_client.py` | — | `POST /api/ingest/` | `ingest.py::ingest_data` | 边端上传压缩后的传感器数据 |
-| `edge_client.py` | — | `GET /api/devices/edge/config?device_id=xxx` | `devices/config.py::get_edge_config` | 边端拉取设备配置 |
-| `edge_client.py` | — | `GET /api/collect/tasks?device_id=xxx` | `collect.py::get_pending_tasks` | 边端查询待执行的采集任务 |
-| `edge_client.py` | — | `POST /api/collect/tasks/{id}/complete` | `collect.py::complete_task` | 边端上报采集任务完成 |
+| 边端（Rust `edge/`） | — | `POST /api/ingest/` | `ingest.py::ingest_data` | 边端上传压缩后的传感器数据 |
+| 边端（Rust `edge/`） | — | `GET /api/devices/edge/config?device_id=xxx` | `devices/config.py::get_edge_config` | 边端拉取设备配置 |
+| 边端（Rust `edge/`） | — | `GET /api/collect/tasks?device_id=xxx` | `collect.py::get_pending_tasks` | 边端查询待执行的采集任务 |
+| 边端（Rust `edge/`） | — | `POST /api/collect/tasks/{id}/complete` | `collect.py::complete_task` | 边端上报采集任务完成 |
 
-> **⚠️ 注意**：`edge_client.py` 与 `ingest.py` 之间的数据格式（msgpack + zlib 压缩结构）变更时，必须同步修改边端 `compressor.py` 和后端 `ingest.py` 的解压逻辑。
+> **⚠️ 注意**：边端与 `ingest.py` 之间的数据格式（msgpack + zlib 压缩结构）变更时，必须同步修改边端实现（旧 `edge_client.py`/`compressor.py` 已随 2026-11 布局重构退役）和后端 `ingest.py` 的解压逻辑。
 
 ---
 
@@ -192,12 +192,12 @@
 | `data_view/diagnosis_ops.py` | `DataView.vue` |
 | `data_view/research.py` | `ResearchDiagnosis.vue` |
 | `monitor.py` | `Monitor.vue` |
-| `collect.py` | `Monitor.vue`, `edge_client.py` |
+| `collect.py` | `Monitor.vue`、边端（Rust `edge/`） |
 | `alarms.py` | `Alarm.vue` |
 | `devices/core.py` | `Alarm.vue`, `Settings.vue` |
-| `devices/config.py` | `Settings.vue`, `edge_client.py` |
+| `devices/config.py` | `Settings.vue`、边端（Rust `edge/`） |
 | `system.py` | `Logs.vue`, `Monitor.vue` |
-| `ingest.py` | `edge_client.py` |
+| `ingest.py` | 边端（Rust `edge/`） |
 
 ---
 

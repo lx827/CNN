@@ -28,19 +28,19 @@
 | 22 | `utils/websocket.js` | **重复握手、旧 close 破坏新心跳、多个重连定时器** — OPEN/CONNECTING 幂等，校验连接实例，定时器去重 |
 | 23 | `Dashboard.vue` | **总览推送与轮询并发，慢响应可覆盖新数据** — 多个入口直接查询且无串行约束；共用在途 Promise，保留一次后续查询，卸载丢弃排队事件 |
 | 24 | `lifespan.py` | **后台诊断入库 JSON 序列化失败，批次长期未分析** — 仅转换通道缓存，遗漏批次结果中的 NumPy 类型；现于算法返回后统一转换完整结果（本地及云端验证通过） |
-| 25 | `edge/replay.py` | **启动器退出后遗留 Vite 子进程** — 持有 cmd/npm 包装进程且忽略终止失败，无法可靠确认 Node 已退出；改为直接持有 Vite 的 Node 进程，终止失败时回退并等待退出 |
-| 26 | `edge/replay.py` | **快速启动重复打开两个页面** — Vite 的 `open:true` 与启动器的 `webbrowser.open` 同时执行；仅对子进程设置 `BROWSER=none`，统一由启动器打开一次 |
-| 27 | `edge/dc24_vendor_bridge.ps1` | **厂商 DLL 连接在首个采样帧后自动停止**。边端经 DLL 套接字发送 B7 前先同步该设备在 DLL 中的采集状态。实机重测及网页网卡抓包确认连续收样与正常停止。见 [DC24 工作记录](DC24_ACQUISITION_WORKLOG.md)。 |
+| 25 | `dc24/replay.py`（已退役） | **启动器退出后遗留 Vite 子进程** — 持有 cmd/npm 包装进程且忽略终止失败，无法可靠确认 Node 已退出；改为直接持有 Vite 的 Node 进程，终止失败时回退并等待退出 |
+| 26 | `dc24/replay.py`（已退役） | **快速启动重复打开两个页面** — Vite 的 `open:true` 与启动器的 `webbrowser.open` 同时执行；仅对子进程设置 `BROWSER=none`，统一由启动器打开一次 |
+| 27 | `dc24/dc24_vendor_bridge.ps1` | **厂商 DLL 连接在首个采样帧后自动停止**。边端经 DLL 套接字发送 B7 前先同步该设备在 DLL 中的采集状态。实机重测及网页网卡抓包确认连续收样与正常停止。见 [DC24 工作记录](DC24_ACQUISITION_WORKLOG.md)。 |
 
-**Bug #26 验证（2026-10-24）**：`tests/edge/test_browser_open.py` 使用真实 Vite、临时端口和浏览器脚本探针，在修复前确认 Vite 额外打开，修复后探针不再触发且启动器只打开一次；复用已有前端同样只打开一次。父进程浏览器环境保持原值，不修改前端代理或 `open:true` 配置，不访问云端、不上传数据。
+**Bug #26 验证（2026-10-24）**：`tests/edge/test_browser_open.py`（已随旧回放链退役）使用真实 Vite、临时端口和浏览器脚本探针，在修复前确认 Vite 额外打开，修复后探针不再触发且启动器只打开一次；复用已有前端同样只打开一次。父进程浏览器环境保持原值，不修改前端代理或 `open:true` 配置，不访问云端、不上传数据。
 
-**Bug #25 验证（2026-10-23）**：清理工作区前确认残留 Node 占用本机 3000 端口。`tests/edge/test_frontend_lifecycle.py` 使用真实 Vite，覆盖正常返回及 Ctrl+C 两条路径；修复后均确认所创建 Node 退出、3000 端口不再提供服务。不访问云端或上传数据，已运行的用户前端仍直接复用。
+**Bug #25 验证（2026-10-23）**：清理工作区前确认残留 Node 占用本机 3000 端口。`tests/edge/test_frontend_lifecycle.py`（已随旧回放链退役）使用真实 Vite，覆盖正常返回及 Ctrl+C 两条路径；修复后均确认所创建 Node 退出、3000 端口不再提供服务。不访问云端或上传数据，已运行的用户前端仍直接复用。
 
 **Bug #24 验证（2026-10-23）**：
 
 - 触发条件：后台分析输出的批次 `order_analysis` 含 NumPy 布尔等非 JSON 原生类型；普通数据上传仍成功，但诊断事务提交失败，已分析标记和健康度更新一起回滚。
 - 根因：`full_analysis` 的转换不覆盖批次诊断，SQLAlchemy JSON 编码抛出 `Object of type bool is not JSON serializable`。在 `analyze_device` 返回后对完整结果调用现有 `sanitize_for_json`，供后续入库、告警与推送使用；不改算法评分或数据来源。
-- `tests/backend/test_analysis_worker_json.py` 两项修复前均复现同一错误，修复后通过；覆盖真实内存 SQLite 提交、通道新增/覆盖、原始数据已分析、设备健康度、告警输入与严格 JSON 推送。后端 12 项测试、三项 P0 回归通过；变速阶次回归使用恢复目录的 HUSTbear 样本。
+- `cloud/tests/test_analysis_worker_json.py`（2026-11 分立后新位置）两项修复前均复现同一错误，修复后通过；覆盖真实内存 SQLite 提交、通道新增/覆盖、原始数据已分析、设备健康度、告警输入与严格 JSON 推送。后端 12 项测试、三项 P0 回归通过；变速阶次回归使用恢复目录的 HUSTbear 样本。
 - 云端 SSH 非交互认证未通过，改由用户通过阿里云 Workbench 在独立本地任务分支应用同一处修复；保留原文件备份，重启后 `CNN` 服务为 active。未整体升级云端代码。
 - 云端实测（2026-10-23，北京时间 19:51 后）：沿用已确认的 CW 回放，每台上传一批恢复在线；WTG-001 批次 6/7、WTG-002 批次 7/8、WTG-003 批次 7/8 六个新旧批次均 `is_analyzed=1`，已保存的通道诊断均可读取，近期日志未再出现序列化错误。未启动持续回放，不代表算法诊断准确率评估。
 - 本地修复与另一 AI 的主工作区改动通过独立 worktree 隔离，未推送或合并。
@@ -48,8 +48,8 @@
 **Bug #16–22 验证（2026-10-21）**：
 
 - 每组均先通过实际函数/端点/真实 Vue 生命周期的测试复现，再修改实现；没有使用线上数据库或向现场设备下发采集。
-- 后端 `tests/backend/test_read_paths.py`：总览 11 台设备由 16 次 SELECT 降为 3 次，历史 16 个批次由 17 次降为 2 次；批次列表不加载完整算法 JSON，两列表结果一致；缓存插入/覆盖、严格 JSON、旧库重复补索引、真实应用五条 HTTP 读路径均通过。
-- 后端 `tests/backend/test_event_loop.py`：用受控慢去噪在 STFT/倒谱/阶次实际端点上验证其他协程能被调度，修复前三个端点均失败，修复后通过。不代表真实 VMD 算法耗时降低。
+- 后端 `cloud/tests/test_read_paths.py`（新位置）：总览 11 台设备由 16 次 SELECT 降为 3 次，历史 16 个批次由 17 次降为 2 次；批次列表不加载完整算法 JSON，两列表结果一致；缓存插入/覆盖、严格 JSON、旧库重复补索引、真实应用五条 HTTP 读路径均通过。
+- 后端 `cloud/tests/test_event_loop.py`（新位置）：用受控慢去噪在 STFT/倒谱/阶次实际端点上验证其他协程能被调度，修复前三个端点均失败，修复后通过。不代表真实 VMD 算法耗时降低。
 - 前端 `monitor_lifecycle.test.cjs`（7 项）、`dashboard_lifecycle.test.cjs`（6 项）、`websocket.test.cjs`（3 项）全部通过；不覆盖实际浏览器像素渲染。
 - 三项 P0 回归通过，前端生产构建通过。线上 P95 延迟、MySQL/Ubuntu 环境、完整数据集分类效果未验证。原有 #11d/#13d 仍未解决。
 
@@ -62,7 +62,7 @@
 - **触发条件**：首次进入实时监测，或切换到其他路由后返回；请求未完成时离开页面也会遗留资源。
 - **根因**：挂载回调先执行 `loadLatestData()`，其中的 `updateCharts()` 在图表实例创建前调用，随后 `initCharts()` 创建的是空图表；手动切换通道才重新绘图。`onUnmounted` 又在异步挂载的 await 之后注册，Vue 无法关联组件，导致清理不执行；单例 WebSocket 的匿名回调也未被移除。
 - **修复**：先初始化图表，再请求并绘制数据；在 setup 阶段同步注册卸载钩子，用具名回调取消 WebSocket 订阅，释放图表、轮询和 resize 监听，并阻止卸载后的异步初始化和绘图。
-- **验证**：`tests/frontend/monitor_lifecycle.test.cjs` 使用真实 Vue 生命周期和模拟 API/ECharts，修复前 3 项均失败，修复后 3 项通过，覆盖默认通道首屏、切换通道、离开再进入、订阅清理和请求尚未完成时离开。该测试不验证浏览器实际像素渲染或云端在线采集。
+- **验证**：`wind-turbine-diagnosis/tests/monitor_lifecycle.test.cjs`（2026-11 分立后新位置）使用真实 Vue 生命周期和模拟 API/ECharts，修复前 3 项均失败，修复后 3 项通过，覆盖默认通道首屏、切换通道、离开再进入、订阅清理和请求尚未完成时离开。该测试不验证浏览器实际像素渲染或云端在线采集。
 
 **Bug #11 详细**（根因分析与修复记录）：
 
@@ -94,7 +94,7 @@
 
 | 层级 | 文件 | 修复内容 | 状态 |
 |------|------|---------|------|
-| 1 | `tests/diagnosis/eval_plots/run_all.py` | 标签映射改用精确匹配：`fl == "bearing_bpfo"` 替代 `"bpfo" in fl` | ✅ 已修复 |
+| 1 | `cloud/tests/diagnosis/eval_plots/run_all.py`（新位置） | 标签映射改用精确匹配：`fl == "bearing_bpfo"` 替代 `"bpfo" in fl` | ✅ 已修复 |
 | 2 | `cloud/app/services/diagnosis/ensemble.py` | `_fault_label` 按 SNR 降序取主导峰，不再拼接多故障标签 | ✅ 已修复 |
 | 3 | `cloud/app/services/diagnosis/engine.py` | `significant` 增加相对主导过滤：只有最强峰或 SNR>15 才保留 significant | ✅ 已修复 |
 | 4 | `cloud/app/services/diagnosis/engine.py` | 需引入主导峰排序、谐波族验证、相对 SNR 机制 | ⏳ 待修复 |

@@ -1,201 +1,70 @@
-# Edge Client — 边端采集客户端
+# DC24 Rust 边端（开发中）
 
-> 本文档说明 `edge/` 目录下的边端采集程序，负责读取风机现场振动数据并上传至云端。
+**这是开发进度交接，不是已验证可部署的发行版。** 截至 2026-11-07，源码、配置、测试和服务模板已写入；Rust 语法格式和 Cargo 清单/锁文件检查通过，完整构建与端到端测试尚未通过。没有安装到树莓派，没有部署或修改 ECS。
 
----
+## 目标与已有代码
 
-## 1. 模块概述
+在树莓派上控制 DC24、接收四路原始 ADC 计数、本地保存并上传 CNN 后端；异常判断留在云端。本轮没有实现本地 FFT、模型推理或自动异常切换。
 
-### DC24 实际硬件采集（2026-11-05）
+实现依据是本交接分支已有的 [DC24 协议](../docs/DC24_PROTOCOL.md) 和 [Python 实机链路交接](../docs/DC24_HANDOFF_20261107.md)。Windows DLL 不参与 Rust 程序运行。当前只实现已验证的四通道 IEPE/AC0.2Hz/PASS 配置，不是完整厂家 SDK。
 
-`dc24_capture.py`负责协议，`dc24_agent.py`和`dc24_live.py`负责实时示波、点击后保存及完整文件上传。使用电脑 `192.168.2.100:6800` 等待DC24连接；支持原厂50～100000Hz全部12档、四通道、自填时长或手动停止、可选现场保存目录。示波只驻留内存，采集不抽点。先让原厂软件脱机，双击根目录 `start_dc24.bat` 一键启动本机前后端和边端。完整步骤见 [DC24采集说明](../docs/DC24_ACQUISITION.md)。下文既有 `edge_client.py` 和数据集回放继续适用于原入口。
+| 文件 | 已写入的内容（仍待验证） |
+|---|---|
+| `src/protocol.rs` | 控制报文、TCP 拆帧、四路有符号24位计数、序号连续性检查 |
+| `src/device.rs` | 主机监听、设备连接、心跳、开始/停止控制 |
+| `src/recording.rs` | CSV、原始采样帧、int32 计数及元数据保存，磁盘空间保护 |
+| `src/cloud.rs` | 现有 `/api/acquisition` HTTP 接口及流式文件上传 |
+| `src/runtime.rs` | 云端控制、有限实时窗口、调度、持久化补传清单 |
+| `config.example.json` | 配置样例，无真实云端地址或密钥 |
+| `deploy/dc24-edge.service` | 未安装的 systemd 模板；账号和路径需要部署前核实 |
+| `tests/end_to_end.rs` | 回环模拟设备和云端，检查计数、文件一致性及上传重试；尚未通过执行 |
 
-### 当前快速启动与数据集选择（2026-10-23）
+原始值保持 ADC counts，不自动换算为 g 或 m/s²，不抽点替代完整保存。文件格式沿用现有真实采集链路：`samples.csv`、`counts.i32`、`rx_stream.bin`、`commands.jsonl`、`metadata.json`。
 
-Windows 本机推荐双击仓库根目录 `start.bat`，选择 CW、HUSTbear 或两份同时回放。它使用现有 edge 虚拟环境，启动本机前端并打开浏览器；Ctrl+C 停止边端和本次启动的前端。完整说明见 `docs/快速启动说明.md`。
+## 配置与控制约定
 
-快速启动器仅在 Vite 子进程中设置 `BROWSER=none`，由启动器统一打开一次页面，避免与前端 `open:true` 重复；复用已有前端时同样只发起一次打开请求，不改父进程环境或日常 `npm run dev` 的配置。
+- `mode=cloud`：由现有云端会话下发采样率、保存时长及停止指令；不自行开始采样。
+- `mode=periodic`：显式配置 `sample_rate`、正数 `duration_seconds` 和 `interval_seconds`；间隔按上一次会话结束后等待计算，不重叠追赶任务。
+- `mode=continuous`：显式配置采样率，请求持续保存，直到停止；不按本地异常自动切换模式。
+- 示例中的采样率、时长、间隔为 `null`，不替用户确定业务参数。`cloud` 模式允许保留这些空值。
+- 文件配置在外层任务循环重新读取；正在进行的会话不会被本地配置文件静默重设。云端地址、边端身份或存储根目录变化需要重启程序。
+- 密钥只从 `api_key_env` 指定的环境变量读取，默认变量名 `EDGE_API_KEY`；不要将真实密钥写入样例或提交到 Git。
+- 无桌面的树莓派需要在页面填写设备上的绝对保存路径，不依赖 Windows 目录选择窗口。
 
-| 选择 | 数据目录（相对仓库根目录） | 设备 |
-|---|---|---|
-| CW | `data/CW/down8192_CW` | WTG-001/002/003：健康、内圈、外圈 |
-| HUSTbear | `data/HUSTbear/down8192` | HUST-001～005：健康、球、内圈、外圈、复合 |
-| 两份 | 上述两目录 | 上述八台设备，不含缺失数据的 WTgearbox 设备 |
+## 连续上传与恢复的边界
 
-`replay.py` 固定使用项目内两份 8192 Hz 数据，覆盖旧终端中的外部数据路径；先检查所有工况的完整通道和有限实数，再检查云端设备已注册。HUSTbear 的 H/N、B、I/IR、O/OR、C 通过下划线完整字段分类（兼容负载前缀），X/Y/Z 映射到通道 1/2/3，缺轴会在上传前拒绝。保留既有截断/重复补足至 5 秒和压缩方式。
+代码沿用已有 CNN 接口：采集中上传有限实时窗口；完整五文件在一次保存任务结束、文件关闭后上传。**尚未实现持续保存期间分段发布完整文件**，不能将实时窗口等同于已可靠上传全部连续原始数据。
 
-新 HUSTbear 设备需先由管理员在云端执行 `scripts/register_hustbear_devices.py`；仅新增缺失设备，参数冲突整批回滚。ER-16K 参数为 `{n:9,d:7.94,D:38.52,alpha:0}`，X/Y/Z 三轴，仅轴承诊断。未注册时启动器停止，不上传孤立批次。新设备沿用现有演示配置：108000 秒上传间隔、5 秒任务轮询，压缩开启和降采样比 8；更频繁采集请在云端配置。
+实时窗口过期后以绝对样本索引显式保留缺口；本地完整保存与实时上传分开。已完整关闭的文件用本地清单记录重试，不把整份文件装入内存。不会自动删除已保存文件；磁盘空间不足时需要报错并停止保存。实际手机热点带宽、存储写入速度和长期稳定性尚未验证。
 
-直接运行 `edge_client.py` 时，`REPLAY_DATASET=cw/hustbear/both` 对应固定设备映射；不设置时保留原多数据源模式及 `DEVICE_IDS` 行为。`HUSTBEAR_DIR` 可指定数据目录。下文旧版 `DATA_DIR` 配置不再用于现有多数据源客户端，请使用 `CNN_DATA_ROOT`、`CW_DATA_DIR`、`HUSTBEAR_DIR`、`WTGEAR_DATA_DIR`。
+进程崩溃时未完成的记录保留并标记中断，不冒充完整文件上传；旧实时会话不能在重启后从零重用样本索引。以上恢复路径仍需执行测试。
 
-新增函数：`matching_groups(groups, data_dir, label)` 返回匹配工况前缀；`replay.check_data(edge)` 扫描验证后返回 `DataSourceManager`；`replay.check_cloud(edge)` 检查云端注册及 HUSTbear 参数，失败抛异常，均不上传。
+服务模板的 `MemoryMax=192M` 是拟设的资源保护上限，**不是程序实测内存占用**，也不代表已经证明适用于1GB树莓派。正式部署前必须核验 ARM64 构建、实际资源占用和停止行为。
 
-边端客户端安装在风机现场的工业网关，核心职责：
+## 本地验证方式
 
-1. **信号采集**：读取本地真实 `.npy` 振动数据文件
-2. **数据压缩**：使用降采样 + msgpack + zlib 压缩，减少上传带宽
-3. **数据上传**：通过 HTTP POST 将数据上传到云端 `/api/ingest/`
-4. **任务轮询**：定期从云端获取手动采集任务，执行后上传结果
-5. **动态配置**：支持云端动态调整上传间隔等参数
+以下命令只用于开发验证，**不表示目前已全部通过**。在装好 Rust 工具链的开发电脑终端中、工作目录为本仓库的 `edge/` 时执行；无需管理员权限。首次获取依赖需要网络，构建产物写入忽略的 `target/`。
 
----
+```sh
+# 检查 Rust 源码格式和可解析性；--check 只检查，不改文件。
+cargo fmt --all -- --check
 
-## 2. 文件结构
+# 按已提交的锁文件构建并运行测试；--locked 禁止悄悄更改依赖版本。
+cargo test --locked
 
-```
-edge/
-├── edge_client.py       # 主程序（采集 + 上传 + 任务轮询）
-├── edge_client.py       # 主程序（读取 .npy + 上传 + 任务轮询）
-├── compressor.py        # 数据压缩（降采样 + msgpack + zlib）
-├── requirements.txt     # Python 依赖
-├── .env                 # 边端配置文件
-└── venv/                # Python 虚拟环境
-```
-
----
-
-## 3. 环境配置（`.env`）
-
-```env
-# 云端地址
-CLOUD_INGEST_URL=http://localhost:8000/api/ingest/
-
-# 设备列表（支持多设备，逗号分隔）
-DEVICE_IDS=WTG-001,WTG-002,WTG-003,WTG-004,WTG-005
-
-# 真实数据目录（相对仓库根目录，也可写绝对路径）
-DATA_DIR=data/HUSTbear/down8192
-
-# 信号参数
-SAMPLE_RATE=8192
-DURATION=10
-
-# 压缩参数
-COMPRESSION_ENABLED=true
-DOWNSAMPLE_RATIO=8
-
-# 轮询间隔
-UPLOAD_INTERVAL=10
-TASK_POLL_INTERVAL=5
+# 生成本机平台的优化构建；不会自动生成树莓派 ARM64 程序，也不会部署。
+cargo build --release --locked
 ```
 
-### 配置项说明
+运行程序前要替换配置样例的云端占位地址，并设置认证环境变量。即使构建成功，也先使用检查模式，不连接采集器或上传数据：
 
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `CLOUD_INGEST_URL` | `http://localhost:8000/api/ingest/` | 云端数据接入地址 |
-| `DEVICE_IDS` | `WTG-001` | 设备编号列表，逗号分隔 |
-| `DATA_DIR` | — | 真实数据目录（`.npy` 文件路径） |
-| `SAMPLE_RATE` | `25600` | 采样率 Hz |
-| `DURATION` | `10` | 单次采集时长（秒） |
-| `COMPRESSION_ENABLED` | `true` | 是否启用数据压缩 |
-| `DOWNSAMPLE_RATIO` | `8` | 降采样压缩比 |
-| `UPLOAD_INTERVAL` | `10` | 自动上传间隔（秒） |
-| `TASK_POLL_INTERVAL` | `5` | 任务轮询间隔（秒） |
-
----
-
-## 4. 数据格式
-
-### 4.1 真实数据模式（`.npy` 文件）
-
-使用 HUSTbear 轴承数据集：
-
-- **路径**：`DATA_DIR` 目录下的 `.npy` 文件
-- **采样率**：8192 Hz（与 `SAMPLE_RATE` 配置一致）
-- **文件命名**：`{负载}_{故障类型}_{转速模式}-{通道}.npy`
-  - 负载：`0.5X` / `1X` / `1.5X` / `2X`
-  - 故障类型：`N`（健康）/ `B`（球故障）/ `IR`（内圈）/ `OR`（外圈）/ `C`（复合）
-  - 转速模式：`CS`（恒定转速）/ `VS`（变速）
-  - 通道：`X` / `Y` / `Z`
-- **示例**：`0.5X_B_VS_0_40_0Hz-X.npy`
-
----
-
-## 5. 数据压缩流程
-
-```
-原始信号 (float64 数组)
-    │
-    ▼ 降采样
-降采样信号 (长度 / DOWNSAMPLE_RATIO)
-    │
-    ▼ msgpack 序列化
-二进制数据
-    │
-    ▼ zlib 压缩
-压缩数据 (Base64 编码)
-    │
-    ▼ HTTP POST 上传
-云端
+```sh
+# 读取指定配置并做格式、参数校验；--check 禁止启动采集或网络操作。
+./target/release/dc24-edge --config config.json --check
 ```
 
-压缩率通常可达 **10:1 ~ 50:1**，显著减少上传带宽。
+最后一条的路径形式适用于 Linux/macOS；Windows 构建产物是 `target/release/dc24-edge.exe`。Windows GNU 工具链在中文绝对路径下的链接问题尚未解决，详细过程见 [工作记录](../docs/RUST_EDGE_WORKLOG.md)。
 
----
+## 下一步
 
-## 6. 启动方式
-
-```bash
-cd /d/code/CNN/edge
-. venv/Scripts/activate
-pip install -r requirements.txt
-python edge_client.py
-```
-
-一个边端实例可同时为多个设备（`WTG-001` ~ `WTG-005`）采集和上传数据，每个设备独立轮询、独立上传。
-
----
-
-## 7. 运行流程
-
-```
-启动
-  │
-  ├──→ 拉取云端配置（上传间隔等）
-  │
-  ├──→ 为每个设备创建独立线程
-  │      │
-  │      ├──→ 读取真实 .npy 数据
-  │      │
-  │      ├──→ 压缩数据
-  │      │
-  │      ├──→ HTTP POST 上传至 /api/ingest/
-  │      │
-  │      └──→ 等待 UPLOAD_INTERVAL 秒，循环
-  │
-  └──→ 任务轮询线程
-         │
-         ├──→ GET /api/collect/tasks
-         │
-         ├──→ 若有 pending 任务，执行采集上传
-         │
-         └──→ 等待 TASK_POLL_INTERVAL 秒，循环
-```
-
----
-
-## 8. 多设备支持
-
-边端客户端支持**一个实例管理多个设备**：
-
-```env
-DEVICE_IDS=WTG-001,WTG-002,WTG-003
-```
-
-每个设备：
-- 独立的数据目录（按设备 ID 子目录查找 `.npy` 文件）
-- 独立的上传线程
-- 独立的批次索引
-
----
-
-## 9. 常见问题
-
-| 问题 | 解决 |
-|------|------|
-| 上传失败 / 连接超时 | 检查 `CLOUD_INGEST_URL` 是否正确，云端是否已启动 |
-| `ModuleNotFoundError` | 确认已激活 venv，`pip install -r requirements.txt` |
-| 找不到 `.npy` 文件 | 检查 `DATA_DIR` 路径是否正确，文件名格式是否匹配 |
-| 数据上传成功但云端未显示 | 检查边端 `X-Edge-Key` 是否与云端 `EDGE_API_KEY` 一致 |
-| 压缩后数据异常 | 检查 `SAMPLE_RATE` 和 `DOWNSAMPLE_RATIO` 配置是否合理 |
+先解决构建，执行协议、定时/持续保存、故障收尾、重试及与现有真实后端的兼容性测试，再做 ARM64 和真机资源验证。用户已明确要求暂不部署：推送交接分支不等于授权上传程序到树莓派、修改设备网络或部署 ECS。

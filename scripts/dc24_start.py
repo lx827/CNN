@@ -38,12 +38,11 @@ def main():
     parser.add_argument('--check', action='store_true', help='只检查依赖，不启动服务或采集')
     parser.add_argument('--no-browser', action='store_true', help='启动服务但不自动打开浏览器')
     args = parser.parse_args()
-    cloud_python = ROOT/'cloud/venv/Scripts/python.exe'
-    edge_python = ROOT/'edge/venv/Scripts/python.exe'
-    for path in (cloud_python, edge_python):
-        if not path.exists():
-            raise RuntimeError('缺少虚拟环境：'+str(path))
-    vendor_root = os.environ.get('DC24_VENDOR_ROOT', dotenv_values(ROOT/'edge/.env').get('DC24_VENDOR_ROOT')) or ''
+    workspace_python = ROOT/'.venv/Scripts/python.exe'
+    if not workspace_python.exists():
+        raise RuntimeError('缺少 uv workspace 环境：'+str(workspace_python)
+                           +'；请先在仓库根目录运行 uv sync（或双击 start_dc24.bat 自动创建）')
+    vendor_root = os.environ.get('DC24_VENDOR_ROOT', dotenv_values(ROOT/'dc24/.env').get('DC24_VENDOR_ROOT')) or ''
     if vendor_root:
         vendor_path = Path(vendor_root).expanduser()
         if not vendor_path.is_absolute() or not (vendor_path/'dll/JMServer.dll').is_file():
@@ -65,7 +64,7 @@ def main():
     env = {**os.environ, **{k: str(v) for k, v in config.items() if v is not None},
            'USE_SQLITE': 'true', 'DATABASE_URL': 'sqlite:///'+str(ROOT/'cloud/turbine.db'),
            'EDGE_API_KEY': key, 'PYTHONUTF8': '1', 'PYTHONIOENCODING': 'utf-8',
-           'VIRTUAL_ENV': str(ROOT/'cloud/venv')}
+           'VIRTUAL_ENV': str(ROOT/'.venv')}
     processes, logs = [], []
     started = time.monotonic()
     try:
@@ -80,7 +79,7 @@ def main():
                     raise RuntimeError('8000端口已被其他或旧版服务占用，请先结束旧服务；没有停止任何已有进程')
             output = ROOT/'tmp/dc24_live'; output.mkdir(parents=True, exist_ok=True)
             log = (output/'local-backend.log').open('ab'); logs.append(log)
-            p = subprocess.Popen([str(cloud_python), '-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000'],
+            p = subprocess.Popen([str(workspace_python), '-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000'],
                                  cwd=ROOT/'cloud', env=env, stdout=log, stderr=subprocess.STDOUT,
                                  creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             processes.append(p)
@@ -103,16 +102,16 @@ def main():
             raise RuntimeError('已运行的边端使用另一种采集模块，请先退出其启动窗口，再双击start_dc24.bat')
         if not online:
             output = ROOT/'tmp/dc24_live'; output.mkdir(parents=True, exist_ok=True)
-            log = (output/'local-edge.log').open('ab'); logs.append(log)
-            edge_env = {**env, 'VIRTUAL_ENV': str(ROOT/'edge/venv'), 'DC24_VENDOR_ROOT': vendor_root}
-            p = subprocess.Popen([str(edge_python), str(ROOT/'edge/dc24_agent.py'), '--cloud', BASE, '--agent-id', AGENT,
-                                  '--output', str(ROOT/'data/dc24_recordings')], cwd=ROOT, env=edge_env,
+            log = (output/'local-agent.log').open('ab'); logs.append(log)
+            dc24_env = {**env, 'VIRTUAL_ENV': str(ROOT/'.venv'), 'DC24_VENDOR_ROOT': vendor_root}
+            p = subprocess.Popen([str(workspace_python), str(ROOT/'dc24/dc24_agent.py'), '--cloud', BASE, '--agent-id', AGENT,
+                                  '--output', str(ROOT/'data/dc24_recordings')], cwd=ROOT, env=dc24_env,
                                  stdout=log, stderr=subprocess.STDOUT,
                                  creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             processes.append(p)
             for _ in range(100):
                 if p.poll() is not None:
-                    raise RuntimeError('边端启动失败，见tmp/dc24_live/local-edge.log')
+                    raise RuntimeError('边端启动失败，见tmp/dc24_live/local-agent.log')
                 if any(a['id'] == AGENT and a['online'] for a in call('/agents', key)):
                     break
                 time.sleep(.1)
