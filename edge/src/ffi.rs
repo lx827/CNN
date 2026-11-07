@@ -230,8 +230,11 @@ fn write_err(err: *mut c_char, capacity: usize, message: &str) {
     }
     let bytes = message.as_bytes();
     let mut end = (capacity - 1).min(bytes.len());
-    // 退回 UTF-8 字符边界，避免宿主拿到非法截断字节。
-    while end > 0 && (bytes[end] & 0xC0) == 0x80 {
+    // 退回 UTF-8 字符边界，语义同 str::is_char_boundary：切割点处的字节若是
+    // 续字节，说明多字节字符被截半，须整体让出。（手写 bytes[end] 不判 len 会
+    // 越界 panic；查 bytes[end-1] 续字节则漏掉"保留首字节、丢弃续字节"的切割。）
+    let boundary = |cut: usize| cut == 0 || cut >= bytes.len() || (bytes[cut] & 0xC0) != 0x80;
+    while end > 0 && !boundary(end) {
         end -= 1;
     }
     unsafe {

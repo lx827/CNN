@@ -297,3 +297,47 @@ fn ffi_fails_when_host_stops_consuming() {
     unsafe { dc24_edge_close(handle) };
     device.join().unwrap();
 }
+
+#[test]
+fn ffi_open_reports_errors_without_crashing() {
+    // write_err 曾在消息短于缓冲时越界 panic：任何错误返回都会杀死宿主进程，
+    // 这里逐条覆盖错误文本路径，包括多字节中文 + 小缓冲的截断回退。
+    let mut err = [0 as c_char; 512];
+    let bad = CString::new("{ 不是 JSON").unwrap();
+    assert!(unsafe { dc24_edge_open(bad.as_ptr(), err.as_mut_ptr(), err.len()) }.is_null());
+    assert!(cstr_lossy(&err).contains("配置"));
+
+    // 端口被占：先占住再 open，bind 必须失败并返回可读错误。
+    let probe = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = probe.local_addr().unwrap().port();
+    let storage = PathBuf::from(std::env::temp_dir()).join(format!(
+        "dc24-ffi-err-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let text = CString::new(
+        serde_json::to_string(&json!({
+            "cloud_url": "http://127.0.0.1:1",
+            "listen_ip": "127.0.0.1",
+            "device_ip": "127.0.0.1",
+            "port": port,
+            "storage": storage,
+            "agent_id": "ffi-test",
+            "min_free_bytes": 0,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(unsafe { dc24_edge_open(text.as_ptr(), err.as_mut_ptr(), err.len()) }.is_null());
+    assert!(cstr_lossy(&err).contains("监听"));
+
+    // 多字节中文错误写入 8 字节小缓冲：截断必须落在字符边界且不 panic。
+    let mut tiny = [0 as c_char; 8];
+    assert!(unsafe { dc24_edge_open(bad.as_ptr(), tiny.as_mut_ptr(), tiny.len()) }.is_null());
+    let truncated = cstr_lossy(&tiny);
+    assert!(truncated.len() < 8, "截断文本必须短于缓冲: {truncated:?}");
+    assert!(truncated.chars().all(|c| !c.is_control()));
+}
