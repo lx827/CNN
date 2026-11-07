@@ -1,0 +1,4797 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "风机齿轮箱智能故障诊断系统 - 云端 API",
+    "description": "边端上传数据 → 云端分析诊断 → 前端展示",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "认证"
+        ],
+        "summary": "Login",
+        "description": "用户登录接口\n密码正确后返回 JWT Token，前端存储并在后续请求中携带",
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ingest/": {
+      "post": {
+        "tags": [
+          "数据接入"
+        ],
+        "summary": "Ingest Data",
+        "description": "边端上传传感器数据\n支持压缩模式和原图模式",
+        "operationId": "ingest_data_api_ingest__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/dashboard/": {
+      "get": {
+        "tags": [
+          "设备总览"
+        ],
+        "summary": "Get Dashboard",
+        "description": "返回设备总览所需的所有数据",
+        "operationId": "get_dashboard_api_dashboard__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/monitor/latest": {
+      "get": {
+        "tags": [
+          "实时监测"
+        ],
+        "summary": "Get Latest Monitor",
+        "description": "获取最新一批传感器数据（每个通道一条）\n同时返回时域数据和 FFT 频域数据\n\n如果 prefer_special=True，优先返回最新的特殊数据批次；\n否则返回最新的普通数据批次。",
+        "operationId": "get_latest_monitor_api_monitor_latest_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "WTG-001",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "prefer_special",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "优先返回特殊数据",
+              "default": false,
+              "title": "Prefer Special"
+            },
+            "description": "优先返回特殊数据"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "返回最近几条记录",
+              "default": 3,
+              "title": "Limit"
+            },
+            "description": "返回最近几条记录"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/monitor/history": {
+      "get": {
+        "tags": [
+          "实时监测"
+        ],
+        "summary": "Get Monitor History",
+        "description": "获取某通道最近 N 个批次的历史数据",
+        "operationId": "get_monitor_history_api_monitor_history_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "WTG-001",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "batches",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "最近多少批次",
+              "default": 16,
+              "title": "Batches"
+            },
+            "description": "最近多少批次"
+          },
+          {
+            "name": "include_special",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否包含特殊数据",
+              "default": true,
+              "title": "Include Special"
+            },
+            "description": "是否包含特殊数据"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/alarms/": {
+      "get": {
+        "tags": [
+          "告警管理"
+        ],
+        "summary": "Get Alarms",
+        "description": "分页获取告警列表",
+        "operationId": "get_alarms_api_alarms__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Size"
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "过滤级别: warning/critical",
+              "title": "Level"
+            },
+            "description": "过滤级别: warning/critical"
+          },
+          {
+            "name": "resolved",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "过滤是否已处理: 0/1",
+              "title": "Resolved"
+            },
+            "description": "过滤是否已处理: 0/1"
+          },
+          {
+            "name": "device_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "过滤设备ID",
+              "title": "Device Id"
+            },
+            "description": "过滤设备ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/alarms/{alarm_id}/resolve": {
+      "post": {
+        "tags": [
+          "告警管理"
+        ],
+        "summary": "Resolve Alarm",
+        "description": "处理（关闭）一条告警",
+        "operationId": "resolve_alarm_api_alarms__alarm_id__resolve_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "alarm_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Alarm Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/alarms/{alarm_id}": {
+      "delete": {
+        "tags": [
+          "告警管理"
+        ],
+        "summary": "Delete Alarm",
+        "description": "删除一条告警记录",
+        "operationId": "delete_alarm_api_alarms__alarm_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "alarm_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Alarm Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/": {
+      "get": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "Get Devices",
+        "description": "获取所有设备列表",
+        "operationId": "get_devices_api_devices__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/devices/edge/config": {
+      "get": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "Get Edge Config",
+        "description": "边端拉取配置接口（边端启动时调用）\n返回该设备的全部运行参数",
+        "operationId": "get_edge_config_api_devices_edge_config_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{device_id}/config": {
+      "get": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "Get Device Config",
+        "description": "获取某设备的边端配置参数（前端调用）",
+        "operationId": "get_device_config_api_devices__device_id__config_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "Update Device Config",
+        "description": "更新某设备的边端配置参数（前端调用）\n\n可更新字段：\n- upload_interval: 自动采集上传间隔(秒)，建议 >= 5\n- task_poll_interval: 任务轮询间隔(秒)，建议 >= 3\n- sample_rate: 采样率 Hz\n- window_seconds: 采集窗口秒数\n- channel_count: 通道数",
+        "operationId": "update_device_config_api_devices__device_id__config_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/batch-config": {
+      "put": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "Update Batch Config",
+        "description": "批量更新所有设备的配置参数\n只更新 payload 中存在的字段，不影响其他字段",
+        "operationId": "update_batch_config_api_devices_batch_config_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/devices/{device_id}/alarm-thresholds": {
+      "get": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "Get Alarm Thresholds",
+        "description": "获取设备的告警阈值配置\n返回用户自定义配置 + 实际生效阈值（含默认值回退）",
+        "operationId": "get_alarm_thresholds_api_devices__device_id__alarm_thresholds_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "Update Alarm Thresholds",
+        "description": "更新设备的告警阈值配置\n\n请求体示例：\n{\n    \"rms\": {\"warning\": 5.0, \"critical\": 10.0},\n    \"peak\": {\"warning\": 15.0, \"critical\": 30.0},\n    \"kurtosis\": {\"warning\": 4.0, \"critical\": 6.0},\n    \"crest_factor\": {\"warning\": 6.0, \"critical\": 10.0}\n}\n（默认值来自 DEVICE_DEFAULT_THRESHOLDS）",
+        "operationId": "update_alarm_thresholds_api_devices__device_id__alarm_thresholds_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/devices": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get All Device Data",
+        "description": "获取所有设备的批次列表（表格展示用）\n返回每个设备的所有批次，含时间和特殊标记\n\n性能优化：\n- 使用 IN 查询一次性拉取所有设备的批次和诊断，避免 N+1\n- 设备列表不返回 order_analysis 大字段，减少传输",
+        "operationId": "get_all_device_data_api_data_devices_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/data/{device_id}/batches": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Device Batches",
+        "description": "获取某设备最近批次（普通+特殊）的概要信息\n特殊数据会用 is_special 标记",
+        "operationId": "get_device_batches_api_data__device_id__batches_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "include_special",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "包含特殊数据",
+              "default": true,
+              "title": "Include Special"
+            },
+            "description": "包含特殊数据"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Channel Data",
+        "description": "查询某批次某通道的原始时域数据",
+        "operationId": "get_channel_data_api_data__device_id___batch_index___channel__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "detrend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否线性去趋势",
+              "default": false,
+              "title": "Detrend"
+            },
+            "description": "是否线性去趋势"
+          },
+          {
+            "name": "denoise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "default": "none",
+              "title": "Denoise"
+            },
+            "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/special": {
+      "delete": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Delete Special Batches",
+        "description": "删除某设备的所有特殊数据批次\n同时删除关联的诊断结果\n\n注意：此路由必须放在 /{device_id}/{batch_index} 之前，\n否则 \"special\" 会被当成 batch_index 导致 422 错误。",
+        "operationId": "delete_special_batches_api_data__device_id__special_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}": {
+      "delete": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Delete Batch",
+        "description": "删除某设备的整条批次数据（包括该批次的所有通道）\n同时删除关联的诊断结果和告警记录",
+        "operationId": "delete_batch_api_data__device_id___batch_index__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/fft": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Channel Fft",
+        "description": "实时计算某批次某通道的 FFT 频谱\n请求时计算，不预存。自动适配实际采样率。",
+        "operationId": "get_channel_fft_api_data__device_id___batch_index___channel__fft_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "max_freq",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": 5000,
+              "title": "Max Freq"
+            }
+          },
+          {
+            "name": "detrend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否线性去趋势",
+              "default": false,
+              "title": "Detrend"
+            },
+            "description": "是否线性去趋势"
+          },
+          {
+            "name": "denoise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "default": "none",
+              "title": "Denoise"
+            },
+            "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/stft": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Channel Stft",
+        "description": "实时计算某批次某通道的 STFT 时频谱\n请求时计算，不预存。自动适配实际采样率。\n窗口长度 nperseg 和重叠 noverlap 可从前端调整。",
+        "operationId": "get_channel_stft_api_data__device_id___batch_index___channel__stft_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "max_freq",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": 5000,
+              "title": "Max Freq"
+            }
+          },
+          {
+            "name": "nperseg",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 4096,
+              "minimum": 64,
+              "description": "STFT 窗口长度（点数）",
+              "default": 512,
+              "title": "Nperseg"
+            },
+            "description": "STFT 窗口长度（点数）"
+          },
+          {
+            "name": "noverlap",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 4095,
+              "minimum": 0,
+              "description": "STFT 窗口重叠长度（点数）",
+              "default": 256,
+              "title": "Noverlap"
+            },
+            "description": "STFT 窗口重叠长度（点数）"
+          },
+          {
+            "name": "detrend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否线性去趋势",
+              "default": false,
+              "title": "Detrend"
+            },
+            "description": "是否线性去趋势"
+          },
+          {
+            "name": "denoise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "default": "none",
+              "title": "Denoise"
+            },
+            "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/stats": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Channel Stats",
+        "description": "实时计算某批次某通道的统计特征指标\n包括：峰值、RMS、峭度、偏度、裕度、波形因子、脉冲因子、峰值因子、加窗峰度\n加窗参数 window_size 和 step 可从前端调整",
+        "operationId": "get_channel_stats_api_data__device_id___batch_index___channel__stats_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "window_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 8192,
+              "minimum": 64,
+              "description": "加窗窗口大小（点数）",
+              "default": 1024,
+              "title": "Window Size"
+            },
+            "description": "加窗窗口大小（点数）"
+          },
+          {
+            "name": "step",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 4096,
+              "minimum": 1,
+              "description": "滑动步长（点数），默认窗口大小的一半",
+              "title": "Step"
+            },
+            "description": "滑动步长（点数），默认窗口大小的一半"
+          },
+          {
+            "name": "detrend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否线性去趋势",
+              "default": false,
+              "title": "Detrend"
+            },
+            "description": "是否线性去趋势"
+          },
+          {
+            "name": "denoise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "default": "none",
+              "title": "Denoise"
+            },
+            "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/envelope": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Channel Envelope",
+        "description": "实时计算某批次某通道的包络谱（Envelope Spectrum）\n支持多种轴承诊断方法：标准包络 / Fast Kurtogram / CPW / MED\n请求时计算，不预存。",
+        "operationId": "get_channel_envelope_api_data__device_id___batch_index___channel__envelope_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "max_freq",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": 1000,
+              "title": "Max Freq"
+            }
+          },
+          {
+            "name": "detrend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否线性去趋势",
+              "default": false,
+              "title": "Detrend"
+            },
+            "description": "是否线性去趋势"
+          },
+          {
+            "name": "method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "包络分析方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope",
+              "default": "envelope",
+              "title": "Method"
+            },
+            "description": "包络分析方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"
+          },
+          {
+            "name": "denoise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "去噪方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "default": "none",
+              "title": "Denoise"
+            },
+            "description": "去噪方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/order": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Channel Order",
+        "description": "实时计算阶次谱（Order Tracking / 阶次跟踪）\n改进：采用短时多帧平均，自适应处理缓慢转速变化；支持直接传入转频。\n\n流程：\n  1. 若传入 rot_freq，直接用它做阶次跟踪（跳过估计）\n  2. 否则将信号分帧（默认 1 秒/帧，50% 重叠）\n  3. 每帧估计转频（频谱法 + 包络解调辅助），并用 MAD 剔除异常帧\n  4. 各帧独立阶次跟踪后，插值到公共阶次轴并平均\n  5. 返回平均阶次谱 + 转速变化信息\n\n参数：\n  freq_min/freq_max: 转频搜索范围，默认 10~100 Hz\n  samples_per_rev:   每转采样点数，默认 1024\n  max_order:         返回的最大阶次，默认 50\n  rot_freq:          直接指定转频(Hz)，传入则跳过自动估计\n\n返回：\n  rot_freq:      中位数转频 (Hz)\n  rot_rpm:       中位数转速 (RPM)\n  rot_freq_std:  转频标准差 (Hz)，反映转速波动程度\n  orders:        阶次轴\n  spectrum:      阶次谱幅值",
+        "operationId": "get_channel_order_api_data__device_id___batch_index___channel__order_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "freq_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 500.0,
+              "minimum": 1.0,
+              "description": "转频搜索下限 (Hz)",
+              "default": 10.0,
+              "title": "Freq Min"
+            },
+            "description": "转频搜索下限 (Hz)"
+          },
+          {
+            "name": "freq_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 500.0,
+              "minimum": 1.0,
+              "description": "转频搜索上限 (Hz)",
+              "default": 100.0,
+              "title": "Freq Max"
+            },
+            "description": "转频搜索上限 (Hz)"
+          },
+          {
+            "name": "samples_per_rev",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 4096,
+              "minimum": 64,
+              "description": "每转采样点数",
+              "default": 1024,
+              "title": "Samples Per Rev"
+            },
+            "description": "每转采样点数"
+          },
+          {
+            "name": "max_order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 5,
+              "description": "返回的最大阶次",
+              "default": 50,
+              "title": "Max Order"
+            },
+            "description": "返回的最大阶次"
+          },
+          {
+            "name": "rot_freq",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 500.0,
+                  "minimum": 1.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "直接指定转频(Hz)，传入则跳过自动估计",
+              "title": "Rot Freq"
+            },
+            "description": "直接指定转频(Hz)，传入则跳过自动估计"
+          },
+          {
+            "name": "detrend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否线性去趋势",
+              "default": false,
+              "title": "Detrend"
+            },
+            "description": "是否线性去趋势"
+          },
+          {
+            "name": "denoise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "default": "none",
+              "title": "Denoise"
+            },
+            "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/cepstrum": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Channel Cepstrum",
+        "description": "实时计算功率倒谱（Cepstrum / 倒谱分析）\n\n流程：\n  1. FFT → 对数幅度谱 → IFFT → 倒谱\n  2. 倒频率轴反映频谱中的周期性结构\n  3. 自动检测显著峰值并标注对应频率\n\n参数：\n  max_quefrency: 最大倒频率（毫秒），默认 500 ms\n\n返回：\n  quefrency:  倒频率轴（ms）\n  cepstrum:   倒谱幅值\n  peaks:      检测到的峰值列表 [{quefrency_ms, freq_hz, amplitude}]",
+        "operationId": "get_channel_cepstrum_api_data__device_id___batch_index___channel__cepstrum_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "max_quefrency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 2000.0,
+              "minimum": 10.0,
+              "description": "最大倒频率 (ms)",
+              "default": 500.0,
+              "title": "Max Quefrency"
+            },
+            "description": "最大倒频率 (ms)"
+          },
+          {
+            "name": "detrend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否线性去趋势",
+              "default": false,
+              "title": "Detrend"
+            },
+            "description": "是否线性去趋势"
+          },
+          {
+            "name": "denoise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "default": "none",
+              "title": "Denoise"
+            },
+            "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/gear": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Channel Gear",
+        "description": "实时计算某批次某通道的齿轮诊断分析\n支持标准边频带分析和高级时域指标。",
+        "operationId": "get_channel_gear_api_data__device_id___batch_index___channel__gear_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "detrend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否线性去趋势",
+              "default": false,
+              "title": "Detrend"
+            },
+            "description": "是否线性去趋势"
+          },
+          {
+            "name": "method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "齿轮诊断方法: standard/advanced",
+              "default": "standard",
+              "title": "Method"
+            },
+            "description": "齿轮诊断方法: standard/advanced"
+          },
+          {
+            "name": "denoise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "default": "none",
+              "title": "Denoise"
+            },
+            "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/analyze": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Channel Analyze",
+        "description": "综合故障诊断分析（新诊断引擎统一入口）\n\n支持前端配置选择诊断策略、轴承方法、齿轮方法和预处理方法。\n返回轴承诊断、齿轮诊断、时域特征和综合健康度评分。",
+        "operationId": "get_channel_analyze_api_data__device_id___batch_index___channel__analyze_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "detrend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否线性去趋势",
+              "default": false,
+              "title": "Detrend"
+            },
+            "description": "是否线性去趋势"
+          },
+          {
+            "name": "strategy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "诊断策略: standard/advanced/expert",
+              "default": "standard",
+              "title": "Strategy"
+            },
+            "description": "诊断策略: standard/advanced/expert"
+          },
+          {
+            "name": "bearing_method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "轴承方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope",
+              "default": "envelope",
+              "title": "Bearing Method"
+            },
+            "description": "轴承方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"
+          },
+          {
+            "name": "gear_method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "齿轮方法: standard/advanced",
+              "default": "standard",
+              "title": "Gear Method"
+            },
+            "description": "齿轮方法: standard/advanced"
+          },
+          {
+            "name": "denoise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "default": "none",
+              "title": "Denoise"
+            },
+            "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/full-analysis": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Channel Full Analysis",
+        "description": "全算法对比分析（运行所有轴承方法和所有齿轮方法）\n\n返回所有诊断方法的详细结果和检出结论对比，便于前端展示：\n- 各轴承方法（包络 / Kurtogram / CPW / MED）分别检出了什么故障\n- 各齿轮方法（标准边频带 / 高级指标）的详细参数和阈值判定\n- 综合结论和建议",
+        "operationId": "get_channel_full_analysis_api_data__device_id___batch_index___channel__full_analysis_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "detrend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否线性去趋势",
+              "default": false,
+              "title": "Detrend"
+            },
+            "description": "是否线性去趋势"
+          },
+          {
+            "name": "denoise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "default": "none",
+              "title": "Denoise"
+            },
+            "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/method-info": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Method Info",
+        "description": "返回所有可用分析方法的信息（分类、名称、说明）。",
+        "operationId": "get_method_info_api_data_method_info_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/method-analysis": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Channel Method Analysis",
+        "description": "独立运行单个分析方法或全部方法。\n\nmethod 参数值：\n- 'all': 运行所有轴承+齿轮方法（等效 full-analysis）\n- 轴承方法: envelope / kurtogram / cpw / med / teager / spectral_kurtosis / wp / dwt / emd_envelope / ceemdan_envelope / vmd_envelope\n- 齿轮方法: gear_standard / gear_advanced\n- 行星箱方法: planetary_narrowband / planetary_fullband / planetary_tsa_envelope\n              / planetary_hp_envelope / planetary_vmd_demod / planetary_sc_scoh / planetary_msb",
+        "operationId": "get_channel_method_analysis_api_data__device_id___batch_index___channel__method_analysis_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "分析方法名或'all'运行全部",
+              "default": "all",
+              "title": "Method"
+            },
+            "description": "分析方法名或'all'运行全部"
+          },
+          {
+            "name": "denoise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "default": "none",
+              "title": "Denoise"
+            },
+            "description": "none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          },
+          {
+            "name": "detrend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否线性去趋势",
+              "default": false,
+              "title": "Detrend"
+            },
+            "description": "是否线性去趋势"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/research-analysis": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Channel Research Analysis",
+        "description": "Run a user-triggered, multi-algorithm research diagnosis.\n\nThis endpoint is intentionally separate from real-time monitoring because\nkurtogram, MED, TEO and TSA metrics are CPU-heavy.",
+        "operationId": "get_channel_research_analysis_api_data__device_id___batch_index___channel__research_analysis_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "detrend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "whether to linearly detrend",
+              "default": false,
+              "title": "Detrend"
+            },
+            "description": "whether to linearly detrend"
+          },
+          {
+            "name": "profile",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "runtime/balanced/exhaustive",
+              "default": "balanced",
+              "title": "Profile"
+            },
+            "description": "runtime/balanced/exhaustive"
+          },
+          {
+            "name": "denoise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "default": "none",
+              "title": "Denoise"
+            },
+            "description": "none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          },
+          {
+            "name": "max_seconds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 10.0,
+              "minimum": 1.0,
+              "default": 5.0,
+              "title": "Max Seconds"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/export": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Export Channel Csv",
+        "description": "导出某批次某通道的时域数据为 CSV\n格式：时间(s), 振幅",
+        "operationId": "export_channel_csv_api_data__device_id___batch_index___channel__export_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "detrend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否线性去趋势",
+              "default": false,
+              "title": "Detrend"
+            },
+            "description": "是否线性去趋势"
+          },
+          {
+            "name": "denoise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "default": "none",
+              "title": "Denoise"
+            },
+            "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/diagnosis": {
+      "put": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Update Batch Diagnosis",
+        "description": "更新批次诊断结果（order_analysis / rot_freq）。\n用于阶次追踪重新计算后，把新的转频写回数据库覆盖原始数据。",
+        "operationId": "update_batch_diagnosis_api_data__device_id___batch_index__diagnosis_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_update_batch_diagnosis_api_data__device_id___batch_index__diagnosis_put"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/diagnosis": {
+      "get": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Get Channel Diagnosis",
+        "description": "查询指定批次通道的诊断结果。\n优先返回通道级 engine_result，如果没有则返回批次级诊断记录。\n若指定 denoise_method，优先匹配该去噪方法的结果。",
+        "operationId": "get_channel_diagnosis_api_data__device_id___batch_index___channel__diagnosis_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "denoise_method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "去噪方法过滤: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "title": "Denoise Method"
+            },
+            "description": "去噪方法过滤: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/reanalyze": {
+      "post": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Reanalyze Batch",
+        "description": "重新分析指定批次的所有通道数据",
+        "operationId": "reanalyze_batch_api_data__device_id___batch_index__reanalyze_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/reanalyze-all": {
+      "post": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Reanalyze All Batches",
+        "description": "重新分析指定设备的所有批次数据，逐批次串行执行以避免 OOM",
+        "operationId": "reanalyze_all_batches_api_data__device_id__reanalyze_all_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collect/request": {
+      "post": {
+        "tags": [
+          "采集任务"
+        ],
+        "summary": "Request Collection",
+        "description": "前端请求对指定设备进行手动采集（特殊数据）\n创建采集任务，等待边端轮询执行",
+        "operationId": "request_collection_api_collect_request_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "sample_rate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 25600,
+              "title": "Sample Rate"
+            }
+          },
+          {
+            "name": "duration",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "title": "Duration"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collect/tasks": {
+      "get": {
+        "tags": [
+          "采集任务"
+        ],
+        "summary": "Get Pending Tasks",
+        "description": "边端轮询接口：查询该设备的待采集任务\n边端应每隔几秒调用一次",
+        "operationId": "get_pending_tasks_api_collect_tasks_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collect/tasks/{task_id}/complete": {
+      "post": {
+        "tags": [
+          "采集任务"
+        ],
+        "summary": "Complete Task",
+        "description": "边端完成采集上传后，通知云端任务已完成\n由 ingest.py 内部调用，无需前端直接调用",
+        "operationId": "complete_task_api_collect_tasks__task_id__complete_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collect/tasks/{task_id}/status": {
+      "get": {
+        "tags": [
+          "采集任务"
+        ],
+        "summary": "Get Task Status",
+        "description": "前端查询采集任务状态\n用于轮询\"采集中...\"的进度",
+        "operationId": "get_task_status_api_collect_tasks__task_id__status_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collect/history": {
+      "get": {
+        "tags": [
+          "采集任务"
+        ],
+        "summary": "Get Collection History",
+        "description": "查询采集历史（含普通和特殊采集记录）",
+        "operationId": "get_collection_history_api_collect_history_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs/": {
+      "get": {
+        "tags": [
+          "系统日志"
+        ],
+        "summary": "Get Logs",
+        "description": "读取应用日志\n\n优先返回内存中的环形缓冲区日志（跨平台，Windows/Linux 均可查看），\n若运行在 Linux 且 journalctl 可用，则将其输出追加在末尾作为补充。",
+        "operationId": "get_logs_api_logs__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "lines",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 200,
+              "title": "Lines"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/agents/heartbeat": {
+      "post": {
+        "tags": [
+          "真实采集"
+        ],
+        "summary": "Heartbeat",
+        "operationId": "heartbeat_api_acquisition_agents_heartbeat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Heartbeat"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/acquisition/agents": {
+      "get": {
+        "tags": [
+          "真实采集"
+        ],
+        "summary": "Agents",
+        "operationId": "agents_api_acquisition_agents_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/acquisition/jobs": {
+      "get": {
+        "tags": [
+          "真实采集"
+        ],
+        "summary": "History",
+        "operationId": "history_api_acquisition_jobs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "真实采集"
+        ],
+        "summary": "Create Job",
+        "operationId": "create_job_api_acquisition_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateJob"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/acquisition/agents/{agent_id}/next": {
+      "get": {
+        "tags": [
+          "真实采集"
+        ],
+        "summary": "Claim",
+        "operationId": "claim_api_acquisition_agents__agent_id__next_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "真实采集"
+        ],
+        "summary": "Get Job",
+        "operationId": "get_job_api_acquisition_jobs__job_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/jobs/{job_id}/cancel": {
+      "post": {
+        "tags": [
+          "真实采集"
+        ],
+        "summary": "Cancel",
+        "operationId": "cancel_api_acquisition_jobs__job_id__cancel_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/jobs/{job_id}/progress": {
+      "post": {
+        "tags": [
+          "真实采集"
+        ],
+        "summary": "Progress",
+        "operationId": "progress_api_acquisition_jobs__job_id__progress_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Progress"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/jobs/{job_id}/upload": {
+      "post": {
+        "tags": [
+          "真实采集"
+        ],
+        "summary": "Upload",
+        "operationId": "upload_api_acquisition_jobs__job_id__upload_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/jobs/{job_id}/analysis": {
+      "get": {
+        "tags": [
+          "真实采集"
+        ],
+        "summary": "Analysis",
+        "operationId": "analysis_api_acquisition_jobs__job_id__analysis_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/jobs/{job_id}/waveform": {
+      "get": {
+        "tags": [
+          "真实采集"
+        ],
+        "summary": "Waveform",
+        "operationId": "waveform_api_acquisition_jobs__job_id__waveform_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 3,
+              "minimum": 0,
+              "default": 0,
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "default": 0,
+              "title": "Start"
+            }
+          },
+          {
+            "name": "seconds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 5,
+              "exclusiveMinimum": 0,
+              "default": 0.2,
+              "title": "Seconds"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/jobs/{job_id}/files/{name}": {
+      "get": {
+        "tags": [
+          "真实采集"
+        ],
+        "summary": "Download",
+        "operationId": "download_api_acquisition_jobs__job_id__files__name__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/capabilities": {
+      "get": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Capabilities",
+        "operationId": "capabilities_api_acquisition_capabilities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/acquisition/sessions": {
+      "post": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Start",
+        "operationId": "start_api_acquisition_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartSession"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/acquisition/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Session Status",
+        "operationId": "session_status_api_acquisition_sessions__session_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/sessions/{session_id}/stop": {
+      "post": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Stop",
+        "operationId": "stop_api_acquisition_sessions__session_id__stop_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/sessions/{session_id}/record": {
+      "post": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Record",
+        "operationId": "record_api_acquisition_sessions__session_id__record_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/sessions/{session_id}/record/stop": {
+      "post": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Stop Record",
+        "operationId": "stop_record_api_acquisition_sessions__session_id__record_stop_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/agents/{agent_id}/control": {
+      "get": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Control",
+        "operationId": "control_api_acquisition_agents__agent_id__control_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/agents/{agent_id}/session": {
+      "get": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Current Session",
+        "operationId": "current_session_api_acquisition_agents__agent_id__session_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/agents/{agent_id}/select-directory": {
+      "post": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Select Directory",
+        "operationId": "select_directory_api_acquisition_agents__agent_id__select_directory_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/agents/{agent_id}/directory-result": {
+      "post": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Directory Result",
+        "operationId": "directory_result_api_acquisition_agents__agent_id__directory_result_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectoryResult"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/agents/{agent_id}/directory": {
+      "get": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Selected Directory",
+        "operationId": "selected_directory_api_acquisition_agents__agent_id__directory_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/sessions/{session_id}/state": {
+      "post": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "State",
+        "operationId": "state_api_acquisition_sessions__session_id__state_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/sessions/{session_id}/frames": {
+      "post": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Frames",
+        "operationId": "frames_api_acquisition_sessions__session_id__frames_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Start"
+            }
+          },
+          {
+            "name": "sequence",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 65535,
+              "minimum": 0,
+              "title": "Sequence"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/sessions/{session_id}/view": {
+      "get": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "View",
+        "operationId": "view_api_acquisition_sessions__session_id__view_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "waveform",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Waveform"
+            }
+          },
+          {
+            "name": "fft",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Fft"
+            }
+          },
+          {
+            "name": "rms",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Rms"
+            }
+          },
+          {
+            "name": "envelope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Envelope"
+            }
+          },
+          {
+            "name": "band_low",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Band Low"
+            }
+          },
+          {
+            "name": "band_high",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Band High"
+            }
+          },
+          {
+            "name": "wave_seconds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 2,
+              "exclusiveMinimum": 0,
+              "default": 0.2,
+              "title": "Wave Seconds"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/jobs/{job_id}/stream-files/{name}": {
+      "put": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Upload File",
+        "operationId": "upload_file_api_acquisition_jobs__job_id__stream_files__name__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/acquisition/jobs/{job_id}/finish-stream": {
+      "post": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Finish",
+        "operationId": "finish_api_acquisition_jobs__job_id__finish_stream_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnalysisOptions": {
+        "properties": {
+          "fft": {
+            "type": "boolean",
+            "title": "Fft",
+            "default": true
+          },
+          "rms": {
+            "type": "boolean",
+            "title": "Rms",
+            "default": true
+          },
+          "envelope": {
+            "type": "boolean",
+            "title": "Envelope",
+            "default": false
+          },
+          "band_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band Low"
+          },
+          "band_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band High"
+          }
+        },
+        "type": "object",
+        "title": "AnalysisOptions"
+      },
+      "Body_update_batch_diagnosis_api_data__device_id___batch_index__diagnosis_put": {
+        "properties": {
+          "order_analysis": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Analysis"
+          },
+          "rot_freq": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rot Freq"
+          }
+        },
+        "type": "object",
+        "title": "Body_update_batch_diagnosis_api_data__device_id___batch_index__diagnosis_put"
+      },
+      "CreateJob": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,64}$",
+            "title": "Agent Id"
+          },
+          "sample_rate": {
+            "type": "integer",
+            "title": "Sample Rate",
+            "default": 5000
+          },
+          "duration": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Duration",
+            "default": 60
+          },
+          "analysis": {
+            "$ref": "#/components/schemas/AnalysisOptions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_id"
+        ],
+        "title": "CreateJob"
+      },
+      "DirectoryResult": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "directory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Directory"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "DirectoryResult"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Heartbeat": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,64}$",
+            "title": "Agent Id"
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^(dc24_tcp|recording_replay)$",
+            "title": "Source"
+          },
+          "state": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_id",
+          "source"
+        ],
+        "title": "Heartbeat"
+      },
+      "LoginRequest": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "Progress": {
+        "properties": {
+          "stage": {
+            "type": "string",
+            "pattern": "^(waiting_device|configuring|capturing|uploading|failed|cancelled)$",
+            "title": "Stage"
+          },
+          "samples_per_channel": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Samples Per Channel",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Message",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "stage"
+        ],
+        "title": "Progress"
+      },
+      "RecordRequest": {
+        "properties": {
+          "duration": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Duration",
+            "default": 60
+          },
+          "save_directory": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Save Directory"
+          },
+          "analysis": {
+            "$ref": "#/components/schemas/AnalysisOptions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "save_directory"
+        ],
+        "title": "RecordRequest"
+      },
+      "StartSession": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,64}$",
+            "title": "Agent Id"
+          },
+          "sample_rate": {
+            "type": "integer",
+            "title": "Sample Rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_id",
+          "sample_rate"
+        ],
+        "title": "StartSession"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token"
+        ],
+        "title": "TokenResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
