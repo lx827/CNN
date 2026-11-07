@@ -53,7 +53,8 @@ result = engine.analyze_bearing(signal, fs)
 ### 2.4 无法本地复现时
 
 - 通过 SSH 登录服务器查看日志：`journalctl -u CNN.service --since "5 min ago"`
-- 从 `docs/scripts/INDEX.md` 中选择对应诊断脚本在服务器上运行
+- 用 `curl` 在服务器本机调后端 API 查数据（如 `curl http://localhost:8000/api/data/devices`、`curl http://localhost:8000/api/data/{device_id}/batches`、`curl http://localhost:8000/api/data/{device_id}/{batch}/{channel}/diagnosis`）
+- 深查数据库时用一条 sqlite 查询直接读 `/opt/CNN/cloud/turbine.db`（勿在仓库堆积一次性脚本）
 - 收集错误发生时的上下文（设备 ID、批次号、操作步骤）
 
 ---
