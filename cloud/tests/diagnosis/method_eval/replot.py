@@ -1,15 +1,15 @@
 """
 独立绘图脚本 — 从已保存的 JSON 数据重新生成图表
 
-用法：
+用法(uv-only,见 AGENTS.md §2/§4,在 cloud 目录执行):
     # 从测试1的数据重新生成
-    d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\method_eval\replot.py bearing_hustbear
+    uv run python tests/diagnosis/method_eval/replot.py bearing_hustbear
 
     # 从测试3的数据重新生成
-    d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\method_eval\replot.py gear_wtgearbox
+    uv run python tests/diagnosis/method_eval/replot.py gear_wtgearbox
 
     # 从所有数据重新生成
-    d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\method_eval\replot.py --all
+    uv run python tests/diagnosis/method_eval/replot.py --all
 """
 import sys
 import json

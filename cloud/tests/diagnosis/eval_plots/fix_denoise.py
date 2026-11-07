@@ -15,7 +15,7 @@ HUST = HUSTBEAR_DIR
 FS = 8192
 MAX_PTS = FS * 5
 BP = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
-OUT = Path(r'D:\code\CNN\tests\output\eval_plots')
+OUT = Path(__file__).resolve().parents[2] / "output" / "eval_plots"
 
 
 def ld(d, f):

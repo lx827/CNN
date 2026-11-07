@@ -3,11 +3,11 @@
 
 一键运行全部 4 个测试，生成跨数据集对比图表和总报告。
 
-用法:
-    d:\code\CNN\cloud\venv\Scripts\python.exe -m tests.diagnosis.method_eval.main
+用法(uv-only,见 AGENTS.md §2/§4):
+    cd cloud && uv run python -m tests.diagnosis.method_eval.main
 
 或:
-    d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\method_eval\main.py
+    cd cloud && uv run python tests/diagnosis/method_eval/main.py
 """
 import sys
 import time

@@ -1,10 +1,9 @@
 """
 评估实验 — 数据采集（存 JSON, joblib 多进程加速）
 
-用法:
-    cd d:/code/CNN/cloud
-    . venv/Scripts/activate
-    python ../tests/diagnosis/eval_plots/run_eval.py
+用法(uv-only,见 AGENTS.md §2/§4):
+    cd cloud
+    uv run python tests/diagnosis/eval_plots/run_eval.py
 """
 import sys, json, time, warnings, os, traceback
 from pathlib import Path

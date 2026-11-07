@@ -6,7 +6,7 @@
 - Ensemble 集成（五类分类 + 二分类，基于 D-S 融合）
 
 运行方式：
-    d:\code\CNN\cloud\venv\Scripts\python.exe tests\diagnosis\method_eval\test_bearing_hustbear.py
+    cd cloud && uv run python tests/diagnosis/method_eval/test_bearing_hustbear.py
 """
 import sys
 import time

@@ -13,11 +13,10 @@ r"""
   - sc_scoh:     谱相关/谱相干解调 (Level 4)
   - msb:         调制信号双谱 (Level 5)
 
-用法：
-  cd /d D:\code\CNN\cloud
-  . venv\Scripts\activate
-  PYTHONPATH=D:\code\CNN\cloud python ..\tests\diagnosis\test_planetary_demod.py
-  PYTHONPATH=D:\code\CNN\cloud python ..\tests\diagnosis\test_planetary_demod.py --skip-vmd
+用法（uv-only，见 AGENTS.md §2/§4）：
+  cd cloud
+  uv run python tests/diagnosis/planetary/test_planetary_demod.py
+  uv run python tests/diagnosis/planetary/test_planetary_demod.py --skip-vmd
 """
 import sys
 import os

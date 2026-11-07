@@ -12,9 +12,9 @@
   HUSTbear: <仓库>/data/HUSTbear/down8192  (8192 Hz)
   CW:       <仓库>/data/CW/down8192_CW      (8192 Hz)
 
-运行方式:
-    cd d:/code/CNN
-    cloud/venv/Scripts/python.exe tests/diagnosis/test_dataset_effectiveness.py
+运行方式(uv-only,见 AGENTS.md §2/§4):
+    cd cloud
+    uv run python tests/diagnosis/effectiveness/test_dataset_effectiveness.py
 """
 import sys
 import os

@@ -1,10 +1,9 @@
 """
 Ensemble 五分类偏向 BPFO 问题诊断脚本
 
-用法:
-    cd d:/code/CNN/cloud
-    . venv/Scripts/activate
-    python ../tests/diagnosis/eval_plots/diagnose_multiclass.py
+用法(uv-only,见 AGENTS.md §2/§4):
+    cd cloud
+    uv run python tests/diagnosis/eval_plots/diagnose_multiclass.py
 
 输出: 每个样本的 fault_label / param_hits / BPFO/BPFI/BSF SNR / 预测类别
 """
