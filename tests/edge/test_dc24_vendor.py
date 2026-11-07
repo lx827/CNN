@@ -11,7 +11,7 @@ import unittest
 from dotenv import dotenv_values
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT/'edge'))
+sys.path.insert(0, str(ROOT/'dc24'))
 from dc24_capture import B5_PROFILES, CONFIG_B2, Frames, Link, command, samples
 from dc24_vendor import VendorConnection
 
@@ -19,7 +19,7 @@ from dc24_vendor import VendorConnection
 class VendorConnectionTests(unittest.TestCase):
     @unittest.skipUnless(os.name == 'nt', '原厂 DLL 需要 Windows')
     def test_dll_receives_frames_and_preserves_control_messages(self):
-        vendor_root = os.environ.get('DC24_VENDOR_ROOT', dotenv_values(ROOT/'edge/.env').get('DC24_VENDOR_ROOT'))
+        vendor_root = os.environ.get('DC24_VENDOR_ROOT', dotenv_values(ROOT/'dc24/.env').get('DC24_VENDOR_ROOT'))
         if not vendor_root:
             self.skipTest('未配置本机原厂软件目录')
         with socket.socket() as reservation:

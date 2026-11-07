@@ -27,7 +27,7 @@ INPUT_CONFIGURATION = {"measurement": "IEPE", "coupling": "AC0.2Hz", "upper_freq
 # 原厂2026-11-06有效10kHz B5为基准，只替换已验证的采样率字段；未知字段原样保留。
 # 频率仅限此前原厂逐档确认的12档，不把其他档位冒充本次逐档新抓包。
 B5_PROFILES = {int(k): bytes.fromhex(v) for k, v in json.loads(
-    (Path(__file__).resolve().parents[1]/"shared/dc24_profiles.json").read_text()).items()}
+    (Path(__file__).resolve().parents[0]/"dc24_profiles.json").read_text()).items()}
 
 
 class CaptureCancelled(Exception):

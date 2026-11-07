@@ -39,11 +39,11 @@ def main():
     parser.add_argument('--no-browser', action='store_true', help='启动服务但不自动打开浏览器')
     args = parser.parse_args()
     cloud_python = ROOT/'cloud/venv/Scripts/python.exe'
-    edge_python = ROOT/'edge/venv/Scripts/python.exe'
-    for path in (cloud_python, edge_python):
+    dc24_python = ROOT/'dc24/venv/Scripts/python.exe'
+    for path in (cloud_python, dc24_python):
         if not path.exists():
             raise RuntimeError('缺少虚拟环境：'+str(path))
-    vendor_root = os.environ.get('DC24_VENDOR_ROOT', dotenv_values(ROOT/'edge/.env').get('DC24_VENDOR_ROOT')) or ''
+    vendor_root = os.environ.get('DC24_VENDOR_ROOT', dotenv_values(ROOT/'dc24/.env').get('DC24_VENDOR_ROOT')) or ''
     if vendor_root:
         vendor_path = Path(vendor_root).expanduser()
         if not vendor_path.is_absolute() or not (vendor_path/'dll/JMServer.dll').is_file():
@@ -103,16 +103,16 @@ def main():
             raise RuntimeError('已运行的边端使用另一种采集模块，请先退出其启动窗口，再双击start_dc24.bat')
         if not online:
             output = ROOT/'tmp/dc24_live'; output.mkdir(parents=True, exist_ok=True)
-            log = (output/'local-edge.log').open('ab'); logs.append(log)
-            edge_env = {**env, 'VIRTUAL_ENV': str(ROOT/'edge/venv'), 'DC24_VENDOR_ROOT': vendor_root}
-            p = subprocess.Popen([str(edge_python), str(ROOT/'edge/dc24_agent.py'), '--cloud', BASE, '--agent-id', AGENT,
-                                  '--output', str(ROOT/'data/dc24_recordings')], cwd=ROOT, env=edge_env,
+            log = (output/'local-agent.log').open('ab'); logs.append(log)
+            dc24_env = {**env, 'VIRTUAL_ENV': str(ROOT/'dc24/venv'), 'DC24_VENDOR_ROOT': vendor_root}
+            p = subprocess.Popen([str(dc24_python), str(ROOT/'dc24/dc24_agent.py'), '--cloud', BASE, '--agent-id', AGENT,
+                                  '--output', str(ROOT/'data/dc24_recordings')], cwd=ROOT, env=dc24_env,
                                  stdout=log, stderr=subprocess.STDOUT,
                                  creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             processes.append(p)
             for _ in range(100):
                 if p.poll() is not None:
-                    raise RuntimeError('边端启动失败，见tmp/dc24_live/local-edge.log')
+                    raise RuntimeError('边端启动失败，见tmp/dc24_live/local-agent.log')
                 if any(a['id'] == AGENT and a['online'] for a in call('/agents', key)):
                     break
                 time.sleep(.1)
