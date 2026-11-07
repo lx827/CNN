@@ -798,3 +798,20 @@ AI Agent 在对以下范围进行修改前，**必须先查阅对应文档**，�
 - **同一任务内继续拆分**：例如目录调整、路径替换、文档同步、规则说明分别提交，不要把整个任务压成一个提交。
 - **每个提交可独立审查、独立回滚**：提交标题使用 `type(scope): 摘要` 格式，正文说明改动原因和影响。
 - **拆分不等于机械切分**：同一逻辑改动不要拆成多个无意义的小提交；单个文件内互不相关的改动应分别提交，若无法拆分则说明原因。
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+本仓库的 issue 统一在 GitHub Issues 中跟踪，通过 `gh` CLI 读写。见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+使用五个默认 triage 标签（needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix）。见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+单一上下文布局：根目录 `GLOSSARY.md` + `docs/adr/`。见 `docs/agents/domain.md`。
+
