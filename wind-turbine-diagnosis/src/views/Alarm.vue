@@ -200,7 +200,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getHistoryAlarmList, updateAlarmStatus, deleteAlarm, getDevices } from '../api'
+import { getHistoryAlarmList, updateAlarmStatus, deleteAlarm } from '../api/alarms'
+import { getDevices } from '../api/devices'
 
 const router = useRouter()
 

@@ -175,7 +175,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
-import { getDeviceInfo } from '../api'
+import { getDeviceInfo } from '../api/dashboard'
 import { getWebSocketClient } from '../utils/websocket'
 
 const devices = ref([])

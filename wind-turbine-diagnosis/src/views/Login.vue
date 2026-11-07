@@ -49,7 +49,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { login } from '../api/index'
+import { login } from '../api/auth'
 
 const router = useRouter()
 const route = useRoute()

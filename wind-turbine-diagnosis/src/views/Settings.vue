@@ -401,7 +401,7 @@ import { ElMessage } from 'element-plus'
 import {
   getDevices, getDeviceConfig, updateDeviceConfig, updateBatchDeviceConfig,
   getAlarmThresholds, updateAlarmThresholds
-} from '../api'
+} from '../api/devices'
 
 const deviceList = ref([])
 const savingEdge = ref(false)

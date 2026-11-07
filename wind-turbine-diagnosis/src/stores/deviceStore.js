@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getDeviceInfo } from '../api'
+import { getDeviceInfo } from '../api/dashboard'
 
 export const useDeviceStore = defineStore('device', () => {
   // ========== State ==========

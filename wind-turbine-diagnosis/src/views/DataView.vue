@@ -784,18 +784,20 @@ import {
   getChannelSTFT,
   getChannelEnvelope,
   getChannelGear,
-  getChannelAnalyze,
   getChannelStats,
   getChannelOrder,
   getChannelCepstrum,
+  deleteSpecialBatches,
+  exportChannelCSV
+} from '../api/data'
+import {
+  getChannelAnalyze,
   getChannelFullAnalysis,
   getChannelDiagnosis,
-  deleteSpecialBatches,
-  exportChannelCSV,
   updateBatchDiagnosis,
   reanalyzeBatch,
   reanalyzeAllDevice
-} from '../api'
+} from '../api/diagnosis'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import DiagnosisDetail from '../components/DiagnosisDetail.vue'
 import { useRouter } from 'vue-router'

@@ -153,7 +153,9 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
-import { getRealtimeVibrationData, requestCollection, getTaskStatus, getDevices } from '../api'
+import { getRealtimeVibrationData } from '../api/monitor'
+import { requestCollection, getTaskStatus } from '../api/system'
+import { getDevices } from '../api/devices'
 import { getWebSocketClient } from '../utils/websocket'
 import { ElMessage } from 'element-plus'
 

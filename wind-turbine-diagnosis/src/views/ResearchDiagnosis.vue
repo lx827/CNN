@@ -347,7 +347,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Cpu, DataLine } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getAllDeviceData, getMethodInfo, getChannelMethodAnalysis, getChannelResearchAnalysis } from '../api'
+import { getAllDeviceData } from '../api/data'
+import { getMethodInfo, getChannelMethodAnalysis, getChannelResearchAnalysis } from '../api/diagnosis'
 
 const route = useRoute()
 const router = useRouter()
