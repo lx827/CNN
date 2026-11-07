@@ -27,6 +27,8 @@
 - 日常操作与运维命令：见 [操作手册](docs/操作手册.md)、[服务器命令速查](docs/服务器命令速查.md)
 - 全部文档索引：见 [docs/INDEX.md](docs/INDEX.md)
 
+> **接口契约**：后端 OpenAPI 契约入库于 [`docs/api/openapi.json`](docs/api/openapi.json)。修改任何后端路由后，在仓库根执行 `uv run python scripts/export_openapi.py` 刷新并随代码一起提交。
+
 ## 目录结构
 
 ```
