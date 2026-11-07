@@ -140,3 +140,10 @@ cloud/tests/diagnosis/eval_plots/output/
 
 # Local field photos, manual scans and their readable copies (not committed)
 /docs/field-assets/
+
+# ========== Data / local artifacts ==========
+data/
+.claude/worktrees/
+.playwright-mcp/
+baseline-*.png
+check_api_docs_report.md
