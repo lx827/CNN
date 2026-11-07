@@ -38,6 +38,8 @@
 
 | 文件 | 路径 | 职责 | 主要端点 |
 |------|------|------|----------|
+| `acquisition.py` | `cloud/app/api/acquisition.py` | DC24 完整原始采集任务（领取/进度/整包与流式上传/分析/下载） | `POST /api/acquisition/agents/heartbeat`, `POST /api/acquisition/jobs`, `GET /agents/{id}/next`, `POST /jobs/{id}/upload` 等 |
+| `acquisition_live.py` | `cloud/app/api/acquisition_live.py` | 实时示波、示波中保存、WS 实时窗口 | `POST /api/acquisition/sessions`, `GET /sessions/{id}/view`, `WS /ws/acquisition/sessions/{id}/view` |
 | `auth.py` | `cloud/app/api/auth.py` | 用户认证、JWT 管理 | `POST /api/auth/login` |
 | `dashboard.py` | `cloud/app/api/dashboard.py` | 设备总览、离线检测 | `GET /api/dashboard/` |
 | `alarms.py` | `cloud/app/api/alarms.py` | 告警查询、处理、删除 | `GET/POST/DELETE /api/alarms/*` |
@@ -93,7 +95,10 @@
 
 | 文件 | 路径 | 职责 |
 |------|------|------|
+| `acquisition_analysis.py` | `cloud/app/services/acquisition_analysis.py` | DC24 原始计数可选分析（FFT/RMS/包络，不作故障判定） |
+| `acquisition_live.py` | `cloud/app/services/acquisition_live.py` | 示波有界内存窗口（LiveStore，最近连续 2 秒） |
 | `analyzer.py` | `cloud/app/services/analyzer.py` | 多通道综合分析引擎入口 |
+| `diagnosis_queries.py` | `cloud/app/services/diagnosis_queries.py` | 诊断摘要读模型与统一最新记录规则 |
 | `nn_predictor.py` | `cloud/app/services/nn_predictor.py` | 神经网络预测预留接口 |
 | `offline_monitor.py` | `cloud/app/services/offline_monitor.py` | 设备离线状态监测 |
 
