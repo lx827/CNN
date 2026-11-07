@@ -5,6 +5,10 @@ edition = "2021"
 description = "DC24 acquisition and CNN cloud uploader"
 license = "MIT"
 
+[lib]
+name = "dc24_edge_core"
+crate-type = ["rlib", "cdylib"]
+
 [dependencies]
 anyhow = "1"
 ctrlc = "3"

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use dc24_edge::{config::Config, runtime};
+use dc24_edge_core::{config::Config, runtime};
 use std::{
     path::PathBuf,
     sync::{

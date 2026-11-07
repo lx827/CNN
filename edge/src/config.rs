@@ -57,8 +57,11 @@ impl Default for Config {
 
 impl Config {
     pub fn load(path: &std::path::Path) -> Result<Self> {
-        let value: Self = serde_json::from_slice(&std::fs::read(path).context("读取配置失败")?)
-            .context("配置格式错误")?;
+        Self::from_json(&std::fs::read_to_string(path).context("读取配置失败")?)
+    }
+    /// FFI 入口共用同一份配置文本（config.json 全 schema；网络核心只使用其中设备链路字段）。
+    pub fn from_json(text: &str) -> Result<Self> {
+        let value: Self = serde_json::from_str(text).context("配置格式错误")?;
         value.validate()?;
         Ok(value)
     }
