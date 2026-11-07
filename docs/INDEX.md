@@ -80,12 +80,11 @@
 
 ---
 
-### 🧪 测试与脚本文档
+### 🧪 测试文档
 
 | 文档 | 路径 | 用途 |
 |------|------|------|
 | [测试套件索引](./tests/INDEX.md) | `docs/tests/INDEX.md` | 回归测试、方法评估、专项测试的完整索引 |
-| [运维脚本索引](./scripts/INDEX.md) | `docs/scripts/INDEX.md` | 服务器运维调试脚本的完整索引 |
 
 ---
 
@@ -109,7 +108,6 @@
 | 查找服务器命令 | `docs/服务器命令速查.md` |
 | 处理现场设备数据 | `docs/FIELD_DATA_HANDOFF_20261020.md`, `docs/FIELD_EQUIPMENT_20261023.md` |
 | 运行/编写测试 | `docs/tests/INDEX.md` |
-| 服务器运维调试 | `docs/scripts/INDEX.md` |
 
 ### 修改代码时的文档同步规则
 
@@ -150,7 +148,6 @@ docs/
 ├── frontend/                         # 前端文档
 ├── algorithms/                       # 专项算法文档
 ├── tests/                            # 测试文档
-├── scripts/                          # 脚本索引
 └── internal/                         # 文档检查工具
 ```
 
