@@ -107,10 +107,21 @@ def test_cw_dataset_can_be_loaded_when_available():
     assert "time_features" in result
 
 
+def test_zero_signal_comprehensive_is_indeterminate_not_healthy():
+    engine = DiagnosisEngine(gear_teeth={"input": 18})
+    result = engine.analyze_comprehensive(np.zeros(FS), FS, rot_freq=20.0, skip_bearing=True)
+    assert result["gear"]["analysis_status"] == "indeterminate"
+    assert result["gear"]["order_peak_concentration"] is None
+    assert result["gear"]["fault_indicators"]["order_kurtosis"]["status"] == "not_evaluable"
+    assert result["health_score"] is None
+    assert result["status"] == "indeterminate"
+
+
 if __name__ == "__main__":
     test_no_params_uses_statistical_fault_indicators()
     test_advanced_gear_uses_tsa_residual()
     test_noisy_rot_freq_estimation_is_robust()
     test_dataset_sample_fault_scores_when_available()
     test_cw_dataset_can_be_loaded_when_available()
+    test_zero_signal_comprehensive_is_indeterminate_not_healthy()
     print("test_engine_regressions: OK")

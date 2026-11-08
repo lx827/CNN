@@ -71,7 +71,9 @@ def resample_to_phase(
         raise ValueError("每转采样点数必须是整数")
     if samples_per_revolution < 16:
         raise ValueError("每转采样点数至少为 16")
-    point_count = int(np.floor(phase.revolutions[-1] * samples_per_revolution))
+    # 恒速 t=fr*N/fs 的浮点积分可能把整数转数写成 31.99999999999999；
+    # 加入远小于一个角域采样间隔的容差，避免无端丢失最后一个完整周期。
+    point_count = int(np.floor(phase.revolutions[-1] * samples_per_revolution + 1e-9))
     if point_count < 16:
         raise ValueError("有效转数太少，无法进行等角重采样")
     target_revolutions = np.arange(point_count, dtype=np.float64) / samples_per_revolution

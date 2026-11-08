@@ -197,15 +197,23 @@ def _historical_denominator(values: tuple[float, ...]) -> float:
     return float(np.mean(np.asarray(values, dtype=np.float64))) ** 2
 
 
+def _history_is_compatible(tsa: TSARepresentation, history: TrendHistory) -> bool:
+    """方差只有来自完全相同的 regular 定义和实际平均转数才可比。"""
+    return (
+        history.samples_per_revolution == tsa.synchronous.angle_domain.samples_per_revolution
+        and history.mesh_order == tsa.mesh_order
+        and history.mesh_harmonics == len(tsa.mesh_orders)
+        and history.regular_sideband_order == tsa.regular_sideband_order
+        and history.revolutions == tsa.synchronous.revolutions
+        and history.input_unit == tsa.amplitude_unit
+    )
+
+
 def compute_na4(tsa: TSARepresentation, history: TrendHistory | None) -> MetricValue:
     """NA4 使用可比历史 residual 方差；无历史时绝不退化为 FM4。"""
     if history is None or not history.residual_variances:
         return MetricValue.unavailable("NA4", "missing_comparable_residual_history")
-    if (
-        history.samples_per_revolution != tsa.synchronous.angle_domain.samples_per_revolution
-        or history.mesh_order != tsa.mesh_order
-        or history.input_unit != tsa.amplitude_unit
-    ):
+    if not _history_is_compatible(tsa, history):
         return MetricValue.unavailable("NA4", "incompatible_residual_history_representation")
     residual = tsa.residual_signal
     centered = residual - np.mean(residual)
@@ -219,7 +227,10 @@ def compute_na4(tsa: TSARepresentation, history: TrendHistory | None) -> MetricV
             "fourth_central_moment": numerator,
             "historical_variance_mean": float(np.mean(history.residual_variances)),
             "history_count": len(history.residual_variances),
-            "history_representation": "angular_residual_same_spr_mesh_and_unit",
+            "history_representation": "same_spr_mesh_regular_definition_revolutions_and_unit",
+            "mesh_harmonics": history.mesh_harmonics,
+            "regular_sideband_order": history.regular_sideband_order,
+            "revolutions": history.revolutions,
         },
     )
 
@@ -242,11 +253,7 @@ def compute_nb4(tsa: TSARepresentation, history: TrendHistory | None) -> MetricV
     """NB4 使用同角域、同啮合带的历史包络方差；无历史时不可判定。"""
     if history is None or not history.envelope_variances:
         return MetricValue.unavailable("NB4", "missing_comparable_envelope_history")
-    if (
-        history.samples_per_revolution != tsa.synchronous.angle_domain.samples_per_revolution
-        or history.mesh_order != tsa.mesh_order
-        or history.input_unit != tsa.amplitude_unit
-    ):
+    if not _history_is_compatible(tsa, history):
         return MetricValue.unavailable("NB4", "incompatible_envelope_history_representation")
     try:
         envelope = residual_envelope(tsa)
@@ -263,6 +270,9 @@ def compute_nb4(tsa: TSARepresentation, history: TrendHistory | None) -> MetricV
             "fourth_central_moment": numerator,
             "historical_variance_mean": float(np.mean(history.envelope_variances)),
             "history_count": len(history.envelope_variances),
+            "mesh_harmonics": history.mesh_harmonics,
+            "regular_sideband_order": history.regular_sideband_order,
+            "revolutions": history.revolutions,
             "angular_sample_rate_points_per_revolution": tsa.synchronous.angle_domain.samples_per_revolution,
             "mesh_center_order": tsa.mesh_order,
             "bandpass_orders": [0.9 * tsa.mesh_order, 1.1 * tsa.mesh_order],
@@ -276,8 +286,17 @@ def analyze_order_statistics(spectrum: OrderSpectrum):
     amplitude = spectrum.amplitude
     total = float(np.sum(amplitude**2))
     if total <= np.finfo(np.float64).tiny:
-        return OrderStatistics(peak_concentration=0.0, kurtosis=0.0)
+        return OrderStatistics(
+            status="not_evaluable",
+            peak_concentration=None,
+            kurtosis=None,
+            reason="zero_order_spectrum_energy",
+        )
     top5 = float(np.sum(np.sort(amplitude)[::-1][:5] ** 2))
     normalized = amplitude / (np.mean(amplitude) + np.finfo(np.float64).tiny)
     kurtosis = float(np.mean(normalized**4) / (np.mean(normalized**2) ** 2 + 1e-12) - 2.0)
-    return OrderStatistics(peak_concentration=top5 / total, kurtosis=kurtosis)
+    return OrderStatistics(
+        status="evaluated",
+        peak_concentration=top5 / total,
+        kurtosis=kurtosis,
+    )

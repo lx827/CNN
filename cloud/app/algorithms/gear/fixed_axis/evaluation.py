@@ -59,7 +59,24 @@ def _thresholded(
     return result
 
 
-def _statistic(name: str, value: float, warning: float, critical: float) -> dict:
+def _statistic(
+    name: str,
+    value: float | None,
+    warning: float,
+    critical: float,
+    status: str = "evaluated",
+    reason: str | None = None,
+) -> dict:
+    if status != "evaluated" or value is None:
+        return {
+            "status": "not_evaluable",
+            "evaluable": False,
+            "value": None,
+            "unit": "dimensionless",
+            "reason": reason or "statistic_not_evaluable",
+            "warning": None,
+            "critical": None,
+        }
     return {
         "status": "evaluated",
         "evaluable": True,
@@ -122,12 +139,16 @@ def evaluate_fixed_axis(
             analysis.order_statistics.peak_concentration,
             thresholds.order_concentration_warning,
             thresholds.order_concentration_critical,
+            status=analysis.order_statistics.status,
+            reason=analysis.order_statistics.reason,
         ),
         "order_kurtosis": _statistic(
             "order_kurtosis",
             analysis.order_statistics.kurtosis,
             thresholds.order_kurtosis_warning,
             thresholds.order_kurtosis_critical,
+            status=analysis.order_statistics.status,
+            reason=analysis.order_statistics.reason,
         ),
     }
     evaluable = any(item.get("evaluable") for item in indicators.values())

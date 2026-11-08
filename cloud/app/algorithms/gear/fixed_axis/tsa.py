@@ -115,4 +115,5 @@ def compute_tsa_representation(
         spectrum=spectrum,
         mesh_orders=mesh_orders,
         regular_sideband_orders=tuple(float(order) for order in sorted(sideband_bins)),
+        regular_sideband_order=regular_sideband_order,
     )

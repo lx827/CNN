@@ -108,6 +108,7 @@ class TSARepresentation:
     spectrum: OrderSpectrum
     mesh_orders: tuple[float, ...]
     regular_sideband_orders: tuple[float, ...]
+    regular_sideband_order: int
     amplitude_unit: str = "input_signal"
 
     def __post_init__(self) -> None:
@@ -143,6 +144,9 @@ class TrendHistory:
 
     samples_per_revolution: int
     mesh_order: float
+    mesh_harmonics: int
+    regular_sideband_order: int
+    revolutions: int
     residual_variances: tuple[float, ...] = ()
     envelope_variances: tuple[float, ...] = ()
     input_unit: str = "input_signal"
@@ -150,6 +154,8 @@ class TrendHistory:
     def __post_init__(self) -> None:
         if self.samples_per_revolution < 16 or not np.isfinite(self.mesh_order) or self.mesh_order <= 0:
             raise ValueError("历史角域采样率或啮合阶次无效")
+        if self.mesh_harmonics < 1 or self.regular_sideband_order < 0 or self.revolutions < 2:
+            raise ValueError("历史 regular 定义或实际 TSA 转数无效")
         for name, values in (
             ("历史 residual 方差", self.residual_variances),
             ("历史包络方差", self.envelope_variances),
@@ -204,8 +210,10 @@ class CepstrumRepresentation:
 
 @dataclass(frozen=True)
 class OrderStatistics:
-    peak_concentration: float
-    kurtosis: float
+    status: str
+    peak_concentration: Optional[float]
+    kurtosis: Optional[float]
+    reason: Optional[str] = None
 
 
 @dataclass(frozen=True)

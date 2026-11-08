@@ -851,6 +851,10 @@ class DiagnosisEngine:
             self.gear_teeth,
             time_features, bearing_result, gear_result
         )
+        if not skip_gear and gear_result.get("analysis_status") == "indeterminate":
+            # 无有效谱/全部定轴指标不可评估时，不允许时域零值合成健康 100 分。
+            health_score = None
+            status = "indeterminate"
 
         return {
             "health_score": health_score, "status": status,

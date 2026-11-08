@@ -337,9 +337,15 @@ def _fault_label(best_bearing: Dict, best_gear: Dict, bearing_score: float, gear
 
     indicators = best_bearing.get("evaluation", {}).get("indicators", {}) if best_bearing else {}
     param_hits = [
-        (name, float(item.get("snr", 0.0)))
+        (name, float(item["snr"]))
         for name, item in indicators.items()
-        if isinstance(item, dict) and item.get("significant") and not name.endswith("_stat")
+        if (
+            isinstance(item, dict)
+            and item.get("significant")
+            and item.get("status") != "not_evaluable"
+            and item.get("snr") is not None
+            and not name.endswith("_stat")
+        )
     ]
     if param_hits:
         # 按 SNR 降序取主导故障类型，避免多故障拼接导致子串误判
@@ -522,6 +528,15 @@ def run_research_ensemble(
         best_gear,
         ds_fusion_result=ds_fusion_result,
     )
+    gear_only_indeterminate = skip_bearing and not skip_gear and (
+        (best_gear and best_gear.get("analysis_status") == "indeterminate")
+        or (not best_gear and bool(gear_results))
+    )
+    if gear_only_indeterminate:
+        # 阶次估计失败或全部定轴指标不可评估，不返回健康 100 分。
+        health_score = None
+        status = "indeterminate"
+        fault_label = "unknown"
 
     # D-S 融合主导故障标签
     ds_fault_label = get_ds_label(ds_fusion_result)

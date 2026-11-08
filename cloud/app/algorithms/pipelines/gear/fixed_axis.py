@@ -66,13 +66,19 @@ class FixedAxisGearPipeline:
         self.car_parameters = car_parameters
         self.n_sidebands = n_sidebands
 
-    @property
-    def required_max_order(self) -> float:
-        mesh_order = self.geometry.mesh_order if self.geometry else 1.0
+    def required_max_order(self, include_tsa: bool) -> float:
+        """只覆盖本次实际请求的指标；standard 不承担 TSA 谐波前提。"""
+        mesh_order = self.geometry.mesh_order if self.geometry else None
+        sideband_maximum = (
+            mesh_order + self.n_sidebands + 0.25
+            if mesh_order is not None else self.tsa_parameters.max_order
+        )
+        if not include_tsa or mesh_order is None:
+            return sideband_maximum
         return max(
+            sideband_maximum,
             self.tsa_parameters.max_order,
             mesh_order * self.tsa_parameters.mesh_harmonics + self.tsa_parameters.regular_sideband_order,
-            mesh_order + self.n_sidebands + 0.25,
         )
 
     @staticmethod
@@ -106,7 +112,7 @@ class FixedAxisGearPipeline:
             order_analysis = ConstantSpeedOrderPipeline(
                 OrderParameters(
                     samples_per_revolution=self.tsa_parameters.samples_per_revolution,
-                    max_order=self.required_max_order,
+                    max_order=self.required_max_order(include_tsa),
                 )
             ).run(signal, sample_rate_hz, speed)
         if order_analysis.status != "valid" or order_analysis.spectrum is None:
@@ -114,10 +120,13 @@ class FixedAxisGearPipeline:
 
         spectrum = order_analysis.spectrum
         if (
-            spectrum.order_bins[-1] + spectrum.order_resolution * 1e-9 < self.required_max_order
+            spectrum.order_bins[-1] + spectrum.order_resolution * 1e-9 < self.required_max_order(include_tsa)
             and order_analysis.angle_domain is not None
         ):
-            spectrum = compute_order_spectrum(order_analysis.angle_domain, self.required_max_order)
+            spectrum = compute_order_spectrum(
+                order_analysis.angle_domain,
+                self.required_max_order(include_tsa),
+            )
 
         mesh_order = self.geometry.mesh_order if self.geometry else None
         if mesh_order is None:
@@ -145,6 +154,13 @@ class FixedAxisGearPipeline:
                 tsa_reason = "missing_fixed_axis_geometry"
             elif order_analysis.angle_domain is None or not isinstance(order_analysis.speed, ScalarSpeed):
                 tsa_reason = "tsa_requires_accurate_constant_speed_with_continuous_phase"
+            if tsa_reason is not None:
+                fm0 = MetricValue.unavailable("FM0", tsa_reason)
+                fm4 = MetricValue.unavailable("FM4", tsa_reason)
+                m6a = MetricValue.unavailable("M6A", tsa_reason)
+                m8a = MetricValue.unavailable("M8A", tsa_reason)
+                na4 = MetricValue.unavailable("NA4", tsa_reason)
+                nb4 = MetricValue.unavailable("NB4", tsa_reason)
             else:
                 try:
                     synchronous = compute_synchronous_average(
@@ -156,7 +172,7 @@ class FixedAxisGearPipeline:
                         mesh_order=mesh_order,
                         mesh_harmonics=self.tsa_parameters.mesh_harmonics,
                         regular_sideband_order=self.tsa_parameters.regular_sideband_order,
-                        max_order=max(self.required_max_order, mesh_order + self.n_sidebands + 0.25),
+                        max_order=self.required_max_order(include_tsa=True),
                     )
                     tsa_status = "evaluated"
                     fm0 = compute_fm0(tsa)

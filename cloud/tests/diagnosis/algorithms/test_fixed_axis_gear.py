@@ -137,7 +137,10 @@ def test_na4_nb4_require_comparable_history():
     tsa = compute_tsa_representation(synchronous, 4, mesh_harmonics=2, max_order=20)
     assert compute_na4(tsa, None).status == "not_evaluable"
     assert compute_nb4(tsa, None).status == "not_evaluable"
-    history = TrendHistory(64, 4, residual_variances=(2.0, 4.0), envelope_variances=(1.0, 3.0))
+    history = TrendHistory(
+        64, 4, mesh_harmonics=2, regular_sideband_order=1, revolutions=8,
+        residual_variances=(2.0, 4.0), envelope_variances=(1.0, 3.0),
+    )
     na4 = compute_na4(tsa, history)
     centered = tsa.residual_signal - tsa.residual_signal.mean()
     expected_na4 = np.mean(centered**4) / 3.0**2
@@ -147,9 +150,30 @@ def test_na4_nb4_require_comparable_history():
     assert nb4.details["angular_sample_rate_points_per_revolution"] == 64
     assert nb4.details["mesh_center_order"] == 4
     assert nb4.details["bandpass_orders"] == [3.6, 4.4]
-    wrong = TrendHistory(128, 4, residual_variances=(2.0,), envelope_variances=(1.0,))
+    wrong = TrendHistory(
+        128, 4, mesh_harmonics=2, regular_sideband_order=1, revolutions=8,
+        residual_variances=(2.0,), envelope_variances=(1.0,),
+    )
     assert compute_na4(tsa, wrong).reason == "incompatible_residual_history_representation"
     assert compute_nb4(tsa, wrong).reason == "incompatible_envelope_history_representation"
+    different_regular = TrendHistory(
+        64, 4, mesh_harmonics=3, regular_sideband_order=0, revolutions=8,
+        residual_variances=(2.0,), envelope_variances=(1.0,),
+    )
+    assert compute_na4(tsa, different_regular).status == "not_evaluable"
+    assert compute_nb4(tsa, different_regular).status == "not_evaluable"
+    different_sidebands = TrendHistory(
+        64, 4, mesh_harmonics=2, regular_sideband_order=0, revolutions=8,
+        residual_variances=(2.0,), envelope_variances=(1.0,),
+    )
+    assert compute_na4(tsa, different_sidebands).status == "not_evaluable"
+    assert compute_nb4(tsa, different_sidebands).status == "not_evaluable"
+    different_revolutions = TrendHistory(
+        64, 4, mesh_harmonics=2, regular_sideband_order=1, revolutions=7,
+        residual_variances=(2.0,), envelope_variances=(1.0,),
+    )
+    assert compute_na4(tsa, different_revolutions).status == "not_evaluable"
+    assert compute_nb4(tsa, different_revolutions).status == "not_evaluable"
 
 
 def test_car_quefrency_seconds_and_background_formula():
@@ -252,6 +276,36 @@ def test_evaluation_reuses_metrics_without_fft():
     assert evaluation.indicators["m8a"]["critical"] is None
 
 
+def test_standard_high_teeth_does_not_require_tsa_harmonics():
+    fs = 1024.0
+    rot = 8.0
+    t = np.arange(int(fs * 4) + 1) / fs
+    signal = (
+        np.sin(2 * np.pi * 40 * rot * t)
+        + 0.3 * np.sin(2 * np.pi * 39 * rot * t)
+        + 0.2 * np.sin(2 * np.pi * 41 * rot * t)
+    )
+    pipeline = FixedAxisGearPipeline(
+        FixedAxisGearGeometry(40),
+        tsa_parameters=TSAParameters(samples_per_revolution=128, max_order=50),
+        n_sidebands=2,
+    )
+    diagnosis = pipeline.run(signal, fs, speed=ScalarSpeed(rot, "test"), include_tsa=False)
+    assert diagnosis.analysis.sideband_analysis.ser.status == "evaluated"
+    assert diagnosis.analysis.tsa_status == "not_requested"
+    assert diagnosis.analysis.spectrum.order_bins[-1] < 64.0
+
+
+def test_zero_energy_statistics_and_evaluation_are_indeterminate():
+    pipeline = FixedAxisGearPipeline(FixedAxisGearGeometry(18))
+    diagnosis = pipeline.run(np.zeros(4096), 2048.0, speed=ScalarSpeed(16.0, "test"))
+    assert diagnosis.analysis.order_statistics.status == "not_evaluable"
+    assert diagnosis.analysis.order_statistics.peak_concentration is None
+    assert diagnosis.analysis.order_statistics.kurtosis is None
+    assert diagnosis.evaluation.status == "indeterminate"
+    assert diagnosis.evaluation.indicators["order_kurtosis"]["warning"] is None
+
+
 def test_multi_frame_spectrum_does_not_fake_tsa_or_car():
     spectrum = _manual_spectrum()
     speeds = LocalSpeedEstimates(
@@ -267,6 +321,7 @@ def test_multi_frame_spectrum_does_not_fake_tsa_or_car():
     assert analysis.tsa is None
     assert analysis.tsa_reason == "tsa_requires_accurate_constant_speed_with_continuous_phase"
     assert analysis.fm4.status == "not_evaluable"
+    assert analysis.fm4.reason == analysis.tsa_reason
     assert analysis.car.reason == "car_requires_accurate_constant_speed"
 
 
