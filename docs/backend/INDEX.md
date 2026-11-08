@@ -126,7 +126,7 @@
 | `ensemble.py` | `cloud/app/services/diagnosis/ensemble.py` | 多算法集成诊断引擎 |
 | `bearing.py` | `cloud/app/services/diagnosis/bearing.py` | 轴承诊断（包络/Kurtogram/CPW/MED 等） |
 | `features.py` | `cloud/app/services/diagnosis/features.py` | 时域/频域/阶次/包络特征提取 |
-| `order_tracking.py` | `cloud/app/services/diagnosis/order_tracking.py` | 阶次跟踪算法 |
+| `order_tracking.py` | `cloud/app/services/diagnosis/order_tracking.py` | 旧阶次 tuple 兼容边界（无数学实现） |
 | `rule_based.py` | `cloud/app/services/diagnosis/rule_based.py` | 规则诊断算法（回退方案） |
 | `signal_utils.py` | `cloud/app/services/diagnosis/signal_utils.py` | 通用信号处理辅助函数 |
 
@@ -191,6 +191,7 @@
 | `core` | `cloud/app/algorithms/core/` | 带单位的频谱、频带和谱峰数据类型 |
 | `mechanics` | `cloud/app/algorithms/mechanics/` | 机械对象运动学参数与故障频率 |
 | `bearing` | `cloud/app/algorithms/bearing/` | 包络计算、指标分析、边带分析与阈值评估 |
+| `order` | `cloud/app/algorithms/order/` | 标量/局部/连续转速、积分相位、角域重采样与阶次谱 |
 | `pipelines/bearing` | `cloud/app/algorithms/pipelines/bearing/` | 标准轴承包络的分析与诊断 Pipeline |
 
 算法库不依赖 FastAPI、ORM、数据库或业务配置；业务层通过对象化 Pipeline 调用。

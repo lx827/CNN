@@ -49,6 +49,7 @@ async def get_channel_method_analysis(
 - **async**：✅
 - **method 可选值**：轴承 13 种 + 齿轮 2 种 + 行星箱 7 种
 - **说明**：单方法/全部方法分析
+- **行星解调边界**：独立行星方法先取得 `OrderAnalysis`。仅恒速/缓变标量前提继续执行；快速变速返回明确错误并指向 `/order`，不可判定不会转成固定转频。
 
 ### `GET /{device_id}/{batch_index}/{channel}/research-analysis`
 

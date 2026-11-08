@@ -16,8 +16,9 @@
 | `_extract_order_features` | `_extract_order_features(order_axis, spectrum, rot_freq, gear_teeth, bearing_params) -> dict` | 阶次特征提取 |
 | `_order_band_energy` | `_order_band_energy(order_axis, spectrum, center_order: float, bandwidth: float) -> float` | 指定阶次带能量和 |
 | `_feature_severity` | `_feature_severity(value: float, metric: str, rot_freq: float = 0.0) -> float` | 单一特征严重度 (0.0~1.0+) |
-| `_compute_order_spectrum_simple` | `_compute_order_spectrum_simple(sig: np.ndarray, fs: float, rot_freq: float, samples_per_rev: int = 1024, max_order: int = 50) -> Tuple[np.ndarray, np.ndarray]` | 简化阶次跟踪（单帧） |
 | `_band_energy` | `_band_energy(freq, amp, center: float, bandwidth: float) -> float` | 指定频带能量积分 |
+
+规则回退直接调用 `AutomaticOrderPipeline`，不再保留 `_compute_order_spectrum_simple` 的第二份重采样/FFT 实现。快速变速时只有阶次特征使用连续相位补偿谱，其他标量频率特征使用中位转频摘要；估计不可判定会显式失败。
 
 ### `_order_band_energy`
 
@@ -45,27 +46,6 @@ def _feature_severity(value: float, metric: str, rot_freq: float = 0.0) -> float
   - `rot_freq` (`float`, 默认 0.0): 转频 Hz，用于 RMS 基线自适应
 - **返回值**：`float` — 严重度归一化到 0.0~1.0+
 - **说明**：基于预设阈值计算单一特征的严重度。RMS 基线随转速自适应：`baseline = max(1.0, 0.05·rot_freq + 1.0)`。
-
-### `_compute_order_spectrum_simple`
-
-```python
-def _compute_order_spectrum_simple(
-    sig: np.ndarray,
-    fs: float,
-    rot_freq: float,
-    samples_per_rev: int = 1024,
-    max_order: int = 50,
-) -> Tuple[np.ndarray, np.ndarray]
-```
-
-- **参数**:
-  - `sig` (`np.ndarray`): 输入信号
-  - `fs` (`float`): 采样率 Hz
-  - `rot_freq` (`float`): 转频 Hz
-  - `samples_per_rev` (`int`, 默认 1024): 每转采样点数
-  - `max_order` (`int`, 默认 50): 最大输出阶次
-- **返回值**：`(orders, spectrum)` — 阶次轴与阶次谱幅值
-- **说明**：简化单帧阶次跟踪。按转频等角度重采样后做 FFT，输出 0~max_order 的阶次谱，供规则诊断内部快速使用。
 
 ### `_band_energy`
 

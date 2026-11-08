@@ -24,18 +24,16 @@
 | `peak_value` | `peak_value(signal) -> float` | 峰值 |
 | `crest_factor` | `crest_factor(signal) -> float` | 峰值因子 |
 | `skewness` | `skewness(signal) -> float` | 偏度 |
-| `estimate_rot_freq_spectrum` | `estimate_rot_freq_spectrum(signal, fs) -> float` | 频谱法估计转频 |
-| `estimate_rot_freq_autocorr` | `estimate_rot_freq_autocorr(signal, fs) -> float` | 自相关法估计转频 |
-| `estimate_rot_freq_envelope` | `estimate_rot_freq_envelope(signal, fs) -> float` | 包络法估计转频 |
+| `estimate_rot_freq_spectrum` | `estimate_rot_freq_spectrum(signal, fs, freq_range=(10,100), ...) -> float` | 委托 `algorithms.order.estimate_spectrum_speed`；不可判定时抛 `ValueError` |
+| `estimate_rot_freq_autocorr` | `estimate_rot_freq_autocorr(signal, fs, freq_range=(10,100)) -> Optional[float]` | 委托独立自相关候选，无有效候选返回 None |
+| `estimate_rot_freq_envelope` | `estimate_rot_freq_envelope(signal, fs, f_center, ...) -> Optional[float]` | 委托独立包络候选，无有效候选返回 None |
 | `zoom_fft_analysis` | `zoom_fft_analysis(signal, fs, center_freq, bandwidth, n_fft) -> Tuple` | ZOOM-FFT 细化谱 |
 | `_band_energy` | `_band_energy(freq, amp, center, bandwidth) -> float` | 频带能量积分 |
-| `_candidate_score` | `_candidate_score(f_est: float, method: str) -> float` | 候选频率置信度评分 |
-| `_sub_harmonic_penalty` | `_sub_harmonic_penalty(f_candidate: float) -> float` | 次谐波惩罚项 |
-| `_support_energy` | `_support_energy(f_est: float) -> float` | 支撑带能量 |
-
 | `parabolic_interpolation` | `parabolic_interpolation(freqs, spectrum, idx) -> float` | 抛物线插值精确定位谱峰频率 |
 | `_order_band_energy` | `_order_band_energy(order_axis, spectrum, center_order: float, bandwidth: float) -> float` | 指定阶次带能量 |
 | `lowpass_filter_complex` | `lowpass_filter_complex(signal: np.ndarray, fs: float, f_cut: float, order: int = 6) -> np.ndarray` | 复数信号低通滤波 |
+
+转频估计的频谱、包络、Welch、自相关与 STFT 实现已迁移到 `algorithms/order/estimation.py`。本文件只保留旧标量签名适配，不再保存启发式副本；估计失败不得默认 10 Hz。`compute_fft_spectrum` 等展示算法不在本次迁移范围内。
 
 ### `parabolic_interpolation`
 

@@ -1,68 +1,14 @@
-# `order_tracking.py` — 阶次跟踪算法
+# `order_tracking.py` — 旧阶次 tuple 兼容边界
 
-
-> **算法原理**: 详见 [小波与模态分解算法文档](../../../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../算法原理.md)。
 **对应源码**：`cloud/app/services/diagnosis/order_tracking.py`
 
-## 函数
+本文件不再包含转频估计、重采样或 FFT 数学实现；唯一实现位于 [`algorithms/order/`](../../algorithms/order/__init__.md)。保留它只为行星解调等尚未结构化的旧调用方转换返回值，新代码应直接使用 `OrderAnalysis`。
 
-### `_compute_order_spectrum`
+## 适配函数
 
-```python
-def _compute_order_spectrum(
-    signal: np.ndarray,
-    fs: float,
-    rot_freq: float,
-    samples_per_rev: int = 1024,
-    max_order: int = 50,
-) -> Tuple[np.ndarray, np.ndarray]
-```
+- `_order_tracking(sig, fs, rot_freq, samples_per_rev=1024)`：委托恒速 Pipeline，返回 `(角域信号, 角域采样点轴)`。第二轴单位为 rev，间隔 `1/samples_per_rev`；旧版把它同时当 FFT 阶次轴的语义已删除。
+- `_compute_order_spectrum(...)`：返回 `(FFT bin 阶次轴, 单边峰值幅值)`，默认保留到 `max_order=50`。
+- `_compute_order_spectrum_multi_frame(...)`：返回 `(阶次轴, 幅值, 保留局部转频中位数, 标准差)`；内部仍是局部序列，不表示连续相位。
+- `_compute_order_spectrum_varying_speed(...)`：返回 `(阶次轴, 幅值, 连续轨迹中位数, 标准差)`；中位数仅供旧摘要，不能反推相位。
 
-- **返回值**：`(order_axis, spectrum)`
-- **说明**：单帧阶次跟踪（恒速）
-
-### `_compute_order_spectrum_multi_frame`
-
-```python
-def _compute_order_spectrum_multi_frame(
-    signal: np.ndarray,
-    fs: float,
-    freq_range: Tuple[float, float],
-    samples_per_rev: int,
-    max_order: int,
-    frame_duration: float = 1.0,
-    overlap: float = 0.5,
-) -> Tuple[np.ndarray, np.ndarray, float, float]
-```
-
-- **返回值**：`(order_axis, spectrum, rot_freq, rot_std)`
-- **说明**：多帧平均阶次跟踪（返回转频估计及标准差）
-
-### `_compute_order_spectrum_varying_speed`
-
-```python
-def _compute_order_spectrum_varying_speed(
-    signal: np.ndarray,
-    fs: float,
-    freq_range: Tuple[float, float],
-    samples_per_rev: int,
-    max_order: int,
-) -> Tuple[np.ndarray, np.ndarray, float, float]
-```
-
-- **返回值**：`(order_axis, spectrum, rot_freq, rot_std)`
-- **说明**：变速阶次跟踪（STFT + 等相位重采样）
-
-### `_order_tracking`
-
-```python
-def _order_tracking(
-    signal: np.ndarray,
-    fs: float,
-    rot_freq: float,
-    samples_per_rev: int,
-    max_order: int,
-) -> Tuple
-```
-
-- **说明**：底层阶次跟踪实现
+所有适配在 `OrderAnalysis.status != "valid"` 时抛出 `ValueError`，不得把不可判定结果替换为默认转频或正常空谱。显式传入旧 `nperseg/noverlap` 时只转换为 STFT 参数；缺省使用按采样率自适应窗长。

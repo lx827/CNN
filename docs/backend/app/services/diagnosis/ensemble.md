@@ -103,6 +103,7 @@ def run_research_ensemble(
 
 - **返回值**：`{health_score, status, fault_likelihood, fault_label, rot_freq_hz, time_features, bearing, gear, bearing_results, gear_results, ensemble, recommendation}`
 - **说明**：集成诊断主入口
+- **转速传递**：每种去噪分支通过 `_analyze_order(proc, estimation_signal=arr)` 共享同一 `OrderAnalysis`；原始信号负责估计，显式处理信号负责重采样。轴承/齿轮接收结构化缓存，快速变速轴承与齿轮分支均由 Engine 明确报错；即使先把轨迹摘要为 `rf`，缓存中的工况仍拥有最终前提决定权。
 
 **skip 逻辑**：
 

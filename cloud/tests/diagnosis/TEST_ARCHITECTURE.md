@@ -10,10 +10,10 @@
 ```
 Layer 5: 应用入口
   ensemble.py ──→ engine, features, health_score, recommendation
-  analyzer.py ──→ engine, features, order_tracking, rule_based, channel_consensus
+  analyzer.py ──→ engine, features, rule_based, channel_consensus
   │
 Layer 4: 中央调度器
-  engine.py ──→ signal_utils, order_tracking, bearing, gear,
+  engine.py ──→ signal_utils, algorithms/order, bearing, gear,
                 preprocessing, vmd_denoise, features, health_score, recommendation
   │
 Layer 3: 模块聚合
@@ -22,15 +22,16 @@ Layer 3: 模块聚合
 Layer 2: 特征提取 & 复杂信号处理（依赖 Layer 1）
   features.py ──→ signal_utils
   bearing.py  ──→ signal_utils, preprocessing
-  order_tracking.py ──→ signal_utils
+  order_tracking.py ──→ algorithms/order (仅旧 tuple 适配)
+  algorithms/order/pipeline.py ──→ estimation, resampling, types
   preprocessing.py ──→ signal_utils, vmd_denoise
   gear/metrics.py ──→ signal_utils
   gear/planetary_demod.py ──→ signal_utils, order_tracking, .metrics
   health_score.py ──→ health_score_continuous
-  rule_based.py ──→ features, order_tracking
+  rule_based.py ──→ features, algorithms/order
   │
 Layer 1: 信号处理基元（零内部依赖）
-  signal_utils.py             (prepare_signal, FFT, 转频估计, 谱峰搜索)
+  signal_utils.py             (prepare_signal, FFT, 谱峰搜索；转频估计委托 algorithms/order)
   vmd_denoise.py              (VMD分解)
   health_score_continuous.py  (连续扣分)
   algorithms/bearing/analysis.py (边带分析)
@@ -159,9 +160,9 @@ tests/diagnosis/foundation/
 | `bearing` | `spectral_kurtosis_envelope_analysis` | `layer2/test_bearing_correctness.py` | ✅ |
 | `bearing` | `mckd_envelope_analysis` (MCKD) | `layer2/test_bearing_advanced_correctness.py` | ✅ |
 | `bearing` | `bearing_sc_scoh_analysis` (循环平稳) | `layer2/test_bearing_advanced_correctness.py` | ✅ |
-| `order_tracking` | `_compute_order_spectrum` | `layer2/test_order_tracking_correctness.py` | ✅ |
-| `order_tracking` | `_compute_order_spectrum_multi_frame` | `layer2/test_order_tracking_correctness.py` | ✅ |
-| `order_tracking` | `_compute_order_spectrum_varying_speed` | `layer2/test_order_tracking_correctness.py` | ✅ |
+| `algorithms/order` | 恒速/缓变/快速变速 Pipeline、结构化速度/相位、单边幅值与谱轴 | `algorithms/test_order_pipeline.py` + `layer2/test_order_tracking_correctness.py` | ✅ |
+| `order_tracking` | 旧 tuple 适配与第二轴语义 | `algorithms/test_order_pipeline.py` | ✅ |
+| `engine` + `/order` | 不可判定、快速变速下游边界、API 与数据库写入 | `algorithms/test_order_integration.py` | ✅ |
 | `preprocessing` | `wavelet_denoise` | `layer2/test_preprocessing_correctness.py` | ✅ |
 | `preprocessing` | `cepstrum_pre_whitening` | `layer2/test_preprocessing_correctness.py` | ✅ |
 | `preprocessing` | `minimum_entropy_deconvolution` | `layer2/test_preprocessing_correctness.py` | ✅ |
@@ -400,25 +401,11 @@ MARK_WARN = '△ WARN'       # 警告 / 边界 —— 用橙色
   │ 判定: ✗ 误报！健康文件检出 SNR=4.2 │
 ```
 
-#### 2.2 阶次跟踪（order_tracking）
+#### 2.2 转速/相位与阶次（algorithms/order）
 
-**标杆设计（参考现有 `17_cw_variable` 图，应推广为标准）：**
+正确性由 `algorithms/test_order_pipeline.py` 的公式断言提供：已知正弦阶次和单边幅值、近频 bin、解析积分、全记录三角扫频逐时刻轨迹、单帧快扫频双阶次、持续越界与近边界有效信号、MAD=0 离群与正常微变、窄带纯音、短/长边缘与内部越界、slow 失败转 fast、不可判定、不同采样率的 STFT 物理分辨率，以及角域采样点轴/FFT 阶次轴分离。线性扫频真值使用解析 `rev=f0*t+a*t²/2`，不与被测梯形积分共用实现。`layer2/test_order_tracking_correctness.py` 运行同一组断言。
 
-```
-CW 变速数据集 — 转频估计验证
-─────────────────────────────────────────
-灰色横带 = 预期转速范围 [14.1-29.0]Hz（标注在带右侧）
-  蓝点 ○  = 频谱法估计值 = 26.3Hz  → 在带内 ✓
-  绿菱 ◇  = 阶次跟踪法  = 27.1Hz  → 在带内 ✓
-  
-右侧大字体标注：
-  ✓ = 在预期范围内
-  ✗ = 偏离预期范围
-  
-额外增加：方法一致性列
-  两种方法差异 < 20% → 一致 ✓
-  两种方法差异 > 20% → 冲突 △（黄色警告）
-```
+旧“转频落在宽泛范围内、两种方法接近、变速谱峰度不太差”只能作为可视化辅助，不能证明谱轴、分辨率或补偿正确，已从正确性测试中删除。旧输出不得作为 golden。轴承合成器必须实际生成其声明的 1×轴频分量；只有 BPFO 冲击而没有轴频证据时，不允许算法按故障阶次比例反猜转频。Layer 3 Engine 同时断言估计转频约 25Hz、理论/实测 BPFO 约 90Hz，并在任何失败时非零退出。
 
 #### 2.3 齿轮诊断指标（FM0, FM4, CAR, SER, TSA）
 

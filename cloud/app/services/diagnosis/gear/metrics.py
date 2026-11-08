@@ -304,7 +304,13 @@ def compute_fm0_order(
 
     harmonics_sum = 0.0
     for i in range(1, n_harmonics + 1):
-        harmonics_sum += _order_band_amplitude(order_axis, spectrum, mesh_order * i, 0.5)
+        center = mesh_order * i
+        mask = np.abs(order_axis - center) <= 0.5
+        if np.any(mask):
+            # FM0 分母是各啮合谐波幅值，而不是整个窗主瓣的幅值和。
+            # 单边幅值契约下，周期 Hann 在整数周期峰两侧也有主瓣点；
+            # 累加整带会把每个谐波重复计入并随窗函数改变 FM0。
+            harmonics_sum += float(np.max(np.abs(spectrum[mask])))
 
     if harmonics_sum < 1e-12:
         return 0.0

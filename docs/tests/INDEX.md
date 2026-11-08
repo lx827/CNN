@@ -115,7 +115,7 @@ cloud/tests/
     │   ├── test_none_params.py
     │   ├── test_cpw_robustness.py
     │   └── test_varying_speed_order.py
-    ├── algorithms/                     # 新增算法单元测试(EMD/MCKD/小波包/SG/引擎回归)
+    ├── algorithms/                     # 算法单元/集成测试(含 order Pipeline 与 Engine/API 接入)
     ├── planetary/                      # 行星齿轮箱专项(端到端/解调方法)
     ├── method_eval/                    # 方法级分类评估框架
     ├── evaluation/                     # 多维度评价框架
@@ -187,10 +187,9 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 
 | 项目 | 说明 |
 |------|------|
-| **目的** | 验证变速工况下阶次跟踪算法正确性 |
-| **数据集** | 不需要(2026-11-08 起改用合成变速信号,无数据集依赖) |
-| **通过标准** | 转频估计在合理范围,多帧 vs 单帧阶次谱差异可接受 |
-| **出图** | 默认关闭;`TEST_PLOT=1` 开启,产物在 `tests/diagnosis/regression/output/`(不入库) |
+| **目的** | 用公式期望验证恒速/缓变/快速变速转速、相位、角域采样与阶次谱 |
+| **数据集** | 不需要（全部独立合成信号） |
+| **通过标准** | 已知阶次与近频峰、解析转速积分、三角扫频轨迹、MAD 近零、非法/不可判定、8192/25600 Hz 分辨率、单边幅值和阶次轴语义全部通过 |
 
 ### 1.4 一键回归测试
 
@@ -207,6 +206,8 @@ uv run python tests/diagnosis/regression/test_none_params.py && uv run python te
 |------|------|-----------|---------|
 | `test_bearing_envelope_analysis.py` | 手工谱唯一归属、偏移真峰、有效阴性、超带宽/共享 bin、BPFI 边带融合、真实可观测边带分母、非谐波负对照、低频后缀健康/ensemble 集成、阈值与参数校验 | 无 | `uv run python tests/diagnosis/algorithms/test_bearing_envelope_analysis.py`(在 cloud 目录) |
 | `test_bearing_envelope_pipeline.py` | 标准包络单边幅值、实际频带、指标/评估分离、展示不影响诊断、无参统计、未知转频、Engine/ensemble/SC 新契约 | 无 | `uv run python tests/diagnosis/algorithms/test_bearing_envelope_pipeline.py`(在 cloud 目录) |
+| `test_order_pipeline.py` | 恒速已知阶次/近频峰、单边幅值、角域轴与 FFT 阶次轴、解析积分与全记录三角扫频、单帧快扫频双阶次、持续越界与近边界有效信号、零 MAD 离群与微变、窄带纯音、短/长边缘与内部越界、slow→fast 与失败不可判定、不同 fs 的 STFT 分辨率、轴承故障调制不冒充轴频、原始估计信号隔离 | 无 | `uv run python tests/diagnosis/algorithms/test_order_pipeline.py`(在 cloud 目录) |
+| `test_order_integration.py` | Engine/ensemble 快速变速轴承与齿轮边界；/order 恒速幅值/谱轴、批次记录持久化、通道缓存保护、无记录不伪造健康、快速变速成功及噪声 400 | 无（隔离 SQLite） | `uv run python tests/diagnosis/algorithms/test_order_integration.py`(在 cloud 目录) |
 | `test_bearing_envelope_api.py` | 包络 HTTP 新响应、max_freq 生效、隔离 SQLite 与认证替身 | 无 | `uv run python tests/diagnosis/algorithms/test_bearing_envelope_api.py`(在 cloud 目录) |
 | `test_engine_regressions.py` | 诊断引擎核心回归(无参数/TSA/转频/健康区分) | HUSTbear/CW(可选) | `uv run python tests/diagnosis/algorithms/test_engine_regressions.py`(在 cloud 目录) |
 | `test_new_algorithms.py` | EMD/MCKD/小波包/SG 等新算法功能验证 | 无 | 同上 |
@@ -306,7 +307,7 @@ uv run python tests/diagnosis/evaluation/main.py
 | `bearing.py`, `bearing_cyclostationary.py` | P0回归 + `test_bearing_hustbear.py` |
 | `gear/`, `planetary_demod.py` | P0回归 + `test_planetary_e2e.py` |
 | `health_score.py` | P0回归 + `test_effectiveness.py` |
-| `order_tracking.py` | `test_varying_speed_order.py` |
+| `algorithms/order/`, `order_tracking.py` | P0 + `test_order_pipeline.py` + `test_order_integration.py` + foundation order/signal_utils |
 | `preprocessing.py`, `vmd_denoise.py` | P0回归 + `test_cpw_robustness.py` |
 | API 路由 (`data_view/`, `ingest.py` 等) | P0回归 + 手动 API 调用验证 |
 

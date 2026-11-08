@@ -357,15 +357,22 @@ async def get_channel_method_analysis(
             }
             func = func_map[func_name]
 
-            # 先估计转频
-            from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
+            # 行星解调仍要求标量恒速/缓变输入，不能把快速变速轨迹摘要成恒速。
             engine = DiagnosisEngine(
                 denoise_method=denoise_method,
                 bearing_params=bearing_params,
                 gear_teeth=gear_teeth,
             )
             arr = engine.preprocess(signal)
-            rot_freq, _, _, _, _ = engine._estimate_rot_freq(arr, sample_rate)
+            raw_for_speed = prepare_signal(signal, detrend=True)
+            order_analysis = engine._analyze_order(
+                arr, sample_rate, estimation_signal=raw_for_speed,
+            )
+            if order_analysis.status != "valid":
+                raise ValueError(order_analysis.reason or "行星解调转频不可判定")
+            if order_analysis.tracking_method == "varying_speed":
+                raise ValueError("快速变速行星解调尚未迁移连续相位接口，请先使用 /order 查看补偿阶次谱")
+            rot_freq, _ = engine._order_speed_summary(order_analysis)
 
             result = await asyncio.to_thread(func, arr, sample_rate, rot_freq, gear_teeth)
             response_data = {

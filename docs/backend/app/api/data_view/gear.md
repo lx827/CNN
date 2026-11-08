@@ -26,7 +26,7 @@ async def get_channel_gear(
 
 - **async**：✅
 - **响应 data**：`{rot_freq_hz, mesh_freq_hz, mesh_order, ser, sidebands, fm0, fm4, car, m6a, m8a, fault_indicators}`
-- **说明**：齿轮诊断。返回值通过 `_sanitize_for_json` 包裹，确保 numpy 类型可被 FastAPI 序列化。
+- **说明**：齿轮诊断。返回值通过 `_sanitize_for_json` 包裹，确保 numpy 类型可被 FastAPI 序列化。阶次计算由 Engine 委托 `algorithms/order`；本路由不再导入旧阶次实现。快速变速工况会由 Engine 明确拒绝，而非以标量中位转频继续 TSA/行星解调。
 
 ### `GET /{device_id}/{batch_index}/{channel}/analyze`
 

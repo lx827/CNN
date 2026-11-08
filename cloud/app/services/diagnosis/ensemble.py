@@ -401,13 +401,10 @@ def run_research_ensemble(
         if best_time_features is None:
             best_time_features = time_features
 
-        rf = rot_freq
-        cached_oa = cached_os = None
-        if rf is None:
-            try:
-                rf, cached_oa, cached_os, _, _ = base._estimate_rot_freq(proc, fs)
-            except Exception:
-                rf = 0.0
+        order_analysis = base._analyze_order(
+            proc, fs, rot_freq=rot_freq, estimation_signal=arr,
+        )
+        rf, _ = base._order_speed_summary(order_analysis)
         rot_freq_by_denoise[denoise] = round(float(rf or 0.0), 3)
 
         for method in config["bearing"]:
@@ -422,7 +419,9 @@ def run_research_ensemble(
                     bearing_params=bearing_params,
                     gear_teeth=gear_teeth,
                 )
-                result = engine.analyze_bearing(proc, fs, rf, preprocess=False)
+                result = engine.analyze_bearing(
+                    proc, fs, rf, preprocess=False, _cached_order=order_analysis,
+                )
                 result["denoise"] = denoise
                 bearing_results[key] = result
                 vote = _bearing_confidence(result, time_features)
@@ -453,8 +452,7 @@ def run_research_ensemble(
                     fs,
                     rf,
                     preprocess=False,
-                    _cached_oa=cached_oa,
-                    _cached_os=cached_os,
+                    _cached_order=order_analysis,
                 )
                 result["denoise"] = denoise
                 gear_results[key] = result

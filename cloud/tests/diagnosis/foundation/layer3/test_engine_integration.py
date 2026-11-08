@@ -31,21 +31,31 @@ def test_engine_analyze_bearing():
     print("\n--- engine.analyze_bearing ---")
     results = []
 
+    np.random.seed(7)
     sig, _, _ = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=15)
     engine = DiagnosisEngine(bearing_params={"n": 9, "d": 7.94, "D": 38.52, "alpha": 0})
     res = engine.analyze_bearing(sig, FS)
 
     has_indicators = len(res.get("evaluation", {}).get("indicators", {})) > 0
     has_envelope = res.get("spectrum") is not None and len(res["spectrum"]["frequency_hz"]) > 0
-    passed = has_indicators and has_envelope
+    rot_freq = res.get("rot_freq_hz")
+    speed_ok = rot_freq is not None and abs(rot_freq - 25.0) < 1.0
+    bpfo = res.get("evaluation", {}).get("indicators", {}).get("BPFO", {})
+    theory_ok = abs(bpfo.get("theory_hz", 0.0) - 90.0) < 2.0
+    detected = bpfo.get("detected_hz")
+    detected_ok = detected is not None and abs(detected - 90.0) < 3.0
+    passed = has_indicators and has_envelope and speed_ok and theory_ok and detected_ok
     results.append({
         "test": "engine_bearing_dispatch",
         "method": res.get("method"),
         "has_indicators": has_indicators,
         "has_envelope": has_envelope,
+        "rot_freq_hz": rot_freq,
+        "bpfo_theory_hz": bpfo.get("theory_hz"),
+        "bpfo_detected_hz": detected,
         "passed": passed,
     })
-    print(f"  [{'PASS' if passed else 'FAIL'}] 轴承分发: method={res.get('method')}, indicators={has_indicators}, envelope={has_envelope}")
+    print(f"  [{'PASS' if passed else 'FAIL'}] 轴承分发: method={res.get('method')}, indicators={has_indicators}, envelope={has_envelope}, rot={rot_freq}, BPFO={detected}")
 
     return results
 
@@ -156,7 +166,8 @@ def main():
         print(f"WARNING: {s['failed']} 个测试失败")
     else:
         print("全部通过!")
+    return s["failed"]
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -160,13 +160,9 @@ engine = DiagnosisEngine(
 
 ---
 
-## 9. 阶次跟踪（order_tracking.py）
+## 9. 阶次跟踪（algorithms/order）
 
-> ⚠️ **此模块已冻结，禁止修改。**
-
-- `_compute_order_spectrum()`：单帧阶次跟踪（恒定转速）
-- `_compute_order_spectrum_multi_frame()`：多帧平均（转速缓变）
-- `_compute_order_spectrum_varying_speed()`：变速跟踪（STFT + 等相位重采样）
+唯一数学实现位于 `app/algorithms/order/`：恒速、缓变逐帧谱平均和快速变速连续相位 Pipeline。`order_tracking.py` 只保留旧 tuple 兼容适配，不再包含算法，也不再把角域采样点轴与 FFT 阶次轴混用。
 
 ---
 

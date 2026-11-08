@@ -18,7 +18,7 @@ def sinusoidal(freq=25.0, duration=3.0, fs=FS):
 
 
 def bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=20):
-    """模拟外圈故障轴承信号 — ground_truth: BPFO=90Hz, 转频=25Hz"""
+    """外圈故障冲击 + 1×轴频振动；ground_truth: BPFO、rot_freq。"""
     t = np.arange(0, duration, 1/fs)
     T_impact = 1.0 / bpfo
     impulse_train = np.zeros_like(t)
@@ -33,6 +33,11 @@ def bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=20)
     wd = wn * np.sqrt(1 - zeta**2)
     ir = np.exp(-zeta * wn * np.arange(0, 0.01, 1/fs)) * np.sin(wd * np.arange(0, 0.01, 1/fs))
     sig = np.convolve(impulse_train, ir, mode='same')
+
+    # 旧生成器声明了 rot_freq 却从未使用，只有 90Hz 故障冲击，无法为转频
+    # 估计提供 25Hz 物理证据。加入相对较弱的 1×轴频振动，使故障调制频率
+    # 与轴转频成为两个可独立验证的成分，而不是要求算法按 BPFO 比例猜转速。
+    sig += 0.05 * np.std(sig) * np.sin(2 * np.pi * rot_freq * t)
 
     sig_power = np.var(sig)
     noise_power = sig_power / (10 ** (snr_db / 10))

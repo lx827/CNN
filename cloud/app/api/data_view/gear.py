@@ -6,10 +6,6 @@ from datetime import datetime, timezone
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod, DiagnosisStrategy
 from app.services.diagnosis.features import has_bearing_params as _service_has_bearing, has_gear_params as _service_has_gear
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
-from app.services.diagnosis.order_tracking import (
-    _compute_order_spectrum_multi_frame,
-    _compute_order_spectrum_varying_speed,
-)
 from . import router, prepare_signal, _get_channel_name, _extract_device_param, _sanitize_for_json
 import logging
 import numpy as np

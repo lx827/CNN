@@ -92,11 +92,11 @@ def test_estimate_rot_freq():
     })
     print(f"  [{'PASS' if rf_ok and method_ok else 'FAIL'}] 恒速转频: rf={rf:.2f}Hz, method={method}")
 
-    # 极短信号应回退
+    # 极短无变化信号必须明确不可判定，不得回退到固定 10 Hz。
     rf2, _, _, method2, _ = engine._estimate_rot_freq(np.ones(50), FS)
-    fallback_ok = method2 == "fallback" or rf2 == 10.0
-    results.append({"test": "estimate_rot_freq_short", "method": method2, "passed": fallback_ok})
-    print(f"  [{'PASS' if fallback_ok else 'FAIL'}] 短信号回退: method={method2}")
+    indeterminate_ok = method2 == "indeterminate" and rf2 is None
+    results.append({"test": "estimate_rot_freq_short", "method": method2, "passed": indeterminate_ok})
+    print(f"  [{'PASS' if indeterminate_ok else 'FAIL'}] 短信号不可判定: method={method2}")
 
     return results
 

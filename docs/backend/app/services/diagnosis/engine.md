@@ -86,14 +86,17 @@ def preprocess(self, signal: np.ndarray) -> np.ndarray
 - **返回值**：`np.ndarray`
 - **说明**：去直流 + 按 `denoise_method` 路由到各去噪函数
 
-#### `_estimate_rot_freq`
+#### `_analyze_order` 与 `_estimate_rot_freq`
 
 ```python
-def _estimate_rot_freq(self, signal: np.ndarray, fs: float) -> Tuple[float, oa, os_, method, std]
+def _analyze_order(self, signal, fs, rot_freq=None, estimation_signal=None) -> OrderAnalysis
+def _estimate_rot_freq(self, signal, fs) -> Tuple[Optional[float], oa, os_, method, std]
 ```
 
-- **返回值**：`(rot_freq, order_axis, order_spectrum, tracking_method_str, rot_std)`
-- **说明**：多帧估计转频，自动切换 single_frame/multi_frame/varying_speed
+- `_analyze_order` 是统一入口：已知转频走 `ConstantSpeedOrderPipeline`，未知走 `AutomaticOrderPipeline`。
+- `estimation_signal` 使用未做故障增强的去趋势信号；重采样信号可以是显式去噪结果。
+- `_estimate_rot_freq` 仅为旧调用方保留 tuple 摘要；不可判定返回 `(None, [], [], "indeterminate", 0)`，不再默认 10 Hz。
+- `_order_speed_summary` 分别为标量、局部序列和连续轨迹生成摘要，不代表下游已经支持对应补偿。
 
 #### `analyze_bearing`
 
@@ -105,6 +108,7 @@ def analyze_bearing(
     rot_freq: Optional[float] = None,
     preprocess: bool = True,
     max_freq: float = 1000.0,
+    _cached_order: Optional[OrderAnalysis] = None,
 ) -> Dict[str, Any]
 ```
 
@@ -114,6 +118,7 @@ def analyze_bearing(
 - `features`：包含 `spectral_power_proxy`（幅值平方和）和 `spectral_power_unit`，不是时域物理能量。
 - `evaluation`：`{status, indicators}`；`indeterminate` 表示缺必要输入，单项 `not_evaluable` 表示超带宽、共享 bin 或不可分辨，均不表示健康。
 - **说明**：标准 `envelope` 直接调用 `BearingEnvelopePipeline`；其他方法共享同一指标分析与评估实现。不同 `max_freq` 只改变展示，不改变诊断。
+- **快速变速边界**：轴承包络和物理故障频率评估尚未消费连续相位。无论直接自动分析，还是调用方先把轨迹摘要成标量 `rot_freq` 并传入 `_cached_order`，只要结构化结果为有效 `varying_speed` 都明确抛错；ensemble 中对应方法记录错误，不得按恒速继续评估。fast 估计不可判定不属于成功轨迹，仍按未知转频处理。
 - **配置适配**：`bearing_geometry_from_config(values)` 将设备字典转换为 `BearingGeometry`；只有 `None/{}` 表示未配置，缺必需字段或畸形配置显式报错。
 
 #### `analyze_gear`
@@ -127,11 +132,13 @@ def analyze_gear(
     preprocess: bool = True,
     _cached_oa: Optional[np.ndarray] = None,
     _cached_os: Optional[np.ndarray] = None,
+    _cached_order: Optional[OrderAnalysis] = None,
 ) -> Dict[str, Any]
 ```
 
 - **返回值**：`{method, strategy, rot_freq_hz, mesh_freq_hz, mesh_order, ser, sidebands, fm0, fm4, car, m6a, m8a, fault_indicators, planetary_*}`
 - **说明**：齿轮诊断入口。行星箱 Level 2a~2d 默认，Level 3~5 需 `_run_slow_methods=True`
+- **工况边界**：齿轮指标、TSA 和行星解调仍只接受恒速/缓变标量转频；`_cached_order.tracking_method == "varying_speed"` 时明确抛错，不能把连续轨迹中位数当成已补偿恒速输入。已知转频直接走恒速 Pipeline，不再围绕该值重新估计。
 
 #### `analyze_comprehensive`
 
