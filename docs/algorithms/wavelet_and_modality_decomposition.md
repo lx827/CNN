@@ -1017,7 +1017,7 @@ $$\text{Confidence}(F) = \frac{\text{Vote}(F)}{\sum_{F'} \text{Vote}(F')}$$
 | 小波包降噪 | `diagnosis/wavelet_packet.py::wavelet_packet_denoise` | ✅ 已实现 | 能量阈值节点筛选 |
 | Savitzky-Golay平滑 | `diagnosis/savgol_denoise.py::sg_denoise` | ✅ 已实现 | 与wavelet互补，O(N)复杂度 |
 | VMD+ICA盲源分离 | `diagnosis/bss.py::vmd_ica_separation` | ✅ 已实现 | 单通道扩展为多通道，峭度最大选故障分量 |
-| 轴承包络谱分析 | `diagnosis/bearing.py::envelope_analysis` | ✅ 已实现 | 带通+Hilbert+低通+包络谱，BPFO/BPFI/BSF匹配 |
+| 轴承包络谱分析 | `algorithms/bearing/envelope.py::compute_envelope`；`algorithms/bearing/analysis.py`；`algorithms/pipelines/bearing/` | ✅ 已迁移 | 带通+Hilbert+低通+单边幅值谱；指标与阈值评估分离，BPFO/BPFI/BSF匹配 |
 | 轴承快速Kurtogram | `diagnosis/bearing.py::fast_kurtogram` | ✅ 已实现 | 多尺度STFT近似Antoni滤波器组 |
 | 轴承CPW分析 | `diagnosis/preprocessing.py::cepstrum_pre_whitening` | ✅ 已实现 | 倒频谱编辑+包络分析 |
 | 轴承MED分析 | `diagnosis/preprocessing.py::med_filter` | ✅ 已实现 | 最小熵解卷积+包络 |

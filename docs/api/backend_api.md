@@ -494,7 +494,15 @@ GET /api/data/{device_id}/{batch_index}/{channel}/envelope?max_freq={max_freq}&d
 | `method` | `str` | `"envelope"` | 包络方法 |
 | `denoise` | `str` | `"none"` | 去噪方法 |
 
-**注意**：该端点为 `async def`
+**注意**：该端点为 `async def`。`max_freq` 只截断展示频谱，不改变完整分析范围或诊断结果。
+
+**响应 data（新契约）**：
+
+- `spectrum`：`{frequency_hz, amplitude, amplitude_unit, scaling}`；标准包络为 `single_sided_amplitude`。
+- `band`：`{low_hz, high_hz, center_hz, width_hz}`，为实际滤波频带。
+- `features`：`spectral_power_proxy`（幅值平方和）、`spectral_power_unit`、故障频率及谐波能量比。
+- `evaluation`：`{status, indicators}`；单项 `not_evaluable` 带 `reason`、`significant=None`，不表示未检出或健康。
+- 另含 `method/strategy/rot_freq_hz/envelope_low_pass_hz` 和方法元数据；不再返回 `envelope_freq`、`envelope_amp` 或顶层 `fault_indicators`。
 
 #### 6.3.2 阶次跟踪
 

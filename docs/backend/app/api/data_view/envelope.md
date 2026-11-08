@@ -24,13 +24,18 @@ async def get_channel_envelope(
 - **async**：✅
 - **参数 method 可选值**：`envelope` | `kurtogram` | `cpw` | `med` | `teager` | `spectral_kurtosis` | `sc_scoh` | `mckd` | `wp` | `dwt` | `emd_envelope` | `ceemdan_envelope` | `vmd_envelope`
 - **参数 denoise 可选值**：`none` | `wavelet` | `vmd` | `wavelet_vmd` | `wavelet_lms` | `emd` | `ceemdan` | `savgol` | `wavelet_packet` | `ceemdan_wp` | `eemd`
-- **参数 max_freq**：包络谱返回的最大频率（Hz），默认 `1000`。当前端点接收此参数，实际计算由诊断引擎内部默认 `1000.0` 处理。
-- **响应 data**：`{device_id, batch_index, channel, channel_name, sample_rate, is_special, method, envelope_freq, envelope_amp, optimal_fc, optimal_bw, max_kurtosis, comb_frequencies, med_filter_len, kurtosis_before, kurtosis_after, teager_rms, reweighted_score, spectral_kurtosis_bands, features, fault_indicators}`
+- **参数 max_freq**：展示包络谱的最大频率（Hz），默认 `1000`；仅截断响应中的 `spectrum`，完整有效频谱的指标与诊断不变。
+- **响应 data**：设备/批次标识及 `{method, strategy, rot_freq_hz, spectrum, band, envelope_low_pass_hz, features, evaluation, ...方法元数据}`。
+  - `spectrum`：`{frequency_hz, amplitude, amplitude_unit, scaling}`；标准包络为单边幅值谱。
+  - `band`：`{low_hz, high_hz, center_hz, width_hz}`，表示实际滤波频带。
+  - `features`：`spectral_power_proxy`（幅值平方和）、`spectral_power_unit` 和故障频率/谐波能量比。
+  - `evaluation`：`{status, indicators}`；单项 `not_evaluable` 带 `reason` 和 `significant=None`，不表示未检出或健康。
+  - 不再返回 `envelope_freq`、`envelope_amp` 或顶层 `fault_indicators`。
 - **错误码**：
   - `404`：数据不存在
-  - `400`：信号长度不足（少于 64 采样点）
-  - `500`：计算过程异常（已增强底层鲁棒性，极端场景下仍可能返回）
-- **说明**：包络谱分析（13 种轴承方法）。信号会先被截断到最多 5 秒长度，再进行计算。返回值通过 `_sanitize_for_json` 将 numpy 类型转换为 Python 原生类型，确保 FastAPI 可序列化。
+  - `400`：信号长度不足或算法参数无效
+  - `500`：其他计算过程异常
+- **说明**：包络谱分析（13 种轴承方法）。信号会先被截断到最多 5 秒长度，再进行计算。返回值通过 `_sanitize_for_json` 转换为 Python 原生类型。
 
 ## 内部辅助函数
 

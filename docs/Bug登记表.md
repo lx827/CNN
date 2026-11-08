@@ -1,6 +1,6 @@
 # Bug 记录
 
-> 最后更新: 2026-11-06 | 详见 AGENTS.md §14
+> 最后更新: 2026-11-08 | 详见 AGENTS.md §14
 
 ## 未修复 (3)
 
@@ -10,7 +10,7 @@
 | 13d | `ensemble.py` | **WTG 五分类断齿检出 0%** — gear_abnormal 标签映射缺失 |
 | 25 | `Settings.vue`(现 `components/settings/MechanicalParamsCard.vue`) | **设置页首渲染即崩、整页空白** — `form.gear_teeth` 初始为 {},模板无守卫直接访问 `form.gear_teeth[String(i)].input`;挂载中止致 onMounted 不执行、无法自愈(396cf64 引入)。T5 拆分按视觉零变化要求保留该行为 |
 
-## 已修复 (29)
+## 已修复 (32)
 
 | # | 文件 | 描述 |
 |---|------|------|
@@ -32,6 +32,9 @@
 | 25 | `dc24/replay.py`（已退役） | **启动器退出后遗留 Vite 子进程** — 持有 cmd/npm 包装进程且忽略终止失败，无法可靠确认 Node 已退出；改为直接持有 Vite 的 Node 进程，终止失败时回退并等待退出 |
 | 26 | `dc24/replay.py`（已退役） | **快速启动重复打开两个页面** — Vite 的 `open:true` 与启动器的 `webbrowser.open` 同时执行；仅对子进程设置 `BROWSER=none`，统一由启动器打开一次 |
 | 27 | `dc24/dc24_vendor_bridge.ps1` | **厂商 DLL 连接在首个采样帧后自动停止**。边端经 DLL 套接字发送 B7 前先同步该设备在 DLL 中的采集状态。实机重测及网页网卡抓包确认连续收样与正常停止。见 [DC24 工作记录](DC24_ACQUISITION_WORKLOG.md)。 |
+| 28 | `algorithms/bearing/`, `engine.py`, `data_view/envelope.py` | **标准包络谱未归一化、频带元数据失真、max_freq 未生效、转频失败默认 10Hz** — 新 Pipeline 返回实际频带和单边幅值谱；非法输入显式报错，缺转频返回 `indeterminate`，HTTP 与集成测试覆盖 |
+| 29 | `algorithms/bearing/analysis.py`, `evaluation.py` | **展示截断改变诊断、粗分辨率共享谱峰、BPFI 边带补救被覆盖、低频能量误判转频谐波、边带分母错误** — 分析/展示分离；唯一局部峰和 `not_evaluable`；载波/边带/最终证据分离；转频整数倍窄带判定；独立数学回归覆盖 |
+| 30 | `algorithms/bearing/analysis.py`, `evaluation.py`, `ensemble.py`, `health_score_continuous.py` | **最近 bin 漏掉偏移真峰、边带只计检出峰放大密度、带后缀低频键被消费者忽略** — 改为容差内局部峰全局唯一分配；理论可观测目标与实际峰分离；健康评分与 ensemble 统一读取 `low_freq_ratio_stat`，真实提取测试验证 |
 
 **Bug #26 验证（2026-10-24）**：`tests/edge/test_browser_open.py`（已随旧回放链退役）使用真实 Vite、临时端口和浏览器脚本探针，在修复前确认 Vite 额外打开，修复后探针不再触发且启动器只打开一次；复用已有前端同样只打开一次。父进程浏览器环境保持原值，不修改前端代理或 `open:true` 配置，不访问云端、不上传数据。
 

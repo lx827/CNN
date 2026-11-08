@@ -104,11 +104,17 @@ def analyze_bearing(
     fs: float,
     rot_freq: Optional[float] = None,
     preprocess: bool = True,
+    max_freq: float = 1000.0,
 ) -> Dict[str, Any]
 ```
 
-- **返回值**：`{method, strategy, rot_freq_hz, envelope_freq, envelope_amp, features, fault_indicators}`
-- **说明**：轴承诊断入口
+- **返回值**：`{method, strategy, rot_freq_hz, spectrum, band, envelope_low_pass_hz, features, evaluation, ...方法元数据}`
+- `spectrum`：`{frequency_hz, amplitude, amplitude_unit, scaling}`；标准包络使用 `single_sided_amplitude`。该字段在评估完成后才按 `max_freq` 截断，仅用于展示。
+- `band`：`{low_hz, high_hz, center_hz, width_hz}`，表示实际滤波频带。
+- `features`：包含 `spectral_power_proxy`（幅值平方和）和 `spectral_power_unit`，不是时域物理能量。
+- `evaluation`：`{status, indicators}`；`indeterminate` 表示缺必要输入，单项 `not_evaluable` 表示超带宽、共享 bin 或不可分辨，均不表示健康。
+- **说明**：标准 `envelope` 直接调用 `BearingEnvelopePipeline`；其他方法共享同一指标分析与评估实现。不同 `max_freq` 只改变展示，不改变诊断。
+- **配置适配**：`bearing_geometry_from_config(values)` 将设备字典转换为 `BearingGeometry`；只有 `None/{}` 表示未配置，缺必需字段或畸形配置显式报错。
 
 #### `analyze_gear`
 

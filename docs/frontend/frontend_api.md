@@ -118,7 +118,7 @@ const data = await getRealtimeVibrationData('WTG-001', true);
 | `getChannelData(deviceId, batchIndex, channel, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`detrend?: bool`<br>`denoise?: string` | 时域数据点数组 | `GET /api/data/{deviceId}/{batchIndex}/{channel}` | `DataView.vue` |
 | `getChannelFFT(deviceId, batchIndex, channel, max_freq, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`max_freq?: number`<br>`detrend?: bool`<br>`denoise?: string` | FFT 频谱数据 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/fft?...` | `DataView.vue` |
 | `getChannelSTFT(deviceId, batchIndex, channel, max_freq, nperseg, noverlap, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`max_freq?: number`<br>`nperseg?: number`<br>`noverlap?: number`<br>`detrend?: bool`<br>`denoise?: string` | STFT 时频图数据 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/stft?...` | `DataView.vue` |
-| `getChannelEnvelope(deviceId, batchIndex, channel, max_freq, method, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`max_freq?: number`<br>`method?: string`<br>`denoise?: string` | 包络谱数据 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/envelope?...` | `DataView.vue` |
+| `getChannelEnvelope(deviceId, batchIndex, channel, max_freq, detrend, method, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`max_freq?: number`<br>`detrend?: bool`<br>`method?: string`<br>`denoise?: string` | 结构化轴承包络分析结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/envelope?...` | `DataView.vue` |
 | `getChannelGear(deviceId, batchIndex, channel, method, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`method?: string`<br>`denoise?: string` | 齿轮诊断指标 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/gear?...` | `DataView.vue` |
 | `getChannelOrder(deviceId, batchIndex, channel, freq_min, freq_max, samples_per_rev, max_order, rot_freq, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`freq_min?: number`<br>`freq_max?: number`<br>`samples_per_rev?: number`<br>`max_order?: number`<br>`rot_freq?: number`<br>`detrend?: bool`<br>`denoise?: string` | 阶次谱数据 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/order?...` | `DataView.vue` |
 | `getChannelCepstrum(deviceId, batchIndex, channel, max_quefrency, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`max_quefrency?: number`<br>`detrend?: bool`<br>`denoise?: string` | 倒谱数据 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/cepstrum?...` | `DataView.vue` |
@@ -126,6 +126,8 @@ const data = await getRealtimeVibrationData('WTG-001', true);
 | `deleteBatch(deviceId, batchIndex)` | `deviceId: string`<br>`batchIndex: number` | 删除结果 | `DELETE /api/data/{deviceId}/{batchIndex}` | `DataView.vue`, `DeviceTable.vue` |
 | `deleteSpecialBatches(deviceId)` | `deviceId: string` | 删除结果 | `DELETE /api/data/{deviceId}/special` | `DataView.vue`, `DeviceTable.vue` |
 | `exportChannelCSV(deviceId, batchIndex, channel, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`detrend?: bool`<br>`denoise?: string` | 无（`window.open` 触发下载） | `GET /api/data/{deviceId}/{batchIndex}/{channel}/export` | `DataView.vue` |
+
+> **轴承包络响应契约（2026-11-08）**：上一节 `/envelope` 返回的 `data.spectrum` 为 `{frequency_hz, amplitude, amplitude_unit, scaling}`，图表横纵轴分别读取 `frequency_hz/amplitude`，幅值轴同时展示单位与缩放方式；`data.band` 为实际频带 `{low_hz, high_hz, center_hz, width_hz}`；`data.features` 为包络能量及故障频率能量比；`data.evaluation` 为 `{status, indicators}`。`status=indeterminate` 表示输入不足、不可判定，不能渲染成“正常”。SC/SCoh 的循环频率指标只从 `data.sc_scoh_indicators` 读取，此时可能 `spectrum=null`，页面展示专属指标而不创建空图表。前端不再读取 `envelope_freq`、`envelope_amp` 或轴承顶层 `fault_indicators`；齿轮及行星箱结果仍使用各自的 `fault_indicators`。
 
 ### 2.6 api/diagnosis.js — 诊断
 
@@ -683,7 +685,7 @@ import {
 | 属性 | 说明 |
 |------|------|
 | **文件路径** | `src/components/DiagnosisDetail.vue` |
-| **用途** | 诊断结果明细展示，包括阶次分析、转频、健康度、故障概率等 |
+| **用途** | 诊断结果明细展示，包括阶次分析、转频、健康度、故障概率、轴承包络评估与 SC/SCoh 专属指标 |
 
 **Props**
 
@@ -692,6 +694,8 @@ import {
 | `orderAnalysis` | `object \| null` | `null` | 阶次/包络/频谱分析明细对象 |
 | `rotFreq` | `number \| null` | `null` | 估计转频（Hz） |
 | `rotRpm` | `number \| null` | `null` | 估计转速（RPM） |
+
+**数据读取约定**：轴承评估行与特征频率分别读取 `bearing.evaluation.indicators` 的 `value/score/snr/significant` 和 `theory_hz/detected_hz`；只有真实峰值/背景比显示为 SNR，其他强度显示为 score。SC/SCoh 独立读取 `bearing.sc_scoh_indicators` 的 `theory_hz/scoh_peak/scoh_snr/significant/warning/critical`。齿轮仍读取 `gear.fault_indicators`，两套契约不得互相替换。
 
 **Emits**
 
@@ -796,9 +800,11 @@ import {
 | `useDashboard.js` | `Dashboard.vue` | `devices/selectedDevice` 等状态、`loadData()`(推送+轮询共享串行刷新)、`selectDevice()`、图表 ref(`gaugeChart/pieChart`)、状态映射工具 | `getStatusType/getStatusText/getHealthColor`(Dashboard 专属口径:critical 计故障、85/60 分档,勿与 utils/status.js 混用) |
 | `useMonitor.js` | `Monitor.vue` | `channels/params/sensors/collectDevices`、`requestCollect()`、`startPolling(taskId)`、`refreshLatestData()`(推送合并串行)、`onMonitorDeviceChange()`、图表 ref | — |
 | `useSettings.js` | `Settings.vue` | `form/channelNames/thresholds/thresholdEnabled`、三级加载、`onSaveEdgeConfig/onSaveMechanical/onSaveThresholds/onSyncMechanical`、`intervalValue/intervalUnit` 与 `computedSeconds` | `unitOptions`(采集间隔单位)、`thresholdItems`(阈值指标定义) |
-| `useResearchDiagnosis.js` | `ResearchDiagnosis.vue` | 三级选择器、`runAnalysis()`(single/all/ensemble)、`gotoDataView()`、投票行/D-S 融合行/全方法摘要行等派生 computed | `runModeOptions`、`fmt/percent/statusType/statusText` |
-| `useDataView.js` | `DataView.vue` | 设备批次表格数据与选择、时域自动加载、FFT/STFT/包络/阶次/倒谱/统计/齿轮 `computeX/clearX`、`computeFullAnalysis/computeStrategyAnalyze`、删除/重新诊断/导出、路由联动 | `bearingMethodLabel`、`statsGroups`、`statsDisplay`(预留) |
+| `useResearchDiagnosis.js` | `ResearchDiagnosis.vue` | 三级选择器、`runAnalysis()`(single/all/ensemble)、`gotoDataView()`、投票行/D-S 融合行/全方法摘要行等派生 computed；轴承行读取 `evaluation/sc_scoh_indicators`，齿轮行保留 `fault_indicators` | `runModeOptions`、`fmt/percent/statusType/statusText`、`evaluationStatusType/evaluationStatusText` |
+| `useDataView.js` | `DataView.vue` | 设备批次表格数据与选择、时域自动加载、FFT/STFT/结构化包络谱/阶次/倒谱/统计/齿轮 `computeX/clearX`、轴承与齿轮特征频率标注、综合/策略诊断、删除/重新诊断/导出、路由联动 | `bearingMethodLabel`、`statsGroups`、`statsDisplay`(预留) |
 
 **配套子组件目录**：`src/components/dashboard/`(SummaryCards、DeviceCardList)、`src/components/monitor/`(SensorStatusCard、RunParamsCard、CollectionProgress)、`src/components/settings/`(EdgeConfigCard、MechanicalParamsCard、ThresholdsCard、ConfigNotesCard)、`src/components/research/`(ResearchToolbar、SingleResultPanels、EnsembleResultPanels)、`src/components/dataview/`(StatsSection、FftEnvelopeSection、GearSection、ComprehensiveSection、OrderSection、CepstrumSection、StftSection、DiagnosisDetailSection)。
 
-**回归测试约定**：`tests/dashboard_lifecycle.test.cjs`、`tests/monitor_lifecycle.test.cjs` 在同一 VM 上下文装载 composable 源码并以空壳桩替换子组件标识符,断言语义与拆分前一致;修改 composable 时两套测试必须保持全绿。
+**轴承包络适配点**：`FftEnvelopeSection` 展示实际频带、评估状态与 SC/SCoh 命中数；`ComprehensiveSection` 的轴承汇总和详细指标读取新契约；`SingleResultPanels` 分组展示实际频带、`features`、包络评估指标和 SC/SCoh 专属指标；`EnsembleResultPanels` 与 `ResearchDiagnosis.vue` 对 `indeterminate` 显示“不可判定”，对 `not_evaluable` 显示“不可评估”，均不视为正常。投票强度读取 `strongest_score`。这些组件通过 `utils/bearingDiagnosis.js` 统一派生轴承条目，不改变齿轮/行星箱面板的数据路径。
+
+**回归测试约定**：`tests/dashboard_lifecycle.test.cjs`、`tests/monitor_lifecycle.test.cjs` 在同一 VM 上下文装载 composable 源码并以空壳桩替换子组件标识符,断言语义与拆分前一致;修改 composable 时两套测试必须保持全绿。`tests/bearing_contract.test.cjs` 直接验证结构化包络图 option、轴承/SC/齿轮标注与汇总，并通过 SFC 编译后的 `setup` 验证 `DiagnosisDetail` 和 `SingleResultPanels` 的派生数据；修改轴承响应读取逻辑后必须运行该测试及完整 `node --test tests/*.test.cjs`。

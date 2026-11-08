@@ -40,7 +40,7 @@ start_dc24.bat                 # 一键入口(等价:uv run python scripts/dc24_
 
 ## 4. 测试
 
-**P0 回归(合成信号,无需数据集)— 修改 `cloud/app/services/diagnosis/` 下任何文件后,三件全绿才算完成:**
+**P0 回归(合成信号,无需数据集)— 修改 `cloud/app/services/diagnosis/` 或 `cloud/app/algorithms/` 下任何文件后,三件全绿才算完成:**
 
 ```bash
 cd cloud
@@ -73,6 +73,11 @@ cloud/                      # 云端后端(uv workspace 成员)
 │   │                       # acquisition(DC24 任务/上传)+ acquisition_live(实时示波+WS)、
 │   │                       # ingest、dashboard、alarms、monitor、auth、collect、system
 │   ├── core/               # config / websocket / json_utils / memory_log / thresholds
+│   ├── algorithms/         # 独立纯数值算法库(无 FastAPI/ORM/数据库依赖)
+│   │   ├── core/           # 带单位的频谱、频带与谱峰数据类型
+│   │   ├── mechanics/      # 机械对象运动学模型与故障频率
+│   │   ├── bearing/        # 包络计算、指标/边带分析与阈值评估
+│   │   └── pipelines/      # 按诊断对象组合分析 Pipeline 与评估 Pipeline
 │   ├── services/
 │   │   ├── analyzer.py     # 后台分析入口(多通道综合,lifespan worker 调用)
 │   │   ├── acquisition_analysis.py / acquisition_live.py   # DC24 原始计数分析 / 示波内存窗口

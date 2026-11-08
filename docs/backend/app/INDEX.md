@@ -18,6 +18,19 @@ docs/backend/app/
 ├── models.md                ← SQLAlchemy 数据模型
 ├── schemas.md               ← Pydantic 数据模型
 │
+├── algorithms/              ← 独立纯数值算法库（无业务 I/O）
+│   ├── __init__.md
+│   ├── core/__init__.md     ← Spectrum / FrequencyBand / SpectralPeak
+│   ├── mechanics/__init__.md ← 轴承几何与故障频率
+│   ├── bearing/
+│   │   ├── __init__.md      ← 包络模块导航
+│   │   ├── analysis.md      ← 原始指标、唯一谱峰与边带分析
+│   │   ├── envelope.md      ← 标准包络计算
+│   │   └── evaluation.md    ← 包络指标评估
+│   └── pipelines/
+│       ├── __init__.md
+│       └── bearing/__init__.md ← 标准轴承包络 Pipeline
+│
 ├── api/                     ← API 路由层
 │   ├── __init__.md
 │   ├── acquisition.md       ← DC24 采集任务(领取/上传/分析/下载)
@@ -90,7 +103,6 @@ docs/backend/app/
         ├── savgol_denoise.md ← S-G 平滑
         ├── mckd.md          ← MCKD 解卷积
         ├── bearing_cyclostationary.md ← 轴承循环平稳分析
-        ├── bearing_sideband.md ← 轴承边带
         ├── bss.md           ← 盲源分离
         ├── lms_filter.md    ← LMS 自适应滤波
         ├── channel_consensus.md ← 通道共识
@@ -118,16 +130,17 @@ docs/backend/app/
 | 目录 | 文件数 |
 |------|--------|
 | `app/` 根目录 | 8 |
+| `app/algorithms/` | 9 |
 | `app/api/` | 10 |
 | `app/api/data_view/` | 10 |
 | `app/api/devices/` | 3 |
 | `app/core/` | 5 |
 | `app/services/` | 6 |
 | `app/services/alarms/` | 4 |
-| `app/services/diagnosis/` | 20 |
+| `app/services/diagnosis/` | 19 |
 | `app/services/diagnosis/gear/` | 5 |
 | `app/services/diagnosis/fusion/` | 2 |
-| **总计** | **73** |
+| **总计** | **81** |
 
 ---
 

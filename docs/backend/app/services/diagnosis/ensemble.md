@@ -43,7 +43,7 @@ ensemble.py 通过 `from .features import has_bearing_params, has_gear_params` �
 def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]
 ```
 
-- **返回值**：`{confidence, param_hits, stat_hits, strongest_snr, hits, abnormal}`
+- **返回值**：`{confidence, param_hits, stat_hits, strongest_score, hits, abnormal}`；真实峰/背景比使用 `snr`，其他统计强度使用 `score`。
 - **说明**：轴承投票置信度（impulse_context 门控：kurt>5 或 crest>10）
 
 ### `_gear_confidence`

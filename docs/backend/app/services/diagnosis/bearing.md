@@ -1,93 +1,18 @@
-# `bearing.py` — 轴承诊断算法
+# `bearing.py` — 轴承复合方法调度
 
-
-> **算法原理**: 详见 [小波与模态分解算法文档](../../../../algorithms/wavelet_and_modality_decomposition.md) 与 [系统算法总览](../../../../算法原理.md)。
+> 标准包络的算法实现已迁至 `cloud/app/algorithms/bearing/envelope.py`，对象化入口为 `cloud/app/algorithms/pipelines/bearing/`。
 **对应源码**：`cloud/app/services/diagnosis/bearing.py`
 
-## 函数
+本文件保留尚未独立迁移的选带和冲击增强方法。各方法通过内部 `_compute_envelope_result` 直接共享算法库的 `EnvelopeRepresentation`，不存在第二份包络数学实现，也不再提供旧 `envelope_analysis` 公共入口。
 
-### `envelope_analysis`
+## 方法
 
-```python
-def envelope_analysis(
-    signal: np.ndarray,
-    fs: float,
-    fc: Optional[float] = None,
-    bw: Optional[float] = None,
-    f_low_pass: float = 2000.0,
-    max_freq: float = 1000.0,
-) -> Dict
-```
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `fast_kurtogram` | `fast_kurtogram(signal, fs, max_level=6, f_low=100.0) -> dict` | 当前为 STFT 近似选带，随后计算包络表示 |
+| `cpw_envelope_analysis` | `cpw_envelope_analysis(signal, fs, comb_frequencies) -> dict` | CPW 后执行选带和包络计算 |
+| `med_envelope_analysis` | `med_envelope_analysis(signal, fs, med_filter_len=64) -> dict` | MED 后计算包络表示 |
+| `teager_envelope_analysis` | `teager_envelope_analysis(signal, fs) -> dict` | TEO 后执行选带和包络计算 |
+| `spectral_kurtosis_envelope_analysis` | `spectral_kurtosis_envelope_analysis(signal, fs, max_level=6, f_low=100.0) -> dict` | 自定义重加权选带和包络计算 |
 
-- **返回值**：`{envelope_freq, envelope_amp, band_center, band_width}`
-- **说明**：标准包络分析（带通→Hilbert→低通→FFT）
-
-### `fast_kurtogram`
-
-```python
-def fast_kurtogram(
-    signal: np.ndarray,
-    fs: float,
-    max_level: int = 6,
-    f_low: float = 100.0,
-) -> Dict
-```
-
-- **返回值**：`{envelope_freq, envelope_amp, optimal_fc, optimal_bw, max_kurtosis, kurtogram}`
-- **说明**：Fast Kurtogram + 最优频带包络
-
-### `cpw_envelope_analysis`
-
-```python
-def cpw_envelope_analysis(
-    signal: np.ndarray,
-    fs: float,
-    comb_frequencies: List[float],
-    max_freq: float = 1000.0,
-) -> Dict
-```
-
-- **返回值**：`{envelope_freq, envelope_amp, comb_frequencies, method}`
-- **说明**：CPW 预白化 + 包络
-
-### `med_envelope_analysis`
-
-```python
-def med_envelope_analysis(
-    signal: np.ndarray,
-    fs: float,
-    med_filter_len: int = 64,
-    max_freq: float = 1000.0,
-) -> Dict
-```
-
-- **返回值**：`{envelope_freq, envelope_amp, med_filter_len, kurtosis_before, kurtosis_after, method}`
-- **说明**：MED 增强 + 包络
-
-### `teager_envelope_analysis`
-
-```python
-def teager_envelope_analysis(
-    signal: np.ndarray,
-    fs: float,
-    max_freq: float = 1000.0,
-) -> Dict
-```
-
-- **返回值**：`{envelope_freq, envelope_amp, method, teager_rms}`
-- **说明**：TEO + Fast Kurtogram 包络
-
-### `spectral_kurtosis_envelope_analysis`
-
-```python
-def spectral_kurtosis_envelope_analysis(
-    signal: np.ndarray,
-    fs: float,
-    max_level: int = 6,
-    f_low: float = 100.0,
-    max_freq: float = 1000.0,
-) -> Dict
-```
-
-- **返回值**：`{envelope_freq, envelope_amp, method, optimal_fc, optimal_bw, reweighted_score, spectral_kurtosis_bands}`
-- **说明**：自适应谱峭度重加权包络
+返回字典包含 `representation: EnvelopeRepresentation` 及各方法元数据。`representation.spectrum` 是带单位的 `Spectrum`，`representation.band` 是实际滤波频带。后续 Engine 统一完成指标提取与评估。
