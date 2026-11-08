@@ -1,5 +1,7 @@
 # Tests — 回归测试与评估套件
 
+> 文档链接与函数签名镜像检查不能替代本页测试。算法模块文档只登记验证向量、测试入口和实际状态；每次修改 `cloud/app/services/diagnosis/` 或 `cloud/app/algorithms/` 后仍须运行相应正确性测试。
+>
 > 2026-11 布局重构(#45 地图 T3/#48)后,测试随被测物分立各端,顶层 `tests/` 已撤销:
 >
 > | 位置 | 内容 |
@@ -209,6 +211,8 @@ uv run python tests/diagnosis/regression/test_none_params.py && uv run python te
 | `test_order_pipeline.py` | 恒速已知阶次/近频峰、单边幅值、角域轴与 FFT 阶次轴、解析积分与全记录三角扫频、单帧快扫频双阶次、持续越界与近边界有效信号、零 MAD 离群与微变、窄带纯音、短/长边缘与内部越界、slow→fast 与失败不可判定、不同 fs 的 STFT 分辨率、轴承故障调制不冒充轴频、原始估计信号隔离 | 无 | `uv run python tests/diagnosis/algorithms/test_order_pipeline.py`(在 cloud 目录) |
 | `test_order_integration.py` | Engine/ensemble 快速变速轴承与齿轮边界；/order 恒速幅值/谱轴、批次记录持久化、通道缓存保护、无记录不伪造健康、快速变速成功及噪声 400 | 无（隔离 SQLite） | `uv run python tests/diagnosis/algorithms/test_order_integration.py`(在 cloud 目录) |
 | `test_bearing_envelope_api.py` | 包络 HTTP 新响应、max_freq 生效、隔离 SQLite 与认证替身 | 无 | `uv run python tests/diagnosis/algorithms/test_bearing_envelope_api.py`(在 cloud 目录) |
+| `cloud/tests/test_numeric_algorithms.py` | #76 FFT/STFT/倒谱、统计、通用包络与显示抽点的解析向量和边界 | 无 | `uv run python -m unittest tests.test_numeric_algorithms -v`(在 cloud 目录) |
+| `cloud/tests/test_numeric_routes.py` | #76 DataView/Monitor 数值归一化、响应字段与路由兼容 | 无（隔离测试环境） | `uv run python -m unittest tests.test_numeric_routes -v`(在 cloud 目录) |
 | `test_engine_regressions.py` | 诊断引擎核心回归(无参数/TSA/转频/健康区分) | HUSTbear/CW(可选) | `uv run python tests/diagnosis/algorithms/test_engine_regressions.py`(在 cloud 目录) |
 | `test_new_algorithms.py` | EMD/MCKD/小波包/SG 等新算法功能验证 | 无 | 同上 |
 | `test_emd_denoise.py` | EMD/CEEMDAN 降噪模块测试 | 无 | 同上 |
