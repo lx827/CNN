@@ -228,6 +228,7 @@ export function useResearchDiagnosis() {
         fm0: r.fm0 != null ? Number(r.fm0) : null,
         fm4: r.fm4 != null ? Number(r.fm4) : null,
         sideband_count: r.sidebands?.length ?? (r.sideband_count ?? 0),
+        indicators: fi,
         alerts,
       }
     })

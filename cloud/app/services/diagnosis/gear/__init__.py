@@ -1,39 +1,9 @@
-"""
-齿轮故障诊断算法模块
+"""齿轮服务层公共接口；定轴数学实现位于 app.algorithms.gear.fixed_axis。"""
+from typing import Dict
 
-包含：
-- FM0: 粗故障检测（齿断裂/严重磨损）
-- FM4: 局部故障检测（单/双齿点蚀/裂纹）
-- NA4: 趋势型故障检测（损伤扩展追踪）
-- NB4: 包络域局部齿损坏
-- M6A / M8A: 表面损伤高阶矩
-- ER: 能量比（多齿磨损）
-- SER: 边频带能量比（核心频域指标）
-- CAR: 倒频谱幅值比
-- MSB: 调制信号双谱残余边频带分析
-- 边频带分析
-"""
-import numpy as np
-from scipy import stats
-from scipy.fft import rfft, rfftfreq
-from typing import Dict, List, Optional, Tuple
-
-from ..signal_utils import prepare_signal, compute_fft_spectrum, _band_energy
-from .metrics import (
-    analyze_sidebands_order,
-    analyze_sidebands_zoom_fft,
-    compute_fm0_order,
-    compute_tsa_residual_order,
-    compute_car,
-    compute_fm4,
-    compute_na4,
-    compute_nb4,
-    compute_m6a,
-    compute_m8a,
-    compute_ser_order,
-)
 from .msb import msb_residual_sideband_analysis
 from .planetary_demod import (
+    analyze_planetary_sidebands_order,
     planetary_envelope_order_analysis,
     planetary_fullband_envelope_order_analysis,
     planetary_vmd_demod_analysis,
@@ -47,20 +17,8 @@ from .planetary_demod import (
 from .vmd_demod import vmd_fixed_axis_demod_analysis
 
 __all__ = [
-    "compute_fm0",
-    "compute_fm0_order",
-    "compute_tsa_residual_order",
-    "compute_fm4",
-    "compute_na4",
-    "compute_nb4",
-    "compute_ser",
-    "compute_ser_order",
-    "compute_car",
-    "compute_m6a",
-    "compute_m8a",
     "msb_residual_sideband_analysis",
-    "analyze_sidebands",
-    "analyze_sidebands_order",
+    "analyze_planetary_sidebands_order",
     "_evaluate_gear_faults",
     "planetary_envelope_order_analysis",
     "planetary_fullband_envelope_order_analysis",
@@ -75,353 +33,75 @@ __all__ = [
 ]
 
 
-def compute_fm0(
-    tsa_signal: np.ndarray,
-    mesh_freq: float,
-    fs: float,
-    n_harmonics: int = 3,
-) -> float:
-    """
-    FM0 — 粗故障检测（齿断裂/严重磨损）
-
-    FM0 = PP / sum(A(f_mesh_harmonics))
-    """
-    arr = np.array(tsa_signal, dtype=np.float64)
-    pp = np.max(arr) - np.min(arr)
-
-    xf, yf = compute_fft_spectrum(arr, fs)
-    yf = np.array(yf)
-
-    harmonics_sum = 0.0
-    for i in range(1, n_harmonics + 1):
-        harmonics_sum += _band_energy(xf, yf, mesh_freq * i, 5.0)
-
-    if harmonics_sum < 1e-12:
-        return 0.0
-    return float(pp / harmonics_sum)
-
-
-def compute_er(
-    differential_signal: np.ndarray,
-    tsa_signal: np.ndarray,
-    mesh_freq: float,
-    fs: float,
-    n_harmonics: int = 3,
-    n_sidebands: int = 3,
-) -> float:
-    """
-    ER — 能量比（多齿磨损）
-
-    ER = RMS[d(t)] / (啮合谐波能量 + 边带能量)
-    """
-    d = np.array(differential_signal, dtype=np.float64)
-    rms_d = np.sqrt(np.mean(d ** 2))
-
-    xf, yf = compute_fft_spectrum(np.array(tsa_signal), fs)
-    yf = np.array(yf)
-
-    # 啮合谐波能量
-    mesh_energy = 0.0
-    for i in range(1, n_harmonics + 1):
-        mesh_energy += _band_energy(xf, yf, mesh_freq * i, 5.0)
-
-    # 边带能量
-    sb_energy = 0.0
-    rot_freq = mesh_freq / 18  # 近似估算，实际应传入
-    for j in range(1, n_sidebands + 1):
-        sb_energy += _band_energy(xf, yf, mesh_freq - j * rot_freq, 2.0)
-        sb_energy += _band_energy(xf, yf, mesh_freq + j * rot_freq, 2.0)
-
-    denom = mesh_energy + sb_energy
-    if denom < 1e-12:
-        return 0.0
-    return float(rms_d / denom)
-
-
-def compute_ser(
-    signal: np.ndarray,
-    fs: float,
-    mesh_freq: float,
-    rot_freq: float,
-    n_sidebands: int = 6,
-    sideband_bw: float = 2.0,
-) -> float:
-    """
-    SER — 边频带能量比（核心频域指标）
-
-    SER = sum(A_SB_i^+ + A_SB_i^-) / A(f_mesh)
-
-    健康齿轮 SER < 1；故障齿轮 SER > 1 且随劣化单调上升。
-    """
-    arr = prepare_signal(signal)
-    xf, yf = compute_fft_spectrum(arr, fs)
-    yf = np.array(yf)
-
-    mesh_amp = _band_energy(xf, yf, mesh_freq, 5.0)
-    if mesh_amp < 1e-12:
-        return 0.0
-
-    total_sideband = 0.0
-    for i in range(1, n_sidebands + 1):
-        sb_low = mesh_freq - i * rot_freq
-        sb_high = mesh_freq + i * rot_freq
-        total_sideband += _band_energy(xf, yf, sb_low, sideband_bw)
-        total_sideband += _band_energy(xf, yf, sb_high, sideband_bw)
-
-    return float(total_sideband / mesh_amp)
-
-
-def analyze_sidebands(
-    signal: np.ndarray,
-    fs: float,
-    mesh_freq: float,
-    rot_freq: float,
-    n_sidebands: int = 6,
-) -> Dict:
-    """
-    边频带分析
-
-    返回边频带的幅值、显著性、对称性等信息。
-    """
-    arr = prepare_signal(signal)
-    xf, yf = compute_fft_spectrum(arr, fs)
-    yf = np.array(yf)
-
-    mesh_amp = _band_energy(xf, yf, mesh_freq, 5.0)
-    if mesh_amp < 1e-12:
-        return {"sidebands": [], "ser": 0.0}
-
-    sidebands = []
-    total_sb = 0.0
-
-    for i in range(1, n_sidebands + 1):
-        sb_low = mesh_freq - i * rot_freq
-        sb_high = mesh_freq + i * rot_freq
-
-        amp_low = _band_energy(xf, yf, sb_low, 2.0)
-        amp_high = _band_energy(xf, yf, sb_high, 2.0)
-
-        total_sb += amp_low + amp_high
-
-        # 显著性：边频幅值超过啮合频率的 5%
-        significant = (amp_low > mesh_amp * 0.05) or (amp_high > mesh_amp * 0.05)
-
-        sidebands.append({
-            "order": i,
-            "freq_low": round(sb_low, 2),
-            "freq_high": round(sb_high, 2),
-            "amp_low": round(amp_low, 6),
-            "amp_high": round(amp_high, 6),
-            "significant": significant,
-            "asymmetry": round(abs(amp_low - amp_high) / (amp_low + amp_high + 1e-12), 4),
-        })
-
-    return {
-        "sidebands": sidebands,
-        "ser": round(total_sb / mesh_amp, 4),
-        "mesh_amp": round(mesh_amp, 6),
-    }
-
-
 def _evaluate_gear_faults(gear_result: Dict) -> Dict:
-    """评估齿轮故障指示器
-
-    行星齿轮箱（planet_count≥3）的频域指标阈值与定轴齿轮箱不同：
-    - 行星架构天然产生大量边频带（多个行星轮同时啮合调制）
-    - SER 天然在 5~12 范围（定轴箱健康 < 1.5）
-    - CAR 在 10^1 量级（背景改用中位数后值域缩至 10~30）
-    - sideband_count 天然 = 6（定轴箱健康通常 ≤ 2）
-
-    阈值策略：使用多指标联合判断，提高故障检出率。
-    - SER > 7.5 → warning（覆盖磨损/断齿/裂纹）
-    - FM4 > 4.0 → warning（覆盖磨损）
-    - order_kurtosis > 30 → warning（覆盖缺齿/裂纹）
-    - peak_conc < 0.1 → warning（覆盖断齿）
-    """
+    """仅评估行星旧读模型；定轴阈值已迁移到 FixedAxisEvaluation。"""
     indicators = {}
-
-    # 行星齿轮箱判断：planet_count ≥ 3 → 行星架构
-    planet_count = gear_result.get("planet_count", 0)
-    is_planetary = planet_count >= 3
-
     ser = gear_result.get("ser") if gear_result.get("ser") is not None else 0.0
-    if is_planetary:
-        # 行星箱 SER 天然 5~12，健康/故障有重叠
-        # 健康 40Hz=7.6, 55Hz=6.7
-        # 故障：断齿 6.3~8.2, 缺齿 6.7~7.6, 裂纹 8.3~9.7, 磨损 9.6~10.0
-        # 阈值设为 8.5 可捕获磨损/裂纹，但会漏检断齿/缺齿
-        # 综合：warning > 8.0, critical > 10.0
-        indicators["ser"] = {
-            "value": round(ser, 4),
-            "warning": ser > 8.0,
-            "critical": ser > 10.0,
-        }
-    else:
-        # 定轴箱 SER < 1.5 为正常，> 3.0 为严重
-        indicators["ser"] = {
-            "value": round(ser, 4),
-            "warning": ser > 1.5,
-            "critical": ser > 3.0,
-        }
-
-    fm0 = gear_result.get("fm0")
-    if fm0 is not None:
-        indicators["fm0"] = {
-            "value": round(fm0, 4),
-            "warning": fm0 > 5,
-            "critical": fm0 > 10,
-        }
+    indicators["ser"] = {
+        "value": round(ser, 4),
+        "warning": ser > 8.0,
+        "critical": ser > 10.0,
+    }
 
     fm4 = gear_result.get("fm4")
     if fm4 is not None:
-        if is_planetary:
-            # 行星箱 FM4 健康 2.5~3.5，磨损 3.2~6.4，裂纹 2.4~7.5
-            # warning > 3.2 可捕获更多磨损样本，critical > 5.0 捕获严重故障
-            indicators["fm4"] = {
-                "value": round(fm4, 4),
-                "warning": fm4 > 3.2,
-                "critical": fm4 > 5.0,
-            }
-        else:
-            indicators["fm4"] = {
-                "value": round(fm4, 4),
-                "warning": fm4 > 5.0,
-                "critical": fm4 > 10.0,
-            }
-
+        indicators["fm4"] = {
+            "value": round(fm4, 4),
+            "warning": fm4 > 3.2,
+            "critical": fm4 > 5.0,
+        }
     car = gear_result.get("car")
     if car is not None:
-        if is_planetary:
-            # 行星箱 CAR ~10-30，健康/故障完全重叠，无区分力
-            # 仅记录数值，不设 warning/critical
-            indicators["car"] = {
-                "value": round(car, 4),
-                "warning": False,
-                "critical": False,
-            }
-        else:
-            # 定轴箱 CAR 正常 < 5，故障 > 10（修复背景估计后值域 ~10^1）
-            indicators["car"] = {
-                "value": round(car, 4),
-                "warning": car > 10.0,
-                "critical": car > 20.0,
-            }
+        # 行星 CAR 健康/故障重叠，只记录，不触发告警。
+        indicators["car"] = {"value": round(car, 4), "warning": False, "critical": False}
 
-    # 边频带统计
     sidebands = gear_result.get("sidebands", [])
     significant_count = sum(1 for sb in sidebands if sb.get("significant"))
-    if is_planetary:
-        # 行星箱天然 6 个边频带（4行星轮 × 调制），对故障无区分力
-        # 仅标记 ≥ 8 为 warning（实际不可能超过此值）
-        indicators["sideband_count"] = {
-            "value": significant_count,
-            "warning": significant_count >= 8,
-            "critical": significant_count >= 10,
-        }
-    else:
-        indicators["sideband_count"] = {
-            "value": significant_count,
-            "warning": significant_count >= 2,
-            "critical": significant_count >= 4,
-        }
+    indicators["sideband_count"] = {
+        "value": significant_count,
+        "warning": significant_count >= 8,
+        "critical": significant_count >= 10,
+    }
 
-    # 无齿轮参数时的阶次谱统计指示器
     order_peak_conc = gear_result.get("order_peak_concentration")
     if order_peak_conc is not None:
-        if is_planetary:
-            # 行星箱健康 peak_conc = 0.2~0.29
-            # 断齿样本 peak_conc 很低（0.05~0.14），缺齿 0.12~0.24
-            # warning > 0.3 标记异常高集中度（可能裂纹55Hz）
-            # warning < 0.1 标记异常低集中度（断齿）
-            indicators["order_peak_concentration"] = {
-                "value": round(order_peak_conc, 4),
-                "warning": order_peak_conc > 0.3 or order_peak_conc < 0.1,
-                "critical": order_peak_conc > 0.5 or order_peak_conc < 0.05,
-            }
-        else:
-            indicators["order_peak_concentration"] = {
-                "value": round(order_peak_conc, 4),
-                "warning": order_peak_conc > 0.5,
-                "critical": order_peak_conc > 0.7,
-            }
-
+        indicators["order_peak_concentration"] = {
+            "value": round(order_peak_conc, 4),
+            "warning": order_peak_conc > 0.3 or order_peak_conc < 0.1,
+            "critical": order_peak_conc > 0.5 or order_peak_conc < 0.05,
+        }
     order_kurt = gear_result.get("order_kurtosis")
     if order_kurt is not None:
-        if is_planetary:
-            # 行星箱 order_kurt 变化极大：
-            # 健康：12.5 (40Hz), 41.3 (55Hz)
-            # 断齿：-0.1 (40Hz), 3.8 (55Hz)
-            # 缺齿：37.2 (40Hz), 2.8 (55Hz)
-            # 裂纹：37.2 (40Hz), 54.5 (55Hz)
-            # 磨损：14.7 (40Hz), 9.1 (55Hz)
-            # 使用双阈值：
-            #   > 45 → 缺齿/裂纹（55Hz）或 裂纹（40Hz）
-            #   < 5  → 断齿（两种转速）
-            indicators["order_kurtosis"] = {
-                "value": round(order_kurt, 2),
-                "warning": order_kurt > 45.0 or order_kurt < 5.0,
-                "critical": order_kurt > 55.0 or order_kurt < 0.0,
-            }
-        else:
-            indicators["order_kurtosis"] = {
-                "value": round(order_kurt, 2),
-                "warning": order_kurt > 5.0,
-                "critical": order_kurt > 8.0,
-            }
+        indicators["order_kurtosis"] = {
+            "value": round(order_kurt, 2),
+            "warning": order_kurt > 45.0 or order_kurt < 5.0,
+            "critical": order_kurt > 55.0 or order_kurt < 0.0,
+        }
 
-    # 行星齿轮箱全频带包络峭度（crack 核心区分指标）
-    # 健康 fullband_env_kurt = 6.8~20.1，crack = 1.8~4.2，0 误报
     fullband = gear_result.get("planetary_fullband_demod")
     if isinstance(fullband, dict) and "error" not in fullband:
-        fek = fullband.get("envelope_kurtosis", 0.0)
+        fek = fullband.get("envelope_kurtosis")
         if fek is not None:
-            if is_planetary:
-                indicators["planetary_fullband_env_kurt"] = {
-                    "value": round(float(fek), 4),
-                    "warning": float(fek) < 5.0,
-                    "critical": float(fek) < 3.0,
-                }
-            else:
-                indicators["planetary_fullband_env_kurt"] = {
-                    "value": round(float(fek), 4),
-                    "warning": float(fek) < 3.0,
-                    "critical": float(fek) < 2.0,
-                }
+            indicators["planetary_fullband_env_kurt"] = {
+                "value": round(float(fek), 4),
+                "warning": float(fek) < 5.0,
+                "critical": float(fek) < 3.0,
+            }
 
-    # 小波包能量熵（齿轮频带能量重分布指标）
     wp_entropy = gear_result.get("wavelet_packet_entropy")
     if isinstance(wp_entropy, dict):
-        norm_entropy = wp_entropy.get("normalized_entropy", 0.0)
-        mesh_conc = wp_entropy.get("mesh_band_concentration", 0.0)
+        norm_entropy = wp_entropy.get("normalized_entropy")
+        mesh_conc = wp_entropy.get("mesh_band_concentration")
         if norm_entropy is not None:
-            if is_planetary:
-                # 行星箱能量熵天然偏低（啮合频率能量集中），阈值放宽
-                indicators["wavelet_packet_entropy"] = {
-                    "value": round(norm_entropy, 4),
-                    "warning": norm_entropy > 0.85,
-                    "critical": norm_entropy > 0.92,
-                }
-            else:
-                # 定轴箱：正常频带能量分布较均匀(normalized_entropy≈0.7~0.85)
-                # 故障时啮合频带能量集中→normalized_entropy降低，或某频带异常集中→升高
-                indicators["wavelet_packet_entropy"] = {
-                    "value": round(norm_entropy, 4),
-                    "warning": norm_entropy > 0.9,
-                    "critical": norm_entropy > 0.95,
-                }
-        # 啮合频带能量集中度（mesh_band_concentration）
+            indicators["wavelet_packet_entropy"] = {
+                "value": round(norm_entropy, 4),
+                "warning": norm_entropy > 0.85,
+                "critical": norm_entropy > 0.92,
+            }
         if mesh_conc is not None:
-            if is_planetary:
-                indicators["mesh_band_concentration"] = {
-                    "value": round(mesh_conc, 6),
-                    "warning": mesh_conc > 0.6,
-                    "critical": mesh_conc > 0.75,
-                }
-            else:
-                indicators["mesh_band_concentration"] = {
-                    "value": round(mesh_conc, 6),
-                    "warning": mesh_conc > 0.4,
-                    "critical": mesh_conc > 0.6,
-                }
-
+            indicators["mesh_band_concentration"] = {
+                "value": round(mesh_conc, 6),
+                "warning": mesh_conc > 0.6,
+                "critical": mesh_conc > 0.75,
+            }
     return indicators
