@@ -10,7 +10,6 @@ from typing import Dict, List, Optional, Any, Mapping
 from .signal_utils import (
     prepare_signal, linear_detrend,
     compute_fft_spectrum,
-    estimate_rot_freq_spectrum as _estimate_rot_freq_simple,
     highpass_filter,
 )
 from app.algorithms.core import Spectrum
@@ -18,11 +17,16 @@ from app.algorithms.mechanics import BearingGeometry
 from app.algorithms.bearing.analysis import analyze_envelope_spectrum
 from app.algorithms.bearing.evaluation import evaluate_envelope
 from app.algorithms.pipelines.bearing import BearingEnvelopePipeline
-from .order_tracking import (
-    _compute_order_spectrum_multi_frame,
-    _compute_order_spectrum_varying_speed,
-    _compute_order_spectrum,
-    _order_tracking,
+from app.algorithms.order import (
+    AutomaticOrderPipeline,
+    ConstantSpeedOrderPipeline,
+    LocalSpeedEstimates,
+    OrderAnalysis,
+    OrderParameters,
+    ScalarSpeed,
+    SpeedSearchRange,
+    SpeedTrajectory,
+    resample_constant_speed,
 )
 from .bearing import (
     fast_kurtogram,
@@ -207,30 +211,54 @@ class DiagnosisEngine:
             return result
         return arr
 
-    def _estimate_rot_freq(self, signal: np.ndarray, fs: float):
-        """
-        使用与阶次追踪（/order 端点）相同的算法估计转频。
-        返回 (rot_freq, order_axis, order_spectrum, tracking_method_str, rot_std)，供 gear 诊断复用。
-        """
-        try:
-            oa, os_, rf, rsd = _compute_order_spectrum_multi_frame(
-                signal, fs, samples_per_rev=1024, max_order=50
+    @staticmethod
+    def _order_speed_summary(analysis: OrderAnalysis) -> tuple[Optional[float], float]:
+        """只为旧标量调用方摘要速度，不把局部序列或轨迹伪装成恒速输入。"""
+        if analysis.status != "valid":
+            return None, 0.0
+        if isinstance(analysis.speed, ScalarSpeed):
+            return float(analysis.speed.frequency_hz), 0.0
+        if isinstance(analysis.speed, LocalSpeedEstimates):
+            return analysis.speed.median_hz, analysis.speed.std_hz
+        if isinstance(analysis.speed, SpeedTrajectory):
+            return (
+                float(np.median(analysis.speed.frequency_hz)),
+                float(np.std(analysis.speed.frequency_hz)),
             )
-            method = "multi_frame"
-            if rf > 0 and (rsd / rf) > 0.10:
-                oa, os_, rf, rsd = _compute_order_spectrum_varying_speed(
-                    signal, fs, samples_per_rev=1024, max_order=50
-                )
-                method = "varying_speed"
-            return float(rf), oa, os_, method, float(rsd)
-        except Exception:
-            try:
-                rf = float(_estimate_rot_freq_simple(signal, fs))
-                oa, os_ = _compute_order_spectrum(signal, fs, rf, samples_per_rev=1024)
-                return rf, oa, os_, "single_frame", 0.0
-            except Exception:
-                # 信号过短等极端情况无法估计转频
-                return 10.0, np.array([]), np.array([]), "fallback", 0.0
+        raise TypeError("未知转速表示")
+
+    def _analyze_order(
+        self,
+        signal: np.ndarray,
+        fs: float,
+        rot_freq: Optional[float] = None,
+        estimation_signal: Optional[np.ndarray] = None,
+    ) -> OrderAnalysis:
+        """转速/阶次统一入口；估计信号与故障增强信号显式分离。"""
+        parameters = OrderParameters(samples_per_revolution=1024, max_order=50)
+        if rot_freq is not None:
+            if not np.isfinite(rot_freq) or rot_freq <= 0:
+                raise ValueError("已知转频必须是有限正数；未知转频请传 None")
+            return ConstantSpeedOrderPipeline(parameters).run(
+                signal, fs, ScalarSpeed(float(rot_freq), "caller_supplied"),
+            )
+        return AutomaticOrderPipeline(parameters=parameters).run(
+            signal, fs, estimation_signal=estimation_signal,
+        )
+
+    def _estimate_rot_freq(self, signal: np.ndarray, fs: float):
+        """旧 tuple 适配；不可判定返回 None，不再回退到 10 Hz。"""
+        analysis = self._analyze_order(signal, fs)
+        rot_freq, rot_std = self._order_speed_summary(analysis)
+        if analysis.status != "valid" or analysis.spectrum is None:
+            return None, np.array([]), np.array([]), "indeterminate", 0.0
+        return (
+            rot_freq,
+            analysis.spectrum.order_bins,
+            analysis.spectrum.amplitude,
+            analysis.tracking_method,
+            rot_std,
+        )
 
     def analyze_bearing(
         self,
@@ -239,6 +267,7 @@ class DiagnosisEngine:
         rot_freq: Optional[float] = None,
         preprocess: bool = True,
         max_freq: float = 1000.0,
+        _cached_order: Optional[OrderAnalysis] = None,
     ) -> Dict[str, Any]:
         """
         轴承诊断分析
@@ -247,13 +276,27 @@ class DiagnosisEngine:
         """
         arr = self.preprocess(signal) if preprocess else np.array(signal, dtype=np.float64)
 
+        # 轴承包络与物理故障频率评估尚未消费连续相位；即使调用方已把轨迹摘要成
+        # 标量 rot_freq，也必须以结构化缓存为准拒绝快速变速，不能绕过此前提。
+        if (
+            _cached_order is not None
+            and _cached_order.status == "valid"
+            and _cached_order.tracking_method == "varying_speed"
+        ):
+            raise ValueError("快速变速轴承物理频率评估尚未迁移连续相位接口，请先使用 /order")
+
         rot_std = 0.0
         if rot_freq is None:
-            rot_freq, _, _, tracking_method, rot_std = self._estimate_rot_freq(arr, fs)
-            # 标准包络不再把估计失败静默替换为固定 10 Hz。
-            if tracking_method == "fallback" and self.bearing_method == BearingMethod.ENVELOPE:
-                rot_freq = None
-                rot_std = 0.0
+            # 转速估计使用未做故障增强的线性去趋势信号；阶次/诊断仍可使用显式去噪结果。
+            if _cached_order is None:
+                raw_for_speed = prepare_signal(np.asarray(signal, dtype=np.float64), detrend=True)
+                analysis = self._analyze_order(arr, fs, estimation_signal=raw_for_speed)
+            else:
+                analysis = _cached_order
+            if analysis.status == "valid" and analysis.tracking_method == "varying_speed":
+                raise ValueError("快速变速轴承物理频率评估尚未迁移连续相位接口，请先使用 /order")
+            rot_freq, rot_std = self._order_speed_summary(analysis)
+            # 包络本身不是快速变速补偿算法；std 仅用于故障频率搜索容差。
 
         # 变速工况：转速变异 > 10% 时对信号线性去趋势
         if rot_freq is not None and rot_freq > 0 and rot_std / rot_freq > 0.10:
@@ -295,10 +338,13 @@ class DiagnosisEngine:
                 result = med_envelope_analysis(arr, fs)
             elif self.bearing_method == BearingMethod.TEAGER:
                 if rot_freq and rot_freq > 0:
-                    samples_per_rev = 256
-                    arr_order, _ = _order_tracking(arr, fs, rot_freq, samples_per_rev=samples_per_rev)
-                    arr_order = arr_order - arr_order.mean()
-                    result = teager_envelope_analysis(arr_order, samples_per_rev * rot_freq)
+                    angle_domain, _ = resample_constant_speed(
+                        arr, fs, ScalarSpeed(float(rot_freq), "caller_supplied"),
+                        samples_per_revolution=256,
+                    )
+                    result = teager_envelope_analysis(
+                        angle_domain.samples - angle_domain.samples.mean(), 256 * rot_freq,
+                    )
                 else:
                     result = teager_envelope_analysis(arr, fs)
             elif self.bearing_method == BearingMethod.SPECTRAL_KURTOSIS:
@@ -398,6 +444,7 @@ class DiagnosisEngine:
         preprocess: bool = True,
         _cached_oa: Optional[np.ndarray] = None,
         _cached_os: Optional[np.ndarray] = None,
+        _cached_order: Optional[OrderAnalysis] = None,
     ) -> Dict[str, Any]:
         """
         齿轮诊断分析
@@ -417,37 +464,33 @@ class DiagnosisEngine:
         """
         arr = self.preprocess(signal) if preprocess else np.array(signal, dtype=np.float64)
 
-        order_axis = _cached_oa
-        order_spectrum = _cached_os
         rot_freq_used = rot_freq
         rot_std = 0.0
-
-        # 若已有缓存的阶次谱（来自 _estimate_rot_freq 的多帧计算结果），直接复用
-        if order_axis is not None and order_spectrum is not None:
-            pass  # 复用缓存
-        elif rot_freq_used is not None and rot_freq_used > 0:
-            # 有已知转频，用窄范围多帧平均（与 /order 端点行为一致）
-            freq_min = max(1.0, rot_freq_used * 0.7)
-            freq_max = rot_freq_used * 1.3
-            try:
-                order_axis, order_spectrum, rot_freq_used, rot_std = _compute_order_spectrum_multi_frame(
-                    arr, fs, freq_range=(freq_min, freq_max), samples_per_rev=1024, max_order=50
-                )
-            except Exception:
-                order_axis, order_spectrum = _compute_order_spectrum(arr, fs, rot_freq_used, samples_per_rev=1024)
+        if _cached_order is not None:
+            analysis = _cached_order
+        elif _cached_oa is None or _cached_os is None:
+            raw_for_speed = prepare_signal(np.asarray(signal, dtype=np.float64), detrend=True)
+            analysis = self._analyze_order(
+                arr, fs, rot_freq=rot_freq, estimation_signal=raw_for_speed,
+            )
         else:
-            # 无已知转频，多帧平均同时估计转频+计算阶次谱
-            try:
-                order_axis, order_spectrum, rot_freq_used, rot_std = _compute_order_spectrum_multi_frame(
-                    arr, fs, samples_per_rev=1024, max_order=50
-                )
-                if rot_freq_used > 0 and (rot_std / rot_freq_used) > 0.10:
-                    order_axis, order_spectrum, rot_freq_used, rot_std = _compute_order_spectrum_varying_speed(
-                        arr, fs, samples_per_rev=1024, max_order=50
-                    )
-            except Exception:
-                rot_freq_used = _estimate_rot_freq_simple(arr, fs)
-                order_axis, order_spectrum = _compute_order_spectrum(arr, fs, rot_freq_used, samples_per_rev=1024)
+            # 旧数组缓存只允许由恒速/缓变标量调用方提供，不能表达快速变速补偿。
+            if rot_freq is None or not np.isfinite(rot_freq) or rot_freq <= 0:
+                raise ValueError("旧阶次数组缓存必须同时提供有效标量转频")
+            analysis = None
+            order_axis = _cached_oa
+            order_spectrum = _cached_os
+
+        if analysis is not None:
+            if analysis.status != "valid" or analysis.spectrum is None:
+                raise ValueError(analysis.reason or "转频与阶次谱不可判定")
+            if analysis.tracking_method == "varying_speed":
+                raise ValueError("快速变速阶次谱已由 /order 支持；齿轮/TSA/行星解调仍要求恒速或缓变标量转频")
+            order_axis = analysis.spectrum.order_bins
+            order_spectrum = analysis.spectrum.amplitude
+            rot_freq_used, rot_std = self._order_speed_summary(analysis)
+        if rot_freq_used is None:
+            raise ValueError("齿轮诊断需要有效标量转频")
 
         rot_freq = float(rot_freq_used)
 
@@ -478,7 +521,7 @@ class DiagnosisEngine:
         result = {
             "method": self.gear_method.value,
             "strategy": self.strategy.value,
-            "rot_freq_hz": round(rot_freq, 3),
+            "rot_freq_hz": round(rot_freq, 3) if rot_freq is not None else None,
             "mesh_freq_hz": round(mesh_freq, 2) if mesh_freq else None,
             "mesh_order": round(mesh_order, 4) if mesh_order else None,
             "rot_freq_estimated_hz": round(rot_freq, 3),
@@ -689,27 +732,22 @@ class DiagnosisEngine:
         """
         arr = self.preprocess(signal)
 
-        if rot_freq is None and not skip_gear:
-            rot_freq, cached_oa, cached_os, _, rot_std = self._estimate_rot_freq(arr, fs)
-        elif rot_freq is None:
-            # 无齿轮分析且无转频 → 用简化估计
-            try:
-                rot_freq, _, _, _, rot_std = self._estimate_rot_freq(arr, fs)
-            except Exception:
-                rot_freq = 20.0
-                rot_std = 0.0
-            cached_oa = cached_os = None
-        else:
-            cached_oa = cached_os = None
+        cached_order: Optional[OrderAnalysis] = None
+        if rot_freq is None:
+            raw_for_speed = prepare_signal(np.asarray(signal, dtype=np.float64), detrend=True)
+            cached_order = self._analyze_order(arr, fs, estimation_signal=raw_for_speed)
+            rot_freq, rot_std = self._order_speed_summary(cached_order)
 
         time_features = compute_time_features(arr)
 
         # 轴承分析
-        bearing_result = self.analyze_bearing(arr, fs, rot_freq, preprocess=False) if not skip_bearing else {}
+        bearing_result = self.analyze_bearing(
+            arr, fs, rot_freq, preprocess=False, _cached_order=cached_order,
+        ) if not skip_bearing else {}
 
         # 齿轮分析
         gear_result = self.analyze_gear(arr, fs, rot_freq, preprocess=False,
-                                        _cached_oa=cached_oa, _cached_os=cached_os) if not skip_gear else {}
+                                        _cached_order=cached_order) if not skip_gear else {}
 
         health_score, status, _ = _compute_health_score(
             self.gear_teeth,
@@ -772,8 +810,11 @@ class DiagnosisEngine:
         if self.denoise_method != DenoiseMethod.NONE:
             arr = self.preprocess(arr)
 
+        order_analysis: Optional[OrderAnalysis] = None
         if rot_freq is None:
-            rot_freq, _, _, _, _ = self._estimate_rot_freq(arr, fs)
+            raw_for_speed = prepare_signal(np.asarray(signal, dtype=np.float64), detrend=True)
+            order_analysis = self._analyze_order(arr, fs, estimation_signal=raw_for_speed)
+            rot_freq, _ = self._order_speed_summary(order_analysis)
 
         original_bearing = self.bearing_method
         original_gear = self.gear_method
@@ -783,7 +824,9 @@ class DiagnosisEngine:
             for method in BearingMethod:
                 self.bearing_method = method
                 try:
-                    bearing_results[method.value] = self.analyze_bearing(arr, fs, rot_freq)
+                    bearing_results[method.value] = self.analyze_bearing(
+                        arr, fs, rot_freq, _cached_order=order_analysis,
+                    )
                 except Exception as e:
                     bearing_results[method.value] = {"error": str(e)}
 
@@ -794,7 +837,9 @@ class DiagnosisEngine:
             for method in GearMethod:
                 self.gear_method = method
                 try:
-                    gear_results[method.value] = self.analyze_gear(arr, fs, rot_freq)
+                    gear_results[method.value] = self.analyze_gear(
+                        arr, fs, rot_freq, _cached_order=order_analysis,
+                    )
                 except Exception as e:
                     gear_results[method.value] = {"error": str(e)}
             self._run_slow_methods = False
@@ -851,7 +896,7 @@ class DiagnosisEngine:
         return {
             "health_score": health_score,
             "status": status,
-            "rot_freq_hz": round(rot_freq, 3),
+            "rot_freq_hz": round(rot_freq, 3) if rot_freq is not None else None,
             "time_features": time_features,
             "bearing_results": bearing_results,
             "gear_results": gear_results,

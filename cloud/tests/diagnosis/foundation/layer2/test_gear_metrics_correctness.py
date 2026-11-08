@@ -22,7 +22,7 @@ from app.services.diagnosis.gear.metrics import (
     compute_ser_order, compute_fm0_order,
 )
 from app.services.diagnosis.signal_utils import compute_fft_spectrum
-from app.services.diagnosis.order_tracking import _compute_order_spectrum
+from app.algorithms.order import AngleDomainSignal, compute_order_spectrum
 from tests.diagnosis.data_paths import WTGEARBOX_DIR
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
     NumpyEncoder, gear_mesh, sinusoidal,
@@ -234,39 +234,38 @@ def test_ser(tsa_res):
 # 5. compute_fm0_order — 粗故障检测
 # ═══════════════════════════════════════════════════════════
 
-def test_fm0(tsa_res):
-    """FM0：基于 TSA 信号和阶次谱计算"""
+def test_fm0():
+    """用整数周期角域信号和手工 FM0 公式验证新单边幅值契约的消费者。"""
     print("\n--- compute_fm0_order ---")
-    results = []
+    samples_per_rev = 64
+    revolutions = 8
+    sample_count = samples_per_rev * revolutions
+    angle = np.arange(sample_count, dtype=np.float64) / samples_per_rev
+    # 啮合阶次 4 的前三次谐波幅值分别为 1.0/0.5/0.25；3 阶分量不得计入。
+    signal = (
+        1.0 * np.sin(2 * np.pi * 4 * angle)
+        + 0.5 * np.cos(2 * np.pi * 8 * angle)
+        + 0.25 * np.sin(2 * np.pi * 12 * angle)
+        + 0.2 * np.sin(2 * np.pi * 3 * angle)
+    )
+    angle_domain = AngleDomainSignal(angle, signal, samples_per_rev)
+    spectrum = compute_order_spectrum(angle_domain, max_order=20)
+    fm0_val = compute_fm0_order(
+        signal, spectrum.order_bins, spectrum.amplitude, mesh_order=4.0, n_harmonics=3,
+    )
 
-    if tsa_res is None or not tsa_res.get("valid"):
-        results.append({"test": "fm0_skipped", "reason": "tsa_failed", "passed": False})
-        print("  [SKIP] TSA 失败，跳过 FM0")
-        return results
-
-    tsa_signal = tsa_res.get("tsa_signal", np.array([]))
-    if len(tsa_signal) < 512:
-        results.append({"test": "fm0_skipped", "reason": "signal_too_short", "passed": False})
-        print("  [SKIP] 信号太短")
-        return results
-
-    rot_freq = 25.0
-    xf, yf = compute_fft_spectrum(tsa_signal, FS)
-    order_axis = xf / rot_freq
-    spectrum = yf
-
-    mesh_order = 18.0
-    fm0_val = compute_fm0_order(tsa_signal, order_axis, spectrum, mesh_order, n_harmonics=3)
-
-    # FM0 = PP / harmonics_sum，健康齿轮 FM0 应在合理范围（不极端大）
-    fm0_ok = 0.1 < fm0_val < 50.0
-    results.append({
-        "test": "fm0_healthy_gear",
-        "fm0": round(fm0_val, 4),
-        "passed": fm0_ok,
-    })
-    print(f"  [{'PASS' if fm0_ok else 'FAIL'}] FM0(健康): {fm0_val:.3f}")
-
+    peak_to_peak = float(np.max(signal) - np.min(signal))
+    expected = peak_to_peak / (1.0 + 0.5 + 0.25)
+    fm0_ok = np.isclose(fm0_val, expected, rtol=0.0, atol=1e-10)
+    results = [{
+        "test": "fm0_single_sided_amplitude_formula",
+        "fm0": float(fm0_val),
+        "expected": float(expected),
+        "peak_to_peak": peak_to_peak,
+        "harmonics_amplitude_sum": 1.75,
+        "passed": bool(fm0_ok),
+    }]
+    print(f"  [{'PASS' if fm0_ok else 'FAIL'}] FM0公式: 实测={fm0_val:.12f}, 手工期望={expected:.12f}")
     return results
 
 
@@ -393,7 +392,7 @@ def main():
         "fm4": test_fm4(tsa_res),
         "car": test_car(),
         "ser": test_ser(tsa_res),
-        "fm0": test_fm0(tsa_res),
+        "fm0": test_fm0(),
         "real_data_wtgearbox": test_real_data_wtgearbox(),
     }
 
@@ -426,7 +425,8 @@ def main():
         print(f"WARNING: {s['failed']} 个测试失败")
     else:
         print("全部通过!")
+    return s["failed"]
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

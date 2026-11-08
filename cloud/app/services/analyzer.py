@@ -20,10 +20,6 @@ from app.services.diagnosis.signal_utils import (
     estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum,
     _order_band_energy,
 )
-from app.services.diagnosis.order_tracking import (
-    _compute_order_spectrum_multi_frame,
-    _compute_order_spectrum_varying_speed,
-)
 from app.services.diagnosis.rule_based import _rule_based_analyze
 from app.services.diagnosis.features import _get_channel_params, has_bearing_params, has_gear_params
 from app.services.diagnosis.channel_consensus import cross_channel_consensus

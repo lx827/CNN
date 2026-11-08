@@ -11,7 +11,12 @@ from .features import (
     _get_channel_params, _compute_bearing_fault_freqs, _compute_bearing_fault_orders,
 )
 from .signal_utils import prepare_signal, _band_energy, _order_band_energy
-from .order_tracking import _compute_order_spectrum_multi_frame, _compute_order_spectrum_varying_speed
+from app.algorithms.order import (
+    AutomaticOrderPipeline,
+    LocalSpeedEstimates,
+    OrderParameters,
+    SpeedTrajectory,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,31 +69,6 @@ def _feature_severity(value: float, metric: str, rot_freq: float = 0.0) -> float
     return max(0.0, min(1.0, (abs(value) - baseline) / (critical - baseline)))
 
 
-def _compute_order_spectrum_simple(sig: np.ndarray, fs: float, rot_freq: float,
-                                     samples_per_rev: int = 1024, max_order: int = 50):
-    """简化阶次跟踪（单帧），用于诊断内部计算"""
-    duration = len(sig) / fs
-    num_revs = duration * rot_freq
-    n_points = int(num_revs * samples_per_rev)
-    if n_points < 10:
-        return np.array([0.0]), np.array([0.0])
-
-    times = np.arange(len(sig)) / fs
-    target_times = np.linspace(0, duration, n_points, endpoint=False)
-    sig_order = np.interp(target_times, times, sig, left=sig[0], right=sig[-1])
-    sig_order = sig_order - sig_order.mean()
-
-    N = len(sig_order)
-    window = np.hanning(N)
-    sig_windowed = sig_order * window
-    amplitude_scale = np.sqrt(N / np.sum(window ** 2))
-    spectrum = np.abs(rfft(sig_windowed))[:N // 2] * amplitude_scale
-    orders = np.arange(len(spectrum)) / num_revs
-
-    mask = orders <= max_order
-    return orders[mask], spectrum[mask]
-
-
 def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int = 25600, device=None):
     """
     多特征综合规则诊断算法（回退方案）
@@ -126,14 +106,24 @@ def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int 
     first_channel = list(channels_data.values())[0]
     first_arr = np.array(first_channel, dtype=np.float64)
 
-    # 3b. 估计转频（与阶次追踪 /order 端点完全一致）
-    order_axis, spectrum, rot_freq, rot_std = _compute_order_spectrum_multi_frame(
-        first_arr, sample_rate, samples_per_rev=1024, max_order=50
-    )
-    if rot_freq > 0 and (rot_std / rot_freq) > 0.10:
-        order_axis, spectrum, rot_freq, rot_std = _compute_order_spectrum_varying_speed(
-            first_arr, sample_rate, samples_per_rev=1024, max_order=50
-        )
+    # 3b. 与 /order 共用唯一 Pipeline；失败不伪造默认转频。
+    order_analysis = AutomaticOrderPipeline(
+        parameters=OrderParameters(samples_per_revolution=1024, max_order=50),
+    ).run(first_arr, sample_rate)
+    if order_analysis.status != "valid" or order_analysis.spectrum is None:
+        raise ValueError(order_analysis.reason or "规则诊断的转频/阶次分析不可判定")
+    order_axis = order_analysis.spectrum.order_bins
+    spectrum = order_analysis.spectrum.amplitude
+    if isinstance(order_analysis.speed, LocalSpeedEstimates):
+        rot_freq = order_analysis.speed.median_hz
+        rot_std = order_analysis.speed.std_hz
+    elif isinstance(order_analysis.speed, SpeedTrajectory):
+        # 仅阶次特征使用连续相位补偿结果；其他标量特征明确使用中位数摘要。
+        rot_freq = float(np.median(order_analysis.speed.frequency_hz))
+        rot_std = float(np.std(order_analysis.speed.frequency_hz))
+    else:
+        rot_freq = float(order_analysis.speed.frequency_hz)
+        rot_std = 0.0
 
     # 4. 时域特征严重度
     sev = {

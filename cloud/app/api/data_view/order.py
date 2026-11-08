@@ -1,14 +1,18 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
-from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
-from app.services.diagnosis.order_tracking import (
-    _compute_order_spectrum,
-    _compute_order_spectrum_multi_frame,
-    _compute_order_spectrum_varying_speed,
-    _order_tracking,
+from app.algorithms.order import (
+    AutomaticOrderPipeline,
+    ConstantSpeedOrderPipeline,
+    LocalSpeedEstimates,
+    OrderParameters,
+    ScalarSpeed,
+    SpeedSearchRange,
+    SpeedTrajectory,
 )
 from . import router, prepare_signal, _get_channel_name
 from app.services.diagnosis.signal_utils import denoise_signal
@@ -33,29 +37,11 @@ async def get_channel_order(
     denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     db: Session = Depends(get_db)
 ):
-    """
-    实时计算阶次谱（Order Tracking / 阶次跟踪）
-    改进：采用短时多帧平均，自适应处理缓慢转速变化；支持直接传入转频。
+    """实时计算阶次谱：恒速等角采样、缓变逐帧谱平均或快速变速连续相位跟踪。
 
-    流程：
-      1. 若传入 rot_freq，直接用它做阶次跟踪（跳过估计）
-      2. 否则将信号分帧（默认 1 秒/帧，50% 重叠）
-      3. 每帧估计转频（频谱法 + 包络解调辅助），并用 MAD 剔除异常帧
-      4. 各帧独立阶次跟踪后，插值到公共阶次轴并平均
-      5. 返回平均阶次谱 + 转速变化信息
-
-    参数：
-      freq_min/freq_max: 转频搜索范围，默认 10~100 Hz
-      samples_per_rev:   每转采样点数，默认 1024
-      max_order:         返回的最大阶次，默认 50
-      rot_freq:          直接指定转频(Hz)，传入则跳过自动估计
-
-    返回：
-      rot_freq:      中位数转频 (Hz)
-      rot_rpm:       中位数转速 (RPM)
-      rot_freq_std:  转频标准差 (Hz)，反映转速波动程度
-      orders:        阶次轴
-      spectrum:      阶次谱幅值
+    响应字段保持兼容；orders 为 FFT bin 阶次轴，spectrum 为单边峰值幅值。
+    自动估计使用未去噪信号，显式 denoise 只影响重采样输入。快速变速无可靠
+    脊线时返回 400，不回退固定转频或缓变正常谱。
     """
     record = db.query(SensorData).filter(
         SensorData.device_id == device_id,
@@ -67,86 +53,76 @@ async def get_channel_order(
         raise HTTPException(status_code=404, detail="数据不存在")
 
     try:
-        sig = prepare_signal(record.data, detrend=detrend)
+        raw_sig = prepare_signal(record.data, detrend=detrend)
         # VMD 等去噪可能耗时较长，不能直接占用事件循环。
-        sig = await asyncio.to_thread(denoise_signal, sig, denoise)
+        sig = await asyncio.to_thread(denoise_signal, raw_sig, denoise)
         sample_rate = record.sample_rate or 25600
 
         # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）
         max_samples = sample_rate * 5
         if len(sig) > max_samples:
             sig = sig[:max_samples]
+            raw_sig = raw_sig[:max_samples]
 
         # 参数校验
         if freq_min >= freq_max:
             raise ValueError("freq_min 必须小于 freq_max")
 
+        parameters = OrderParameters(
+            samples_per_revolution=samples_per_rev, max_order=float(max_order),
+        )
         if rot_freq is not None:
-            # 直接指定转频，做单帧阶次跟踪
-            order_axis, spectrum = await asyncio.to_thread(
-                _compute_order_spectrum, sig, sample_rate, rot_freq, samples_per_rev
+            analysis = await asyncio.to_thread(
+                ConstantSpeedOrderPipeline(parameters).run,
+                sig, sample_rate, ScalarSpeed(float(rot_freq), "query_parameter"),
             )
-            mask = order_axis <= max_order
-            order_axis = order_axis[mask]
-            spectrum = spectrum[mask]
-            rot_freq_val = float(rot_freq)
-            rot_freq_std = 0.0
-            tracking_method = "single_frame"
         else:
-            # 先用多帧法估计转速及变化程度
-            order_axis, spectrum, rot_freq_val, rot_freq_std = await asyncio.to_thread(
-                _compute_order_spectrum_multi_frame,
-                sig, sample_rate,
-                freq_range=(freq_min, freq_max),
-                samples_per_rev=samples_per_rev,
-                max_order=max_order,
-                frame_duration=1.0,
-                overlap=0.5,
+            analysis = await asyncio.to_thread(
+                AutomaticOrderPipeline(
+                    parameters=parameters,
+                    search=SpeedSearchRange(freq_min, freq_max),
+                ).run,
+                sig, sample_rate, raw_sig,
             )
-            tracking_method = "multi_frame"
-
-            # 若转速变化剧烈（变异系数 > 10%），启用变速阶次跟踪
-            if rot_freq_val > 0 and (rot_freq_std / rot_freq_val) > 0.10:
-                order_axis, spectrum, rot_freq_val, rot_freq_std = await asyncio.to_thread(
-                    _compute_order_spectrum_varying_speed,
-                    sig, sample_rate,
-                    freq_range=(freq_min, freq_max),
-                    samples_per_rev=samples_per_rev,
-                    max_order=max_order,
-                )
-                tracking_method = "varying_speed"
+        if analysis.status != "valid" or analysis.spectrum is None:
+            raise ValueError(analysis.reason or "转频/相位不可判定，未生成正常阶次谱")
+        order_axis = analysis.spectrum.order_bins
+        spectrum = analysis.spectrum.amplitude
+        tracking_method = analysis.tracking_method
+        if isinstance(analysis.speed, ScalarSpeed):
+            rot_freq_val = float(analysis.speed.frequency_hz)
+            rot_freq_std = 0.0
+        elif isinstance(analysis.speed, LocalSpeedEstimates):
+            rot_freq_val = analysis.speed.median_hz
+            rot_freq_std = analysis.speed.std_hz
+        elif isinstance(analysis.speed, SpeedTrajectory):
+            rot_freq_val = float(np.median(analysis.speed.frequency_hz))
+            rot_freq_std = float(np.std(analysis.speed.frequency_hz))
+        else:
+            raise TypeError("未知转速表示")
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
 
-        # 自动将阶次追踪得到的转频写入诊断表，作为后续诊断的权威转频
+        # 仅更新明确的批次级记录；不创建“正常”诊断，也不触碰通道/去噪缓存。
         try:
+            batch_record_scope = or_(
+                and_(Diagnosis.channel == 0, Diagnosis.denoise_method == "none"),
+                and_(Diagnosis.channel.is_(None), Diagnosis.denoise_method.is_(None)),
+            )
             diag = db.query(Diagnosis).filter(
                 Diagnosis.device_id == device_id,
                 Diagnosis.batch_index == batch_index,
-            ).first()
-            if diag:
+                batch_record_scope,
+            ).order_by(Diagnosis.analyzed_at.desc(), Diagnosis.id.desc()).first()
+            if diag is not None:
                 existing_order = diag.order_analysis or {}
                 existing_order["rot_freq_hz"] = round(rot_freq_val, 3)
                 existing_order["rot_rpm"] = round(rot_freq_val * 60.0, 1)
                 diag.order_analysis = existing_order
+                flag_modified(diag, "order_analysis")
                 diag.rot_freq = round(rot_freq_val, 3)
                 diag.analyzed_at = datetime.now(timezone.utc)
-            else:
-                db.add(Diagnosis(
-                    device_id=device_id,
-                    batch_index=batch_index,
-                    health_score=100,
-                    fault_probabilities={"正常运行": 1.0},
-                    imf_energy={},
-                    order_analysis={
-                        "rot_freq_hz": round(rot_freq_val, 3),
-                        "rot_rpm": round(rot_freq_val * 60.0, 1),
-                    },
-                    rot_freq=round(rot_freq_val, 3),
-                    status="normal",
-                    analyzed_at=datetime.now(timezone.utc),
-                ))
-            db.commit()
+                db.commit()
         except Exception as db_err:
             logger.warning(f"阶次追踪转频写入数据库失败: {db_err}")
             db.rollback()
@@ -165,8 +141,8 @@ async def get_channel_order(
                 "rot_freq_std": round(rot_freq_std, 3),
                 "tracking_method": tracking_method,
                 "samples_per_rev": samples_per_rev,
-                "orders": [round(float(o), 3) for o in order_axis.tolist()],
-                "spectrum": [round(float(a), 4) for a in spectrum.tolist()],
+                "orders": [round(float(o), 6) for o in order_axis.tolist()],
+                "spectrum": [round(float(a), 6) for a in spectrum.tolist()],
             }
         }
     except ValueError as e:
