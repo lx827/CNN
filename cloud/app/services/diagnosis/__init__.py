@@ -11,7 +11,6 @@
 """
 from .engine import DiagnosisEngine, DiagnosisStrategy, BearingMethod, GearMethod, DenoiseMethod
 from .bearing import (
-    envelope_analysis,
     fast_kurtogram,
     cpw_envelope_analysis,
     med_envelope_analysis,
@@ -35,7 +34,6 @@ from .preprocessing import (
 from .features import (
     compute_time_features,
     compute_fft_features,
-    compute_envelope_features,
 )
 from .ensemble import run_research_ensemble
 from .fusion import (
@@ -54,7 +52,6 @@ from .trend_prediction import (
 __all__ = [
     "DiagnosisEngine",
     "DiagnosisStrategy",
-    "envelope_analysis",
     "fast_kurtogram",
     "cpw_envelope_analysis",
     "med_envelope_analysis",
@@ -72,7 +69,6 @@ __all__ = [
     "minimum_entropy_deconvolution",
     "compute_time_features",
     "compute_fft_features",
-    "compute_envelope_features",
     "run_research_ensemble",
     # D-S 证据融合
     "dempster_shafer_fusion",

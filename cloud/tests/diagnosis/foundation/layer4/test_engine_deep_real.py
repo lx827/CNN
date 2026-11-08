@@ -3,7 +3,7 @@ Layer 4 中央调度器 — 深层功能 + 真实数据验证
 
 测试:
   preprocess（全部去噪方法分支）+ _estimate_rot_freq（级联回退）
-  _evaluate_bearing_faults / _evaluate_bearing_faults_statistical
+  analyze_envelope_spectrum / evaluate_envelope
   analyze_research_ensemble
 
 输出: layer4/output/engine_deep_real.json
@@ -14,10 +14,11 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
-from app.services.diagnosis.engine import (
-    DiagnosisEngine, DenoiseMethod, _evaluate_bearing_faults_statistical,
-    _evaluate_bearing_faults,
-)
+from app.services.diagnosis.engine import DiagnosisEngine, DenoiseMethod
+from app.algorithms.bearing.envelope import compute_envelope
+from app.algorithms.bearing.analysis import analyze_envelope_spectrum
+from app.algorithms.bearing.evaluation import evaluate_envelope
+from app.algorithms.mechanics import BearingGeometry
 from tests.diagnosis.foundation.layer1.synthetic_signals import NumpyEncoder
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -236,23 +237,21 @@ def test_evaluate_bearing():
     # _evaluate_bearing_faults_statistical(freq_arr, amp_arr, rot_freq)
     sig = load_npy(HUSTBEAR_DIR, "O_20Hz-X.npy")
     if sig is not None:
-        from app.services.diagnosis.bearing import envelope_analysis
         try:
-            env_res = envelope_analysis(sig, FS)
-            ef = env_res.get("envelope_freq", [])
-            ea = env_res.get("envelope_amp", [])
-            if len(ef) > 0:
-                stat_ev = _evaluate_bearing_faults_statistical(
-                    np.array(ef), np.array(ea), rot_freq=20.0
-                )
-                passed = isinstance(stat_ev, dict)
-                results.append({
-                    "test": "eval_bearing_statistical",
-                    "has_indicators": len(stat_ev) > 0,
-                    "indicators_keys": list(stat_ev.keys())[:5],
-                    "passed": passed,
-                })
-                print(f"  [{'PASS' if passed else 'FAIL'}] 统计评估: keys={list(stat_ev.keys())[:5]}")
+            representation = compute_envelope(sig, FS)
+            analysis = analyze_envelope_spectrum(
+                representation.spectrum,
+                rot_frequency_hz=20.0,
+            )
+            stat_ev = evaluate_envelope(analysis).indicators
+            passed = isinstance(stat_ev, dict)
+            results.append({
+                "test": "eval_bearing_statistical",
+                "has_indicators": len(stat_ev) > 0,
+                "indicators_keys": list(stat_ev.keys())[:5],
+                "passed": passed,
+            })
+            print(f"  [{'PASS' if passed else 'FAIL'}] 统计评估: keys={list(stat_ev.keys())[:5]}")
         except Exception as e:
             results.append({"test": "eval_bearing_statistical", "passed": False, "error": str(e)[:100]})
             print(f"  [FAIL] 统计评估: {str(e)[:80]}")
@@ -274,25 +273,25 @@ def test_evaluate_bearing_physical():
 
     sig = load_npy(HUSTBEAR_DIR, "O_20Hz-X.npy")
     if sig is not None:
-        from app.services.diagnosis.bearing import envelope_analysis
         try:
-            env_res = envelope_analysis(sig, FS)
-            ef = env_res.get("envelope_freq", [])
-            ea = env_res.get("envelope_amp", [])
-            if len(ef) > 0:
-                bearing_params = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
-                ev = _evaluate_bearing_faults(bearing_params, ef, ea, rot_freq=20.0)
-                has_bpfo = "BPFO" in ev
-                has_bpfi = "BPFI" in ev
-                passed = has_bpfo or has_bpfi  # 至少检出一种
-                results.append({
-                    "test": "eval_bearing_physical",
-                    "has_BPFO": has_bpfo,
-                    "has_BPFI": has_bpfi,
-                    "faults_found": list(ev.keys()),
-                    "passed": passed,
-                })
-                print(f"  [{'PASS' if passed else 'FAIL'}] 物理评估: faults={list(ev.keys())}")
+            representation = compute_envelope(sig, FS)
+            analysis = analyze_envelope_spectrum(
+                representation.spectrum,
+                geometry=BearingGeometry(9, 7.94, 38.52, 0.0),
+                rot_frequency_hz=20.0,
+            )
+            ev = evaluate_envelope(analysis).indicators
+            has_bpfo = "BPFO" in ev
+            has_bpfi = "BPFI" in ev
+            passed = has_bpfo or has_bpfi
+            results.append({
+                "test": "eval_bearing_physical",
+                "has_BPFO": has_bpfo,
+                "has_BPFI": has_bpfi,
+                "faults_found": list(ev.keys()),
+                "passed": passed,
+            })
+            print(f"  [{'PASS' if passed else 'FAIL'}] 物理评估: faults={list(ev.keys())}")
         except Exception as e:
             results.append({"test": "eval_bearing_physical", "passed": False, "error": str(e)[:100]})
             print(f"  [FAIL] 物理评估: {str(e)[:80]}")

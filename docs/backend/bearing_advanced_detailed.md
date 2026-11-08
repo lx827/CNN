@@ -124,130 +124,41 @@ def bearing_sc_scoh_analysis(
 
 ---
 
-## bearing_sideband.py
+## algorithms/bearing/analysis.py
 
 > 轴承包络谱边频带密度分析模块，针对 BPFI/BPFO/BSF 三种故障类型的谱形态特征进行区分。
 
 ---
 
-### `compute_sideband_density`
+### `compute_sideband_metrics`
 
 ```python
-def compute_sideband_density(
-    env_freq: np.ndarray,
-    env_amp: np.ndarray,
-    fault_freq_hz: float,
-    mod_freq_hz: float,
-    background: float,
-    max_harmonics: int = 5,
-    snr_threshold: float = 3.0,
-    freq_tolerance: float = 0.0,
-    df: float = 1.0,
-) -> Dict[str, Any]:
+def compute_sideband_metrics(
+    observations: tuple[SidebandObservation, ...],
+    observable_targets: tuple[SidebandTarget, ...],
+) -> SidebandEvidence:
 ```
 
 **功能说明**
 
-计算指定故障频率周围的边频带密度指标。
+只根据可观测边带计算原始不对称度，不应用显著性阈值。`analyze_envelope_spectrum()` 先收集容差内局部峰，再按幅值和距离做全局唯一分配；偏移真峰不会因最近 bin 不是局部峰而漏检。
 
-边频带密度定义为：在 `fault_freq ± n×mod_freq`（`n = 1, 2, ..., N`）位置，超过 `snr_threshold` 的边带数量占总搜索边带数量的比例。
+`observable_targets` 包含所有在频带内、可分辨且唯一归属的理论目标，包括无局部峰/不显著目标；`observations` 仅包含实际局部峰。边带密度、显著数量及 `high_density/high_asymmetry` 由 `evaluate_sideband_evidence()` 计算，分母为 `observable_targets` 数量。任一侧没有局部峰时，`asymmetry=None`。
 
-不同故障类型的边带特征：
-- **BPFI（内圈故障）**：包络谱峰值周围常有转频调制边带，边带密度高
-- **BPFO（外圈故障）**：谐波更规律，边带较少
-- **BSF（滚动体故障）**：频率附近有保持架频率（FTF）调制
+`SidebandObservation` 的 `snr` 是局部峰/背景中位数的线性比，不是 dB。
 
-同时计算上/下边带不对称性，内圈故障因承载区调制，上下边带幅度通常不对称。
+### `SidebandEvidence`
 
-**参数说明**
+`analyze_envelope_spectrum()` 通过 `compute_sideband_metrics()` 生成原始边带证据：
 
-| 参数名 | 类型 | 默认值 | 说明 |
-|--------|------|--------|------|
-| `env_freq` | `np.ndarray` | — | 包络谱频率轴 (Hz) |
-| `env_amp` | `np.ndarray` | — | 包络谱幅值轴 |
-| `fault_freq_hz` | `float` | — | 故障特征频率 (BPFO/BPFI/BSF) |
-| `mod_freq_hz` | `float` | — | 调制频率（通常为转频 `fr` 或保持架频率 `FTF`） |
-| `background` | `float` | — | 包络谱背景水平（中位数） |
-| `max_harmonics` | `int` | `5` | 最大搜索谐波阶数（搜索 `±1×` 到 `±N×mod`） |
-| `snr_threshold` | `float` | `3.0` | 边带显著性的 SNR 阈值 |
-| `freq_tolerance` | `float` | `0.0` | 频率匹配容差 (Hz)，`0` 则自动计算为 `max(fault_freq_hz * 0.05, df * 2)` |
-| `df` | `float` | `1.0` | 频率分辨率 (Hz) |
-
-**返回值说明**
-
-返回 `Dict[str, Any]`，结构如下：
-
-| 键 | 类型 | 说明 |
+| 字段 | 类型 | 说明 |
 |----|------|------|
-| `total_searched` | `int` | 搜索的边带总数（含超出频率范围的） |
-| `significant_count` | `int` | 超过 SNR 阈值的边带数 |
-| `density` | `float` | 边带密度 `(0~1)`，保留 4 位小数 |
-| `sideband_details` | `List[Dict]` | 各边带的详细信息列表 |
-| `asymmetry` | `float` | 上/下边带不对称性，保留 4 位小数 |
-| `upper_count` | `int` | 显著上边带数量 |
-| `lower_count` | `int` | 显著下边带数量 |
+| `observations` | `tuple[SidebandObservation, ...]` | 实际局部峰 |
+| `observable_targets` | `tuple[SidebandTarget, ...]` | 在频带内、可分辨且唯一归属的全部理论目标 |
+| `asymmetry` | `float \| None` | 上下边带不对称度；任一侧无峰为 `None` |
+| `observable_count` | `int` | `observable_targets` 数量，作为评估密度分母 |
 
-其中 `sideband_details` 每项结构：
-
-| 键 | 类型 | 说明 |
-|----|------|------|
-| `order` | `int` | 谐波阶数 `n` |
-| `side` | `str` | `"upper"` 或 `"lower"` |
-| `theory_hz` | `float` | 理论边带频率 |
-| `detected` | `bool` | 是否在频率轴上找到匹配位置 |
-| `snr` | `float` | 实际 SNR 值 |
-| `significant` | `bool` | 是否超过阈值 |
-
----
-
-### `evaluate_bearing_sideband_features`
-
-```python
-def evaluate_bearing_sideband_features(
-    env_freq: List[float],
-    env_amp: List[float],
-    bearing_params: Optional[Dict],
-    rot_freq: float,
-) -> Dict[str, Dict]:
-```
-
-**功能说明**
-
-评估三种轴承故障类型（BPFO/BPFI/BSF）的边频带密度特征。
-
-返回各故障类型的边带密度、不对称性指标，供故障类型区分使用。
-
-分析流程：
-1. 检查参数有效性，无效时返回空字典
-2. 根据轴承几何参数计算 BPFO、BPFI、BSF 理论故障频率
-3. BPFO/BPFI 使用转频 `rot_freq` 作为调制频率
-4. BSF 使用保持架频率 `FTF` 作为调制频率
-5. 对每个故障类型调用 `compute_sideband_density` 计算边带密度
-6. 附加故障类型判定辅助字段（`high_density`、`low_density`、`high_asymmetry`）
-
-**参数说明**
-
-| 参数名 | 类型 | 默认值 | 说明 |
-|--------|------|--------|------|
-| `env_freq` | `List[float]` | — | 包络谱频率轴 |
-| `env_amp` | `List[float]` | — | 包络谱幅值轴 |
-| `bearing_params` | `Optional[Dict]` | — | 轴承几何参数，含 `n`、`d`、`D`、`alpha` |
-| `rot_freq` | `float` | — | 转频 (Hz) |
-
-**返回值说明**
-
-返回 `Dict[str, Dict]`，键为故障类型名称 `"BPFO"`、`"BPFI"`、`"BSF"`，每个值为：
-
-| 键 | 类型 | 说明 |
-|----|------|------|
-| `sideband_density` | `float` | 边带密度 |
-| `sideband_significant_count` | `int` | 显著边带数 |
-| `sideband_asymmetry` | `float` | 不对称性 |
-| `high_density` | `bool` | `density >= 0.3`，内圈故障特征 |
-| `low_density` | `bool` | `density < 0.15`，外圈故障特征 |
-| `high_asymmetry` | `bool` | `asymmetry > 0.3`，内圈故障特征 |
-
-若参数无效或 `env_freq`/`env_amp` 为空，返回 `{}`。
+显著性、密度和 `high_density/high_asymmetry` 由 `evaluate_sideband_evidence()` 计算。
 
 ---
 
@@ -765,7 +676,7 @@ MCKD + 包络分析的完整诊断流程。
 
 **返回值说明**
 
-返回 `Dict`，结构为 `bearing.envelope_analysis()` 的标准输出，额外附加：
+返回 `Dict`，包含算法库的 `representation: EnvelopeRepresentation`，额外附加：
 
 | 键 | 类型 | 说明 |
 |----|------|------|

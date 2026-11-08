@@ -64,6 +64,7 @@
 | [后端目录索引](./backend/INDEX.md) | `docs/backend/INDEX.md` | **按文件模块结构组织后端代码** |
 | [后端 API 接口](./api/backend_api.md) | `docs/api/backend_api.md` | REST API 和 WebSocket 端点完整文档 |
 | [后端服务层接口](./backend/services.md) | `docs/backend/services.md` | 服务层所有公共函数/类接口文档 |
+| [独立算法库](./backend/app/algorithms/__init__.md) | `docs/backend/app/algorithms/` | 纯数值数据契约、机械运动学、包络分析与对象化 Pipeline |
 | [小波与模态分解算法](algorithms/wavelet_and_modality_decomposition.md) | `docs/algorithms/wavelet_and_modality_decomposition.md` | VMD、EMD、小波等信号分解方法 |
 
 ---

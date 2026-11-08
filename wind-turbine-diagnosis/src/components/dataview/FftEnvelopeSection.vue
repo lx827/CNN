@@ -66,8 +66,15 @@
         </div>
       </div>
       <div v-if="computedEnvelope && envelopeData" class="envelope-info">
-        <el-tag v-if="envelopeData.optimal_fc" type="info" size="small" effect="plain">
-          最优频段 {{ envelopeData.optimal_fc }}±{{ (envelopeData.optimal_bw/2).toFixed(0) }} Hz
+        <el-tag v-if="envelopeData.band" type="info" size="small" effect="plain">
+          实际频带 {{ envelopeData.band.low_hz }}~{{ envelopeData.band.high_hz }} Hz
+          （中心 {{ envelopeData.band.center_hz }} Hz）
+        </el-tag>
+        <el-tag v-if="envelopeData.evaluation" :type="envelopeData.evaluation.status === 'evaluated' ? 'success' : 'info'" size="small" effect="plain">
+          {{ envelopeData.evaluation.status === 'evaluated' ? '包络评估已完成' : '输入不足，不可判定' }}
+        </el-tag>
+        <el-tag v-if="scScohHitCount > 0" type="warning" size="small" effect="plain">
+          SC/SCoh 显著指标 {{ scScohHitCount }} 项
         </el-tag>
         <el-tag v-if="envelopeData.max_kurtosis != null" type="info" size="small" effect="plain" style="margin-left: 8px;">
           峭度 {{ envelopeData.max_kurtosis.toFixed(2) }}
@@ -82,7 +89,10 @@
           SK评分 {{ envelopeData.reweighted_score.toFixed(2) }}
         </el-tag>
       </div>
-      <VibrationChart v-if="computedEnvelope" :option="envelopeOption" />
+      <VibrationChart v-if="computedEnvelope && envelopeOption" :option="envelopeOption" />
+      <div v-else-if="computedEnvelope" class="placeholder">
+        <el-empty description="该方法不返回包络谱，请查看上方 SC/SCoh 专属指标" :image-size="80" />
+      </div>
       <div v-else-if="loadingEnvelope" class="placeholder">
         <el-skeleton :rows="3" animated />
       </div>
@@ -94,9 +104,11 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import VibrationChart from '../../components/charts/VibrationChart.vue'
+import { scScohEntries } from '../../utils/bearingDiagnosis'
 
-defineProps({
+const props = defineProps({
   computedFFT: { type: Boolean, default: false },
   loadingFFT: { type: Boolean, default: false },
   fftOption: { type: Object, default: null },
@@ -106,6 +118,9 @@ defineProps({
   envelopeOption: { type: Object, default: null },
   envelopeMethodLabel: { type: String, default: '' },
 })
+
+const scScohHitCount = computed(() => scScohEntries(props.envelopeData)
+  .filter(({ info }) => info?.significant || info?.critical).length)
 
 const envelopeMethod = defineModel('envelopeMethod', { type: String, default: 'envelope' })
 

@@ -19,11 +19,11 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 
 def _make_ch_result(faults=None):
     """构造单个通道的诊断结果"""
-    r = {"bearing": {"fault_indicators": {}}, "gear": {"fault_indicators": {}},
+    r = {"bearing": {"evaluation": {"indicators": {}}}, "gear": {"fault_indicators": {}},
          "ensemble": {"has_gear_params": False}, "time_features": {"kurtosis": 3.0}}
     if faults:
         for name in faults:
-            r["bearing"]["fault_indicators"][name] = {"significant": True}
+            r["bearing"]["evaluation"]["indicators"][name] = {"significant": True}
     return r
 
 

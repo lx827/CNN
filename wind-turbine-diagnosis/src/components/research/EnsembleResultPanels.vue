@@ -69,7 +69,7 @@
         </el-table-column>
         <el-table-column prop="param_hits" label="参数命中" width="100" />
         <el-table-column prop="stat_hits" label="统计命中" width="100" />
-        <el-table-column prop="strongest_snr" label="最强SNR" width="100" />
+        <el-table-column prop="strongest_score" label="最强证据" width="100" />
         <el-table-column prop="hits" label="证据" min-width="220" />
       </el-table>
       <!-- 全部方法模式：各方法检出摘要 -->
@@ -77,10 +77,11 @@
         <el-table-column prop="method" label="诊断方法" width="160" />
         <el-table-column prop="faults" label="检出故障">
           <template #default="{ row }">
-            <el-tag v-for="(f, idx) in row.faults" :key="idx" :type="(f.snr > 5 || f.snr === '?') ? 'danger' : 'warning'" size="small" style="margin-right:6px;margin-bottom:4px">
-              {{ f.fault_type }} (SNR={{ f.snr }})
+            <el-tag v-for="(f, idx) in row.faults" :key="idx" :type="((f.snr ?? f.score) > 5 || f.score === '?') ? 'danger' : 'warning'" size="small" style="margin-right:6px;margin-bottom:4px">
+              {{ f.fault_type }} ({{ f.snr != null ? 'SNR' : 'score' }}={{ f.snr ?? f.score }})
             </el-tag>
-            <el-text v-if="row.faults.length === 0 && !row._error" type="info" size="small">未检出显著故障</el-text>
+            <el-text v-if="row.evaluationStatus !== 'evaluated' && !row._error" type="info" size="small">输入不足，暂不可判定</el-text>
+            <el-text v-else-if="row.faults.length === 0 && !row._error" type="info" size="small">未检出显著故障</el-text>
             <el-text v-if="row._error" type="danger" size="small">{{ row.params }}</el-text>
           </template>
         </el-table-column>

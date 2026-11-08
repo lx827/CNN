@@ -116,6 +116,7 @@
 | `backend.js` | `src/utils/backend.js` | 后端交互辅助工具 |
 | `constants.js` | `src/utils/constants.js` | 全局常量定义（故障类型映射、状态枚举等） |
 | `format.js` | `src/utils/format.js` | 数据格式化工具（时间/数字/单位转换） |
+| `bearingDiagnosis.js` | `src/utils/bearingDiagnosis.js` | 轴承包络评估、SC/SCoh 指标与图表标注的只读适配 |
 | `math.js` | `src/utils/math.js` | 数学计算工具 |
 | `status.js` | `src/utils/status.js` | 状态处理工具（设备在线/离线状态判断） |
 
@@ -134,9 +135,9 @@
 | 类别 | 数量 |
 |------|------|
 | Vue 组件 | 16 个 |
-| JavaScript 模块 | 18 个 |
+| JavaScript 模块 | 19 个 |
 | CSS 样式 | 1 个 |
-| **总计** | **35 个文件** |
+| **总计** | **36 个文件** |
 
 ---
 

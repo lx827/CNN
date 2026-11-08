@@ -35,8 +35,8 @@ def test_engine_analyze_bearing():
     engine = DiagnosisEngine(bearing_params={"n": 9, "d": 7.94, "D": 38.52, "alpha": 0})
     res = engine.analyze_bearing(sig, FS)
 
-    has_indicators = len(res.get("fault_indicators", {})) > 0
-    has_envelope = len(res.get("envelope_freq", [])) > 0
+    has_indicators = len(res.get("evaluation", {}).get("indicators", {})) > 0
+    has_envelope = res.get("spectrum") is not None and len(res["spectrum"]["frequency_hz"]) > 0
     passed = has_indicators and has_envelope
     results.append({
         "test": "engine_bearing_dispatch",

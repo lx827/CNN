@@ -229,19 +229,22 @@ def compute_continuous_deductions(
             deductions.append(("trend_drift_warning", trend_ded))
 
     # ═══════ 轴承故障扣分 ═══════
-    bearing_ind = bearing_result.get("fault_indicators", {})
+    bearing_ind = bearing_result.get("evaluation", {}).get("indicators", {})
     freq_sig_count = sum(
-        v.get("significant") for k, v in bearing_ind.items()
+        bool(v.get("significant")) for k, v in bearing_ind.items()
         if isinstance(v, dict) and not k.endswith("_stat")
     )
     stat_sig_count = sum(
-        v.get("significant") for k, v in bearing_ind.items()
+        bool(v.get("significant")) for k, v in bearing_ind.items()
         if isinstance(v, dict) and (k.endswith("_stat") or k in {
             "envelope_peak_snr", "envelope_kurtosis", "high_freq_ratio", "peak_concentration"
         })
     )
     rotation_dominant = False
-    low_freq_ind = bearing_ind.get("low_freq_ratio")
+    low_freq_ind = bearing_ind.get(
+        "low_freq_ratio_stat",
+        bearing_ind.get("low_freq_ratio", {}),
+    )
     if isinstance(low_freq_ind, dict):
         rotation_dominant = low_freq_ind.get("rotation_harmonic_dominant", False)
 
@@ -263,11 +266,11 @@ def compute_continuous_deductions(
         # 边带密度增强扣分：high_density 或 high_asymmetry 标记时追加扣分
         # 边带密度高说明故障频率周围调制边带丰富，是轴承故障的强证据
         sideband_high_count = sum(
-            v.get("high_density", False) for k, v in bearing_ind.items()
+            bool(v.get("high_density")) for k, v in bearing_ind.items()
             if isinstance(v, dict) and not k.endswith("_stat")
         )
         sideband_asym_count = sum(
-            v.get("high_asymmetry", False) for k, v in bearing_ind.items()
+            bool(v.get("high_asymmetry")) for k, v in bearing_ind.items()
             if isinstance(v, dict) and not k.endswith("_stat")
         )
         if sideband_high_count >= 1 and kurt_gate > 0.3:
@@ -408,8 +411,8 @@ def compute_continuous_deductions(
 
     # ═══════ SC/SCoh 循环平稳补充扣分 ═══════
     # 轴承 SC/SCoh 结果：scoh_peak > 0.3 时作为弱证据补充
-    scoh_result = bearing_result.get("fault_indicators", {})
-    # SC_SCOH 方法的 fault_indicators 包含各故障频率的 scoh_peak
+    # SC/SCoh 的专属证据独立于通用包络 evaluation。
+    scoh_result = bearing_result.get("sc_scoh_indicators", {})
     # 仅当 SC/SCoh 是分析方法时才提取（避免从 envelope 结果中误读）
     bearing_method = bearing_result.get("method", "")
     if bearing_method == "sc_scoh":

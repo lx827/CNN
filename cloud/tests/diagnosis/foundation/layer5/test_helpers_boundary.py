@@ -54,7 +54,7 @@ def test_bearing_confidence_boundary():
 
     # 极高 SNR
     try:
-        res = {"fault_indicators": {"BPFO": {"significant": True, "snr": 100.0}}}
+        res = {"evaluation": {"indicators": {"BPFO": {"significant": True, "snr": 100.0}}}}
         c3 = _bearing_confidence(res, {"kurtosis": 25.0, "crest_factor": 30.0})
         capped_ok = c3["confidence"] <= 1.0
         results.append({"test": "bearing_extreme_snr", "conf": c3["confidence"], "passed": capped_ok})
@@ -154,10 +154,10 @@ def test_fault_label_boundary():
     results = []
 
     # 平局：轴承和齿轮置信度接近
-    best_b = {"fault_indicators": {"BPFO": {"significant": True}}}
+    best_b = {"evaluation": {"indicators": {"BPFO": {"significant": True}}}}
     best_g = {"fault_indicators": {"ser": {"critical": True}}}
     label = _fault_label(best_b, best_g, 0.5, 0.5)
-    tie_ok = label in ("bearing_BPFO", "gear_ser", "unknown")
+    tie_ok = label in ("bearing_bpfo", "gear_ser", "unknown")
     results.append({"test": "label_tie", "label": label, "passed": tie_ok})
     print(f"  [{'PASS' if tie_ok else 'FAIL'}] 平局(0.5 vs 0.5): {label}")
 

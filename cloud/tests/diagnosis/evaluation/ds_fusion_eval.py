@@ -119,7 +119,7 @@ def _predict_label_from_bearing_result(result: Dict, health_score: int) -> str:
     if health_score >= 85:
         return "healthy"
 
-    indicators = result.get("fault_indicators", {}) or {}
+    indicators = result.get("evaluation", {}).get("indicators", {}) or {}
 
     # 参数匹配指标优先
     param_hits = []

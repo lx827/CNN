@@ -38,20 +38,6 @@ def compute_fft_features(
 - **返回值**：`{estimated_rot_freq, mesh_freq_hz, mesh_freq_ratio, sideband_total_ratio, sideband_count, BPFO_hz, BPFO_ratio, ...}`
 - **说明**：FFT 频域特征
 
-### `compute_envelope_features`
-
-```python
-def compute_envelope_features(
-    envelope_freq: list,
-    envelope_amp: list,
-    bearing_params: Optional[Dict] = None,
-    rot_freq: Optional[float] = None,
-) -> Dict[str, float]
-```
-
-- **返回值**：`{total_env_energy, BPFO_env_ratio, BPFI_env_ratio, BSF_env_ratio, *_harmonic_ratio}`
-- **说明**：包络域特征（基于已有包络谱）
-
 ### `remove_dc`
 
 ```python

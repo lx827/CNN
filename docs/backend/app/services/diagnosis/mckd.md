@@ -9,4 +9,4 @@
 | 函数 | 签名 | 说明 |
 |------|------|------|
 | `mckd_deconvolution` | `mckd_deconvolution(signal, filter_len=30, T=1, M=1, max_iter=30) -> np.ndarray` | MCKD 最大相关峭度解卷积（引入故障周期约束） |
-| `mckd_envelope_analysis` | `mckd_envelope_analysis(signal, fs, bearing_params, rot_freq, ...) -> dict` | MCKD + 包络分析 |
+| `mckd_envelope_analysis` | `mckd_envelope_analysis(signal, fs, bearing_params, rot_freq, ...) -> dict` | MCKD + 包络分析，返回 `representation: EnvelopeRepresentation` 和方法元数据 |

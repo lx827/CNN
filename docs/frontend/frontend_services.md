@@ -24,8 +24,8 @@
 | `useDashboard.js` | Dashboard | 总览拉取(推送/轮询共享串行刷新)、状态统计、仪表盘/饼图 |
 | `useMonitor.js` | Monitor | 最新数据拉取、传感器状态、采集任务下发与轮询、时域/频域图 |
 | `useSettings.js` | Settings | 设备/配置/阈值加载与保存、机械参数同步 |
-| `useResearchDiagnosis.js` | ResearchDiagnosis | 三模式分析运行、结果行派生、路由联动 |
-| `useDataView.js` | DataView | 批次选择、七类频谱按需计算、特征频率标注、删除/重诊 |
+| `useResearchDiagnosis.js` | ResearchDiagnosis | 三模式分析运行、结果行派生、包络评估状态、路由联动 |
+| `useDataView.js` | DataView | 批次选择、七类频谱按需计算、结构化包络图、轴承/齿轮特征频率标注、删除/重诊 |
 
 ---
 
@@ -192,6 +192,25 @@ view.connect();
 | `getHealthLevel` | `getHealthLevel(score: number) -> string` | 根据健康度分数返回级别（`normal`/`warning`/`fault`/`unknown`） |
 | `getHealthColor` | `getHealthColor(score: number) -> string` | 根据健康度分数返回十六进制颜色 |
 
+### 2.8 轴承诊断结果适配 (`bearingDiagnosis.js`)
+
+**文件路径**：`src/utils/bearingDiagnosis.js`
+
+只处理轴承新响应契约，不得用于齿轮；齿轮仍直接读取 `fault_indicators`。所有函数均为无副作用只读派生，缺失对象按空指标处理。
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `bearingEvaluationIndicators` | `(result: object \| null) -> object` | 读取 `evaluation.indicators`，不回退旧顶层 `fault_indicators` |
+| `scScohIndicators` | `(result: object \| null) -> object` | 读取 SC/SCoh 专属 `sc_scoh_indicators` |
+| `bearingEvaluationEntries` | `(result) -> Array<{key,name,info,source}>` | 包络评估指标条目，`source=evaluation` |
+| `scScohEntries` | `(result) -> Array<{key,name,info,source}>` | SC/SCoh 指标条目，`source=sc_scoh` |
+| `bearingIndicatorEntries` | `(result) -> Array` | 按包络评估、SC/SCoh 顺序合并条目，key 带来源前缀避免冲突 |
+| `significantBearingFaults` | `(result) -> Array` | 汇总 `significant/critical` 指标；真实 `snr` 与一般 `score` 分开，SC/SCoh 的 SNR 取 `scoh_snr`，并保留理论/检出频率与来源 |
+| `bearingFrequencyAnnotations` | `(result) -> Array` | 从 `detected_hz ?? theory_hz ?? frequency_hz` 生成图表标注，区分 `bearing` 与 `bearing_sc_scoh` |
+| `indicatorDisplayValue` | `(info: object) -> number \| string` | 依次选择 `value/snr/scoh_peak/scoh_snr/detected_hz`，空值返回 `-` |
+
+**评估状态**：`evaluation.status=evaluated` 表示已完成评估，`indeterminate` 表示输入不足、不可判定，`not_evaluable` 表示频率覆盖、分辨率等条件不足、不可评估；后两者都不等于正常或故障。研究页通过 `useResearchDiagnosis.js` 导出的 `evaluationStatusType/evaluationStatusText` 统一展示。投票行读取 `strongest_score`，真实峰值/背景比与一般证据分不混称为 SNR。
+
 ---
 
 ## 3. 通用组件 (Components)
@@ -223,7 +242,9 @@ view.connect();
 | `rotFreq` | `number \| null` | `null` | 估计转频（Hz） |
 | `rotRpm` | `number \| null` | `null` | 估计转速（RPM） |
 
-**用途**：诊断结果明细展示（健康度、故障概率、阶次分析）
+**用途**：诊断结果明细展示（健康度、故障概率、阶次分析、轴承包络评估、SC/SCoh 专属指标）
+
+**数据读取**：轴承指标与特征频率来自 `bearing.evaluation.indicators`（`theory_hz/detected_hz`）；SC/SCoh 独立来自 `bearing.sc_scoh_indicators`（`scoh_peak/scoh_snr`）；齿轮指标继续来自 `gear.fault_indicators`。`bearing.evaluation.status` 为 `indeterminate` 或 `not_evaluable` 时均显示输入不足、不可判定，不按正常处理。
 
 ---
 

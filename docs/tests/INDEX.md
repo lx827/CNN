@@ -10,7 +10,7 @@
 >
 > Python 环境统一为 uv workspace(#47):仓库根目录 `uv sync` 一次,所有 Python 测试用 `uv run` 执行;前端测试用 `node --test`(Node ≥18)。
 
-## P0 回归(全部合成信号、无数据集依赖;每次修改 `cloud/app/services/diagnosis/` 后必跑)
+## P0 回归(全部合成信号、无数据集依赖;每次修改 `cloud/app/services/diagnosis/` 或 `cloud/app/algorithms/` 后必跑)
 
 ```bash
 cd cloud
@@ -205,6 +205,9 @@ uv run python tests/diagnosis/regression/test_none_params.py && uv run python te
 
 | 文件 | 用途 | 需要数据集 | 运行方式 |
 |------|------|-----------|---------|
+| `test_bearing_envelope_analysis.py` | 手工谱唯一归属、偏移真峰、有效阴性、超带宽/共享 bin、BPFI 边带融合、真实可观测边带分母、非谐波负对照、低频后缀健康/ensemble 集成、阈值与参数校验 | 无 | `uv run python tests/diagnosis/algorithms/test_bearing_envelope_analysis.py`(在 cloud 目录) |
+| `test_bearing_envelope_pipeline.py` | 标准包络单边幅值、实际频带、指标/评估分离、展示不影响诊断、无参统计、未知转频、Engine/ensemble/SC 新契约 | 无 | `uv run python tests/diagnosis/algorithms/test_bearing_envelope_pipeline.py`(在 cloud 目录) |
+| `test_bearing_envelope_api.py` | 包络 HTTP 新响应、max_freq 生效、隔离 SQLite 与认证替身 | 无 | `uv run python tests/diagnosis/algorithms/test_bearing_envelope_api.py`(在 cloud 目录) |
 | `test_engine_regressions.py` | 诊断引擎核心回归(无参数/TSA/转频/健康区分) | HUSTbear/CW(可选) | `uv run python tests/diagnosis/algorithms/test_engine_regressions.py`(在 cloud 目录) |
 | `test_new_algorithms.py` | EMD/MCKD/小波包/SG 等新算法功能验证 | 无 | 同上 |
 | `test_emd_denoise.py` | EMD/CEEMDAN 降噪模块测试 | 无 | 同上 |

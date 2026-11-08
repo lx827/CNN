@@ -84,7 +84,7 @@ def eval_bearing(label, files, methods):
                                          denoise_method=DenoiseMethod.NONE)
                 res = engine.analyze_bearing(sig, FS)
                 times.append((time.perf_counter() - t1) * 1000)
-                inds = res.get("fault_indicators", {})
+                inds = res.get("evaluation", {}).get("indicators", {})
                 has_f = any(v.get("significant") for k, v in inds.items()
                             if isinstance(v, dict) and not k.endswith("_stat"))
                 if has_f != is_h: correct += 1
@@ -143,7 +143,7 @@ def eval_gear_binary(files):
                                          denoise_method=DenoiseMethod.NONE)
                 res = engine.analyze_gear(sig, FS, rot_freq=rf)
                 times.append((time.perf_counter() - t1) * 1000)
-                inds = res.get("fault_indicators", {})
+                inds = res.get("evaluation", {}).get("indicators", {})
                 has_w = any(v.get("warning") or v.get("critical")
                             for v in inds.values() if isinstance(v, dict))
                 if has_w != is_h: correct += 1
@@ -246,7 +246,7 @@ def eval_robustness():
                 engine = DiagnosisEngine(bearing_method=method, bearing_params=BP,
                                          denoise_method=DenoiseMethod.NONE)
                 res = engine.analyze_bearing(sig_c + noise, FS)
-                inds = res.get("fault_indicators", {})
+                inds = res.get("evaluation", {}).get("indicators", {})
                 det = any(v.get("significant") for k, v in inds.items()
                           if isinstance(v, dict) and not k.endswith("_stat"))
                 curve.append({"snr_db": s_db, "detected": det})

@@ -105,10 +105,16 @@ async def get_channel_envelope(
         )
 
         # CPU 密集型轴承分析放入线程池
-        result = await asyncio.to_thread(engine.analyze_bearing, signal, sample_rate)
+        result = await asyncio.to_thread(
+            engine.analyze_bearing,
+            signal,
+            sample_rate,
+            None,
+            True,
+            float(max_freq or 1000.0),
+        )
 
-        # 兼容原有返回格式
-        # _sanitize_for_json 确保 numpy 类型转换为 Python 原生类型，防止 FastAPI jsonable_encoder 崩溃
+        # 新契约直接返回结构化 spectrum、band、features 和 evaluation。
         return _sanitize_for_json({
             "code": 200,
             "data": {
@@ -118,23 +124,13 @@ async def get_channel_envelope(
                 "channel_name": _get_channel_name(device, record.channel),
                 "sample_rate": sample_rate,
                 "is_special": bool(record.is_special),
-                "method": result.get("method", method),
-                "envelope_freq": result.get("envelope_freq", []),
-                "envelope_amp": result.get("envelope_amp", []),
-                "optimal_fc": result.get("optimal_fc"),
-                "optimal_bw": result.get("optimal_bw"),
-                "max_kurtosis": result.get("max_kurtosis"),
-                "comb_frequencies": result.get("comb_frequencies"),
-                "med_filter_len": result.get("med_filter_len"),
-                "kurtosis_before": result.get("kurtosis_before"),
-                "kurtosis_after": result.get("kurtosis_after"),
-                "teager_rms": result.get("teager_rms"),
-                "reweighted_score": result.get("reweighted_score"),
-                "spectral_kurtosis_bands": result.get("spectral_kurtosis_bands", []),
-                "features": result.get("features", {}),
-                "fault_indicators": result.get("fault_indicators", {}),
+                **result,
             }
         })
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"包络谱参数无效: {e}") from e
     except Exception as e:
         logger.error(f"包络谱计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"包络谱计算失败: {e}")

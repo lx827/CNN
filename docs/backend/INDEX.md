@@ -17,6 +17,7 @@
 8. [诊断服务 (services/diagnosis)](#8-诊断服务-servicesdiagnosis)
 9. [齿轮诊断子模块 (services/diagnosis/gear)](#9-齿轮诊断子模块-servicesdiagnosisgear)
 10. [融合算法子模块 (services/diagnosis/fusion)](#10-融合算法子模块-servicesdiagnosisfusion)
+11. [独立算法库 (algorithms)](#11-独立算法库-algorithms)
 
 ---
 
@@ -154,7 +155,6 @@
 | 文件 | 路径 | 职责 |
 |------|------|------|
 | `bearing_cyclostationary.py` | `cloud/app/services/diagnosis/bearing_cyclostationary.py` | 轴承循环平稳分析 |
-| `bearing_sideband.py` | `cloud/app/services/diagnosis/bearing_sideband.py` | 轴承边带分析 |
 | `bss.py` | `cloud/app/services/diagnosis/bss.py` | 盲源分离 (ICA) |
 | `lms_filter.py` | `cloud/app/services/diagnosis/lms_filter.py` | LMS 自适应滤波 |
 | `channel_consensus.py` | `cloud/app/services/diagnosis/channel_consensus.py` | 通道一致性分析 |
@@ -183,6 +183,17 @@
 |------|------|------|
 | `__init__.py` | `cloud/app/services/diagnosis/fusion/__init__.py` | 融合模块初始化 |
 | `ds_fusion.py` | `cloud/app/services/diagnosis/fusion/ds_fusion.py` | Dempster-Shafer 证据理论融合 |
+
+## 11. 独立算法库 (algorithms)
+
+| 目录 | 路径 | 职责 |
+|------|------|------|
+| `core` | `cloud/app/algorithms/core/` | 带单位的频谱、频带和谱峰数据类型 |
+| `mechanics` | `cloud/app/algorithms/mechanics/` | 机械对象运动学参数与故障频率 |
+| `bearing` | `cloud/app/algorithms/bearing/` | 包络计算、指标分析、边带分析与阈值评估 |
+| `pipelines/bearing` | `cloud/app/algorithms/pipelines/bearing/` | 标准轴承包络的分析与诊断 Pipeline |
+
+算法库不依赖 FastAPI、ORM、数据库或业务配置；业务层通过对象化 Pipeline 调用。
 
 ---
 

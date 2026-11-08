@@ -33,7 +33,7 @@ Layer 1: 信号处理基元（零内部依赖）
   signal_utils.py             (prepare_signal, FFT, 转频估计, 谱峰搜索)
   vmd_denoise.py              (VMD分解)
   health_score_continuous.py  (连续扣分)
-  bearing_sideband.py         (边带分析)
+  algorithms/bearing/analysis.py (边带分析)
   channel_consensus.py        (通道一致性)
   recommendation.py           (建议生成)
   gear/msb.py                 (调制双谱)
@@ -126,7 +126,7 @@ tests/diagnosis/foundation/
 | `signal_utils` | `_snr_by_residual_std` (原子函数, 2025-05新增) | `layer1/test_signal_utils_correctness.py` | ✅ |
 | `vmd_denoise` | `vmd_decompose` / `vmd_denoise` / `vmd_select_impact_mode` | `layer1/test_vmd_denoise_correctness.py` | ✅ |
 | `health_score_continuous` | `sigmoid_deduction` / `multi_threshold_deduction` / `cascade_deduction` / `compute_continuous_deductions` | `layer1/test_health_score_continuous.py` | ✅ |
-| `bearing_sideband` | `compute_sideband_density` / `evaluate_bearing_sideband_features` | `layer1/test_bearing_sideband.py` | ✅ |
+| `algorithms/bearing/analysis` + `evaluation` | `compute_sideband_metrics` / `evaluate_sideband_evidence` | `layer1/test_bearing_sideband.py` + `algorithms/test_bearing_envelope_analysis.py` | ✅ |
 | `channel_consensus` | `cross_channel_consensus` | `layer1/test_channel_consensus.py` | ✅ |
 | `recommendation` | `_generate_recommendation` / `_match_suggestion` | `layer1/test_recommendation.py` | ✅ |
 | `gear/msb` | `msb_residual_sideband_analysis` | `layer1/test_msb_correctness.py` | ✅ |
@@ -151,7 +151,7 @@ tests/diagnosis/foundation/
 | `features` | `compute_channel_features` (通道聚合) | `layer2/test_features_correctness.py` | ✅ |
 | `features` | `compute_nonparam_cusum_features` | `layer2/test_features_correctness.py` | ✅ |
 | `features` | `has_bearing_params` / `has_gear_params` | `layer2/test_features_correctness.py` | ✅ |
-| `bearing` | `envelope_analysis` (Hilbert 包络) | `layer2/test_bearing_correctness.py` | ✅ |
+| `algorithms/bearing/envelope` | `compute_envelope` (Hilbert 包络与单边幅值谱) | `algorithms/test_bearing_envelope_pipeline.py` + `layer2/test_bearing_correctness.py` | ✅ |
 | `bearing` | `fast_kurtogram` (谱峭度选带) | `layer2/test_bearing_correctness.py` | ✅ |
 | `bearing` | `cpw_envelope_analysis` (倒频谱预白化) | `layer2/test_bearing_advanced_correctness.py` | ✅ |
 | `bearing` | `med_envelope_analysis` (最小熵解卷积) | `layer2/test_bearing_correctness.py` | ✅ |
@@ -199,7 +199,7 @@ tests/diagnosis/foundation/
 | `engine` | `preprocess` (多 denoise 方法分支) | `layer4/test_engine_deep.py` | ✅ |
 | `engine` | `_estimate_rot_freq` (转频估计 + 回退) | `layer4/test_engine_deep.py` | ✅ |
 | `engine` | `analyze_research_ensemble` (委托 ensemble.py) | `layer4/test_engine_deep.py` | ✅ |
-| `engine` | `_evaluate_bearing_faults` / `_evaluate_bearing_faults_statistical` | `layer4/test_engine_deep.py` | ✅ |
+| `algorithms/bearing/analysis` + `evaluation` | `analyze_envelope_spectrum` / `evaluate_envelope` | `algorithms/test_bearing_envelope_pipeline.py` + `layer4/test_engine_deep_real.py` | ✅ |
 | `engine` | `analyze_all_methods` | — | ⚠️ 需数据集 |
 
 ### Layer 5 — 应用入口辅助函数（依赖 Layer 1-4）

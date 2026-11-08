@@ -323,7 +323,7 @@ def evaluate_cw():
                     print(f"    >>> stat: hs={stat_hs}, status={stat_status} {stat_fp_flag}")
                     # 打印扣分项
                     if hasattr(result, 'get'):
-                        bearing_ind = result.get("bearing", {}).get("fault_indicators", {})
+                        bearing_ind = result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
                         gear_ind = result.get("gear", {}).get("fault_indicators", {})
                         sig_bearing = [k for k, v in bearing_ind.items() if isinstance(v, dict) and v.get("significant")]
                         sig_gear = [k for k, v in gear_ind.items() if isinstance(v, dict) and v.get("significant")]
@@ -376,7 +376,7 @@ def evaluate_false_positive_causes():
 
         if status != "normal":
             # 分析原因
-            bearing_ind = result.get("bearing", {}).get("fault_indicators", {})
+            bearing_ind = result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
             gear_ind = result.get("gear", {}).get("fault_indicators", {})
             stat_sig = [k for k, v in bearing_ind.items()
                         if isinstance(v, dict) and v.get("significant")]
@@ -411,7 +411,7 @@ def evaluate_false_positive_causes():
             all_healthy_hs.append(hs)
 
             if status != "normal":
-                bearing_ind = result.get("bearing", {}).get("fault_indicators", {})
+                bearing_ind = result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
                 gear_ind = result.get("gear", {}).get("fault_indicators", {})
                 stat_sig = [k for k, v in bearing_ind.items()
                             if isinstance(v, dict) and v.get("significant")]
@@ -480,7 +480,7 @@ def evaluate_fault_detection_detail():
             status = result["status"]
             detected = "YES" if status in ("warning", "fault") else "NO"
 
-            bearing_ind = result.get("bearing", {}).get("fault_indicators", {})
+            bearing_ind = result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
             gear_ind = result.get("gear", {}).get("fault_indicators", {})
             b_sig = [k for k, v in bearing_ind.items()
                      if isinstance(v, dict) and v.get("significant")]

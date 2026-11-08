@@ -107,12 +107,11 @@ def mckd_envelope_analysis(
     rot_freq: float,
     filter_len: int = 64,
     shift_order_M: int = 1,
-    max_freq: float = 1000.0,
 ) -> Dict:
     """
     MCKD + 包络分析完整流程
     """
-    from .bearing import envelope_analysis
+    from .bearing import _compute_envelope_result
     from .preprocessing import minimum_entropy_deconvolution
 
     n = int(float(bearing_params.get("n") or 0))
@@ -123,7 +122,7 @@ def mckd_envelope_analysis(
     if n <= 0 or d <= 0 or D <= 0:
         # 无参数时退化为 MED
         med_sig, _ = minimum_entropy_deconvolution(signal, filter_len=filter_len)
-        result = envelope_analysis(med_sig, fs, max_freq=max_freq)
+        result = _compute_envelope_result(med_sig, fs)
         result["method"] = "MED + Envelope (MCKD fallback: no params)"
         return result
 
@@ -140,7 +139,7 @@ def mckd_envelope_analysis(
         signal, filter_len=filter_len, period_T=period_T, shift_order_M=shift_order_M
     )
 
-    result = envelope_analysis(mckd_sig, fs, max_freq=max_freq)
+    result = _compute_envelope_result(mckd_sig, fs)
     result["mckd_info"] = mckd_info
     result["method"] = "MCKD + Envelope"
     result["target_fault_freq_hz"] = round(target_freq, 2)

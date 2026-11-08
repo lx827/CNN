@@ -468,7 +468,7 @@ async def get_channel_research_analysis(
             list(ensemble.keys()) if ensemble else "MISSING",
             len(ensemble.get("bearing_votes", {})),
             len(ensemble.get("gear_votes", {})),
-            len(result.get("bearing", {}).get("fault_indicators", {})),
+            len(result.get("bearing", {}).get("evaluation", {}).get("indicators", {})),
             len(result.get("gear", {}).get("fault_indicators", {})),
             ensemble.get("best_bearing", "N/A"),
             ensemble.get("best_gear", "N/A"),

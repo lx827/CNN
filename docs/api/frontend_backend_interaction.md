@@ -70,6 +70,8 @@
 | `DataView.vue::exportChannelCSV()` | `window.open()` 直接打开 | `GET /api/data/{id}/{batch}/{ch}/export` | `data_view/export.py::export_channel_csv` | 导出通道数据为 CSV 文件 |
 | `DataView.vue::gotoResearchDiagnosis()` | — | 路由跳转带 query 参数 | — | 跳转到高级诊断页面，携带设备/批次/通道参数 |
 
+> **2026-11-08 包络响应契约变更**：`/envelope` 改为返回 `spectrum {frequency_hz, amplitude, amplitude_unit, scaling}`、实际 `band`、`features` 和 `evaluation {status, indicators}`，不再返回 `envelope_freq`、`envelope_amp` 或顶层 `fault_indicators`。标准包络幅值改为单边幅值，`max_freq` 只截断展示，不改变诊断；`features` 使用 `spectral_power_proxy`，单项不可分辨时为 `not_evaluable`。前端适配由独立任务处理，不能继续按旧字段读取。
+>
 > **⚠️ 影响前端**：`DataView.vue` 是核心数据查看组件，任何 `/api/data/{id}/{batch}/{ch}/*` 端点的 URL 变更、参数增减或响应结构调整，都需要同步修改 `frontend/src/views/DataView.vue` 和 `frontend/src/api/data.js`。
 
 ---

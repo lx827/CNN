@@ -77,7 +77,8 @@ def test_diagnosis_engine_bearing_with_none_params():
     )
     sig = np.random.randn(4096)
     result = engine.analyze_bearing(sig, fs=25600, rot_freq=25.0)
-    assert "fault_indicators" in result
+    assert "evaluation" in result
+    assert "indicators" in result["evaluation"]
     print("  [PASS] DiagnosisEngine bearing alpha=None 未崩溃")
 
 

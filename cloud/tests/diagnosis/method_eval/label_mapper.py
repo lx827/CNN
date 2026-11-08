@@ -89,7 +89,7 @@ def infer_bearing_label_from_single(
     if health_score >= HEALTH_THRESHOLD:
         return "healthy"
 
-    indicators = bearing_result.get("fault_indicators", {}) or {}
+    indicators = bearing_result.get("evaluation", {}).get("indicators", {}) or {}
 
     # 找 SNR 最高的物理参数项（排除 _stat 统计项）
     best_snr = 0

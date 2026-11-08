@@ -48,8 +48,12 @@ def _get_peak_snr(found):
     return 0.0, 0.0
 
 
+def _spectrum_arrays(result):
+    spectrum = result["representation"].spectrum
+    return spectrum.frequency_hz, spectrum.amplitude
+
+
 # ═══════════════════════════════════════════════════════════
-# 1. cpw_envelope_analysis — 倒频谱预白化 + 包络
 # ═══════════════════════════════════════════════════════════
 
 def test_cpw():
@@ -58,9 +62,9 @@ def test_cpw():
     results = []
 
     sig, fs, gt = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=15)
-    res = cpw_envelope_analysis(sig, fs, comb_frequencies=[25.0, 50.0, 75.0], max_freq=500)
+    res = cpw_envelope_analysis(sig, fs, comb_frequencies=[25.0, 50.0, 75.0])
 
-    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=90.0, tolerance_hz=5.0))
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(_spectrum_arrays(res)[0], _spectrum_arrays(res)[1], target_freq=90.0, tolerance_hz=5.0))
     freq_ok = abs(peak_f - 90.0) < 10.0
     snr_ok = snr > 2.0
     passed = freq_ok and snr_ok
@@ -76,8 +80,8 @@ def test_cpw():
     # 边界：空 comb_frequencies
     empty_ok = False
     try:
-        res_empty = cpw_envelope_analysis(sig, fs, comb_frequencies=[], max_freq=500)
-        empty_ok = len(res_empty.get("envelope_freq", [])) > 0
+        res_empty = cpw_envelope_analysis(sig, fs, comb_frequencies=[])
+        empty_ok = len(res_empty["representation"].spectrum.frequency_hz) > 0
     except Exception:
         pass
     results.append({
@@ -100,9 +104,9 @@ def test_mckd():
 
     sig, fs, gt = bearing_inner_race(bpfi=135.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=15)
     bearing_params = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}
-    res = mckd_envelope_analysis(sig, fs, bearing_params, rot_freq=25.0, filter_len=64, shift_order_M=1, max_freq=500)
+    res = mckd_envelope_analysis(sig, fs, bearing_params, rot_freq=25.0, filter_len=64, shift_order_M=1)
 
-    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=135.0, tolerance_hz=5.0))
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(_spectrum_arrays(res)[0], _spectrum_arrays(res)[1], target_freq=135.0, tolerance_hz=5.0))
     freq_ok = abs(peak_f - 135.0) < 15.0  # MCKD 对 BPFI 有一定容差
     snr_ok = snr > 2.0
     passed = freq_ok and snr_ok
@@ -185,8 +189,8 @@ def test_real_data_hustbear_advanced():
         # CPW
         try:
             comb = [rot_freq * h for h in range(1, 4)]
-            res = cpw_envelope_analysis(signal, FS, comb_frequencies=comb, max_freq=500)
-            ef, ea = np.array(res.get("envelope_freq", [])), np.array(res.get("envelope_amp", []))
+            res = cpw_envelope_analysis(signal, FS, comb_frequencies=comb)
+            ef, ea = _spectrum_arrays(res)
             if len(ef) > 0:
                 peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(ef, ea, target_freq, tolerance_hz=5.0))
                 passed = abs(peak_f - target_freq) < target_freq * 0.20 + 5 and snr > 2.0
@@ -197,8 +201,8 @@ def test_real_data_hustbear_advanced():
 
         # MCKD
         try:
-            res = mckd_envelope_analysis(signal, FS, BEARING_PARAMS, rot_freq=rot_freq, filter_len=64, shift_order_M=1, max_freq=500)
-            ef, ea = np.array(res.get("envelope_freq", [])), np.array(res.get("envelope_amp", []))
+            res = mckd_envelope_analysis(signal, FS, BEARING_PARAMS, rot_freq=rot_freq, filter_len=64, shift_order_M=1)
+            ef, ea = _spectrum_arrays(res)
             if len(ef) > 0:
                 peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(ef, ea, target_freq, tolerance_hz=5.0))
                 if fault == "N":

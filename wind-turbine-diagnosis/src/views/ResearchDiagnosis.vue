@@ -47,7 +47,13 @@
       </div>
       <div class="metric"><span class="label">转频</span><strong>{{ result.rot_freq_hz ?? '-' }} Hz</strong></div>
       <div class="metric" v-if="result.health_score"><span class="label">健康度</span><strong>{{ result.health_score }}</strong></div>
-      <div class="metric" v-if="result.status"><span class="label">状态</span><el-tag :type="statusType(result.status)">{{ statusText(result.status) }}</el-tag></div>
+      <div class="metric" v-if="selectedMethodInfo?.category === 'bearing'">
+        <span class="label">包络评估</span>
+        <el-tag :type="evaluationStatusType(result.evaluation?.status)">
+          {{ evaluationStatusText(result.evaluation?.status) }}
+        </el-tag>
+      </div>
+      <div class="metric" v-else-if="result.status"><span class="label">状态</span><el-tag :type="statusType(result.status)">{{ statusText(result.status) }}</el-tag></div>
     </div>
 
     <el-empty v-if="!result && !loading" :description="runMode === 'single' ? '请选择分析方法后运行' : '请点击运行开始诊断'" />
@@ -80,7 +86,7 @@
 import ResearchToolbar from '../components/research/ResearchToolbar.vue'
 import SingleResultPanels from '../components/research/SingleResultPanels.vue'
 import EnsembleResultPanels from '../components/research/EnsembleResultPanels.vue'
-import { useResearchDiagnosis, percent, statusType, statusText } from '../composables/useResearchDiagnosis'
+import { useResearchDiagnosis, percent, statusType, statusText, evaluationStatusType, evaluationStatusText } from '../composables/useResearchDiagnosis'
 
 const {
   devices, selectedDeviceId, selectedBatchIndex, selectedChannel,

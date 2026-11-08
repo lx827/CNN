@@ -16,6 +16,11 @@
         <el-descriptions-item label="故障类型">
           {{ faultLabelText(data.fault_label) }}
         </el-descriptions-item>
+        <el-descriptions-item v-if="data.bearing?.evaluation" label="轴承包络评估" :span="2">
+          <el-tag :type="data.bearing.evaluation.status === 'evaluated' ? 'success' : 'info'" size="small">
+            {{ data.bearing.evaluation.status === 'evaluated' ? '已完成评估' : '输入不足，不可判定' }}
+          </el-tag>
+        </el-descriptions-item>
         <el-descriptions-item label="转频" :span="2">
           {{ displayRotFreq != null ? displayRotFreq.toFixed(2) + ' Hz / ' + (displayRotFreq * 60).toFixed(0) + ' RPM' : '-' }}
         </el-descriptions-item>
@@ -43,6 +48,22 @@
         <el-descriptions-item v-for="item in bearingIndicators" :key="item.key" :label="item.label">
           <span :class="item.significant ? 'text-warning' : 'text-muted'">{{ fmtVal(item.value) }}</span>
           <el-tag v-if="item.significant" type="warning" size="small" style="margin-left: 4px;">显著</el-tag>
+        </el-descriptions-item>
+      </el-descriptions>
+    </div>
+
+    <!-- SC/SCoh 专属指标 -->
+    <div class="detail-group" v-if="scScohItems.length">
+      <div class="group-title">〰 SC/SCoh 专属指标</div>
+      <el-descriptions :column="2" size="small" border>
+        <el-descriptions-item v-for="item in scScohItems" :key="item.key" :label="item.label">
+          <span :class="item.critical ? 'text-danger' : item.significant || item.warning ? 'text-warning' : 'text-muted'">
+            SCoh={{ fmtVal(item.value) }}，SNR={{ fmtVal(item.snr) }}
+          </span>
+          <el-text type="info" size="small" class="val-hint">理论 {{ fmtVal(item.theoryHz) }} Hz</el-text>
+          <el-tag v-if="item.critical" type="danger" size="small" style="margin-left: 4px;">严重</el-tag>
+          <el-tag v-else-if="item.warning" type="warning" size="small" style="margin-left: 4px;">预警</el-tag>
+          <el-tag v-else-if="item.significant" type="warning" size="small" style="margin-left: 4px;">显著</el-tag>
         </el-descriptions-item>
       </el-descriptions>
     </div>
@@ -86,6 +107,10 @@
 
 <script setup>
 import { computed } from 'vue'
+import {
+  bearingEvaluationIndicators,
+  scScohEntries,
+} from '../utils/bearingDiagnosis'
 
 const props = defineProps({
   orderAnalysis: { type: Object, default: null },
@@ -185,7 +210,7 @@ const indicatorLabelMap = {
 }
 
 const bearingIndicators = computed(() => {
-  const bi = data.value?.bearing?.fault_indicators || {}
+  const bi = bearingEvaluationIndicators(data.value?.bearing)
   const items = []
   for (const [k, v] of Object.entries(bi)) {
     if (typeof v !== 'object' || v === null) continue
@@ -198,6 +223,17 @@ const bearingIndicators = computed(() => {
   }
   return items
 })
+
+const scScohItems = computed(() => scScohEntries(data.value?.bearing).map(({ key, name, info }) => ({
+  key,
+  label: indicatorLabelMap[name] || name,
+  value: info.scoh_peak ?? null,
+  snr: info.scoh_snr ?? null,
+  theoryHz: info.theory_hz ?? null,
+  significant: info.significant ?? false,
+  warning: info.warning ?? false,
+  critical: info.critical ?? false,
+})))
 
 const gearIndicators = computed(() => {
   const gi = data.value?.gear?.fault_indicators || {}
@@ -218,11 +254,12 @@ const gearIndicators = computed(() => {
 
 // ---- 特征频率 ----
 const bearingFreqItems = computed(() => {
-  const bi = data.value?.bearing?.fault_indicators || {}
+  const bi = bearingEvaluationIndicators(data.value?.bearing)
   const items = []
   for (const key of ['BPFO', 'BPFI', 'BSF', 'FTF']) {
-    if (bi[key]?.frequency_hz) {
-      items.push({ key, label: indicatorLabelMap[key], value: bi[key].frequency_hz })
+    const frequency = bi[key]?.theory_hz ?? bi[key]?.detected_hz
+    if (frequency) {
+      items.push({ key, label: indicatorLabelMap[key], value: frequency })
     }
   }
   return items

@@ -141,7 +141,7 @@ def _run_bearing_method(files, bm_value):
             result = engine.analyze_bearing(signal, SAMPLE_RATE, rot_freq=rf)
             elapsed = (time.perf_counter() - t0) * 1000
 
-            indicators = result.get("fault_indicators", {}) or {}
+            indicators = result.get("evaluation", {}).get("indicators", {}) or {}
             has_fault = any(
                 isinstance(v, dict) and v.get("significant") and not k.endswith("_stat")
                 for k, v in indicators.items()

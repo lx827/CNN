@@ -85,7 +85,7 @@ def test_engine_bearing_hustbear():
                 continue
             try:
                 res = engine.analyze_bearing(sig, FS)
-                indicators = res.get("fault_indicators", {})
+                indicators = res.get("evaluation", {}).get("indicators", {})
                 has_any = len(indicators) > 0
                 # 健康数据应有较高健康度
                 health_ok = True
@@ -121,7 +121,7 @@ def test_engine_bearing_cw():
                 continue
             try:
                 res = engine.analyze_bearing(sig, FS)
-                indicators = res.get("fault_indicators", {})
+                indicators = res.get("evaluation", {}).get("indicators", {})
                 has_any = len(indicators) > 0
                 # 变速下只要不崩溃就算基本通过
                 passed = has_any
