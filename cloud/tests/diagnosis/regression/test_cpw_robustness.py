@@ -24,32 +24,40 @@ def test_cpw_with_none_rot_freq():
     sig = np.random.randn(4096)
     # 直接传入 rot_freq=None，内部会尝试估计，如果估计失败不应崩溃
     result = engine.analyze_bearing(sig, fs=25600, rot_freq=None)
-    assert "envelope_freq" in result
+    assert "spectrum" in result
     print("  [PASS] CPW with rot_freq=None 未崩溃")
 
 
 def test_cpw_with_negative_rot_freq():
-    """CPW: rot_freq 为负数时不应崩溃"""
+    """CPW: 显式传入负转频时必须给出可控参数错误"""
     engine = DiagnosisEngine(
         bearing_method=BearingMethod.CPW,
         gear_teeth={"input": 18},
     )
     sig = np.random.randn(4096)
-    result = engine.analyze_bearing(sig, fs=25600, rot_freq=-5.0)
-    assert "envelope_freq" in result
-    print("  [PASS] CPW with rot_freq=-5 未崩溃")
+    try:
+        engine.analyze_bearing(sig, fs=25600, rot_freq=-5.0)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("负转频未触发 ValueError")
+    print("  [PASS] CPW with rot_freq=-5 明确拒绝非法参数")
 
 
 def test_cpw_with_zero_rot_freq():
-    """CPW: rot_freq 为 0 时不应崩溃"""
+    """CPW: 显式传入零转频时必须给出可控参数错误"""
     engine = DiagnosisEngine(
         bearing_method=BearingMethod.CPW,
         gear_teeth={"input": 18},
     )
     sig = np.random.randn(4096)
-    result = engine.analyze_bearing(sig, fs=25600, rot_freq=0.0)
-    assert "envelope_freq" in result
-    print("  [PASS] CPW with rot_freq=0 未崩溃")
+    try:
+        engine.analyze_bearing(sig, fs=25600, rot_freq=0.0)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("零转频未触发 ValueError")
+    print("  [PASS] CPW with rot_freq=0 明确拒绝非法参数")
 
 
 def test_cpw_empty_comb_freqs():

@@ -59,7 +59,7 @@ def test_generate_recommendation():
     print(f"  [{'PASS' if normal_ok else 'FAIL'}] normal: {r[:50]}...")
 
     # 精确匹配（使用单键避免排序问题 + D-S 冲突）
-    bearing = {"fault_indicators": {}}
+    bearing = {"evaluation": {"indicators": {}}}
     gear = {"fault_indicators": {}}
     r = _generate_recommendation(bearing, gear, "warning", ds_conflict_high=True,
                                   deductions=[("ds_conflict_penalty", 10)])

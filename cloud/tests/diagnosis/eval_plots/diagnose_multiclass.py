@@ -125,7 +125,7 @@ def diagnose():
 
             # 提取 best_bearing 的 indicators
             best_bearing = res.get("bearing", {})
-            indicators = best_bearing.get("fault_indicators", {})
+            indicators = best_bearing.get("evaluation", {}).get("indicators", {})
             param_hits = [
                 name for name, item in indicators.items()
                 if isinstance(item, dict) and item.get("significant") and not name.endswith("_stat")

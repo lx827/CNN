@@ -9,6 +9,11 @@ import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { getAllDeviceData } from '../api/data'
 import { getMethodInfo, getChannelMethodAnalysis, getChannelResearchAnalysis } from '../api/diagnosis'
+import {
+  bearingIndicatorEntries,
+  indicatorDisplayValue,
+  significantBearingFaults,
+} from '../utils/bearingDiagnosis'
 
 export const runModeOptions = [
   { label: '单方法', value: 'single' },
@@ -38,6 +43,15 @@ export const statusText = status => {
   return '正常'
 }
 
+export const evaluationStatusType = status => status === 'evaluated' ? 'success' : 'info'
+
+export const evaluationStatusText = status => {
+  if (status === 'indeterminate') return '不可判定'
+  if (status === 'not_evaluable') return '不可评估'
+  if (status === 'evaluated') return '已评估'
+  return status || '不可判定'
+}
+
 const voteRows = (votes = {}) => Object.entries(votes).map(([method, value]) => ({
   method,
   confidence: value.confidence ?? 0,
@@ -45,23 +59,31 @@ const voteRows = (votes = {}) => Object.entries(votes).map(([method, value]) => 
   stat_hits: value.stat_hits ?? '-',
   critical_hits: value.critical_hits ?? '-',
   warning_hits: value.warning_hits ?? '-',
-  strongest_snr: value.strongest_snr ?? '-',
+  strongest_score: value.strongest_score ?? '-',
   hits: Array.isArray(value.hits) ? value.hits.join(', ') : '',
 }))
 
-const appendIndicators = (rows, source, indicators = {}) => {
-  Object.entries(indicators || {}).forEach(([name, value]) => {
-    if (!value || typeof value !== 'object') return
-    const isCritical = value.critical || value.significant
-    const isWarning = value.warning
-    rows.push({
-      source,
-      name,
-      value: value.value ?? value.snr ?? value.detected_hz ?? '-',
-      state: isCritical ? '命中' : isWarning ? '预警' : '正常',
-      type: isCritical ? 'danger' : isWarning ? 'warning' : 'success',
-    })
+const appendIndicator = (rows, source, name, value) => {
+  if (!value || typeof value !== 'object') return
+  const notEvaluable = value.evaluable === false
+    || ('significant' in value && value.significant == null && value.evaluable !== true)
+  const isCritical = !notEvaluable && (value.critical || value.significant)
+  const isWarning = !notEvaluable && value.warning
+  rows.push({
+    source,
+    name,
+    value: indicatorDisplayValue(value),
+    state: notEvaluable ? '不可评估' : isCritical ? '命中' : isWarning ? '预警' : '正常',
+    type: notEvaluable ? 'info' : isCritical ? 'danger' : isWarning ? 'warning' : 'success',
   })
+}
+
+const appendIndicators = (rows, source, indicators = {}) => {
+  Object.entries(indicators || {}).forEach(([name, value]) => appendIndicator(rows, source, name, value))
+}
+
+const appendBearingIndicators = (rows, source, result) => {
+  bearingIndicatorEntries(result).forEach(({ name, info }) => appendIndicator(rows, source, name, info))
 }
 
 export function useResearchDiagnosis() {
@@ -143,7 +165,7 @@ export function useResearchDiagnosis() {
 
   const bestIndicatorRows = computed(() => {
     const rows = []
-    appendIndicators(rows, '轴承', result.value?.bearing?.fault_indicators)
+    appendBearingIndicators(rows, '轴承', result.value?.bearing)
     appendIndicators(rows, '齿轮', result.value?.gear?.fault_indicators)
     return rows
   })
@@ -175,15 +197,17 @@ export function useResearchDiagnosis() {
     if (!br || isAllMode.value === false) return []
     return Object.entries(br).map(([method, r]) => {
       if (!r || r.error) return { method, faults: [], params: r?.error || '执行失败', _error: true }
-      const fi = r.fault_indicators || {}
-      const faults = Object.entries(fi)
-        .filter(([, v]) => v && typeof v === 'object' && (v.significant || v.critical))
-        .map(([name, v]) => ({ fault_type: name, snr: v.snr?.toFixed?.(1) ?? v.value ?? '?' }))
+      const faults = significantBearingFaults(r).map(fault => ({
+        ...fault,
+        snr: fault.snr?.toFixed?.(1) ?? fault.snr,
+        score: fault.score?.toFixed?.(1) ?? fault.score,
+      }))
       const params = [
         r.rot_freq_hz != null ? `${r.rot_freq_hz?.toFixed?.(2) ?? r.rot_freq_hz}Hz` : '',
-        r.band_center != null ? `频带${r.band_center?.toFixed?.(0) ?? r.band_center}Hz` : '',
+        r.band?.center_hz != null ? `频带${r.band.center_hz?.toFixed?.(0) ?? r.band.center_hz}Hz` : '',
+        r.evaluation?.status !== 'evaluated' ? evaluationStatusText(r.evaluation?.status) : '',
       ].filter(Boolean).join(', ')
-      return { method, faults, params: params || '-' }
+      return { method, faults, evaluationStatus: r.evaluation?.status, params: params || '-' }
     })
   })
 
@@ -217,7 +241,7 @@ export function useResearchDiagnosis() {
     const gearResults = result.value?.gear_results || {}
     for (const [method, r] of Object.entries(bearingResults)) {
       if (!r || r.error) continue
-      appendIndicators(rows, method, r.fault_indicators)
+      appendBearingIndicators(rows, method, r)
     }
     for (const [method, r] of Object.entries(gearResults)) {
       if (!r || r.error) continue

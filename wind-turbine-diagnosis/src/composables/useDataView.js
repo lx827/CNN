@@ -30,6 +30,10 @@ import {
   reanalyzeAllDevice
 } from '../api/diagnosis'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  bearingFrequencyAnnotations,
+  significantBearingFaults,
+} from '../utils/bearingDiagnosis'
 
 export const bearingMethodLabel = (key) => {
   const map = {
@@ -218,16 +222,12 @@ export function useDataView() {
     const results = []
     for (const [methodKey, result] of Object.entries(fullAnalysisData.value.bearing_results)) {
       if (result.error) continue
-      const faults = []
-      const indicators = result.fault_indicators || {}
-      for (const [fname, info] of Object.entries(indicators)) {
-        if (info.significant) {
-          faults.push({ fault_type: fname, snr: info.snr, detected_hz: info.detected_hz })
-        }
-      }
-      // 关键参数
+      const faults = significantBearingFaults(result)
+      // 关键参数优先使用新契约中的实际分析频带
       const params = []
-      if (result.optimal_fc != null) params.push(`最优频段 ${result.optimal_fc}Hz`)
+      if (result.band?.center_hz != null) {
+        params.push(`频带 ${result.band.low_hz}~${result.band.high_hz}Hz`)
+      }
       if (result.max_kurtosis != null) params.push(`峭度 ${result.max_kurtosis.toFixed(2)}`)
       if (result.kurtosis_after != null) params.push(`MED后峭度 ${result.kurtosis_after.toFixed(2)}`)
       if (result.kurtosis_before != null) params.push(`MED前峭度 ${result.kurtosis_before.toFixed(2)}`)
@@ -235,6 +235,7 @@ export function useDataView() {
         method: bearingMethodLabel(methodKey),
         methodKey,
         faults,
+        evaluationStatus: result.evaluation?.status ?? 'indeterminate',
         params: params.join(' | ') || '-',
       })
     }
@@ -415,31 +416,19 @@ export function useDataView() {
   /** 从诊断结果提取特征频率列表，用于 FFT/包络谱的 markLine 标注 */
   const extractFaultFreqAnnotations = (diagData) => {
     const annotations = []
-    // 从 engine_result 或 full_analysis 中提取
+    // 兼容缓存外层与策略/全分析直接返回的 engine_result 本体
     const engineResult = diagData.engine_result || diagData.full_analysis
+      || ((diagData.bearing || diagData.bearing_results || diagData.gear || diagData.gear_results) ? diagData : null)
     if (!engineResult) {
       faultFreqAnnotations.value = null
       return
     }
 
-    // 轴承特征频率（从 fault_indicators 或 bearing_results 中提取）
-    const bearingSource = engineResult.bearing?.fault_indicators
-      || engineResult.bearing_results?.envelope?.fault_indicators
-    if (bearingSource) {
-      for (const [name, info] of Object.entries(bearingSource)) {
-        if (info && typeof info === 'object') {
-          const freq = info.detected_hz ?? info.theory_hz
-          if (freq && freq > 0) {
-            annotations.push({
-              freq,
-              name,
-              detected: !!info.significant,
-              type: 'bearing',
-            })
-          }
-        }
-      }
-    }
+    // 轴承特征频率只读新 evaluation / SC/SCoh 专属字段，避免误用齿轮旧契约
+    const bearingResult = engineResult.bearing
+      || engineResult.bearing_results?.envelope
+      || Object.values(engineResult.bearing_results || {})[0]
+    annotations.push(...bearingFrequencyAnnotations(bearingResult))
 
     // 齿轮特征频率
     const gearSource = engineResult.gear?.fault_indicators
@@ -492,6 +481,15 @@ export function useDataView() {
     faultFreqAnnotations.value = annotations.length > 0 ? annotations : null
   }
 
+  /** 实时包络计算只替换轴承标注，保留缓存中的齿轮与转频标注。 */
+  const updateBearingFreqAnnotations = (bearingResult) => {
+    const retained = (faultFreqAnnotations.value || []).filter(
+      ann => ann.type !== 'bearing' && ann.type !== 'bearing_sc_scoh'
+    )
+    const annotations = [...retained, ...bearingFrequencyAnnotations(bearingResult)]
+    faultFreqAnnotations.value = annotations.length > 0 ? annotations : null
+  }
+
   /** 将特征频率标注叠加到 ECharts option 的 markLine 上 */
   const addFreqAnnotationsToOption = (option, freqData) => {
     if (!faultFreqAnnotations.value || !freqData || freqData.length === 0) return option
@@ -510,14 +508,15 @@ export function useDataView() {
       if (idx < 0 || idx >= freqData.length) continue
 
       const isDetected = ann.detected
-      const labelPrefix = ann.type === 'bearing' ? '🧩' : ann.type === 'gear' ? '⚙' : ann.type === 'gear_mesh' ? '🔧' : '🔄'
+      const isBearing = ann.type === 'bearing' || ann.type === 'bearing_sc_scoh'
+      const labelPrefix = isBearing ? '🧩' : ann.type === 'gear' ? '⚙' : ann.type === 'gear_mesh' ? '🔧' : '🔄'
 
       markLineData.push({
         xAxis: idx,
         name: `${labelPrefix} ${ann.name}(${ann.freq.toFixed(1)}Hz)`,
         lineStyle: {
           type: isDetected ? 'solid' : 'dashed',
-          color: isDetected ? '#F5222D' : ann.type === 'bearing' ? '#165DFF' : ann.type === 'gear' ? '#FAAD14' : '#999',
+          color: isDetected ? '#F5222D' : isBearing ? '#165DFF' : ann.type === 'gear' ? '#FAAD14' : '#999',
           width: isDetected ? 2 : 1,
         },
       })
@@ -782,22 +781,33 @@ export function useDataView() {
 
       envelopeData.value = d
       computedEnvelope.value = true
-      envelopeOption.value = {
-        tooltip: { trigger: 'axis', triggerOn: 'click' },
-        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-        xAxis: { type: 'category', data: d.envelope_freq, name: '频率 (Hz)', nameGap: 25 },
-        yAxis: { type: 'value', name: '包络幅值' },
-        dataZoom: [{ type: 'inside' }],
-        series: [{
-          type: 'line',
-          data: d.envelope_amp,
-          showSymbol: false,
-          areaStyle: { color: 'rgba(250, 173, 20, 0.2)' },
-          lineStyle: { width: 1.5, color: '#FAAD14' }
-        }]
+      updateBearingFreqAnnotations(d)
+
+      const spectrum = d.spectrum
+      if (spectrum?.frequency_hz?.length && spectrum?.amplitude?.length) {
+        envelopeOption.value = {
+          tooltip: { trigger: 'axis', triggerOn: 'click' },
+          grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+          xAxis: { type: 'category', data: spectrum.frequency_hz, name: '频率 (Hz)', nameGap: 25 },
+          yAxis: {
+            type: 'value',
+            name: `包络幅值 (${spectrum.amplitude_unit || 'input_signal'}；${spectrum.scaling || 'unnormalized'})`,
+          },
+          dataZoom: [{ type: 'inside' }],
+          series: [{
+            type: 'line',
+            data: spectrum.amplitude,
+            showSymbol: false,
+            areaStyle: { color: 'rgba(250, 173, 20, 0.2)' },
+            lineStyle: { width: 1.5, color: '#FAAD14' }
+          }]
+        }
+        // 叠加特征频率标注（包络谱是轴承诊断核心视图，标注尤为重要）
+        addFreqAnnotationsToOption(envelopeOption.value, spectrum.frequency_hz)
+      } else {
+        // SC/SCoh 只返回专属循环频率指标，没有包络谱数组。
+        envelopeOption.value = null
       }
-      // 叠加特征频率标注（包络谱是轴承诊断核心视图，标注尤为重要）
-      addFreqAnnotationsToOption(envelopeOption.value, d.envelope_freq)
     } catch (e) {
       console.error('包络谱计算失败:', e)
       ElMessage.error('包络谱计算失败: ' + (e.response?.data?.detail || e.message))
@@ -1078,10 +1088,8 @@ export function useDataView() {
       if (!d) return
       strategyAnalyzeData.value = d
       computedStrategyAnalyze.value = true
-      // 提取特征频率标注
-      if (d.bearing_result?.fault_indicators) {
-        extractFaultFreqAnnotations(d)
-      }
+      // 策略结果中的轴承同样使用 evaluation.indicators
+      extractFaultFreqAnnotations(d)
     } catch (e) {
       console.error('策略诊断失败:', e)
       ElMessage.error('策略诊断失败: ' + (e.response?.data?.detail || e.message))

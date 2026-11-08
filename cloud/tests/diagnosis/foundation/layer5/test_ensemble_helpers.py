@@ -25,10 +25,10 @@ def test_bearing_confidence():
 
     # 高置信：2+ param hits + 冲击背景
     res = {
-        "fault_indicators": {
+        "evaluation": {"indicators": {
             "BPFO": {"significant": True, "snr": 12.0},
             "BPFI": {"significant": True, "snr": 8.0},
-        }
+        }}
     }
     tf = {"kurtosis": 12.0, "crest_factor": 15.0}
     c = _bearing_confidence(res, tf)
@@ -37,7 +37,7 @@ def test_bearing_confidence():
     print(f"  [{'PASS' if high_ok else 'FAIL'}] 高置信: conf={c['confidence']:.2f}, abnormal={c['abnormal']}")
 
     # 低置信：无显著指标
-    res2 = {"fault_indicators": {}}
+    res2 = {"evaluation": {"indicators": {}}}
     c2 = _bearing_confidence(res2, {"kurtosis": 3.0, "crest_factor": 5.0})
     low_ok = c2["confidence"] < 0.3 and c2["abnormal"] is False
     results.append({"test": "bearing_low_conf", "conf": c2["confidence"], "passed": low_ok})
@@ -45,9 +45,9 @@ def test_bearing_confidence():
 
     # 统计路径：单统计指标 + 高 SNR + 冲击
     res3 = {
-        "fault_indicators": {
+        "evaluation": {"indicators": {
             "envelope_peak_snr": {"significant": True, "snr": 15.0},
-        }
+        }}
     }
     c3 = _bearing_confidence(res3, {"kurtosis": 8.0, "crest_factor": 12.0})
     stat_ok = c3["confidence"] > 0.3
@@ -137,7 +137,7 @@ def test_fault_label():
     print(f"  [{'PASS' if gear_ok else 'FAIL'}] 齿轮占优: {label}")
 
     # 轴承占优
-    best_bearing = {"fault_indicators": {"BPFO": {"significant": True}}}
+    best_bearing = {"evaluation": {"indicators": {"BPFO": {"significant": True}}}}
     label2 = _fault_label(best_bearing, {}, 0.7, 0.2)
     bearing_ok = "bearing_" in label2
     results.append({"test": "label_bearing_dominant", "label": label2, "passed": bearing_ok})

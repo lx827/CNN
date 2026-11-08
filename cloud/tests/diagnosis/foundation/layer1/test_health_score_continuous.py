@@ -115,7 +115,7 @@ def test_continuous_deductions():
 
     tf = {"kurtosis": 3.2, "crest_factor": 6.0, "rms": 0.5,
           "rms_mad_z": 1.0, "kurtosis_mad_z": 0.5}
-    bearing = {"fault_indicators": {}}
+    bearing = {"evaluation": {"indicators": {}}}
     gear = {"fault_indicators": {}}
     ded = compute_continuous_deductions(tf, None, bearing, gear)
     not_empty = len(ded) >= 0  # 可能为空（指标都在正常范围）

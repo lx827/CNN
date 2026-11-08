@@ -280,8 +280,8 @@ def evaluate_bearing_robustness() -> Dict[str, Any]:
                         )
 
                 # BPFO 检出 SNR
-                env_freq = result_fault.get("envelope_freq", [])
-                env_amp = result_fault.get("envelope_amp", [])
+                env_freq = result_fault["spectrum"]["frequency_hz"]
+                env_amp = result_fault["spectrum"]["amplitude"]
                 bpfo_snr = estimate_fault_freq_snr(
                     env_freq, env_amp, rot_freq_fault, BEARING_FREQ_COEFFS["BPFO"]
                 )

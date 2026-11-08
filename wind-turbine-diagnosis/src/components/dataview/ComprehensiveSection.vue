@@ -157,10 +157,11 @@
             <el-table-column prop="method" label="诊断方法" width="160" />
             <el-table-column prop="faults" label="检出故障">
               <template #default="{ row }">
-                <el-tag v-for="(f, idx) in row.faults" :key="idx" :type="f.snr > 5 ? 'danger' : 'warning'" size="small" style="margin-right: 6px; margin-bottom: 4px;">
-                  {{ f.fault_type }} (SNR={{ f.snr }})
+                <el-tag v-for="(f, idx) in row.faults" :key="idx" :type="(f.snr ?? f.score) > 5 ? 'danger' : 'warning'" size="small" style="margin-right: 6px; margin-bottom: 4px;">
+                  {{ f.fault_type }} ({{ f.snr != null ? 'SNR' : 'score' }}={{ f.snr ?? f.score }})
                 </el-tag>
-                <el-text v-if="row.faults.length === 0" type="info" size="small">未检出显著故障</el-text>
+                <el-text v-if="row.evaluationStatus !== 'evaluated'" type="info" size="small">输入不足，暂不可判定</el-text>
+                <el-text v-else-if="row.faults.length === 0" type="info" size="small">未检出显著故障</el-text>
               </template>
             </el-table-column>
             <el-table-column prop="params" label="关键参数" min-width="200">
@@ -175,20 +176,25 @@
             <el-collapse-item title="查看各方法详细指标" name="1">
               <div v-for="(bresult, methodKey) in fullAnalysisData.bearing_results" :key="methodKey" style="margin-bottom: 12px;">
                 <el-text type="primary" size="small" style="font-weight: 600;">{{ bearingMethodLabel(methodKey) }}</el-text>
-                <el-descriptions :column="3" size="small" border v-if="bresult.fault_indicators">
+                <el-descriptions :column="3" size="small" border v-if="bearingEntries(bresult).length">
                   <el-descriptions-item
-                    v-for="(info, fname) in bresult.fault_indicators"
-                    :key="fname"
-                    :label="fname"
+                    v-for="entry in bearingEntries(bresult)"
+                    :key="entry.key"
+                    :label="entry.source === 'sc_scoh' ? `SC/SCoh ${entry.name}` : entry.name"
                   >
-                    <span v-if="info.significant" style="color: #F5222D; font-weight: 600;">
-                      检出 ({{ info.detected_hz }}Hz, SNR={{ info.snr }})
+                    <span v-if="entry.info.significant || entry.info.critical" style="color: #F5222D; font-weight: 600;">
+                      检出 ({{ entry.info.detected_hz ?? entry.info.theory_hz }}Hz,
+                      {{ entry.source === 'sc_scoh' ? `SCoh=${entry.info.scoh_peak}, SNR=${entry.info.scoh_snr}` : `SNR=${entry.info.snr}` }})
+                    </span>
+                    <span v-else-if="entry.info.evaluable === false || entry.info.significant == null" style="color: #999;">
+                      不可评估（{{ entry.info.reason || '输入或频率覆盖不足' }}）
                     </span>
                     <span v-else style="color: #999;">
-                      未检出 (理论{{ info.theory_hz }}Hz)
+                      未检出 (理论{{ entry.info.theory_hz }}Hz)
                     </span>
                   </el-descriptions-item>
                 </el-descriptions>
+                <el-text v-else type="info" size="small">暂无可评估指标</el-text>
               </div>
             </el-collapse-item>
           </el-collapse>
@@ -258,6 +264,7 @@
 
 <script setup>
 import { bearingMethodLabel } from '../../composables/useDataView'
+import { bearingIndicatorEntries as bearingEntries } from '../../utils/bearingDiagnosis'
 
 defineProps({
   computedStrategyAnalyze: { type: Boolean, default: false },

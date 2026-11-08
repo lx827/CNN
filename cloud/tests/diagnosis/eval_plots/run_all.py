@@ -94,7 +94,7 @@ def _fault_code_wtg(fname):
 
 def _bearing_detect(result, is_healthy):
     """判断轴承方法是否检出故障"""
-    inds = result.get("fault_indicators", {})
+    inds = result.get("evaluation", {}).get("indicators", {})
     has_fault = any(
         v.get("significant") for k, v in inds.items()
         if isinstance(v, dict) and not k.endswith("_stat"))
@@ -740,7 +740,7 @@ def run_46_robustness():
                     bearing_method=method_val,
                     bearing_params=BEARING_PARAMS, denoise_method=DenoiseMethod.NONE)
                 res = engine.analyze_bearing(sig_clean + noise, FS)
-                inds = res.get("fault_indicators", {})
+                inds = res.get("evaluation", {}).get("indicators", {})
                 detected = any(v.get("significant") for k, v in inds.items()
                                if isinstance(v, dict) and not k.endswith("_stat"))
                 curve.append({"snr_db": snr_db, "detected": detected})

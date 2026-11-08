@@ -5,17 +5,19 @@
 """
 import numpy as np
 from enum import Enum
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Mapping
 
 from .signal_utils import (
     prepare_signal, linear_detrend,
     compute_fft_spectrum,
     estimate_rot_freq_spectrum as _estimate_rot_freq_simple,
-    _search_peak_in_band,
-    _compute_peak_snr,
-    rms,
-    crest_factor,
+    highpass_filter,
 )
+from app.algorithms.core import Spectrum
+from app.algorithms.mechanics import BearingGeometry
+from app.algorithms.bearing.analysis import analyze_envelope_spectrum
+from app.algorithms.bearing.evaluation import evaluate_envelope
+from app.algorithms.pipelines.bearing import BearingEnvelopePipeline
 from .order_tracking import (
     _compute_order_spectrum_multi_frame,
     _compute_order_spectrum_varying_speed,
@@ -23,7 +25,6 @@ from .order_tracking import (
     _order_tracking,
 )
 from .bearing import (
-    envelope_analysis,
     fast_kurtogram,
     cpw_envelope_analysis,
     med_envelope_analysis,
@@ -31,7 +32,6 @@ from .bearing import (
     spectral_kurtosis_envelope_analysis,
 )
 from .bearing_cyclostationary import bearing_sc_scoh_analysis
-from .bearing_sideband import evaluate_bearing_sideband_features
 from .gear import (
     compute_fm0_order,
     compute_tsa_residual_order,
@@ -57,15 +57,42 @@ from .vmd_denoise import vmd_denoise
 from .features import (
     compute_time_features,
     compute_fft_features,
-    compute_envelope_features,
 )
-from .signal_utils import highpass_filter
 from .health_score import _compute_health_score
 from .recommendation import (
     _generate_recommendation,
     _generate_recommendation_all,
     _summarize_all_methods,
 )
+
+
+def bearing_geometry_from_config(values: Optional[Mapping]) -> Optional[BearingGeometry]:
+    """业务配置适配：缺失表示未配置，畸形配置显式报错。"""
+    if values is None or values == {}:
+        return None
+    if not isinstance(values, Mapping):
+        raise ValueError("轴承参数必须是字典或 None")
+    required = ("n", "d", "D")
+    if any(key not in values or values[key] is None for key in required):
+        raise ValueError("轴承参数 n、d、D 必须完整配置")
+    raw_count = values["n"]
+    if isinstance(raw_count, bool):
+        raise ValueError("滚动体数量必须是整数")
+    try:
+        count = float(raw_count)
+        if not np.isfinite(count) or not count.is_integer():
+            raise ValueError("滚动体数量必须是整数")
+        roller_diameter = float(values["d"])
+        pitch_diameter = float(values["D"])
+        alpha = float(values.get("alpha") or 0.0)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"轴承参数格式错误: {exc}") from exc
+    return BearingGeometry(
+        roller_count=int(count),
+        roller_diameter=roller_diameter,
+        pitch_diameter=pitch_diameter,
+        contact_angle_deg=alpha,
+    )
 
 
 class DiagnosisStrategy(str, Enum):
@@ -211,118 +238,156 @@ class DiagnosisEngine:
         fs: float,
         rot_freq: Optional[float] = None,
         preprocess: bool = True,
+        max_freq: float = 1000.0,
     ) -> Dict[str, Any]:
         """
         轴承诊断分析
 
-        Returns:
-            {
-                "method": str,
-                "envelope_freq": List[float],
-                "envelope_amp": List[float],
-                "features": Dict,
-                "fault_indicators": Dict,
-            }
+        返回结构化 spectrum、band、features 和 evaluation，不再返回旧包络数组字段。
         """
         arr = self.preprocess(signal) if preprocess else np.array(signal, dtype=np.float64)
 
+        rot_std = 0.0
         if rot_freq is None:
-            rot_freq, _, _, _, rot_std = self._estimate_rot_freq(arr, fs)
-        else:
-            rot_std = 0.0  # 外部指定转频时不携带不确定度
+            rot_freq, _, _, tracking_method, rot_std = self._estimate_rot_freq(arr, fs)
+            # 标准包络不再把估计失败静默替换为固定 10 Hz。
+            if tracking_method == "fallback" and self.bearing_method == BearingMethod.ENVELOPE:
+                rot_freq = None
+                rot_std = 0.0
 
         # 变速工况：转速变异 > 10% 时对信号线性去趋势
-        if rot_freq > 0 and rot_std / rot_freq > 0.10:
+        if rot_freq is not None and rot_freq > 0 and rot_std / rot_freq > 0.10:
             arr = linear_detrend(arr)
 
-        # 选择轴承诊断方法
-        if self.bearing_method == BearingMethod.KURTOGRAM:
-            result = fast_kurtogram(arr, fs)
-        elif self.bearing_method == BearingMethod.CPW:
-            # CPW 需要齿轮/轴频作为 comb_frequencies
-            comb_freqs = []
-            if self.gear_teeth:
-                z_in = (self.gear_teeth.get("input") or 0) if self.gear_teeth else 0
-                planet_count = (self.gear_teeth.get("planet_count") or self.gear_teeth.get("n_planets") or 0) if self.gear_teeth else 0
-                z_sun = (self.gear_teeth.get("sun") or 0) if self.gear_teeth else 0
-                z_ring = (self.gear_teeth.get("ring") or 0) if self.gear_teeth else 0
-                if z_in > 0 and rot_freq is not None and rot_freq > 0:
-                    # 行星齿轮箱 mesh_freq = Z_ring×Z_sun/(Z_sun+Z_ring) × rot_freq
-                    if planet_count >= 3 and z_sun > 0 and z_ring > 0:
-                        comb_freqs.append(rot_freq * z_ring * z_sun / (z_sun + z_ring))
-                    else:
-                        comb_freqs.append(rot_freq * z_in)
-            if rot_freq is not None and rot_freq > 0:
-                comb_freqs.append(rot_freq)
-            result = cpw_envelope_analysis(arr, fs, comb_frequencies=comb_freqs)
-        elif self.bearing_method == BearingMethod.MED:
-            result = med_envelope_analysis(arr, fs)
-        elif self.bearing_method == BearingMethod.TEAGER:
-            # Teager 对变速敏感：先阶次跟踪角域重采样，消除转速调制后再分析
-            # samples_per_rev=256（非1024）：避免信号膨胀触发 fast_kurtogram 的
-            # STFT O(N²) 行为。256点/转对包络分析足够（角分辨率 ~1.4°）
-            if rot_freq and rot_freq > 0:
-                SAMP_PER_REV = 256
-                arr_order, _ = _order_tracking(arr, fs, rot_freq, samples_per_rev=SAMP_PER_REV)
-                arr_order = arr_order - arr_order.mean()
-                # 角域重采样后等效采样率 = SAMP_PER_REV × rot_freq
-                fs_order = SAMP_PER_REV * rot_freq
-                result = teager_envelope_analysis(arr_order, fs_order)
+        geometry = bearing_geometry_from_config(self.bearing_params)
+        if self.bearing_method == BearingMethod.ENVELOPE:
+            pipeline = BearingEnvelopePipeline(geometry=geometry)
+            diagnosis = pipeline.run(
+                arr,
+                fs,
+                rot_frequency_hz=rot_freq,
+                rot_frequency_std_hz=rot_std,
+            )
+            representation = diagnosis.analysis.representation
+            analysis = diagnosis.analysis.envelope_analysis
+            evaluation = diagnosis.evaluation
+            metadata = {}
+        else:
+            # 其他方法仍保留各自的选带/增强流程，但共用同一指标和评估实现。
+            if self.bearing_method == BearingMethod.KURTOGRAM:
+                result = fast_kurtogram(arr, fs)
+            elif self.bearing_method == BearingMethod.CPW:
+                comb_freqs = []
+                if self.gear_teeth:
+                    z_in = (self.gear_teeth.get("input") or 0) if self.gear_teeth else 0
+                    planet_count = (self.gear_teeth.get("planet_count") or self.gear_teeth.get("n_planets") or 0) if self.gear_teeth else 0
+                    z_sun = (self.gear_teeth.get("sun") or 0) if self.gear_teeth else 0
+                    z_ring = (self.gear_teeth.get("ring") or 0) if self.gear_teeth else 0
+                    if z_in > 0 and rot_freq is not None and rot_freq > 0:
+                        if planet_count >= 3 and z_sun > 0 and z_ring > 0:
+                            comb_freqs.append(rot_freq * z_ring * z_sun / (z_sun + z_ring))
+                        else:
+                            comb_freqs.append(rot_freq * z_in)
+                if rot_freq is not None and rot_freq > 0:
+                    comb_freqs.append(rot_freq)
+                result = cpw_envelope_analysis(arr, fs, comb_frequencies=comb_freqs)
+            elif self.bearing_method == BearingMethod.MED:
+                result = med_envelope_analysis(arr, fs)
+            elif self.bearing_method == BearingMethod.TEAGER:
+                if rot_freq and rot_freq > 0:
+                    samples_per_rev = 256
+                    arr_order, _ = _order_tracking(arr, fs, rot_freq, samples_per_rev=samples_per_rev)
+                    arr_order = arr_order - arr_order.mean()
+                    result = teager_envelope_analysis(arr_order, samples_per_rev * rot_freq)
+                else:
+                    result = teager_envelope_analysis(arr, fs)
+            elif self.bearing_method == BearingMethod.SPECTRAL_KURTOSIS:
+                result = spectral_kurtosis_envelope_analysis(arr, fs)
+            elif self.bearing_method == BearingMethod.SC_SCOH:
+                result = bearing_sc_scoh_analysis(
+                    arr, fs, bearing_params=self.bearing_params, rot_freq=rot_freq
+                )
+            elif self.bearing_method == BearingMethod.MCKD:
+                from .mckd import mckd_envelope_analysis
+                result = mckd_envelope_analysis(
+                    arr, fs, bearing_params=self.bearing_params, rot_freq=rot_freq
+                )
+            elif self.bearing_method == BearingMethod.WP:
+                from .wavelet_bearing import wavelet_packet_bearing_analysis
+                result = wavelet_packet_bearing_analysis(arr, fs)
+            elif self.bearing_method == BearingMethod.DWT:
+                from .wavelet_bearing import dwt_bearing_analysis
+                result = dwt_bearing_analysis(arr, fs)
+            elif self.bearing_method == BearingMethod.EMD_ENVELOPE:
+                from .modality_bearing import emd_bearing_analysis
+                result = emd_bearing_analysis(arr, fs)
+            elif self.bearing_method == BearingMethod.CEEMDAN_ENVELOPE:
+                from .modality_bearing import ceemdan_bearing_analysis
+                result = ceemdan_bearing_analysis(arr, fs)
+            elif self.bearing_method == BearingMethod.VMD_ENVELOPE:
+                from .modality_bearing import vmd_bearing_analysis
+                result = vmd_bearing_analysis(arr, fs)
             else:
-                result = teager_envelope_analysis(arr, fs)
-        elif self.bearing_method == BearingMethod.SPECTRAL_KURTOSIS:
-            result = spectral_kurtosis_envelope_analysis(arr, fs)
-        elif self.bearing_method == BearingMethod.SC_SCOH:
-            result = bearing_sc_scoh_analysis(
-                arr, fs, bearing_params=self.bearing_params, rot_freq=rot_freq
-            )
-        elif self.bearing_method == BearingMethod.MCKD:
-            from .mckd import mckd_envelope_analysis
-            result = mckd_envelope_analysis(
-                arr, fs, bearing_params=self.bearing_params, rot_freq=rot_freq
-            )
-        elif self.bearing_method == BearingMethod.WP:
-            from .wavelet_bearing import wavelet_packet_bearing_analysis
-            result = wavelet_packet_bearing_analysis(arr, fs)
-        elif self.bearing_method == BearingMethod.DWT:
-            from .wavelet_bearing import dwt_bearing_analysis
-            result = dwt_bearing_analysis(arr, fs)
-        elif self.bearing_method == BearingMethod.EMD_ENVELOPE:
-            from .modality_bearing import emd_bearing_analysis
-            result = emd_bearing_analysis(arr, fs)
-        elif self.bearing_method == BearingMethod.CEEMDAN_ENVELOPE:
-            from .modality_bearing import ceemdan_bearing_analysis
-            result = ceemdan_bearing_analysis(arr, fs)
-        elif self.bearing_method == BearingMethod.VMD_ENVELOPE:
-            from .modality_bearing import vmd_bearing_analysis
-            result = vmd_bearing_analysis(arr, fs)
-        else:  # ENVELOPE
-            result = envelope_analysis(arr, fs)
+                raise ValueError(f"不支持的轴承方法: {self.bearing_method}")
 
-        # 提取包络域特征（基于轴承方法已计算好的包络谱，不再独立重算）
-        env_features = compute_envelope_features(
-            result.get("envelope_freq", []),
-            result.get("envelope_amp", []),
-            bearing_params=self.bearing_params,
-            rot_freq=rot_freq,
-        )
+            representation = result.get("representation")
+            if representation is not None:
+                spectrum = representation.spectrum
+            else:
+                frequencies = result.get("envelope_freq", [])
+                amplitudes = result.get("envelope_amp", [])
+                spectrum = None
+                if len(frequencies) and len(amplitudes):
+                    spectrum = Spectrum(
+                        frequency_hz=np.asarray(frequencies, dtype=np.float64),
+                        amplitude=np.asarray(amplitudes, dtype=np.float64),
+                        scaling="unnormalized",
+                    )
+            if spectrum is None:
+                analysis = None
+                evaluation = None
+            else:
+                analysis = analyze_envelope_spectrum(
+                    spectrum,
+                    geometry=geometry,
+                    rot_frequency_hz=rot_freq,
+                    rot_frequency_std_hz=rot_std,
+                )
+                evaluation = evaluate_envelope(analysis)
+            metadata = {
+                ("sc_scoh_indicators" if key == "fault_indicators" else key): value
+                for key, value in result.items()
+                if key not in {"method", "representation", "envelope_freq", "envelope_amp"}
+            }
 
-        # 故障指示器：判断哪些轴承特征频率显著
-        indicators = _evaluate_bearing_faults(
-            self.bearing_params,
-            result.get("envelope_freq", []),
-            result.get("envelope_amp", []),
-            rot_freq,
-            rot_freq_std=rot_std,
-        )
-
+        spectrum = analysis.spectrum if analysis else None
+        display_spectrum = spectrum.truncated(max_freq) if spectrum else None
         return {
             "method": self.bearing_method.value,
             "strategy": self.strategy.value,
-            "rot_freq_hz": round(rot_freq, 3),
-            **{k: v for k, v in result.items() if k != "method"},
-            "features": env_features,
-            "fault_indicators": indicators,
+            "rot_freq_hz": round(rot_freq, 3) if rot_freq is not None else None,
+            "spectrum": {
+                "frequency_hz": display_spectrum.frequency_hz.tolist(),
+                "amplitude": display_spectrum.amplitude.tolist(),
+                "amplitude_unit": display_spectrum.amplitude_unit,
+                "scaling": display_spectrum.scaling,
+            } if display_spectrum else None,
+            "band": {
+                "low_hz": representation.band.low_hz,
+                "high_hz": representation.band.high_hz,
+                "center_hz": representation.band.center_hz,
+                "width_hz": representation.band.width_hz,
+            } if representation else None,
+            "envelope_low_pass_hz": representation.envelope_low_pass_hz if representation else None,
+            **metadata,
+            "features": analysis.features.as_dict() if analysis else {
+                "spectral_power_proxy": 0.0,
+                "spectral_power_unit": "input_signal^2",
+            },
+            "evaluation": {
+                "status": evaluation.status if evaluation else "indeterminate",
+                "indicators": evaluation.indicators if evaluation else {},
+            },
         }
 
     def analyze_gear(
@@ -793,273 +858,3 @@ class DiagnosisEngine:
             "summary": summary,
             "recommendation": _generate_recommendation_all(bearing_results, gear_results, status),
         }
-
-
-def _evaluate_bearing_faults_statistical(
-    freq_arr: np.ndarray,
-    amp_arr: np.ndarray,
-    rot_freq: float,
-) -> Dict[str, Any]:
-    """
-    无物理参数时的轴承统计诊断。
-    基于包络谱统计特征评估是否存在异常冲击。
-
-    新增指标：
-      - low_freq_ratio: 低频能量占比（用于区分轴频谐波 vs 轴承故障）
-      - envelope_crest_factor: 包络谱峰值因子（外圈故障分布较分散时兜底）
-      - moderate_kurtosis: 中等峭度路径（外圈故障峭度通常不高但仍异常）
-    """
-    indicators = {}
-    if len(amp_arr) == 0:
-        return indicators
-
-    background = np.median(amp_arr)
-    peak_amp = float(np.max(amp_arr))
-    snr = peak_amp / background if background > 0 else 0.0
-
-    # 1. 包络谱峰值显著性（单峰异常——单一最强峰 vs 背景）
-    #    健康轴承的旋转谐波也能产生 SNR~10-15 的包络谱峰值，
-    #    需要更高阈值区分"旋转谐波主导"和"真正的轴承故障冲击"
-    indicators["envelope_peak_snr"] = {
-        "value": float(round(snr, 2)),
-        "snr": float(round(snr, 2)),
-        "significant": bool(snr > 20.0),
-    }
-
-    # 2. 包络谱峭度（频域峭度——区分"少量超强峰"vs"多个中等峰"）
-    amp_norm = amp_arr / (np.mean(amp_arr) + 1e-12)
-    kurt = float(np.mean(amp_norm ** 4) / (np.mean(amp_norm ** 2) ** 2 + 1e-12) - 2)
-    indicators["envelope_kurtosis"] = {
-        "value": float(round(kurt, 2)),
-        "snr": float(round(max(0, kurt), 2)),
-        "significant": bool(kurt > 15.0),
-    }
-
-    # 2b. 中等峭度路径：外圈/球故障时峭度常在 5-15，不触发高阈值但仍异常
-    #     条件放宽至 kurt>5 AND snr>15（低于此的几乎都是旋转谐波噪声）
-    indicators["moderate_kurtosis"] = {
-        "value": float(round(kurt, 2)),
-        "snr": float(round(max(0, kurt), 2)),
-        "significant": bool(kurt > 5.0 and snr > 15.0),
-    }
-
-    freq_arr_np = np.array(freq_arr)
-
-    # 3. 低频能量占比 — 若包络谱能量集中在 <3×转频 → 轴频谐波，非轴承故障
-    low_cutoff = max(rot_freq * 3, 30.0)
-    total_energy = float(np.sum(amp_arr ** 2)) + 1e-12
-    low_mask = freq_arr_np <= low_cutoff
-    low_energy = float(np.sum(amp_arr[low_mask] ** 2))
-    low_freq_ratio = low_energy / total_energy
-    # 旋转谐波主导标记：低频占比 > 40% 说明包络谱能量主要来自转频谐波而非轴承故障
-    rotation_harmonic_dominant = low_freq_ratio > 0.4
-    indicators["low_freq_ratio"] = {
-        "value": float(round(low_freq_ratio, 4)),
-        "snr": float(round((1.0 - low_freq_ratio) * 10, 2)),
-        "significant": False,  # 辅助抑制误报，不单独判定
-        "rotation_harmonic_dominant": rotation_harmonic_dominant,
-    }
-
-    # 4. 高频能量比 — 轴承故障冲击能量通常在高频段
-    hf_threshold = max(500.0, rot_freq * 2)
-    hf_mask = freq_arr_np >= hf_threshold
-    hf_ratio = float(np.sum(amp_arr[hf_mask] ** 2)) / total_energy if np.any(hf_mask) else 0.0
-    indicators["high_freq_ratio"] = {
-        "value": float(round(hf_ratio, 4)),
-        "snr": float(round(hf_ratio * 10, 2)),
-        "significant": bool(hf_ratio > 0.65 and not rotation_harmonic_dominant),
-    }
-
-    # 5. 谱峰集中度 — 前5峰能量占比（故障时少数峰支配，健康时分布均匀）
-    sorted_amps = np.sort(amp_arr)[::-1]
-    top5_energy = float(np.sum(sorted_amps[:5] ** 2))
-    peak_conc = float(top5_energy / total_energy)
-    # 旋转谐波主导时，集中度是转频谐波导致的而非轴承故障，应抑制
-    indicators["peak_concentration"] = {
-        "value": float(round(peak_conc, 4)),
-        "snr": float(round(peak_conc * 10, 2)),
-        "significant": bool(peak_conc > 0.6 and not rotation_harmonic_dominant),
-    }
-
-    # 6. 包络谱峰值因子（crest_factor_in_spectrum）
-    #    外圈故障：包络谱分布较均匀（多个中等峰），峰值因子偏低
-    #    内圈故障：包络谱分布极不均匀（少数超强峰），峰值因子偏高
-    env_rms = rms(amp_arr)
-    env_cf = float(peak_amp / env_rms) if env_rms > 1e-12 else 0.0
-    indicators["envelope_crest_factor"] = {
-        "value": float(round(env_cf, 2)),
-        "snr": float(round(env_cf, 2)),
-        "significant": bool(env_cf > 35.0 and not rotation_harmonic_dominant),
-    }
-
-    return indicators
-
-
-def _evaluate_bearing_faults(
-    bearing_params: Optional[Dict],
-    env_freq: List[float],
-    env_amp: List[float],
-    rot_freq: float,
-    rot_freq_std: float = 0.0,
-) -> Dict[str, Any]:
-    """
-    评估轴承故障指示器 — 双路并行：
-      1) 物理参数路径：精确匹配 BPFO/BPFI/BSF（需要轴承几何参数）
-      2) 统计路径：包络谱全局统计特征（无参数时兜底；有参数时作为辅助佐证）
-    两路结果独立并存，不互相替代。
-    """
-    if not env_freq or not env_amp or rot_freq <= 0:
-        return {}
-
-    freq_arr = np.array(env_freq, dtype=np.float64)
-    amp_arr = np.array(env_amp, dtype=np.float64)
-    df = freq_arr[1] - freq_arr[0] if len(freq_arr) > 1 else 1.0
-    background = float(np.median(amp_arr))
-
-    # ========== 统计路径：始终计算，作为兜底 + 佐证 ==========
-    stat_indicators = _evaluate_bearing_faults_statistical(freq_arr, amp_arr, rot_freq)
-
-    # 统计路径检出异常？
-    stat_abnormal = any(
-        v.get("significant") for v in stat_indicators.values() if isinstance(v, dict)
-    )
-
-    # ========== 物理参数路径 ==========
-    has_params = bearing_params and any(v is not None for v in bearing_params.values())
-
-    # 先获取物理参数
-    n_balls = d_val = D_val = alpha = 0.0
-    if has_params:
-        try:
-            n_balls = int(float(bearing_params.get("n") or 0))
-            d_val = float(bearing_params.get("d") or 0)
-            D_val = float(bearing_params.get("D") or 0)
-            alpha = np.radians(float(bearing_params.get("alpha") or 0))
-        except (TypeError, ValueError):
-            has_params = False
-
-    if n_balls <= 0 or d_val <= 1e-9 or D_val <= 1e-9:
-        has_params = False
-
-    if has_params:
-        cos_a = np.cos(alpha)
-        dd = (d_val / D_val) * cos_a
-        freqs = {
-            "BPFO": (n_balls / 2.0) * rot_freq * (1 - dd),
-            "BPFI": (n_balls / 2.0) * rot_freq * (1 + dd),
-            "BSF":  (D_val / (2.0 * d_val)) * rot_freq * (1 - dd ** 2),
-        }
-
-        # 边带密度分析（增强故障类型区分）
-        sideband_features = evaluate_bearing_sideband_features(
-            env_freq, env_amp, bearing_params, rot_freq,
-        )
-
-        param_indicators = {}
-        for name, f_hz in freqs.items():
-            if f_hz <= 0 or f_hz > freq_arr[-1]:
-                param_indicators[name] = {"theory_hz": round(f_hz, 2), "detected_hz": None,
-                                          "peak_amp": 0.0, "snr": 0.0, "significant": False}
-                continue
-
-            # 转频不确定性传播：rot_freq_std 越大，容差越宽
-            # 避免变速工况下因转速不稳定导致漏检
-            rot_freq_uncertainty = rot_freq_std / rot_freq if rot_freq > 0 else 0.05
-            tol = max(f_hz * 0.05, df * 2, f_hz * rot_freq_uncertainty * 0.5)
-            mask = np.abs(freq_arr - f_hz) <= tol
-
-            # 谐波 SNR
-            harmonic_snrs = []
-            for h in range(2, 5):
-                h_freq = f_hz * h
-                if h_freq > freq_arr[-1]:
-                    break
-                h_tol = max(h_freq * 0.05, df * 2, h_freq * rot_freq_uncertainty * 0.5)
-                h_mask = np.abs(freq_arr - h_freq) <= h_tol
-                if np.any(h_mask):
-                    h_peak = float(np.max(amp_arr[h_mask]))
-                    h_snr = h_peak / background if background > 0 else 0.0
-                    harmonic_snrs.append(h_snr)
-
-            if np.any(mask):
-                peak = _search_peak_in_band(freq_arr, amp_arr, f_hz, tol)
-                peak_amp = peak["amp"] if peak else 0.0
-                snr = _compute_peak_snr(peak_amp, amp_arr) if peak else 0.0
-
-                # 频率路径判定：仅用于故障类型标注，不用于"是否故障"判断
-                # 健康轴承也有低 SNR 的频率峰值（随机波动），所以阈值不能太低
-                significant = snr > 4.5
-
-                # BPFI 内圈专项：边频带验证（至少 2 个边带 SNR>3）
-                sideband_snrs = []
-                if name == "BPFI":
-                    for offset in [rot_freq, -rot_freq]:
-                        sb_f = f_hz + offset
-                        if sb_f <= 0 or sb_f > freq_arr[-1]:
-                            continue
-                        sb_tol = max(sb_f * 0.05, df * 2, sb_f * rot_freq_uncertainty * 0.5)
-                        sb_peak_info = _search_peak_in_band(freq_arr, amp_arr, sb_f, sb_tol)
-                        if sb_peak_info:
-                            sb_snr = _compute_peak_snr(sb_peak_info["amp"], amp_arr)
-                            sideband_snrs.append(sb_snr)
-                    strong_sb = sum(1 for s in sideband_snrs if s > 3.0)
-                    # 边带增强：需主峰 > 4.3 且包络峭度 > 5（确认冲击性，防变速调制误报）
-                    env_kurt = float(np.mean(amp_arr ** 4) / (np.mean(amp_arr ** 2) ** 2 + 1e-12))
-                    if strong_sb >= 2 and snr > 4.3 and env_kurt > 5.0 and not significant:
-                        significant = True
-
-                param_indicators[name] = {
-                    "theory_hz": round(f_hz, 2),
-                    "detected_hz": round(peak["freq"], 2) if peak else None,
-                    "peak_amp": round(peak_amp, 6),
-                    "snr": round(snr, 2),
-                    "significant": significant,
-                    "harmonic_snrs": [round(s, 2) for s in harmonic_snrs],
-                    "sideband_snrs": [round(s, 2) for s in sideband_snrs] if name == "BPFI" else None,
-                    # 边带密度分析（增强故障类型区分）
-                    "sideband_density": sideband_features.get(name, {}).get("sideband_density", 0.0),
-                    "sideband_significant_count": sideband_features.get(name, {}).get("sideband_significant_count", 0),
-                    "sideband_asymmetry": sideband_features.get(name, {}).get("sideband_asymmetry", 0.0),
-                    "high_density": sideband_features.get(name, {}).get("high_density", False),
-                    "high_asymmetry": sideband_features.get(name, {}).get("high_asymmetry", False),
-                }
-            else:
-                param_indicators[name] = {
-                    "theory_hz": round(f_hz, 2), "detected_hz": None,
-                    "peak_amp": 0.0, "snr": 0.0, "significant": False,
-                }
-
-        # 相对主导过滤：三个故障频率中，只有最强峰或超高 SNR 才保留 significant
-        # 避免健康样本因随机波动导致多参数误检（Bug #11b）
-        phys_snrs = {
-            k: v.get("snr", 0.0)
-            for k, v in param_indicators.items()
-            if k in ("BPFO", "BPFI", "BSF") and isinstance(v, dict)
-        }
-        if phys_snrs:
-            sorted_snrs = sorted(phys_snrs.values(), reverse=True)
-            max_snr = sorted_snrs[0]
-            second_snr = sorted_snrs[1] if len(sorted_snrs) > 1 else 1.0
-            dominant_ratio = max_snr / max(second_snr, 1.0)
-            for k, v in param_indicators.items():
-                if k in ("BPFO", "BPFI", "BSF") and isinstance(v, dict):
-                    snr_val = v.get("snr", 0.0)
-                    # 主导峰需同时满足：>4.5 基础阈值 + 是最高峰 + 比次强峰高 1.5×
-                    # 超高 SNR（>15）单独放行，不要求主导比
-                    is_dominant = snr_val > 4.5 and snr_val == max_snr and dominant_ratio > 1.5
-                    v["significant"] = is_dominant or (snr_val > 15.0)
-
-        # 合并：物理参数路径 + 统计路径（以 _stat 后缀区分）
-        # 有物理参数时，若 BPFO/BPFI/BSF 全部未检出，统计指标不独立报警
-        # （变速工况下统计 SNR 可能被转速调制主导，反而高于故障信号）
-        if has_params:
-            phys_any = any(v.get("significant") for k, v in param_indicators.items()
-                          if k in ("BPFO", "BPFI", "BSF"))
-            if not phys_any:
-                for v in stat_indicators.values():
-                    if isinstance(v, dict):
-                        v["significant"] = False
-        return {**param_indicators, **{f"{k}_stat": v for k, v in stat_indicators.items()}}
-
-    # 无物理参数时，纯粹统计诊断
-    return stat_indicators

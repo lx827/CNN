@@ -74,7 +74,7 @@ for name, method in [('包络', BearingMethod.ENVELOPE), ('Kurtogram', BearingMe
             engine = DiagnosisEngine(bearing_method=method, bearing_params=BP,
                                      denoise_method=DenoiseMethod.NONE)
             res = engine.analyze_bearing(sig_c + noise, FS)
-            inds = res.get('fault_indicators', {})
+            inds = res.get('evaluation', {}).get('indicators', {})
             det = any(v.get('significant') for k, v in inds.items()
                       if isinstance(v, dict) and not k.endswith('_stat'))
             curve.append({'snr_db': s_db, 'detected': det})

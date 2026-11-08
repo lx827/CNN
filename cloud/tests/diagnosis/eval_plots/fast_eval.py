@@ -81,7 +81,7 @@ def eval_bearing_binary(dataset_name, data_dir, file_glob, fault_func, class_nam
                                          denoise_method=DenoiseMethod.NONE)
                 res = engine.analyze_bearing(sig, FS)
                 times.append((time.perf_counter() - t1) * 1000)
-                inds = res.get("fault_indicators", {})
+                inds = res.get("evaluation", {}).get("indicators", {})
                 has_f = any(v.get("significant") for k, v in inds.items()
                             if isinstance(v, dict) and not k.endswith("_stat"))
                 if has_f != is_h:
@@ -149,7 +149,7 @@ def eval_gear_binary():
                                          denoise_method=DenoiseMethod.NONE)
                 res = engine.analyze_gear(sig, FS, rot_freq=rf)
                 times.append((time.perf_counter() - t1) * 1000)
-                inds = res.get("fault_indicators", {})
+                inds = res.get("evaluation", {}).get("indicators", {})
                 has_w = any(v.get("warning") or v.get("critical")
                             for v in inds.values() if isinstance(v, dict))
                 if has_w != is_h:

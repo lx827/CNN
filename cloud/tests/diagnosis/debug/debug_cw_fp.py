@@ -89,7 +89,7 @@ def debug_single_case(filename, engine):
     gear_result = result.get("gear", {})
 
     # 3. 轴承 fault_indicators 详细
-    bearing_ind = bearing_result.get("fault_indicators", {})
+    bearing_ind = bearing_result.get("evaluation", {}).get("indicators", {})
     print(f"\n  === 轴承 fault_indicators ===")
     for key, val in bearing_ind.items():
         if isinstance(val, dict):

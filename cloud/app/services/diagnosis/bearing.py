@@ -2,98 +2,38 @@
 轴承故障诊断算法模块
 
 包含：
-- 标准包络分析
+- 各方法共用 algorithms.bearing.envelope 的结构化包络表示
 - Fast Kurtogram + 自适应包络分析
 - CPW + 包络分析
 - MED + 包络分析
 """
 import numpy as np
-from scipy.signal import hilbert, stft
-from scipy.fft import rfft, rfftfreq
+from scipy.signal import stft
 from typing import Dict, Tuple, Optional, List
 
-from .signal_utils import (
-    prepare_signal, bandpass_filter, lowpass_filter,
-)
+from app.algorithms.bearing.envelope import EnvelopeParameters, compute_envelope
+from .signal_utils import prepare_signal
 from .preprocessing import cepstrum_pre_whitening, minimum_entropy_deconvolution
 
 
-def envelope_analysis(
+def _compute_envelope_result(
     signal: np.ndarray,
     fs: float,
     fc: Optional[float] = None,
     bw: Optional[float] = None,
     f_low_pass: float = 2000.0,
-    max_freq: float = 1000.0,
 ) -> Dict:
-    """
-    标准包络分析（Envelope Analysis）
-
-    Args:
-        signal: 输入信号
-        fs: 采样率
-        fc: 带通中心频率，None 则使用 2000~4000 Hz 默认频段
-        bw: 带通带宽，None 则使用 2000 Hz
-        f_low_pass: 包络低通截止频率
-        max_freq: 返回包络谱的最大频率
-
-    Returns:
-        {
-            "envelope_freq": List[float],
-            "envelope_amp": List[float],
-            "band_center": float,
-            "band_width": float,
-        }
-    """
-    arr = prepare_signal(signal)
-
-    # Step 1: 带通滤波 — 根据采样率自适应选择共振频段
-    if fc is None:
-        # 低采样率场景（<10kHz）：取 Nyquist 的 25%~75% 作为共振带
-        if fs < 10000:
-            fc = fs * 0.45  # e.g. 8192*0.45 ≈ 3686 Hz
-            bw = fs * 0.35  # e.g. 8192*0.35 ≈ 2867 Hz
-        else:
-            fc = 3000.0
-            bw = 2000.0
-    if bw is None:
-        bw = min(2000.0, fs * 0.3)
-    low = max(100, fc - bw / 2)
-    high = min(fs / 2 - 100, fc + bw / 2)
-    if low >= high:
-        # 频段非法，fallback
-        low = max(100, fs * 0.15)
-        high = min(fs / 2 - 100, fs * 0.85)
-    # 极端低采样率二次守卫：若仍非法则跳过带通滤波
-    if low >= high or low <= 0 or high <= 0:
-        low = max(fs * 0.05, 1.0)
-        high = max(low + 1.0, fs * 0.45)
-    if low >= high:
-        filtered = arr  # 完全无法滤波时直接用原始信号
-    else:
-        filtered = bandpass_filter(arr, fs, low, high)
-
-    # Step 2-3: 希尔伯特变换 → 包络
-    analytic = hilbert(filtered)
-    envelope = np.abs(analytic)
-
-    # Step 4: 低通滤波（截止频率自适应采样率）
-    if f_low_pass > fs * 0.3:
-        f_low_pass = fs * 0.3  # 8k→2.4k, 25.6k→7.68k, capped
-    envelope = lowpass_filter(envelope, fs, f_low_pass)
-    envelope = envelope - np.mean(envelope)
-
-    # Step 5: FFT 包络谱
-    n = len(envelope)
-    yf = np.abs(rfft(envelope))
-    xf = rfftfreq(n, 1.0 / fs)
-
-    mask = xf <= max_freq
+    """供尚未拆成独立 Pipeline 的轴承方法共享新包络表示。"""
     return {
-        "envelope_freq": [round(float(f), 2) for f in xf[mask]],
-        "envelope_amp": [round(float(a), 4) for a in yf[mask]],
-        "band_center": fc,
-        "band_width": bw,
+        "representation": compute_envelope(
+            np.asarray(signal, dtype=np.float64),
+            fs,
+            EnvelopeParameters(
+                band_center_hz=fc,
+                band_width_hz=bw,
+                envelope_low_pass_hz=f_low_pass,
+            ),
+        )
     }
 
 
@@ -117,8 +57,7 @@ def fast_kurtogram(
 
     Returns:
         {
-            "envelope_freq": List[float],
-            "envelope_amp": List[float],
+            "representation": EnvelopeRepresentation,  # 结构化包络谱与实际频带
             "optimal_fc": float,      # 最优中心频率
             "optimal_bw": float,      # 最优带宽
             "max_kurtosis": float,    # 最大峭度值
@@ -172,7 +111,7 @@ def fast_kurtogram(
 
     # 如果峭度都很低（无明显冲击），退回标准包络分析（不限定频带）
     if best_kurt < 0.5:
-        result = envelope_analysis(arr, fs)
+        result = _compute_envelope_result(arr, fs)
         result["optimal_fc"] = None
         result["optimal_bw"] = None
         result["max_kurtosis"] = round(float(best_kurt), 4)
@@ -180,7 +119,7 @@ def fast_kurtogram(
         return result
 
     # 对最优频带执行包络分析
-    result = envelope_analysis(arr, fs, fc=best_fc, bw=best_bw, max_freq=1000.0)
+    result = _compute_envelope_result(arr, fs, fc=best_fc, bw=best_bw)
     result["optimal_fc"] = round(best_fc, 2)
     result["optimal_bw"] = round(best_bw, 2)
     result["max_kurtosis"] = round(float(best_kurt), 4)
@@ -195,7 +134,6 @@ def cpw_envelope_analysis(
     signal: np.ndarray,
     fs: float,
     comb_frequencies: List[float],
-    max_freq: float = 1000.0,
 ) -> Dict:
     """
     CPW（倒频谱预白化）+ 包络分析
@@ -206,12 +144,10 @@ def cpw_envelope_analysis(
         signal: 输入信号
         fs: 采样率
         comb_frequencies: 需要抑制的确定性频率列表 (Hz)
-        max_freq: 包络谱最大频率
 
     Returns:
         {
-            "envelope_freq": List[float],
-            "envelope_amp": List[float],
+            "representation": EnvelopeRepresentation,  # 结构化包络谱与实际频带
             "comb_frequencies": List[float],
         }
     """
@@ -232,7 +168,6 @@ def med_envelope_analysis(
     signal: np.ndarray,
     fs: float,
     med_filter_len: int = 64,
-    max_freq: float = 1000.0,
 ) -> Dict:
     """
     MED（最小熵解卷积）+ 包络分析
@@ -243,12 +178,10 @@ def med_envelope_analysis(
         signal: 输入信号
         fs: 采样率
         med_filter_len: MED 滤波器长度
-        max_freq: 包络谱最大频率
 
     Returns:
         {
-            "envelope_freq": List[float],
-            "envelope_amp": List[float],
+            "representation": EnvelopeRepresentation,  # 结构化包络谱与实际频带
             "med_filter_len": int,
             "kurtosis_before": float,
             "kurtosis_after": float,
@@ -264,7 +197,7 @@ def med_envelope_analysis(
     kurt_after = float(np.mean(med_signal ** 4) / (np.var(med_signal) ** 2 + 1e-12))
 
     # 包络分析
-    result = envelope_analysis(med_signal, fs, max_freq=max_freq)
+    result = _compute_envelope_result(med_signal, fs)
     result["med_filter_len"] = med_filter_len
     result["kurtosis_before"] = round(kurt_before, 4)
     result["kurtosis_after"] = round(kurt_after, 4)
@@ -276,7 +209,6 @@ def med_envelope_analysis(
 def teager_envelope_analysis(
     signal: np.ndarray,
     fs: float,
-    max_freq: float = 1000.0,
 ) -> Dict:
     """
     Teager Energy Operator (TEO) envelope analysis.
@@ -288,7 +220,7 @@ def teager_envelope_analysis(
     """
     arr = prepare_signal(signal)
     if len(arr) < 3:
-        return envelope_analysis(arr, fs, max_freq=max_freq)
+        return _compute_envelope_result(arr, fs)
 
     teo = arr[1:-1] ** 2 - arr[:-2] * arr[2:]
     teo = np.pad(teo, (1, 1), mode="edge")
@@ -304,7 +236,6 @@ def spectral_kurtosis_envelope_analysis(
     fs: float,
     max_level: int = 6,
     f_low: float = 100.0,
-    max_freq: float = 1000.0,
 ) -> Dict:
     """
     Adaptive reweighted spectral-kurtosis envelope analysis.
@@ -316,7 +247,7 @@ def spectral_kurtosis_envelope_analysis(
     arr = prepare_signal(signal)
     n = len(arr)
     if n < 128:
-        return envelope_analysis(arr, fs, max_freq=max_freq)
+        return _compute_envelope_result(arr, fs)
 
     candidates = []
     best_score = -1.0
@@ -368,7 +299,7 @@ def spectral_kurtosis_envelope_analysis(
     if best_fc is None or best_score <= 0:
         return fast_kurtogram(arr, fs, max_level=max_level, f_low=f_low)
 
-    result = envelope_analysis(arr, fs, fc=best_fc, bw=best_bw, max_freq=max_freq)
+    result = _compute_envelope_result(arr, fs, fc=best_fc, bw=best_bw)
     candidates.sort(key=lambda x: x["score"], reverse=True)
     result["method"] = "Adaptive Reweighted Spectral Kurtosis Envelope"
     result["optimal_fc"] = round(float(best_fc), 2)

@@ -92,17 +92,20 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
 
 
 def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
-    indicators = result.get("fault_indicators", {}) or {}
+    indicators = result.get("evaluation", {}).get("indicators", {}) or {}
     param_hits = 0
     stat_hits = 0
-    strongest_snr = 0.0
+    strongest_score = 0.0
     hit_names = []
 
     for name, item in indicators.items():
         if not isinstance(item, dict):
             continue
         significant = bool(item.get("significant"))
-        strongest_snr = max(strongest_snr, _as_float(item.get("snr")))
+        raw_strength = item.get("snr")
+        if raw_strength is None:
+            raw_strength = item.get("score", 0.0)
+        strongest_score = max(strongest_score, _as_float(raw_strength))
         if name.endswith("_stat") or name in {
             "envelope_peak_snr",
             "envelope_kurtosis",
@@ -129,7 +132,10 @@ def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
 
     # 低频优势度：仅用于弱证据（stat_hits=1）场景的辅助判断
     low_freq_dominance = False
-    low_freq_indicator = indicators.get("low_freq_ratio", {})
+    low_freq_indicator = indicators.get(
+        "low_freq_ratio_stat",
+        indicators.get("low_freq_ratio", {}),
+    )
     low_freq_ratio_raw = _as_float(low_freq_indicator.get("value") if isinstance(low_freq_indicator, dict) else low_freq_indicator, 0.0)
     if low_freq_ratio_raw > 0.55:
         low_freq_dominance = True
@@ -145,8 +151,8 @@ def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
         # 双统计指标 + 冲击背景：内圈/外圈/球故障典型模式
         # moderate_kurtosis 使外圈也能进入此路径
         confidence = 0.55
-    elif stat_hits >= 1 and impulse_context and strongest_snr > 12:
-        # 单统计指标 + 冲击背景 + 较显著 SNR：
+    elif stat_hits >= 1 and impulse_context and strongest_score > 12:
+        # 单统计指标 + 冲击背景 + 较强证据分数：
         # 外圈故障仅触发 moderate_kurtosis 而无 envelope_kurtosis 时的兜底
         # 若包络谱低频占优（轴频谐波），则降权抑制误报
         if low_freq_dominance:
@@ -155,14 +161,14 @@ def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
             confidence = 0.45
     elif stat_hits >= 2:
         confidence = 0.35
-    elif strongest_snr > 18 and impulse_context:
+    elif strongest_score > 18 and impulse_context:
         confidence = 0.5
 
     return {
         "confidence": round(float(confidence), 4),
         "param_hits": int(param_hits),
         "stat_hits": int(stat_hits),
-        "strongest_snr": round(float(strongest_snr), 3),
+        "strongest_score": round(float(strongest_score), 3),
         "hits": hit_names,
         "abnormal": bool(confidence >= 0.55),
     }
@@ -329,7 +335,7 @@ def _fault_label(best_bearing: Dict, best_gear: Dict, bearing_score: float, gear
     if gear_score > bearing_score and gear_subtype:
         return f"gear_{gear_subtype}"
 
-    indicators = best_bearing.get("fault_indicators", {}) if best_bearing else {}
+    indicators = best_bearing.get("evaluation", {}).get("indicators", {}) if best_bearing else {}
     param_hits = [
         (name, float(item.get("snr", 0.0)))
         for name, item in indicators.items()

@@ -156,7 +156,7 @@ def run_single_method_binary(
             # 获取 health_score（analyze_bearing 不返回 health_score，需要单独算）
             # 实际前端用的是 /analyze 接口，返回的是 analyze_research_ensemble 结果
             # 但这里我们用二分类简单判定：根据 fault_indicators 是否有显著项
-            indicators = result.get("fault_indicators", {}) or {}
+            indicators = result.get("evaluation", {}).get("indicators", {}) or {}
             has_fault = any(
                 isinstance(v, dict) and v.get("significant") and not k.endswith("_stat")
                 for k, v in indicators.items()

@@ -43,7 +43,7 @@ def make_bearing_result(snr=0.0, has_fault=False):
         "envelope_snr": snr,
         "dominant_freq": 90.0 if has_fault else None,
         "method": "envelope",
-        "fault_indicators": indicators,
+        "evaluation": {"indicators": indicators},
     }
 
 

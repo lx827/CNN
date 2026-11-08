@@ -2,7 +2,7 @@
 Layer 2 轴承诊断 — bearing.py 正确性验证
 
 测试 bearing.py 中依赖 Layer 1 的函数：
-  envelope_analysis, fast_kurtogram, med_envelope_analysis,
+  compute_envelope, fast_kurtogram, med_envelope_analysis,
   teager_envelope_analysis, spectral_kurtosis_envelope_analysis
 
 原则：合成已知故障频率的信号，验证各方法能否检出目标频率。
@@ -17,8 +17,9 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
+from app.algorithms.bearing.envelope import EnvelopeParameters, compute_envelope
 from app.services.diagnosis.bearing import (
-    envelope_analysis, fast_kurtogram, med_envelope_analysis,
+    fast_kurtogram, med_envelope_analysis,
     teager_envelope_analysis, spectral_kurtosis_envelope_analysis,
 )
 from app.services.diagnosis.signal_utils import compute_fft_spectrum, kurtosis, find_peaks_in_spectrum
@@ -62,27 +63,40 @@ def _load_npy(path: Path):
         return None
 
 
+def _spectrum_arrays(result):
+    """读取算法表示或复合方法的包络表示。"""
+    spectrum = result.spectrum if hasattr(result, "spectrum") else result["representation"].spectrum
+    return spectrum.frequency_hz, spectrum.amplitude
+
+
 def _eval_bearing_on_real(signal, fs, method_func, method_name, target_freq, rot_freq=None):
     """在真实数据上运行一种轴承诊断方法，返回结果 dict"""
     try:
         if method_name == "envelope":
-            res = method_func(signal, fs, fc=3000, bw=2000, f_low_pass=500, max_freq=500)
+            res = compute_envelope(
+                signal,
+                fs,
+                EnvelopeParameters(
+                    band_center_hz=3000,
+                    band_width_hz=2000,
+                    envelope_low_pass_hz=500,
+                ),
+            )
         elif method_name == "kurtogram":
             res = method_func(signal, fs, max_level=5, f_low=100)
         elif method_name == "med":
-            res = method_func(signal, fs, med_filter_len=64, max_freq=500)
+            res = method_func(signal, fs, med_filter_len=64)
         elif method_name == "teager":
-            res = method_func(signal, fs, max_freq=500)
+            res = method_func(signal, fs)
         elif method_name == "sk":
-            res = method_func(signal, fs, max_level=4, f_low=100, max_freq=500)
+            res = method_func(signal, fs, max_level=4, f_low=100)
         else:
             return None
     except Exception as e:
         print(f"    [WARN] {method_name} 失败: {e}")
         return None
 
-    ef = np.array(res.get("envelope_freq", []))
-    ea = np.array(res.get("envelope_amp", []))
+    ef, ea = _spectrum_arrays(res)
     if len(ef) == 0 or len(ea) == 0:
         return None
 
@@ -100,18 +114,26 @@ def _get_peak_snr(found):
 
 
 # ═══════════════════════════════════════════════════════════
-# 1. envelope_analysis — 标准包络分析
+# 1. compute_envelope — 标准包络分析
 # ═══════════════════════════════════════════════════════════
 
-def test_envelope_analysis():
+def test_compute_envelope():
     """标准包络分析：合成轴承外圈故障信号"""
-    print("\n--- envelope_analysis ---")
+    print("\n--- compute_envelope ---")
     results = []
 
     # 1a. 合成外圈故障: BPFO=90Hz
     sig, fs, gt = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=15)
-    res = envelope_analysis(sig, fs, fc=3000, bw=2000, f_low_pass=500, max_freq=500)
-    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=90.0, tolerance_hz=3.0))
+    res = compute_envelope(
+        sig,
+        fs,
+        EnvelopeParameters(
+            band_center_hz=3000,
+            band_width_hz=2000,
+            envelope_low_pass_hz=500,
+        ),
+    )
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(_spectrum_arrays(res)[0], _spectrum_arrays(res)[1], target_freq=90.0, tolerance_hz=3.0))
     freq_ok = abs(peak_f - 90.0) < 5.0
     snr_ok = snr > 3.0
     passed = freq_ok and snr_ok
@@ -126,8 +148,16 @@ def test_envelope_analysis():
 
     # 1b. 纯冲击序列: 100Hz
     sig, fs, gt = impulse_train(impulse_freq=100.0, duration=3.0, fs=FS, snr_db=15)
-    res = envelope_analysis(sig, fs, fc=2000, bw=1500, f_low_pass=500, max_freq=500)
-    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=100.0, tolerance_hz=3.0))
+    res = compute_envelope(
+        sig,
+        fs,
+        EnvelopeParameters(
+            band_center_hz=2000,
+            band_width_hz=1500,
+            envelope_low_pass_hz=500,
+        ),
+    )
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(_spectrum_arrays(res)[0], _spectrum_arrays(res)[1], target_freq=100.0, tolerance_hz=3.0))
     freq_ok = abs(peak_f - 100.0) < 5.0
     snr_ok = snr > 3.0
     passed = freq_ok and snr_ok
@@ -158,7 +188,7 @@ def test_fast_kurtogram():
     # 验证：返回了最优频带参数
     has_optimal = res.get("optimal_fc", 0) > 0 and res.get("optimal_bw", 0) > 0
     # 包络谱应能检出 BPFO
-    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=90.0, tolerance_hz=5.0))
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(_spectrum_arrays(res)[0], _spectrum_arrays(res)[1], target_freq=90.0, tolerance_hz=5.0))
     freq_ok = abs(peak_f - 90.0) < 10.0
     passed = has_optimal and freq_ok
     results.append({
@@ -183,13 +213,13 @@ def test_med_envelope():
     results = []
 
     sig, fs, gt = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=2.0, fs=FS, snr_db=10)
-    res = med_envelope_analysis(sig, fs, med_filter_len=64, max_freq=500)
+    res = med_envelope_analysis(sig, fs, med_filter_len=64)
 
     kurt_before = res.get("kurtosis_before", 0)
     kurt_after = res.get("kurtosis_after", 0)
     kurt_improved = kurt_after > kurt_before * 1.2  # MED 应显著提升峭度
 
-    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=90.0, tolerance_hz=5.0))
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(_spectrum_arrays(res)[0], _spectrum_arrays(res)[1], target_freq=90.0, tolerance_hz=5.0))
     freq_ok = abs(peak_f - 90.0) < 10.0
 
     passed = kurt_improved and freq_ok
@@ -215,9 +245,9 @@ def test_teager_envelope():
     results = []
 
     sig, fs, gt = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=2.0, fs=FS, snr_db=15)
-    res = teager_envelope_analysis(sig, fs, max_freq=500)
+    res = teager_envelope_analysis(sig, fs)
 
-    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=90.0, tolerance_hz=5.0))
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(_spectrum_arrays(res)[0], _spectrum_arrays(res)[1], target_freq=90.0, tolerance_hz=5.0))
     freq_ok = abs(peak_f - 90.0) < 10.0
     snr_ok = snr > 2.0
     passed = freq_ok and snr_ok
@@ -242,9 +272,9 @@ def test_spectral_kurtosis_envelope():
     results = []
 
     sig, fs, gt = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=2.0, fs=FS, snr_db=15)
-    res = spectral_kurtosis_envelope_analysis(sig, fs, max_level=4, f_low=100, max_freq=500)
+    res = spectral_kurtosis_envelope_analysis(sig, fs, max_level=4, f_low=100)
 
-    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(np.array(res["envelope_freq"]), np.array(res["envelope_amp"]), target_freq=90.0, tolerance_hz=5.0))
+    peak_f, snr = _get_peak_snr(find_peaks_in_spectrum(_spectrum_arrays(res)[0], _spectrum_arrays(res)[1], target_freq=90.0, tolerance_hz=5.0))
     freq_ok = abs(peak_f - 90.0) < 10.0
     snr_ok = snr > 2.0
     passed = freq_ok and snr_ok
@@ -287,7 +317,7 @@ def test_real_data_hustbear():
     ]
 
     methods = [
-        ("envelope",   envelope_analysis),
+        ("envelope",   compute_envelope),
         ("kurtogram",  fast_kurtogram),
         ("med",        med_envelope_analysis),
         ("teager",     teager_envelope_analysis),
@@ -349,7 +379,7 @@ def main():
     print("=" * 60)
 
     all_results = {
-        "envelope_analysis": test_envelope_analysis(),
+        "compute_envelope": test_compute_envelope(),
         "fast_kurtogram": test_fast_kurtogram(),
         "med_envelope": test_med_envelope(),
         "teager_envelope": test_teager_envelope(),

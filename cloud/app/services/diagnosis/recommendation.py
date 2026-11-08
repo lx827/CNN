@@ -87,7 +87,7 @@ def _generate_recommendation(
 
     # 3. 传统条件分支建议
     # 轴承建议
-    bearing_ind = bearing_result.get("fault_indicators", {})
+    bearing_ind = bearing_result.get("evaluation", {}).get("indicators", {})
     bearing_faults = [k for k, v in bearing_ind.items() if isinstance(v, dict) and v.get("significant")]
     if bearing_faults:
         parts.append(f"检测到轴承故障特征（{'/'.join(bearing_faults)}），建议检查润滑状态并安排精密诊断。")
@@ -152,7 +152,7 @@ def _generate_recommendation_all(bearing_results: Dict, gear_results: Dict, stat
     # 统计各轴承方法检出的故障
     bearing_faults = {}
     for result in bearing_results.values():
-        indicators = result.get("fault_indicators", {})
+        indicators = result.get("evaluation", {}).get("indicators", {})
         for fname, info in indicators.items():
             if isinstance(info, dict) and info.get("significant"):
                 bearing_faults.setdefault(fname, 0)
@@ -207,7 +207,7 @@ def _summarize_all_methods(bearing_results: Dict, gear_results: Dict) -> Dict[st
     for method_key, result in bearing_results.items():
         if "error" in result:
             continue
-        indicators = result.get("fault_indicators", {})
+        indicators = result.get("evaluation", {}).get("indicators", {})
         detected = []
         for fname, info in indicators.items():
             if isinstance(info, dict) and info.get("significant"):

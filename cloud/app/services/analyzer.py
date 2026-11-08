@@ -151,7 +151,7 @@ def analyze_device(
 
         merged = {}
         for _, r in channel_results:
-            for fname, prob in r.get("bearing", {}).get("fault_indicators", {}).items():
+            for fname, prob in r.get("bearing", {}).get("evaluation", {}).get("indicators", {}).items():
                 if fname.endswith("_stat") or not isinstance(prob, dict):
                     continue
                 if prob.get("significant"):

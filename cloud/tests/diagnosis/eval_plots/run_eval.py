@@ -71,7 +71,7 @@ def _worker_bearing(fname, is_healthy, method_str):
             bearing_method=BearingMethod(method_str),
             bearing_params=BEARING_PARAMS, denoise_method=DenoiseMethod.NONE)
         res = engine.analyze_bearing(sig, FS)  # rot_freq=None: 引擎自估计
-        inds = res.get("fault_indicators", {})
+        inds = res.get("evaluation", {}).get("indicators", {})
         has_fault = any(
             v.get("significant") for k, v in inds.items()
             if isinstance(v, dict) and not k.endswith("_stat"))
@@ -106,7 +106,7 @@ def _worker_gear(fname, is_healthy, method_str):
             gear_teeth=GEAR_PARAMS, denoise_method=DenoiseMethod.NONE)
         rf = float(fname.split("_")[-1].replace("-c1.npy", ""))
         res = engine.analyze_gear(sig, FS, rot_freq=rf)
-        inds = res.get("fault_indicators", {})
+        inds = res.get("evaluation", {}).get("indicators", {})
         has_warn = any(
             v.get("warning") or v.get("critical")
             for v in inds.values() if isinstance(v, dict))
@@ -140,7 +140,7 @@ def _worker_snr(method_str, snr_db, sig_clean):
             bearing_method=BearingMethod(method_str),
             bearing_params=BEARING_PARAMS, denoise_method=DenoiseMethod.NONE)
         res = engine.analyze_bearing(sig_clean + noise, FS)  # rot_freq=None: 引擎自估计
-        inds = res.get("fault_indicators", {})
+        inds = res.get("evaluation", {}).get("indicators", {})
         return any(v.get("significant") for k, v in inds.items()
                    if isinstance(v, dict) and not k.endswith("_stat"))
     except Exception:

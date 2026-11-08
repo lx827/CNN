@@ -251,7 +251,7 @@ def _run_consensus_diagnosis(
     merged_probs = {}
     for result in [result_c1, result_c2]:
         # 从 bearing fault_indicators 提取
-        bearing_ind = result.get("bearing", {}).get("fault_indicators", {})
+        bearing_ind = result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
         for name, info in bearing_ind.items():
             if isinstance(info, dict) and info.get("significant"):
                 snr_val = float(info.get("snr", 0))

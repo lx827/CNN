@@ -65,8 +65,8 @@ def evaluate_bearing_methods():
                 result = engine.analyze_bearing(signal, SAMPLE_RATE, rot_freq=rot_freq)
                 exec_time = (time.perf_counter() - t0) * 1000
 
-                env_freq = result.get("envelope_freq", [])
-                env_amp = result.get("envelope_amp", [])
+                env_freq = result["spectrum"]["frequency_hz"]
+                env_amp = result["spectrum"]["amplitude"]
 
                 bpfo_snr = estimate_fault_freq_snr(env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BPFO"])
                 bpfi_snr = estimate_fault_freq_snr(env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BPFI"])
@@ -115,8 +115,8 @@ def evaluate_bearing_methods():
                     )
                     result = engine.analyze_bearing(signal, SAMPLE_RATE, rot_freq=rot_freq)
                     exec_time = (time.perf_counter() - t0) * 1000
-                    env_freq = result.get("envelope_freq", [])
-                    env_amp = result.get("envelope_amp", [])
+                    env_freq = result["spectrum"]["frequency_hz"]
+                    env_amp = result["spectrum"]["amplitude"]
 
                     # 获取综合健康度（与 HUSTbear 保持一致）
                     hs = 100

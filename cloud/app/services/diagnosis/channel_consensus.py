@@ -52,7 +52,7 @@ def cross_channel_consensus(
 
     for ch_idx, result in enumerate(channel_results):
         # 轴承故障
-        bearing_ind = result.get("bearing", {}).get("fault_indicators", {})
+        bearing_ind = result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
         for name, info in bearing_ind.items():
             if isinstance(info, dict) and info.get("significant"):
                 # BPFO → 轴承外圈故障, BPFI → 轴承内圈故障, BSF → 滚动体故障

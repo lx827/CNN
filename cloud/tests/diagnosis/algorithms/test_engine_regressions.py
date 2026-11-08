@@ -39,7 +39,7 @@ def test_no_params_uses_statistical_fault_indicators():
     engine = DiagnosisEngine(strategy="advanced", bearing_params={}, gear_teeth={})
     result = engine.analyze_comprehensive(sig, FS)
 
-    indicators = result["bearing"]["fault_indicators"]
+    indicators = result["bearing"]["evaluation"]["indicators"]
     assert "BPFO" not in indicators
     assert "envelope_peak_snr" in indicators
     assert "order_kurtosis" in result["gear"]["fault_indicators"]
