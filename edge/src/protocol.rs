@@ -1,6 +1,6 @@
 //! 来源：CNN DC24_PROTOCOL 第11节，交接基线 c18cd21。
 //! 只实现四路 IEPE/AC0.2Hz/PASS 模式，不推测未知字段。
-use anyhow::{bail, ensure, Result};
+use anyhow::{ensure, Result};
 use serde_json::{json, Value};
 
 pub const RATES: [u32; 12] = [
@@ -96,8 +96,10 @@ pub fn samples(frame: &[u8]) -> Result<(u16, Vec<[i32; 4]>)> {
     Ok((sequence, result))
 }
 pub fn check_sequence(previous: Option<u16>, next: u16) -> Result<()> {
-    if previous.is_some_and(|v| v.wrapping_add(1) != next) {
-        bail!("设备帧不连续: {previous:?} -> {next}");
+    match previous {
+        // 已验证协议：每次开始后首帧序号为 0（DC24_PROTOCOL 第 6 节；Python 基线同此）。
+        None => ensure!(next == 0, "首帧序号不是 0: {next}"),
+        Some(v) => ensure!(v.wrapping_add(1) == next, "设备帧不连续: {v} -> {next}"),
     }
     Ok(())
 }
@@ -150,7 +152,9 @@ mod tests {
             }
         }
         check_sequence(Some(65535), 0).unwrap();
+        check_sequence(None, 0).unwrap();
         assert!(check_sequence(Some(2), 4).is_err());
+        assert!(check_sequence(None, 1).is_err());
     }
     #[test]
     fn corrupt_data_and_control_are_rejected() {

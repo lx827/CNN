@@ -1,5 +1,5 @@
 //! 在回环地址模拟 DC24 与云端，不访问真实设备或公网服务器。
-use dc24_edge::{
+use dc24_edge_core::{
     protocol::{self, Frames},
     runtime,
 };

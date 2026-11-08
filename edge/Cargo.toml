@@ -5,6 +5,10 @@ edition = "2021"
 description = "DC24 acquisition and CNN cloud uploader"
 license = "MIT"
 
+[lib]
+name = "dc24_edge_core"
+crate-type = ["rlib", "cdylib"]
+
 [dependencies]
 anyhow = "1"
 ctrlc = "3"
@@ -12,6 +16,10 @@ fs2 = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
+
+[target.'cfg(unix)'.dependencies]
+# 仅 Unix 需要：常驻监听设置 SO_REUSEADDR，避开 TIME_WAIT 占用（Windows 用默认独占绑定）。
+socket2 = "0.5"
 
 [dev-dependencies]
 tiny_http = "0.12"

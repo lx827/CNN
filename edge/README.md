@@ -1,6 +1,6 @@
 # DC24 Rust 边端（开发中）
 
-**这是开发进度交接，不是已验证可部署的发行版。** 截至 2026-11-07，源码、配置、测试和服务模板已写入；Rust 语法格式和 Cargo 清单/锁文件检查通过，完整构建与端到端测试尚未通过。没有安装到树莓派，没有部署或修改 ECS。
+**这是开发进度交接，不是已验证可部署的发行版。** 截至 2026-11-08：`cargo fmt`、`cargo test`（4 单元 + 1 端到端 + 3 FFI 回环，MSVC 工具链）全部通过；ARM64 构建、树莓派真机与实机 DC24 验证尚未进行。没有安装到树莓派，没有部署或修改 ECS。
 
 ## 目标与已有代码
 
@@ -8,16 +8,28 @@
 
 实现依据是本交接分支已有的 [DC24 协议](../docs/DC24_PROTOCOL.md) 和 [Python 实机链路交接](../docs/DC24_HANDOFF_20261107.md)。Windows DLL 不参与 Rust 程序运行。当前只实现已验证的四通道 IEPE/AC0.2Hz/PASS 配置，不是完整厂家 SDK。
 
-| 文件 | 已写入的内容（仍待验证） |
+### 两种部署形态，共用同一核心
+
+| 形态 | 组成 | 状态 |
+|---|---|---|
+| **核心动态库**（树莓派主路线） | 本 crate 的 cdylib `dc24_edge_core`（Linux 产物 `libdc24_edge_core.so`）+ Python 驱动（`dc24/dc24_edge_pi.py`，负责云端会话/落盘/上传） | FFI 契约见 [FFI.md](FFI.md) |
+| **全 Rust 单体** | `main.rs` + `runtime.rs` 二进制，链同一核心（rlib） | 端到端回环测试通过 |
+
+网络核心修复（相对 2026-11-07 版）：监听改为**进程内常驻绑定**（Unix 设 SO_REUSEADDR，避开 TIME_WAIT 占用；accept 后 BA 探活丢弃陈旧 backlog 连接）；**首帧序号必须为 0**（与 Python 基线一致）。
+
+| 文件 | 已写入的内容（仍待实机验证） |
 |---|---|
-| `src/protocol.rs` | 控制报文、TCP 拆帧、四路有符号24位计数、序号连续性检查 |
-| `src/device.rs` | 主机监听、设备连接、心跳、开始/停止控制 |
+| `src/protocol.rs` | 控制报文、TCP 拆帧、四路有符号24位计数、首帧0+序号连续性检查 |
+| `src/device.rs` | 常驻监听绑定、设备连接与 BA 探活、心跳、开始/停止控制 |
+| `src/ffi.rs` | C ABI 导出：open/start/poll/stop/close/info，有界消息队列 |
 | `src/recording.rs` | CSV、原始采样帧、int32 计数及元数据保存，磁盘空间保护 |
 | `src/cloud.rs` | 现有 `/api/acquisition` HTTP 接口及流式文件上传 |
 | `src/runtime.rs` | 云端控制、有限实时窗口、调度、持久化补传清单 |
+| `FFI.md` | C ABI 契约（宿主语言接入文档） |
 | `config.example.json` | 配置样例，无真实云端地址或密钥 |
 | `deploy/dc24-edge.service` | 未安装的 systemd 模板；账号和路径需要部署前核实 |
-| `tests/end_to_end.rs` | 回环模拟设备和云端，检查计数、文件一致性及上传重试；尚未通过执行 |
+| `tests/end_to_end.rs` | 回环模拟设备和云端，检查计数、文件一致性及上传重试 |
+| `tests/ffi.rs` | FFI 回环：样本/事件/终态交付、首帧门槛、队列超限保护 |
 
 原始值保持 ADC counts，不自动换算为 g 或 m/s²，不抽点替代完整保存。文件格式沿用现有真实采集链路：`samples.csv`、`counts.i32`、`rx_stream.bin`、`commands.jsonl`、`metadata.json`。
 
@@ -63,8 +75,8 @@ cargo build --release --locked
 ./target/release/dc24-edge --config config.json --check
 ```
 
-最后一条的路径形式适用于 Linux/macOS；Windows 构建产物是 `target/release/dc24-edge.exe`。Windows GNU 工具链在中文绝对路径下的链接问题尚未解决，详细过程见 [工作记录](../docs/RUST_EDGE_WORKLOG.md)。
+最后一条的路径形式适用于 Linux/macOS；Windows 构建产物是 `target/release/dc24-edge.exe`（动态库为 `target/release/dc24_edge_core.dll`，Linux 为 `libdc24_edge_core.so`）。Windows 下沿用 MSVC 工具链可正常构建；此前 GNU 工具链在中文绝对路径下的链接问题不再阻塞，记录见 [工作记录](../docs/RUST_EDGE_WORKLOG.md)。
 
 ## 下一步
 
-先解决构建，执行协议、定时/持续保存、故障收尾、重试及与现有真实后端的兼容性测试，再做 ARM64 和真机资源验证。用户已明确要求暂不部署：推送交接分支不等于授权上传程序到树莓派、修改设备网络或部署 ECS。
+Python 驱动与 FFI 核心的实机联调（先 Windows 开发机 + 模拟设备，再树莓派 ARM64 + 真实 DC24）、真机资源占用与停止行为核验。用户已明确要求暂不部署：推送交接分支不等于授权上传程序到树莓派、修改设备网络或部署 ECS。

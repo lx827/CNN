@@ -1,7 +1,7 @@
 use crate::{
     cloud::Cloud,
     config::{valid_id, Config, Mode},
-    device::Link,
+    device::{self, Link},
     protocol,
     recording::{self, Manifest, Recording, FILES},
 };
@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 use std::{
     collections::VecDeque,
     fs::{self, OpenOptions},
+    net::TcpListener,
     path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -336,6 +337,7 @@ fn session(
     quit: &Arc<AtomicBool>,
     control: Value,
     scheduled: bool,
+    listener: &TcpListener,
 ) -> Result<()> {
     let id = control["id"].as_str().context("会话缺少 ID")?.to_owned();
     ensure!(valid_id(&id), "会话 ID 无效");
@@ -393,12 +395,12 @@ fn session(
         record_ended: false,
     };
     let result = (|| -> Result<()> {
-        let Some(mut link) = Link::accept(config, &stop)? else {
+        // connect 内部完成 accept + BA 探活（常驻监听需丢弃陈旧 backlog 连接）。
+        let Some(mut link) = Link::connect(listener, config, &stop)? else {
             return Ok(());
         };
         update(shared, "configuring");
         let mut discard = |_: &[u8], _: &VecDeque<Value>| Ok(());
-        link.exchange(0xba, &[], false, &mut discard)?;
         link.exchange(0xb8, &[], true, &mut discard)?;
         link.exchange(0xb2, &protocol::B2, true, &mut discard)?;
         link.exchange(0xb5, &protocol::profile(rate)?, true, &mut discard)?;
@@ -495,6 +497,8 @@ pub fn run(config_path: &Path, key_override: Option<String>, quit: Arc<AtomicBoo
         .or_else(|| std::env::var(&initial.api_key_env).ok())
         .context("没有设置密钥环境变量")?;
     let cloud = Cloud::new(&initial, key)?;
+    // 常驻监听：整个进程只 bind 一次，会话间复用（对齐原厂软件的占用方式）。
+    let listener = device::bind_listener(&initial)?;
     let shared = Arc::new(Mutex::new(State::default()));
     let upload = {
         let (c, a, s, q) = (initial.clone(), cloud.clone(), shared.clone(), quit.clone());
@@ -553,7 +557,9 @@ pub fn run(config_path: &Path, key_override: Option<String>, quit: Arc<AtomicBoo
                 scheduled_once = true;
             }
             if !current.is_null() {
-                session(&config, &cloud, &shared, &quit, current, scheduled)?;
+                session(
+                    &config, &cloud, &shared, &quit, current, scheduled, &listener,
+                )?;
                 // 间隔定义为上一次会话结束后等待；不为追赶计划而重叠采集。
                 next = Instant::now() + Duration::from_secs(config.interval_seconds.unwrap_or(1));
             }

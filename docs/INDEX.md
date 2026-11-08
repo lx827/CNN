@@ -26,6 +26,7 @@
 | [DC24 实测协议](./DC24_PROTOCOL.md) | `docs/DC24_PROTOCOL.md` | TCP角色、命令、四通道拆帧及原厂同段对照 |
 | [DC24 工作交接说明](./DC24_HANDOFF_20261107.md) | `docs/DC24_HANDOFF_20261107.md` | 已完成链路、现行协议、双接收方式、实测证据和树莓派兼容边界 |
 | [Rust 边端开发说明](../edge/README.md) | `edge/README.md` | Rust 边端开发稿、可调配置、验证状态与部署限制 |
+| [边端网络核心 FFI 契约](../edge/FFI.md) | `edge/FFI.md` | dc24_edge_core 动态库 C ABI：消息结构、导出函数、队列与线程约定（Python 驱动接入文档） |
 | [部署指南](./部署指南.md) | `docs/部署指南.md` | 本地（Windows/WSL）与阿里云 ECS 部署：uv 链路、`deploy.sh` 一键更新、`CNN.service` 模板、2G 红线 |
 | [边端交叉编译构建](../deploy/edge/README.md) | `deploy/edge/README.md` | Rust 边端 ARM64 交叉编译容器、产物导出与树莓派部署步骤 |
 | [操作手册](./操作手册.md) | `docs/操作手册.md` | 系统日常操作流程 |

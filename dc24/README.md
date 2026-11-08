@@ -1,6 +1,6 @@
 # DC24 现场采集工具链（dc24/）
 
-> 按 `GLOSSARY.md` 术语:本目录是 **现场采集工具(DC24 工具链)**,运行在 Windows 现场电脑上驱动 DC24 采集卡,是实机验收的现役链路;不是部署在树莓派上的 Rust 边端(`edge/`)。
+> 按 `GLOSSARY.md` 术语:本目录主体是 **现场采集工具(DC24 工具链)**,运行在 Windows 现场电脑上驱动 DC24 采集卡,是实机验收的现役链路;同时携带树莓派部署形态的 Python 驱动入口 `dc24_edge_pi.py`(设备链路由 `edge/` 的 Rust 核心 cdylib 承担,见下文[树莓派边端驱动](#树莓派边端驱动rust核心--python-驱动)一节)。
 
 ## 已打通链路
 
@@ -20,8 +20,11 @@ dc24/
 ├── dc24_vendor.py             # 原厂 DLL 校验(SHA-256)
 ├── dc24_vendor_bridge.ps1     # 32 位 PowerShell/C# 桥接调用 JMServer.dll
 ├── dc24_profiles.json         # 原厂 12 档完整 B5 命令负载(云端与现场工具共用)
+├── dc24_ffi.py                # 树莓派形态:dc24_edge_core 动态库的 ctypes 绑定(仅标准库)
+├── dc24_edge_pi.py            # 树莓派形态:云端会话编排、五件套落盘、实时窗口与补传上传
 ├── pyproject.toml             # 成员依赖(uv workspace,根目录 uv sync 统一安装)
-├── tests/                     # 工具链测试(test_dc24_start 入口冒烟 / test_dc24_vendor DLL 回环,未配置原厂 DLL 时跳过)
+├── tests/                     # 工具链测试(test_dc24_start 入口冒烟 / test_dc24_vendor DLL 回环,
+│                              #   未配置原厂 DLL 时跳过;test_dc24_edge_pi 树莓派驱动回归)
 └── .env                       # 本机配置(不入库):DC24_VENDOR_ROOT 指向原厂安装目录则走 DLL,留空走 Python TCP
 ```
 
@@ -34,6 +37,42 @@ dc24/
 | `EDGE_API_KEY` | 边端密钥,须与云端 `cloud/.env` 的 `EDGE_API_KEY` 一致 |
 
 采样率、时长、频带等采集参数由"真实采集"页面下发,不在 `.env` 配置。
+
+## 树莓派边端驱动(Rust 核心 + Python 驱动)
+
+`dc24_edge_pi.py` 是树莓派部署形态的边端入口(对应 `edge/README.md` 的"核心动态库"路线):
+设备链路(常驻 TCP 监听、每秒 00 心跳、BA/B8/B2/B5/B7 时序、80 帧解码、首帧序号 0 与连续性
+校验)全部由 Rust cdylib `dc24_edge_core` 承担(契约见 [`edge/FFI.md`](../edge/FFI.md)),
+`dc24_ffi.py` 用 ctypes 加载并轮询消息,`dc24_edge_pi.py` 负责云端会话循环、心跳、五件套
+落盘、实时窗口上传与失败补传。v1 只实现云端下发会话(config.json 的 `mode=cloud`),
+本地定时/持续模式不做。
+
+运行方式(树莓派上;Windows 开发机同命令,库文件为 `dc24_edge_core.dll`):
+
+```bash
+# 1) 构建 Rust 核心(产物 edge/target/release/libdc24_edge_core.so)
+cd edge && cargo build --release && cd ..
+# 2) 配置与密钥:config.json 用 edge/config.example.json 的 schema(与核心共用同一份,
+#    不得加私有键);密钥从 api_key_env 指定的环境变量读,绝不写入文件
+export EDGE_API_KEY=<与云端一致的密钥>
+# 3) 启动(在 dc24/ 目录内;--once 完成一个会话后退出,便于联调)
+cd dc24 && uv run python dc24_edge_pi.py --config /path/to/config.json
+```
+
+行为基线对照 `edge/src/runtime.rs`:实时窗口约最近 2 秒、按绝对样本索引显式保留缺口、
+不重发已确认区间;保存任务落盘五件套(`samples.csv`/`counts.i32`/`rx_stream.bin`/
+`commands.jsonl`/`metadata.json`,格式与 `dc24_capture.py`/`dc24_live.py` 既有链路一致,
+其中 `rx_stream.bin` 由解码样本逐字节可逆重建);上传走 `PUT /jobs/{id}/stream-files/` +
+`finish-stream`,失败用 `storage/.uploads/*.json` 本地清单持久化重试;控制/心跳请求短超时
+(`http_timeout_seconds`,默认 4s),文件上传长超时(`upload_timeout_seconds`,默认 180s)。
+回归测试:`uv run python tests/test_dc24_edge_pi.py -v`(回环假设备+假云端,不需硬件;
+找不到库时会尝试 `cargo build`,无 Rust 工具链则跳过集成部分)。
+
+与原 `dc24_agent.py` 的关系:两者共用同一套云端 `/api/acquisition` 契约与五件套格式,
+但面向不同部署形态——`dc24_agent.py`/`dc24_live.py` 是 Windows 现场电脑的现役实机链路
+(支持原厂 DLL 桥接、回放、目录选择器),继续独立使用;`dc24_edge_pi.py` 面向无桌面树莓派,
+设备链路换用 Rust 核心,不依赖 DLL/回放/图形界面,目录选择请求一律回错误并要求页面直接
+填写绝对路径。两者不要在同一台机器、同一监听地址上同时运行(与原厂软件亦互斥)。
 
 ## 历史说明
 
