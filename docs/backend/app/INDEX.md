@@ -27,6 +27,12 @@ docs/backend/app/
 │   │   ├── analysis.md      ← 原始指标、唯一谱峰与边带分析
 │   │   ├── envelope.md      ← 标准包络计算
 │   │   └── evaluation.md    ← 包络指标评估
+│   ├── order/
+│   │   ├── __init__.md      ← 转速/相位契约与工况边界
+│   │   ├── types.md         ← 标量/局部/轨迹、角域与 FFT 轴 dataclass
+│   │   ├── estimation.md    ← 标量候选仲裁与 STFT 连续转速
+│   │   ├── resampling.md    ← 相位积分、等角采样与单边幅值
+│   │   └── pipeline.md      ← 恒速/缓变/快速变速 Pipeline
 │   └── pipelines/
 │       ├── __init__.md
 │       └── bearing/__init__.md ← 标准轴承包络 Pipeline
@@ -130,7 +136,7 @@ docs/backend/app/
 | 目录 | 文件数 |
 |------|--------|
 | `app/` 根目录 | 8 |
-| `app/algorithms/` | 9 |
+| `app/algorithms/` | 14 |
 | `app/api/` | 10 |
 | `app/api/data_view/` | 10 |
 | `app/api/devices/` | 3 |
@@ -140,7 +146,7 @@ docs/backend/app/
 | `app/services/diagnosis/` | 19 |
 | `app/services/diagnosis/gear/` | 5 |
 | `app/services/diagnosis/fusion/` | 2 |
-| **总计** | **81** |
+| **总计** | **86** |
 
 ---
 

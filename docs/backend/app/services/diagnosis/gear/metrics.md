@@ -15,7 +15,7 @@
 | `compute_car` | `compute_car(cepstrum, quefrency, rot_freq, n_harmonics=5) -> float` | 倒频谱幅值比 |
 | `compute_ser_order` | `compute_ser_order(order_axis, spectrum, mesh_order, carrier_order, n_sidebands=6) -> float` | 阶次域 SER |
 | `analyze_sidebands_order` | `analyze_sidebands_order(order_axis, spectrum, mesh_order, n_sidebands=6, spacing=1.0) -> dict` | 阶次域边频分析 |
-| `compute_fm0_order` | `compute_fm0_order(tsa_signal, order_axis, order_spectrum, mesh_order, n_harmonics=5) -> float` | 阶次域 FM0 |
+| `compute_fm0_order` | `compute_fm0_order(tsa_signal, order_axis, order_spectrum, mesh_order, n_harmonics=5) -> float` | `PP / ΣA_h`；每个啮合谐波在 ±0.5 阶带内取最大单边幅值，不累加整个 Hann 主瓣 |
 | `compute_na4` | `compute_na4(residual_signal, historical_residuals) -> float` | NA4 趋势型故障检测 |
 | `compute_nb4` | `compute_nb4(envelope_signal, historical_envelopes) -> float` | NB4 包络域局部齿损坏 |
 | `analyze_sidebands_zoom_fft` | `analyze_sidebands_zoom_fft(signal, fs, mesh_freq, rot_freq, n_sidebands=6) -> dict` | ZOOM-FFT 高分辨率边频 |

@@ -32,4 +32,4 @@ def analyze_device(
   - `rot_freq` — 转频（可选）
   - `denoise_method` — 去噪方法
 - **返回值**：`{health_score, status, fault_probabilities, imf_energy, order_analysis, rot_freq}`
-- **说明**：综合分析主入口。优先 NN → DiagnosisEngine → rule_based 回退
+- **说明**：综合分析主入口。优先 NN → DiagnosisEngine → rule_based 回退。阶次计算只经 Engine/规则路径委托 `algorithms/order`，本文件不直接选择多帧或快速变速实现。

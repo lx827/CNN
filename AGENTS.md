@@ -77,6 +77,7 @@ cloud/                      # 云端后端(uv workspace 成员)
 │   │   ├── core/           # 带单位的频谱、频带与谱峰数据类型
 │   │   ├── mechanics/      # 机械对象运动学模型与故障频率
 │   │   ├── bearing/        # 包络计算、指标/边带分析与阈值评估
+│   │   ├── order/          # 转速估计、连续相位、等角重采样与阶次谱 Pipeline
 │   │   └── pipelines/      # 按诊断对象组合分析 Pipeline 与评估 Pipeline
 │   ├── services/
 │   │   ├── analyzer.py     # 后台分析入口(多通道综合,lifespan worker 调用)
@@ -87,7 +88,8 @@ cloud/                      # 云端后端(uv workspace 成员)
 │   │       ├── ensemble.py # 多算法集成诊断(run_research_ensemble)
 │   │       ├── features.py # 特征提取;has_bearing_params/has_gear_params 参数门控
 │   │       ├── health_score.py / recommendation.py   # 评分与建议(全项目单一评分源)
-│   │       ├── bearing.py / gear/metrics.py / order_tracking.py
+│   │       ├── bearing.py / gear/metrics.py
+│   │       ├── order_tracking.py          # 旧 tuple 兼容边界；唯一阶次实现位于 algorithms/order
 │   │       └── preprocessing.py / vmd_denoise.py 等  # 去噪族(wavelet/VMD/MED/MCKD/EMD…)
 │   └── lifespan.py         # 线程池 + 后台分析 worker
 └── tests/                  # 后端测试 + 诊断测试套件(含 P0 回归)

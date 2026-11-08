@@ -72,6 +72,8 @@
 
 > **2026-11-08 包络响应契约变更**：`/envelope` 改为返回 `spectrum {frequency_hz, amplitude, amplitude_unit, scaling}`、实际 `band`、`features` 和 `evaluation {status, indicators}`，不再返回 `envelope_freq`、`envelope_amp` 或顶层 `fault_indicators`。标准包络幅值改为单边幅值，`max_freq` 只截断展示，不改变诊断；`features` 使用 `spectral_power_proxy`，单项不可分辨时为 `not_evaluable`。前端适配由独立任务处理，不能继续按旧字段读取。
 >
+> **2026-11-08 阶次契约保持兼容**：`/order` 的 URL、参数和响应字段不变，前端无需改动。`orders` 明确为 FFT bin 阶次轴，`spectrum` 为单边峰值幅值，数值精度提高到六位小数；`tracking_method` 的可选值不变。估计或快速变速脊线不可判定时后端返回 HTTP 400，不再以固定转频生成正常图。没有既有批次诊断时只返回阶次结果，不创建伪健康记录，也不覆盖通道缓存。
+>
 > **⚠️ 影响前端**：`DataView.vue` 是核心数据查看组件，任何 `/api/data/{id}/{batch}/{ch}/*` 端点的 URL 变更、参数增减或响应结构调整，都需要同步修改 `frontend/src/views/DataView.vue` 和 `frontend/src/api/data.js`。
 
 ---

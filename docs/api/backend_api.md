@@ -522,6 +522,8 @@ GET /api/data/{device_id}/{batch_index}/{channel}/order?freq_min={freq_min}&freq
 
 **注意**：该端点为 `async def`
 
+**响应与算法契约（2026-11-08）**：响应字段不变。`orders` 为 FFT bin 阶次轴，`spectrum` 为输入单位下的 `single_sided_amplitude`，两者保留六位小数；不再使用窗能量归一化幅值。已知 `rot_freq` 走恒速等角采样；自动模式按局部转频 CV 区分逐帧谱平均与 STFT 连续相位重采样，单帧或 slow 失败也会尝试 fast。快速变速无可靠脊线、持续触及搜索边界或标量估计不可判定时返回 HTTP 400，不默认 10 Hz、不返回伪正常谱。转速估计使用未去噪信号，`denoise` 只影响重采样输入。仅更新已有 `channel=0/denoise_method="none"` 批次记录（兼容两列均 NULL 的旧记录）；无记录时不创建健康诊断，通道缓存不被覆盖。
+
 #### 6.3.3 倒谱分析
 
 ```
