@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
-from app.services.diagnosis.features import compute_fft
+from app.algorithms.transforms import compute_spectrum
 from app.api.data_view import _get_channel_name
 
 router = APIRouter(prefix="/api/monitor", tags=["实时监测"])
@@ -82,13 +82,13 @@ def get_latest_monitor(
             sample_rate = record.sample_rate or 25600
             channel_num = record.channel
 
-            # 计算 FFT 频谱（用 1 秒数据，保证 1Hz 分辨率）
+            # 全长分析先于显示截断：最多取 1 秒，统一 Hann 单边峰值幅值。
             try:
                 signal_fft = record.data[:FFT_POINTS]
-                freq, amp = compute_fft(signal_fft, sample_rate)
-                freq_amp = [fa for fa in zip(freq, amp) if fa[0] <= FFT_MAX_FREQ]
-                fft_freq = [round(f, 2) for f, a in freq_amp]
-                fft_amp = [round(a, 4) for f, a in freq_amp]
+                spectrum = compute_spectrum(signal_fft, sample_rate)
+                spectrum = spectrum.truncated(FFT_MAX_FREQ)
+                fft_freq = [round(float(value), 2) for value in spectrum.frequency_hz]
+                fft_amp = [round(float(value), 4) for value in spectrum.amplitude]
             except Exception:
                 fft_freq = []
                 fft_amp = []

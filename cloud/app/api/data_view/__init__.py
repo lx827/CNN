@@ -10,9 +10,6 @@
 """
 from fastapi import APIRouter
 from app.models import Device
-from typing import Tuple
-import numpy as np
-from scipy import signal as scipy_signal
 
 router = APIRouter(prefix="/api/data", tags=["振动数据查看"])
 
@@ -44,62 +41,6 @@ def _extract_device_param(params, device_keys):
             return ch
     return params
 
-
-def _compute_cepstrum(
-    sig: np.ndarray, fs: float,
-    max_quefrency_ms: float = 500.0
-) -> Tuple[np.ndarray, np.ndarray, list]:
-    """
-    计算功率倒谱（Power Cepstrum）
-    改进：加窗 + 对数谱去均值，消除 quefrency=0 处的虚假长竖线
-    """
-    N = len(sig)
-    window = np.hanning(N)
-    sig_windowed = sig * window
-
-    spectrum = np.fft.fft(sig_windowed)
-    log_spectrum = np.log(np.abs(spectrum) + 1e-10)
-    log_spectrum = log_spectrum - np.mean(log_spectrum)
-
-    cepstrum = np.real(np.fft.ifft(log_spectrum))
-
-    quefrency = np.arange(N) / fs
-    half = N // 2
-    quef_ms = quefrency[:half] * 1000.0
-    cep = cepstrum[:half]
-
-    mask = quef_ms <= max_quefrency_ms
-    quef_ms = quef_ms[mask]
-    cep = cep[mask]
-
-    peaks = []
-    if len(cep) > 10:
-        search_mask = (quef_ms >= 3.0) & (quef_ms <= 200.0)
-        search_cep = cep[search_mask]
-        search_quef = quef_ms[search_mask]
-
-        if len(search_cep) > 10:
-            peak_indices, _ = scipy_signal.find_peaks(search_cep, distance=50)
-            sorted_indices = sorted(peak_indices, key=lambda i: search_cep[i], reverse=True)
-
-            top_amp = None
-            for idx in sorted_indices:
-                amp = float(search_cep[idx])
-                if top_amp is None:
-                    top_amp = amp
-                elif amp < top_amp * 0.5:
-                    break
-                q_ms = float(search_quef[idx])
-                too_close = any(abs(p["quefrency_ms"] - q_ms) < 3.0 for p in peaks)
-                if too_close:
-                    continue
-                freq_hz = 1000.0 / q_ms if q_ms > 0 else 0.0
-                peaks.append({
-                    "quefrency_ms": round(q_ms, 2),
-                    "freq_hz": round(freq_hz, 2),
-                    "amplitude": round(amp, 4),
-                })
-    return quef_ms, cep, peaks
 
 
 def _get_channel_name(device: Device, channel_num: int) -> str:
