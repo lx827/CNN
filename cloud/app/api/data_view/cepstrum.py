@@ -1,15 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+
+from app.algorithms.cepstrum import analyze_cepstrum, compute_cepstrum
 from app.database import get_db
 from app.models import SensorData, Device
-from . import router, prepare_signal, _get_channel_name, _compute_cepstrum
 from app.services.diagnosis.signal_utils import denoise_signal
-from datetime import datetime
+from . import router, prepare_signal, _get_channel_name
+
 import asyncio
 import logging
-import numpy as np
 
 logger = logging.getLogger(__name__)
+
 
 @router.get("/{device_id}/{batch_index}/{channel}/cepstrum")
 async def get_channel_cepstrum(
@@ -21,22 +23,7 @@ async def get_channel_cepstrum(
     denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     db: Session = Depends(get_db)
 ):
-    """
-    实时计算功率倒谱（Cepstrum / 倒谱分析）
-
-    流程：
-      1. FFT → 对数幅度谱 → IFFT → 倒谱
-      2. 倒频率轴反映频谱中的周期性结构
-      3. 自动检测显著峰值并标注对应频率
-
-    参数：
-      max_quefrency: 最大倒频率（毫秒），默认 500 ms
-
-    返回：
-      quefrency:  倒频率轴（ms）
-      cepstrum:   倒谱幅值
-      peaks:      检测到的峰值列表 [{quefrency_ms, freq_hz, amplitude}]
-    """
+    """实时 log-amplitude 实倒谱及显示峰；不输出机械故障结论。"""
     record = db.query(SensorData).filter(
         SensorData.device_id == device_id,
         SensorData.batch_index == batch_index,
@@ -47,21 +34,21 @@ async def get_channel_cepstrum(
         raise HTTPException(status_code=404, detail="数据不存在")
 
     try:
-        sig = prepare_signal(record.data, detrend=detrend)
-        # 去噪与倒谱计算均在线程池执行，避免拖住其他 HTTP/WebSocket 请求。
-        sig = await asyncio.to_thread(denoise_signal, sig, denoise)
         sample_rate = record.sample_rate or 25600
-
-        # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）
-        max_samples = sample_rate * 5
-        if len(sig) > max_samples:
-            sig = sig[:max_samples]
-
-        # CPU 密集型倒谱计算放入线程池
-        quef_ms, cep, peaks = await asyncio.to_thread(_compute_cepstrum, sig, sample_rate, max_quefrency)
+        # 5 秒业务限制先于去趋势和慢去噪，避免对完整长记录做无效计算。
+        max_samples = int(sample_rate * 5)
+        signal = prepare_signal(record.data[:max_samples], detrend=detrend)
+        signal = await asyncio.to_thread(denoise_signal, signal, denoise)
+        representation = await asyncio.to_thread(compute_cepstrum, signal, sample_rate)
+        analysis = await asyncio.to_thread(
+            analyze_cepstrum,
+            representation,
+            max_quefrency_s=max_quefrency / 1000.0,
+        )
 
         device = db.query(Device).filter(Device.device_id == device_id).first()
-
+        quefrency_s = analysis.representation.quefrency_s
+        cepstrum = analysis.representation.amplitude
         return {
             "code": 200,
             "data": {
@@ -72,13 +59,18 @@ async def get_channel_cepstrum(
                 "sample_rate": sample_rate,
                 "is_special": bool(record.is_special),
                 "max_quefrency": max_quefrency,
-                "quefrency": [round(float(q), 2) for q in quef_ms.tolist()],
-                "cepstrum": [round(float(c), 4) for c in cep.tolist()],
-                "peaks": peaks,
+                "quefrency": [round(float(value) * 1000.0, 2) for value in quefrency_s],
+                "cepstrum": [round(float(value), 4) for value in cepstrum],
+                "peaks": [
+                    {
+                        "quefrency_ms": round(peak.quefrency_s * 1000.0, 2),
+                        "freq_hz": round(peak.frequency_hz, 2),
+                        "amplitude": round(peak.amplitude, 4),
+                    }
+                    for peak in analysis.peaks
+                ],
             }
         }
     except Exception as e:
         logger.error(f"倒谱计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"倒谱计算失败: {e}")
-
-
