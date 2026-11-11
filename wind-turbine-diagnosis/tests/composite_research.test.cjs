@@ -37,6 +37,7 @@ test('真实Vue研究组件渲染五种组合、阶段错误和未知诊断，�
     server: { middlewareMode: true }, appType: 'custom' })
   try {
     const { default: component } = await server.ssrLoadModule('/src/components/research/CompositeResult.vue')
+    const { default: ensemble } = await server.ssrLoadModule('/src/components/research/EnsembleResultPanels.vue')
     const { createSSRApp } = await import('vue')
     const { renderToString } = await import('@vue/server-renderer')
     const ElementPlus = (await import('element-plus')).default
@@ -55,5 +56,16 @@ test('真实Vue研究组件渲染五种组合、阶段错误和未知诊断，�
       assert.match(html, /无法重组/)
       assert.doesNotMatch(html, />正常</)
     }
+    const unavailable = { evaluation_status: 'not_evaluable', diagnosis_conclusion: 'unknown', health_score: null,
+      coverage: 'none', evaluations: [{ object_id: 'gear', evaluation_status: 'not_evaluable', diagnosis_conclusion: 'unknown',
+        fusion: { normal_mass: 0, anomaly_mass: 0, ignorance_mass: 1, conflict: 0, groups: [] } }],
+      gear_results: { composite: { diagnosis: { evaluation_status: 'not_evaluable', diagnosis_conclusion: 'unknown', health_score: null } } } }
+    const app = createSSRApp(ensemble, { result: unavailable })
+    app.use(ElementPlus)
+    const html = await renderToString(app)
+    assert.match(html, /不可评估/)
+    assert.match(html, /没有可融合的有效证据/)
+    assert.match(html, /不按方法数量重复投票/)
+    assert.doesNotMatch(html, /最佳算法|故障概率分布|低冲突|>正常</)
   } finally { await server.close() }
 })
