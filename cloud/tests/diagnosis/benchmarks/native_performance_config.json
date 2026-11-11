@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "frozen_date": "2026-11-12",
+  "issue": 106,
+  "seed": 20261112,
+  "algorithms": ["emd", "eemd", "ceemdan"],
+  "backends": ["python", "native"],
+  "block_orders": [["python", "native"], ["native", "python"], ["python", "native"]],
+  "warmups_per_worker": 1,
+  "samples_per_worker": 5,
+  "native_threads": 1,
+  "logical_cpus": [0, 2],
+  "ecs_logical_cpus": [0, 1],
+  "profiles": {
+    "controlled": {"max_imfs": 4, "max_sifts": 50, "ensemble_size": 8},
+    "production": {"max_imfs": 8, "max_sifts": 100, "ensemble_size": 50}
+  },
+  "emd": {"sd_threshold": 0.2, "mirror_extrema": 3, "interpolation": "pchip", "stopping_rule": "sd"},
+  "noise_scale": 0.2,
+  "vectors": [
+    {"id": "ottawa_I-A-1__short", "sample_rate_hz": 200000, "samples": 4096, "sha256_float64_le": "0143df68e26508a22695a727e90b25b855810540d0d199841ce54ace6d95e225"},
+    {"id": "hust_I_20Hz__short", "sample_rate_hz": 25600, "samples": 4096, "sha256_float64_le": "562ddfe785b27bccef7f2dea365973754bf23a865f67407050e453417eccde7e"},
+    {"id": "hust_B_20_1__short", "sample_rate_hz": 25600, "samples": 4096, "sha256_float64_le": "0b2d51f577ca6d7cb1c36f19b4148608771126f6f47c99747b1f089c29a2091a"},
+    {"id": "wt_B1_20__short", "sample_rate_hz": 48000, "samples": 4096, "sha256_float64_le": "02cfb74c9ba5bf18443d4224be233f0661c77dc7b1b2dda0e322b6824f2b6749"},
+    {"id": "synthetic__short", "sample_rate_hz": 8192, "samples": 4096, "sha256_float64_le": "93595f5aa16ecede478b529276b3fe25953386c08be9faf7e92cc2f6e63d9f50"}
+  ],
+  "gates": {
+    "production_ceemdan_native_over_python_max": 0.5,
+    "emd_eemd_native_over_python_max": 1.05,
+    "peak_memory": "max(native three worker OS peak RSS bytes) <= max(python three worker OS peak RSS bytes); zero tolerance",
+    "worker_noise_scaled_mad_max": 0.05,
+    "worker_noise_mad_scale": 1.4826,
+    "between_blocks_median_range_over_median_max": 0.10,
+    "noise_result": "inconclusive; never widen gates or selectively rerun",
+    "timing_aggregate": "median of all 15 samples per backend",
+    "p95": "linear percentile; descriptive only, not a production SLO",
+    "numerical_contract": "native_emd_contract.json; no waiver for budget or metadata differences"
+  },
+  "measurement_boundary": {
+    "time": "complete public EMD family call including Python outer loops/RNG/aggregation and necessary input conversion/output ownership; exclude imports/vector I/O/warmup/summary/profile",
+    "peak_rss": "OS high water from fresh worker start through last measured call, read before metric serialization; include actual imports, input, warmup and output lifetimes",
+    "correctness": "separate workers before any timing; same backend repeat arrays exact; cross backend frozen array and metadata budget",
+    "profile": "separate worker; excluded from time and memory gates",
+    "allocation_reporting": "observed ndarray input/output/copy bytes and source-derived linear scratch bound are distinct from OS RSS; no claim of instrumented total native allocations",
+    "reruns": "all three scheduled blocks run; resume only never-started workers; completed or interrupted worker cannot be overwritten"
+  },
+  "resources": {
+    "windows_job_commit_limit_bytes": 2147483648,
+    "wsl_measurement_memory_max_bytes": 2147483648,
+    "ecs_build_memory_max_bytes": 805306368,
+    "ecs_measurement_memory_max_bytes": 536870912,
+    "ecs_available_margin_bytes": 268435456,
+    "linux_swap_max_bytes": 0,
+    "build_jobs": 1,
+    "production_changes": false
+  }
+}
