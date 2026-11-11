@@ -185,6 +185,85 @@ class DeconvolutionPipelineTests(unittest.TestCase):
                         atol=max(float(np.max(np.abs(expected_signal))) * 2e-3, np.finfo(float).tiny),
                     )
 
+    def test_single_harmonic_unregularized_rank_deficiency_is_not_a_finite_success(self):
+        fs = 1000.0
+        signal = np.sin(2.0 * np.pi * 50.0 * np.arange(1024) / fs)
+        X = sliding_window_view(signal - np.mean(signal), 16)
+        initial_filter = np.zeros(16)
+        initial_filter[8] = 1.0
+        y = X @ initial_filter
+        normal = X.T @ X
+        rhs = (np.sum(y**2) / np.sum(y**4)) * (X.T @ (y**3))
+        # 独立前提：真实数值秩亏，但普通 solve 并不抛异常且返回有限解。
+        self.assertLess(np.linalg.matrix_rank(normal), 16)
+        self.assertTrue(np.all(np.isfinite(np.linalg.solve(normal, rhs))))
+
+        cases = (
+            (MEDEnvelopePipeline(), MEDParameters(filter_length=16, max_iterations=3, ridge=0.0)),
+            (
+                MCKDEnvelopePipeline(),
+                MCKDParameters(
+                    target_fault="BPFO",
+                    target_frequency_hz=50.0,
+                    filter_length=16,
+                    max_iterations=3,
+                    ridge=0.0,
+                ),
+            ),
+        )
+        for pipeline, parameters in cases:
+            with self.subTest(pipeline=pipeline.method):
+                result = pipeline.run(signal, fs, parameters)
+                self.assertEqual(result.status, "indeterminate")
+                self.assertEqual(result.reason, "numerical_deconvolution_failure")
+                self.assertIsNone(result.representation)
+
+    def test_positive_ridge_defines_regularized_solution_for_same_harmonic(self):
+        fs = 1000.0
+        signal = np.sin(2.0 * np.pi * 50.0 * np.arange(1024) / fs)
+        cases = (
+            (MEDEnvelopePipeline(), MEDParameters(filter_length=16, max_iterations=3, ridge=1e-8)),
+            (
+                MCKDEnvelopePipeline(),
+                MCKDParameters(
+                    target_fault="BPFO",
+                    target_frequency_hz=50.0,
+                    filter_length=16,
+                    max_iterations=3,
+                    ridge=1e-8,
+                ),
+            ),
+        )
+        for pipeline, parameters in cases:
+            with self.subTest(pipeline=pipeline.method):
+                result = pipeline.run(signal, fs, parameters)
+                self.assertEqual(result.status, "computed", result.reason)
+                self.assertIsNotNone(result.representation)
+
+    def test_full_rank_periodic_impulses_remain_computable_without_ridge(self):
+        fs = 1000.0
+        rng = np.random.default_rng(73)
+        impulses = np.zeros(2048)
+        impulses[np.arange(20, len(impulses), 20)] = 1.0
+        ringing_time = np.arange(16) / fs
+        ringing = np.exp(-180.0 * ringing_time) * np.sin(2.0 * np.pi * 180.0 * ringing_time)
+        signal = np.convolve(impulses, ringing, mode="same") + 0.01 * rng.standard_normal(len(impulses))
+        result = MCKDEnvelopePipeline().run(
+            signal,
+            fs,
+            MCKDParameters(
+                target_fault="BPFO",
+                target_frequency_hz=50.0,
+                filter_length=16,
+                max_iterations=3,
+                ridge=0.0,
+            ),
+        )
+        self.assertEqual(result.status, "computed", result.reason)
+        self.assertGreaterEqual(result.metadata["iterations"], 2)
+        self.assertEqual(len(result.metadata["objective_history"]), result.metadata["iterations"])
+        self.assertIsNotNone(result.representation)
+
     def test_zero_energy_and_numerically_undefined_updates_are_not_computed(self):
         for pipeline, parameters in (
             (MEDEnvelopePipeline(), MEDParameters(filter_length=16, max_iterations=3)),

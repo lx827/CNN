@@ -116,6 +116,41 @@ def correlated_kurtosis(values: NDArray[np.float64], period: int, shift_order: i
     return float(np.sum(beta**2) / energy ** (shift_order + 1))
 
 
+def _solve_regularized_least_squares(
+    X: NDArray[np.float64], target: NDArray[np.float64], ridge: float
+) -> np.ndarray:
+    """用 X 的 SVD 解 (X.T@X + ridge*I)f = X.T@target。
+
+    ridge=0 时必须具有完整数值列秩；ridge>0 时所有零空间方向由正则化唯一确定。
+    数值秩采用 LAPACK 常用的 eps*max(m,n)*sigma_max 判据，而非任意条件数阈值。
+    """
+    if not np.all(np.isfinite(target)):
+        raise np.linalg.LinAlgError("解卷积正规方程右端包含非有限值")
+    U, singular_values, Vt = np.linalg.svd(X, full_matrices=False)
+    if len(singular_values) < X.shape[1] or not np.all(np.isfinite(singular_values)):
+        raise np.linalg.LinAlgError("解卷积矩阵 SVD 数值退化")
+    largest = float(singular_values[0])
+    if largest == 0.0:
+        raise np.linalg.LinAlgError("解卷积矩阵零能量，无法更新")
+    rank_tolerance = np.finfo(np.float64).eps * max(X.shape) * largest
+    numerical_rank = int(np.sum(singular_values > rank_tolerance))
+    if ridge == 0.0 and numerical_rank < X.shape[1]:
+        raise np.linalg.LinAlgError("无正则化解卷积矩阵数值秩亏，无法唯一更新")
+
+    projected = U.T @ target
+    if ridge == 0.0:
+        factors = np.zeros_like(singular_values)
+        np.divide(
+            1.0,
+            singular_values,
+            out=factors,
+            where=singular_values > rank_tolerance,
+        )
+    else:
+        factors = singular_values / (singular_values**2 + float(ridge))
+    return Vt.T @ (factors * projected)
+
+
 def _mckd_filter_update(
     X: NDArray[np.float64],
     filter_coefficients: NDArray[np.float64],
@@ -141,7 +176,7 @@ def _mckd_filter_update(
     if beta_energy == 0.0 or not np.isfinite(beta_energy):
         raise np.linalg.LinAlgError("MCKD 周期乘积为零或数值退化，无法更新")
 
-    rhs = np.zeros(X.shape[1], dtype=np.float64)
+    target = np.zeros(X.shape[0], dtype=np.float64)
     for m in range(shift_order + 1):
         # 不执行 beta/y 除法：零输出附近直接计算留一乘积，数值稳定且符合定义。
         leave_one = np.ones(valid, dtype=np.float64)
@@ -149,12 +184,11 @@ def _mckd_filter_update(
             if k != m:
                 leave_one *= shifted[k]
         alpha_m = beta * leave_one
-        delayed_X = X[start - m * period: len(X) - m * period]
-        rhs += delayed_X.T @ alpha_m
+        # X_{mT}.T@alpha_m 等价于把 alpha_m 填回对应的延迟行后取 X.T@target。
+        target[start - m * period: len(X) - m * period] += alpha_m
 
-    scale = float(np.sum(y**2)) / (2.0 * beta_energy)
-    normal = X.T @ X + float(ridge) * np.eye(X.shape[1])
-    return np.linalg.solve(normal, scale * rhs)
+    target *= float(np.sum(y**2)) / (2.0 * beta_energy)
+    return _solve_regularized_least_squares(X, target, ridge)
 
 
 def _validate_iterations(max_iterations: int, tolerance: float, ridge: float) -> None:
@@ -201,11 +235,11 @@ def minimum_entropy_deconvolution(
         fourth = float(np.sum(y**4))
         if fourth == 0.0 or not np.isfinite(fourth):
             raise np.linalg.LinAlgError("MED 四阶矩为零或数值退化，无法更新")
-        rhs = (energy / fourth) * (X.T @ (y**3))
+        target = (energy / fourth) * y**3
         try:
-            updated = np.linalg.solve(X.T @ X + params.ridge * np.eye(length), rhs)
+            updated = _solve_regularized_least_squares(X, target, params.ridge)
         except np.linalg.LinAlgError as exc:
-            raise np.linalg.LinAlgError("MED 正规方程数值退化，无法更新") from exc
+            raise np.linalg.LinAlgError("MED 最小二乘更新数值退化，无法更新") from exc
         norm = float(np.linalg.norm(updated))
         if not np.isfinite(norm) or norm == 0.0:
             raise np.linalg.LinAlgError("MED 滤波器更新为零或非有限值")
