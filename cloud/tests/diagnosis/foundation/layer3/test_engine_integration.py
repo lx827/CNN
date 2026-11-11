@@ -8,18 +8,22 @@ Layer 3 引擎集成 — engine.py 调度正确性验证
 
 输出: layer3/output/engine_integration.json
 """
+
 import json
 import sys
 import os
 from pathlib import Path
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 from app.services.diagnosis import DiagnosisEngine, GearMethod
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
-    NumpyEncoder, bearing_outer_race, gear_mesh, sinusoidal,
+    NumpyEncoder,
+    bearing_outer_race,
+    gear_mesh,
+    sinusoidal,
 )
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -32,12 +36,16 @@ def test_engine_analyze_bearing():
     results = []
 
     np.random.seed(7)
-    sig, _, _ = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=15)
+    sig, _, _ = bearing_outer_race(
+        bpfo=90.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=15
+    )
     engine = DiagnosisEngine(bearing_params={"n": 9, "d": 7.94, "D": 38.52, "alpha": 0})
     res = engine.analyze_bearing(sig, FS)
 
     has_indicators = len(res.get("evaluation", {}).get("indicators", {})) > 0
-    has_envelope = res.get("spectrum") is not None and len(res["spectrum"]["frequency_hz"]) > 0
+    has_envelope = (
+        res.get("spectrum") is not None and len(res["spectrum"]["frequency_hz"]) > 0
+    )
     rot_freq = res.get("rot_freq_hz")
     speed_ok = rot_freq is not None and abs(rot_freq - 25.0) < 1.0
     bpfo = res.get("evaluation", {}).get("indicators", {}).get("BPFO", {})
@@ -45,17 +53,21 @@ def test_engine_analyze_bearing():
     detected = bpfo.get("detected_hz")
     detected_ok = detected is not None and abs(detected - 90.0) < 3.0
     passed = has_indicators and has_envelope and speed_ok and theory_ok and detected_ok
-    results.append({
-        "test": "engine_bearing_dispatch",
-        "method": res.get("method"),
-        "has_indicators": has_indicators,
-        "has_envelope": has_envelope,
-        "rot_freq_hz": rot_freq,
-        "bpfo_theory_hz": bpfo.get("theory_hz"),
-        "bpfo_detected_hz": detected,
-        "passed": passed,
-    })
-    print(f"  [{'PASS' if passed else 'FAIL'}] 轴承分发: method={res.get('method')}, indicators={has_indicators}, envelope={has_envelope}, rot={rot_freq}, BPFO={detected}")
+    results.append(
+        {
+            "test": "engine_bearing_dispatch",
+            "method": res.get("method"),
+            "has_indicators": has_indicators,
+            "has_envelope": has_envelope,
+            "rot_freq_hz": rot_freq,
+            "bpfo_theory_hz": bpfo.get("theory_hz"),
+            "bpfo_detected_hz": detected,
+            "passed": passed,
+        }
+    )
+    print(
+        f"  [{'PASS' if passed else 'FAIL'}] 轴承分发: method={res.get('method')}, indicators={has_indicators}, envelope={has_envelope}, rot={rot_freq}, BPFO={detected}"
+    )
 
     return results
 
@@ -65,28 +77,40 @@ def test_engine_analyze_gear():
     print("\n--- engine.analyze_gear ---")
     results = []
 
-    sig, _, _ = gear_mesh(mesh_freq=450.0, rot_freq=25.0, duration=4.0, fs=FS, snr_db=25)
+    sig, _, _ = gear_mesh(
+        mesh_freq=450.0, rot_freq=25.0, duration=4.0, fs=FS, snr_db=25
+    )
     engine = DiagnosisEngine(gear_teeth={"input": 18}, gear_method=GearMethod.STANDARD)
     res = engine.analyze_gear(sig, FS, rot_freq=25.0)
 
     has_indicators = len(res.get("fault_indicators", {})) > 0
     passed = has_indicators
-    results.append({
-        "test": "engine_gear_dispatch_standard",
-        "indicators_keys": list(res.get("fault_indicators", {}).keys()),
-        "passed": passed,
-    })
-    print(f"  [{'PASS' if passed else 'FAIL'}] 齿轮分发(standard): indicators={list(res.get('fault_indicators', {}).keys())}")
+    results.append(
+        {
+            "test": "engine_gear_dispatch_standard",
+            "indicators_keys": list(res.get("fault_indicators", {}).keys()),
+            "passed": passed,
+        }
+    )
+    print(
+        f"  [{'PASS' if passed else 'FAIL'}] 齿轮分发(standard): indicators={list(res.get('fault_indicators', {}).keys())}"
+    )
 
     # 高级方法
-    engine_adv = DiagnosisEngine(gear_teeth={"input": 18}, gear_method=GearMethod.ADVANCED)
+    engine_adv = DiagnosisEngine(
+        gear_teeth={"input": 18}, gear_method=GearMethod.ADVANCED
+    )
     res_adv = engine_adv.analyze_gear(sig, FS, rot_freq=25.0)
-    has_tsa = res_adv.get("tsa_status") == "evaluated" and res_adv.get("fm4") is not None
-    results.append({
-        "test": "engine_gear_dispatch_advanced",
-        "has_tsa": has_tsa,
-        "passed": has_tsa,
-    })
+    has_tsa = (
+        res_adv.get("tsa_status") == "evaluated" and res_adv.get("fm4") is not None
+    )
+    results.append(
+        {
+            "test": "engine_gear_dispatch_advanced",
+            "has_tsa": has_tsa,
+            "passed": has_tsa,
+        }
+    )
     print(f"  [{'PASS' if has_tsa else 'FAIL'}] 齿轮分发(advanced): has_tsa={has_tsa}")
 
     return results
@@ -97,7 +121,9 @@ def test_engine_comprehensive():
     print("\n--- engine.analyze_comprehensive ---")
     results = []
 
-    sig, _, _ = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=15)
+    sig, _, _ = bearing_outer_race(
+        bpfo=90.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=15
+    )
     engine = DiagnosisEngine(
         bearing_params={"n": 9, "d": 7.94, "D": 38.52, "alpha": 0},
         gear_teeth={"input": 18},
@@ -109,27 +135,37 @@ def test_engine_comprehensive():
     has_health = "health_score" in res
     has_status = "status" in res
     passed = has_bearing and has_gear and has_health and has_status
-    results.append({
-        "test": "engine_comprehensive_structure",
-        "has_bearing": has_bearing,
-        "has_gear": has_gear,
-        "has_health": has_health,
-        "has_status": has_status,
-        "passed": passed,
-    })
-    print(f"  [{'PASS' if passed else 'FAIL'}] 综合结构: bearing={has_bearing}, gear={has_gear}, health={has_health}, status={has_status}")
+    results.append(
+        {
+            "test": "engine_comprehensive_structure",
+            "has_bearing": has_bearing,
+            "has_gear": has_gear,
+            "has_health": has_health,
+            "has_status": has_status,
+            "passed": passed,
+        }
+    )
+    print(
+        f"  [{'PASS' if passed else 'FAIL'}] 综合结构: bearing={has_bearing}, gear={has_gear}, health={has_health}, status={has_status}"
+    )
 
     # 无参数时应走统计诊断
     engine_stat = DiagnosisEngine(strategy="advanced", bearing_params={}, gear_teeth={})
     res_stat = engine_stat.analyze_comprehensive(sig, FS)
-    stat_ok = res_stat.get("health_score", 100) < 100 or res_stat.get("status") != "normal"
-    results.append({
-        "test": "engine_comprehensive_no_params",
-        "health_score": res_stat.get("health_score"),
-        "status": res_stat.get("status"),
-        "passed": stat_ok,
-    })
-    print(f"  [{'PASS' if stat_ok else 'FAIL'}] 无参数统计诊断: hs={res_stat.get('health_score')}, status={res_stat.get('status')}")
+    stat_ok = (
+        res_stat.get("health_score", 100) < 100 or res_stat.get("status") != "normal"
+    )
+    results.append(
+        {
+            "test": "engine_comprehensive_no_params",
+            "health_score": res_stat.get("health_score"),
+            "status": res_stat.get("status"),
+            "passed": stat_ok,
+        }
+    )
+    print(
+        f"  [{'PASS' if stat_ok else 'FAIL'}] 无参数统计诊断: hs={res_stat.get('health_score')}, status={res_stat.get('status')}"
+    )
 
     return results
 
@@ -153,11 +189,18 @@ def main():
             if item.get("passed", False):
                 passed += 1
 
-    all_results["summary"] = {"total": total, "passed": passed, "failed": total - passed}
+    all_results["summary"] = {
+        "total": total,
+        "passed": passed,
+        "failed": total - passed,
+    }
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUTPUT_DIR / "engine_integration.json"
-    out_path.write_text(json.dumps(all_results, indent=2, cls=NumpyEncoder, ensure_ascii=False), encoding='utf-8')
+    out_path.write_text(
+        json.dumps(all_results, indent=2, cls=NumpyEncoder, ensure_ascii=False),
+        encoding="utf-8",
+    )
     print(f"\n结果已保存: {out_path}")
 
     s = all_results["summary"]

@@ -2,6 +2,7 @@
 
 不使用旧 compressor 的抽点压缩，不接入自动机械故障诊断。
 """
+
 import argparse
 import csv
 import io
@@ -28,17 +29,25 @@ FILES = ("samples.csv", "metadata.json", "rx_stream.bin", "commands.jsonl")
 
 def replay(source, output, job, stop, progress):
     """保持原记录采样率和数值；不把文件回放标成实时硬件。"""
-    meta = json.loads((source/"metadata.json").read_text(encoding="utf-8"))
-    if not meta.get("complete") or meta.get("sequence_gaps") or meta.get("unparsed_tail_bytes") or meta.get("error"):
+    meta = json.loads((source / "metadata.json").read_text(encoding="utf-8"))
+    if (
+        not meta.get("complete")
+        or meta.get("sequence_gaps")
+        or meta.get("unparsed_tail_bytes")
+        or meta.get("error")
+    ):
         raise ValueError("回放源须为无帧缺口、已完整结束的记录")
     if meta["sample_rate_hz"] != job["sample_rate"]:
         raise ValueError("回放任务采样率与原文件不同")
-    needed = ((job["sample_rate"]*job["duration"]+253)//254)*254
+    needed = ((job["sample_rate"] * job["duration"] + 253) // 254) * 254
     if meta["samples_per_channel"] < needed:
         raise ValueError("原记录长度不足，请缩短回放时长")
     output.mkdir(parents=True, exist_ok=False)
     count = 0
-    with (source/"samples.csv").open(encoding="utf-8-sig", newline="") as a, (output/"samples.csv").open("x", encoding="utf-8", newline="") as b:
+    with (
+        (source / "samples.csv").open(encoding="utf-8-sig", newline="") as a,
+        (output / "samples.csv").open("x", encoding="utf-8", newline="") as b,
+    ):
         reader, writer = csv.reader(a), csv.writer(b)
         writer.writerow(next(reader))
         for row in reader:
@@ -47,14 +56,39 @@ def replay(source, output, job, stop, progress):
             writer.writerow(row)
             count += 1
     # 只继承信号定义；原采集的网络字节数、到达速率等不能冒充本次回放测量。
-    meta = {key: meta[key] for key in ("sample_rate_hz", "value_unit", "physical_scaling", "channel_tags", "time_axis") if key in meta}
-    meta.update(source="recording_replay", complete=not stop.is_set(), cancelled=stop.is_set(),
-                requested_duration_s=job["duration"], samples_per_channel=count,
-                target_samples_per_channel=job["sample_rate"]*job["duration"],
-                recorded_sample_duration_s=count/job["sample_rate"], replay_of=str(source),
-                sequence_gaps=[], unparsed_tail_bytes=0)
-    (output/"metadata.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-    progress({"stage": "capturing", "samples_per_channel": count, "hardware_connected": False})
+    meta = {
+        key: meta[key]
+        for key in (
+            "sample_rate_hz",
+            "value_unit",
+            "physical_scaling",
+            "channel_tags",
+            "time_axis",
+        )
+        if key in meta
+    }
+    meta.update(
+        source="recording_replay",
+        complete=not stop.is_set(),
+        cancelled=stop.is_set(),
+        requested_duration_s=job["duration"],
+        samples_per_channel=count,
+        target_samples_per_channel=job["sample_rate"] * job["duration"],
+        recorded_sample_duration_s=count / job["sample_rate"],
+        replay_of=str(source),
+        sequence_gaps=[],
+        unparsed_tail_bytes=0,
+    )
+    (output / "metadata.json").write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    progress(
+        {
+            "stage": "capturing",
+            "samples_per_channel": count,
+            "hardware_connected": False,
+        }
+    )
     return meta
 
 
@@ -63,27 +97,42 @@ class Agent:
         self.cloud = cloud.rstrip("/") + "/api/acquisition"
         self.agent_id, self.output, self.replay_dir = agent_id, Path(output), replay_dir
         self.source = "recording_replay" if replay_dir else "dc24_tcp"
-        self.vendor_root = None if replay_dir else os.getenv('DC24_VENDOR_ROOT') or None
+        self.vendor_root = None if replay_dir else os.getenv("DC24_VENDOR_ROOT") or None
         # 与既有上云边端/cloud 保持同一认证配置约定。
         self.headers = {"X-Edge-Key": os.getenv("EDGE_API_KEY", "turbine-edge-secret")}
         if not self.headers["X-Edge-Key"]:
             raise ValueError("请在边端 .env 配置与云端一致的 EDGE_API_KEY")
-        self.state = {"stage": "idle", "hardware_connected": False,
-                      "sample_rates": sorted(B5_PROFILES), "channel_count": 4,
-                      "save_directory": str(self.output.resolve()), "version": 3,
-                      "input_configuration": dict(INPUT_CONFIGURATION)}
+        self.state = {
+            "stage": "idle",
+            "hardware_connected": False,
+            "sample_rates": sorted(B5_PROFILES),
+            "channel_count": 4,
+            "save_directory": str(self.output.resolve()),
+            "version": 3,
+            "input_configuration": dict(INPUT_CONFIGURATION),
+        }
         if not replay_dir:
-            self.state['transport'] = 'jmserver' if self.vendor_root else 'python_tcp'
+            self.state["transport"] = "jmserver" if self.vendor_root else "python_tcp"
         self.picker = None
         self.picker_id = None
         if replay_dir:
-            meta = json.loads((replay_dir/"metadata.json").read_text(encoding="utf-8"))
-            self.state.update(sample_rate=meta["sample_rate_hz"], sample_rates=[meta["sample_rate_hz"]])
+            meta = json.loads(
+                (replay_dir / "metadata.json").read_text(encoding="utf-8")
+            )
+            self.state.update(
+                sample_rate=meta["sample_rate_hz"],
+                sample_rates=[meta["sample_rate_hz"]],
+            )
         self.lock = threading.Lock()
 
     def call(self, method, path, **kwargs):
-        response = requests.request(method, self.cloud+path, headers=self.headers,
-                                    timeout=kwargs.pop("timeout", (3, 8)), **kwargs)
+        response = requests.request(
+            method,
+            self.cloud + path,
+            headers=self.headers,
+            timeout=kwargs.pop("timeout", (3, 8)),
+            **kwargs,
+        )
         response.raise_for_status()
         return response.json().get("data")
 
@@ -94,40 +143,64 @@ class Agent:
     def heartbeat(self):
         with self.lock:
             state = dict(self.state)
-        self.call("POST", "/agents/heartbeat", json={"agent_id": self.agent_id,
-                  "source": self.source, "state": state})
+        self.call(
+            "POST",
+            "/agents/heartbeat",
+            json={"agent_id": self.agent_id, "source": self.source, "state": state},
+        )
 
     def get_control(self):
-        result = self.call('GET', f'/agents/{self.agent_id}/control')
-        picker = result.get('picker')
-        if picker and picker['status'] == 'pending' and picker['id'] != self.picker_id and self.picker is None:
-            self.picker_id = picker['id']
-            self.picker = subprocess.Popen([sys.executable, str(ROOT/'scripts/dc24_select_directory.py')],
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        result = self.call("GET", f"/agents/{self.agent_id}/control")
+        picker = result.get("picker")
+        if (
+            picker
+            and picker["status"] == "pending"
+            and picker["id"] != self.picker_id
+            and self.picker is None
+        ):
+            self.picker_id = picker["id"]
+            self.picker = subprocess.Popen(
+                [sys.executable, str(ROOT / "scripts/dc24_select_directory.py")],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
         if self.picker and self.picker.poll() is not None:
             try:
-                selected = json.loads(self.picker.stdout.read().decode('utf-8'))
+                selected = json.loads(self.picker.stdout.read().decode("utf-8"))
             except Exception:
-                selected = {'error': '无法打开目录选择器，请直接填写绝对路径'}
-            self.call('POST', f'/agents/{self.agent_id}/directory-result', json={'id': self.picker_id, **selected})
-            if selected.get('directory'):
-                self.progress({'save_directory': selected['directory']})
-            self.picker.stdout.close(); self.picker = None
+                selected = {"error": "无法打开目录选择器，请直接填写绝对路径"}
+            self.call(
+                "POST",
+                f"/agents/{self.agent_id}/directory-result",
+                json={"id": self.picker_id, **selected},
+            )
+            if selected.get("directory"):
+                self.progress({"save_directory": selected["directory"]})
+            self.picker.stdout.close()
+            self.picker = None
         return result
 
     def report(self, job_id, stage=None, message=""):
         with self.lock:
             state = dict(self.state)
-        return self.call("POST", f"/jobs/{job_id}/progress", params={"agent_id": self.agent_id},
-                         json={"stage": stage or state["stage"],
-                               "samples_per_channel": state.get("samples_per_channel", 0),
-                               "message": message[:500]})
+        return self.call(
+            "POST",
+            f"/jobs/{job_id}/progress",
+            params={"agent_id": self.agent_id},
+            json={
+                "stage": stage or state["stage"],
+                "samples_per_channel": state.get("samples_per_channel", 0),
+                "message": message[:500],
+            },
+        )
 
     def execute(self, job):
         stop, finished = threading.Event(), threading.Event()
-        self.progress({"stage": "waiting_device", "samples_per_channel": 0, "job_id": job["id"]})
-        output = self.output/job["id"]
+        self.progress(
+            {"stage": "waiting_device", "samples_per_channel": 0, "job_id": job["id"]}
+        )
+        output = self.output / job["id"]
 
         def monitor():
             while not finished.is_set():
@@ -144,28 +217,42 @@ class Agent:
         thread.start()
         try:
             if job.get("source") != self.source:
-                raise ValueError("任务创建后边端数据来源已改变，请按当前来源重新创建任务")
+                raise ValueError(
+                    "任务创建后边端数据来源已改变，请按当前来源重新创建任务"
+                )
             if self.replay_dir:
                 meta = replay(self.replay_dir, output, job, stop, self.progress)
             else:
-                meta = record(output, job["duration"], sample_rate=job["sample_rate"],
-                              on_progress=self.progress, should_stop=stop.is_set)
+                meta = record(
+                    output,
+                    job["duration"],
+                    sample_rate=job["sample_rate"],
+                    on_progress=self.progress,
+                    should_stop=stop.is_set,
+                )
             if meta.get("samples_per_channel", 0) == 0 and meta.get("cancelled"):
                 self.report(job["id"], "cancelled")
                 return
             meta["source"] = self.source
-            (output/"metadata.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+            (output / "metadata.json").write_text(
+                json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
             self.progress({"stage": "uploading", "hardware_connected": False})
             payload = io.BytesIO()
             with zipfile.ZipFile(payload, "w", zipfile.ZIP_DEFLATED) as archive:
                 for name in FILES:
-                    if (output/name).is_file():
-                        archive.write(output/name, name)
+                    if (output / name).is_file():
+                        archive.write(output / name, name)
             # 网络重试只重传同一份已保存数据，不重新采集。
             for attempt in range(3):
                 try:
-                    self.call("POST", f"/jobs/{job['id']}/upload", params={"agent_id": self.agent_id},
-                              data=payload.getvalue(), timeout=(5, 180))
+                    self.call(
+                        "POST",
+                        f"/jobs/{job['id']}/upload",
+                        params={"agent_id": self.agent_id},
+                        data=payload.getvalue(),
+                        timeout=(5, 180),
+                    )
                     break
                 except requests.RequestException:
                     if attempt == 2:
@@ -173,26 +260,34 @@ class Agent:
                     time.sleep(2)
         except Exception as exc:
             message = str(exc)
-            if isinstance(exc, OSError) and getattr(exc, "winerror", None) in (10013, 10048):
+            if isinstance(exc, OSError) and getattr(exc, "winerror", None) in (
+                10013,
+                10048,
+            ):
                 message = "电脑TCP 6800端口被占用，请先让原厂软件脱机或退出其他采集进程"
             try:
                 self.report(job["id"], "failed", message)
             except requests.RequestException:
                 pass
-            print(f"任务失败；本地文件保留在 {output}。{type(exc).__name__}", flush=True)
+            print(
+                f"任务失败；本地文件保留在 {output}。{type(exc).__name__}", flush=True
+            )
         finally:
             finished.set()
             thread.join(timeout=12)
-            self.progress({"stage": "idle", "hardware_connected": False, "job_id": None})
+            self.progress(
+                {"stage": "idle", "hardware_connected": False, "job_id": None}
+            )
 
     def run(self, once=False):
         while True:
             try:
                 self.heartbeat()
                 control = self.get_control()
-                if control.get('session'):
+                if control.get("session"):
                     from dc24_live import SessionRunner
-                    SessionRunner(self, control['session'], self.vendor_root).run()
+
+                    SessionRunner(self, control["session"], self.vendor_root).run()
                     if once:
                         return
                     continue
@@ -208,11 +303,23 @@ class Agent:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    default_url = os.getenv("CLOUD_BASE_URL") or os.getenv("CLOUD_INGEST_URL", "http://127.0.0.1:8000/api/ingest/").split("/api/")[0]
+    default_url = (
+        os.getenv("CLOUD_BASE_URL")
+        or os.getenv("CLOUD_INGEST_URL", "http://127.0.0.1:8000/api/ingest/").split(
+            "/api/"
+        )[0]
+    )
     parser.add_argument("--cloud", default=default_url, help="CNN 后端根地址")
-    parser.add_argument("--agent-id", default="dc24-"+re.sub(r"[^A-Za-z0-9_-]", "_", socket.gethostname()))
-    parser.add_argument("--output", type=Path, default=ROOT/"tmp/dc24_acquisition/recordings")
-    parser.add_argument("--replay-dir", type=Path, help="显式使用历史采集记录，不连接硬件")
+    parser.add_argument(
+        "--agent-id",
+        default="dc24-" + re.sub(r"[^A-Za-z0-9_-]", "_", socket.gethostname()),
+    )
+    parser.add_argument(
+        "--output", type=Path, default=ROOT / "tmp/dc24_acquisition/recordings"
+    )
+    parser.add_argument(
+        "--replay-dir", type=Path, help="显式使用历史采集记录，不连接硬件"
+    )
     parser.add_argument("--once", action="store_true", help="完成一个任务后退出")
     args = parser.parse_args()
     if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", args.agent_id):

@@ -1,4 +1,5 @@
 """定轴齿轮计算表示、历史输入与原始指标的数据契约。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -55,7 +56,10 @@ class TSAParameters:
     max_order: float = 50.0
 
     def __post_init__(self) -> None:
-        if isinstance(self.samples_per_revolution, bool) or self.samples_per_revolution < 16:
+        if (
+            isinstance(self.samples_per_revolution, bool)
+            or self.samples_per_revolution < 16
+        ):
             raise ValueError("每转采样点数至少为 16")
         if self.min_revolutions < 2:
             raise ValueError("TSA 至少需要 2 个完整转周期")
@@ -80,7 +84,9 @@ class SynchronousAverage:
         _finite_vector("TSA 序列", self.tsa_signal)
         if len(self.tsa_cycle) != self.angle_domain.samples_per_revolution:
             raise ValueError("TSA 单转波形长度必须等于每转采样点数")
-        if self.revolutions < 2 or len(self.tsa_signal) != self.revolutions * len(self.tsa_cycle):
+        if self.revolutions < 2 or len(self.tsa_signal) != self.revolutions * len(
+            self.tsa_cycle
+        ):
             raise ValueError("TSA 序列必须由整数个完整转周期构成")
         if len(self.angle_domain.samples) != len(self.tsa_signal):
             raise ValueError("TSA 角域输入必须截断到相同完整转数")
@@ -152,9 +158,17 @@ class TrendHistory:
     input_unit: str = "input_signal"
 
     def __post_init__(self) -> None:
-        if self.samples_per_revolution < 16 or not np.isfinite(self.mesh_order) or self.mesh_order <= 0:
+        if (
+            self.samples_per_revolution < 16
+            or not np.isfinite(self.mesh_order)
+            or self.mesh_order <= 0
+        ):
             raise ValueError("历史角域采样率或啮合阶次无效")
-        if self.mesh_harmonics < 1 or self.regular_sideband_order < 0 or self.revolutions < 2:
+        if (
+            self.mesh_harmonics < 1
+            or self.regular_sideband_order < 0
+            or self.revolutions < 2
+        ):
             raise ValueError("历史 regular 定义或实际 TSA 转数无效")
         for name, values in (
             ("历史 residual 方差", self.residual_variances),
@@ -264,4 +278,6 @@ class ZoomSpectrum:
     frequency_step_hz: float
     original_frequency_step_hz: float
     method: str = "chirp_z"
-    resolution_contract: str = "rayleigh_fs_over_record_samples;denser_grid_is_not_super_resolution"
+    resolution_contract: str = (
+        "rayleigh_fs_over_record_samples;denser_grid_is_not_super_resolution"
+    )

@@ -1,4 +1,5 @@
 """算法层共享数据类型。数组字段保存引用，不因构造对象而复制数据。"""
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -21,7 +22,9 @@ class Spectrum:
             raise ValueError("频谱频率轴和幅值长度必须一致")
         if len(self.frequency_hz) == 0:
             raise ValueError("频谱不能为空")
-        if not np.all(np.isfinite(self.frequency_hz)) or not np.all(np.isfinite(self.amplitude)):
+        if not np.all(np.isfinite(self.frequency_hz)) or not np.all(
+            np.isfinite(self.amplitude)
+        ):
             raise ValueError("频谱不能包含 NaN 或无穷值")
         if len(self.frequency_hz) > 1 and np.any(np.diff(self.frequency_hz) <= 0):
             raise ValueError("频谱频率轴必须严格递增")

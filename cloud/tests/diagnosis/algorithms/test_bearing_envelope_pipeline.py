@@ -1,4 +1,5 @@
 """标准轴承包络 Pipeline 的算法契约测试，全部使用合成信号。"""
+
 import os
 import sys
 import unittest
@@ -21,10 +22,14 @@ from app.services.diagnosis.assessment import reassess_diagnosis, AssessmentPoli
 FS = 8192.0
 
 
-def modulated_carrier(fault_frequency_hz: float, modulation_depth: float = 0.5) -> np.ndarray:
+def modulated_carrier(
+    fault_frequency_hz: float, modulation_depth: float = 0.5
+) -> np.ndarray:
     time = np.arange(int(FS * 2.0)) / FS
     carrier = np.sin(2.0 * np.pi * 2000.0 * time)
-    modulation = 1.0 + modulation_depth * np.cos(2.0 * np.pi * fault_frequency_hz * time)
+    modulation = 1.0 + modulation_depth * np.cos(
+        2.0 * np.pi * fault_frequency_hz * time
+    )
     rng = np.random.default_rng(20261108)
     return modulation * carrier + rng.normal(0.0, 0.001, len(time))
 
@@ -40,7 +45,9 @@ class BearingEnvelopePipelineTest(unittest.TestCase):
     def test_modulation_peak_and_single_sided_amplitude(self) -> None:
         result = compute_envelope(modulated_carrier(90.0), FS, self.parameters)
         peak_index = int(np.argmax(result.spectrum.amplitude))
-        self.assertAlmostEqual(result.spectrum.frequency_hz[peak_index], 90.0, delta=1.0)
+        self.assertAlmostEqual(
+            result.spectrum.frequency_hz[peak_index], 90.0, delta=1.0
+        )
         # 调制深度 0.5，去除包络直流后，90 Hz 余弦峰值应接近 0.5。
         self.assertAlmostEqual(result.spectrum.amplitude[peak_index], 0.5, delta=0.08)
         self.assertEqual(result.spectrum.scaling, "single_sided_amplitude")
@@ -59,7 +66,9 @@ class BearingEnvelopePipelineTest(unittest.TestCase):
     def test_physical_fault_evaluation_and_direct_reevaluation(self) -> None:
         geometry = BearingGeometry(9, 7.94, 38.52, 0.0)
         bpfo = geometry.fault_frequencies(25.0)["BPFO"]
-        pipeline = BearingEnvelopePipeline(geometry=geometry, parameters=self.parameters)
+        pipeline = BearingEnvelopePipeline(
+            geometry=geometry, parameters=self.parameters
+        )
         analysis = pipeline.analyze(modulated_carrier(bpfo), FS, rot_frequency_hz=25.0)
         evaluation = pipeline.evaluate(analysis)
         self.assertEqual(evaluation.status, "evaluated")
@@ -68,7 +77,9 @@ class BearingEnvelopePipelineTest(unittest.TestCase):
         self.assertTrue(evaluation.indicators["BPFO"]["significant"])
 
         # 重评只消费已有指标，不允许再次进入滤波/FFT 所在 analyze。
-        with mock.patch.object(pipeline, "analyze", side_effect=AssertionError("不应重新计算")):
+        with mock.patch.object(
+            pipeline, "analyze", side_effect=AssertionError("不应重新计算")
+        ):
             repeated = pipeline.evaluate(analysis)
         self.assertEqual(repeated.indicators, evaluation.indicators)
 
@@ -85,7 +96,9 @@ class BearingEnvelopePipelineTest(unittest.TestCase):
         diagnosis = pipeline.run(modulated_carrier(90.0), FS)
         self.assertEqual(diagnosis.evaluation.status, "indeterminate")
         self.assertEqual(diagnosis.evaluation.indicators, {})
-        self.assertEqual(diagnosis.analysis.representation.spectrum.scaling, "single_sided_amplitude")
+        self.assertEqual(
+            diagnosis.analysis.representation.spectrum.scaling, "single_sided_amplitude"
+        )
 
     def test_invalid_inputs_fail_explicitly(self) -> None:
         with self.assertRaises(ValueError):
@@ -111,6 +124,7 @@ class BearingEnvelopePipelineTest(unittest.TestCase):
         spectrum = Spectrum(frequency_hz=frequency, amplitude=amplitude)
         self.assertIs(spectrum.frequency_hz, frequency)
         self.assertIs(spectrum.amplitude, amplitude)
+
     def test_engine_and_ensemble_use_new_result_contract(self) -> None:
         geometry = BearingGeometry(9, 7.94, 38.52, 0.0)
         bpfo = geometry.fault_frequencies(25.0)["BPFO"]
@@ -168,12 +182,20 @@ class BearingEnvelopePipelineTest(unittest.TestCase):
                 bearing_geometry_from_config(malformed)
 
     def test_sc_scoh_evidence_uses_method_specific_channel(self) -> None:
-        engine = DiagnosisEngine(bearing_method=BearingMethod.SC_SCOH, bearing_params={"n": 9, "d": 7.94, "D": 38.52})
+        engine = DiagnosisEngine(
+            bearing_method=BearingMethod.SC_SCOH,
+            bearing_params={"n": 9, "d": 7.94, "D": 38.52},
+        )
         sc_result = {
-            "method": "sc_scoh", "evaluation_kind": "sc_scoh", "analysis_status": "computed",
-            "evaluation": {"status": "evaluated", "indicators": {
-                "BPFO": {"scoh_peak": 0.8, "significant": True, "evaluable": True},
-            }},
+            "method": "sc_scoh",
+            "evaluation_kind": "sc_scoh",
+            "analysis_status": "computed",
+            "evaluation": {
+                "status": "evaluated",
+                "indicators": {
+                    "BPFO": {"scoh_peak": 0.8, "significant": True, "evaluable": True},
+                },
+            },
         }
         with mock.patch(
             "app.services.diagnosis.engine.analyze_advanced_bearing",
@@ -184,10 +206,14 @@ class BearingEnvelopePipelineTest(unittest.TestCase):
             )
 
         self.assertNotIn("fault_indicators", result)
-        self.assertEqual(result["evaluation"]["indicators"], sc_result["evaluation"]["indicators"])
+        self.assertEqual(
+            result["evaluation"]["indicators"], sc_result["evaluation"]["indicators"]
+        )
         self.assertNotIn("sc_scoh_indicators", result)
-        reevaluated = reassess_diagnosis(result, AssessmentPolicy(weights={"scoh_evidence": 2., "bpfo": 100.}))
-        self.assertEqual(reevaluated.health_score, 76.)
+        reevaluated = reassess_diagnosis(
+            result, AssessmentPolicy(weights={"scoh_evidence": 2.0, "bpfo": 100.0})
+        )
+        self.assertEqual(reevaluated.health_score, 76.0)
         self.assertEqual(reevaluated.deductions[0].code, "bearing_cyclic")
 
 

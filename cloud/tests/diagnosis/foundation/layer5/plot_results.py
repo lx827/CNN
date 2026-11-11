@@ -1,16 +1,19 @@
 """
 Layer 5 测试结果绘图 — 只读 JSON，不重跑分析
 """
+
 import json
 from pathlib import Path
 import numpy as np
 
 try:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
-    plt.rcParams['axes.unicode_minus'] = False
+
+    plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
+    plt.rcParams["axes.unicode_minus"] = False
     HAS_MPL = True
 except ImportError:
     HAS_MPL = False
@@ -60,9 +63,16 @@ def plot_ensemble_helpers():
     ax.invert_yaxis()
 
     s = data.get("summary", {})
-    ax.text(0.98, 0.02, f"通过: {s.get('passed', 0)}/{s.get('total', 0)}",
-            transform=ax.transAxes, ha="right", va="bottom", fontsize=11,
-            bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
+    ax.text(
+        0.98,
+        0.02,
+        f"通过: {s.get('passed', 0)}/{s.get('total', 0)}",
+        transform=ax.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=11,
+        bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
+    )
 
     out = PLOT_DIR / "layer5_ensemble_helpers.png"
     fig.tight_layout()
@@ -104,9 +114,16 @@ def plot_analyzer_helpers():
     ax.invert_yaxis()
 
     s = data.get("summary", {})
-    ax.text(0.98, 0.02, f"通过: {s.get('passed', 0)}/{s.get('total', 0)}",
-            transform=ax.transAxes, ha="right", va="bottom", fontsize=11,
-            bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
+    ax.text(
+        0.98,
+        0.02,
+        f"通过: {s.get('passed', 0)}/{s.get('total', 0)}",
+        transform=ax.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=11,
+        bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
+    )
 
     out = PLOT_DIR / "layer5_analyzer_helpers.png"
     fig.tight_layout()

@@ -13,6 +13,7 @@ LMS 自适应滤波模块
 docs/算法原理.md §4.2.3 参考：适用于存在独立参考噪声通道的场景，
 单通道时用延迟信号构造参考。
 """
+
 import numpy as np
 from typing import Dict, Tuple, Optional
 
@@ -54,7 +55,7 @@ def lms_filter(
     ref = np.zeros(N, dtype=np.float64)
     if delay >= N:
         return arr.copy(), {"method": "LMS", "error": "delay_exceeds_signal_length"}
-    ref[delay:] = arr[:N - delay]
+    ref[delay:] = arr[: N - delay]
 
     # 初始化
     w = np.zeros(filter_len, dtype=np.float64)
@@ -62,7 +63,7 @@ def lms_filter(
 
     for n in range(filter_len, N):
         # 参考信号向量 u(n) = [u(n), u(n-1), ..., u(n-L+1)]
-        u_vec = ref[n - filter_len + 1:n + 1]
+        u_vec = ref[n - filter_len + 1 : n + 1]
         # 估计输出 y(n) = w^T * u(n)
         y_n = np.dot(w, u_vec)
         # 误差 e(n) = x(n) - y(n)
@@ -78,8 +79,8 @@ def lms_filter(
     output = output - np.mean(output)
 
     # 计算指标
-    kurt_before = float(np.mean(arr ** 4) / (np.var(arr) ** 2 + 1e-12))
-    kurt_after = float(np.mean(output ** 4) / (np.var(output) ** 2 + 1e-12))
+    kurt_before = float(np.mean(arr**4) / (np.var(arr) ** 2 + 1e-12))
+    kurt_after = float(np.mean(output**4) / (np.var(output) ** 2 + 1e-12))
     noise_reduction = float(np.var(arr) / (np.var(output) + 1e-12))
 
     return output, {
@@ -126,13 +127,13 @@ def nlms_filter(
 
     # 构造参考信号
     ref = np.zeros(N, dtype=np.float64)
-    ref[delay:] = arr[:N - delay]
+    ref[delay:] = arr[: N - delay]
 
     w = np.zeros(filter_len, dtype=np.float64)
     output = np.zeros(N, dtype=np.float64)
 
     for n in range(filter_len, N):
-        u_vec = ref[n - filter_len + 1:n + 1]
+        u_vec = ref[n - filter_len + 1 : n + 1]
         y_n = np.dot(w, u_vec)
         e_n = arr[n] - y_n
         output[n] = e_n
@@ -143,8 +144,8 @@ def nlms_filter(
     output[:filter_len] = arr[:filter_len]
     output = output - np.mean(output)
 
-    kurt_before = float(np.mean(arr ** 4) / (np.var(arr) ** 2 + 1e-12))
-    kurt_after = float(np.mean(output ** 4) / (np.var(output) ** 2 + 1e-12))
+    kurt_before = float(np.mean(arr**4) / (np.var(arr) ** 2 + 1e-12))
+    kurt_after = float(np.mean(output**4) / (np.var(output) ** 2 + 1e-12))
     noise_reduction = float(np.var(arr) / (np.var(output) + 1e-12))
 
     return output, {
@@ -199,20 +200,20 @@ def vsslms_filter(
 
     # 构造参考信号
     ref = np.zeros(N, dtype=np.float64)
-    ref[delay:] = arr[:N - delay]
+    ref[delay:] = arr[: N - delay]
 
     w = np.zeros(filter_len, dtype=np.float64)
     output = np.zeros(N, dtype=np.float64)
     mu = mu_init
 
     for n in range(filter_len, N):
-        u_vec = ref[n - filter_len + 1:n + 1]
+        u_vec = ref[n - filter_len + 1 : n + 1]
         y_n = np.dot(w, u_vec)
         e_n = arr[n] - y_n
         output[n] = e_n
 
         # VSSLMS 步长更新
-        mu = alpha * mu + gamma * e_n ** 2
+        mu = alpha * mu + gamma * e_n**2
         mu = np.clip(mu, mu_min, mu_max)
 
         # LMS 更新（使用自适应步长）
@@ -221,8 +222,8 @@ def vsslms_filter(
     output[:filter_len] = arr[:filter_len]
     output = output - np.mean(output)
 
-    kurt_before = float(np.mean(arr ** 4) / (np.var(arr) ** 2 + 1e-12))
-    kurt_after = float(np.mean(output ** 4) / (np.var(output) ** 2 + 1e-12))
+    kurt_before = float(np.mean(arr**4) / (np.var(arr) ** 2 + 1e-12))
+    kurt_after = float(np.mean(output**4) / (np.var(output) ** 2 + 1e-12))
     noise_reduction = float(np.var(arr) / (np.var(output) + 1e-12))
 
     return output, {

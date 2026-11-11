@@ -6,6 +6,7 @@
   - 8 种去噪方法在不同 SNR 下的信号恢复鲁棒性
   - Critical SNR、Robustness Index (AUC)、SNR-Accuracy / SNR-F1 曲线
 """
+
 import sys
 import warnings
 from pathlib import Path
@@ -17,9 +18,16 @@ from scipy import stats
 warnings.filterwarnings("ignore")
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "KaiTi", "Arial Unicode MS"]
+
+plt.rcParams["font.sans-serif"] = [
+    "Microsoft YaHei",
+    "SimHei",
+    "KaiTi",
+    "Arial Unicode MS",
+]
 plt.rcParams["axes.unicode_minus"] = False
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
@@ -78,41 +86,50 @@ from .utils import (
 # ═══════════════════════════════════════════════════════════
 
 # 13 种轴承诊断方法: (display_name, BearingMethod enum | None, callable, needs_params, signal_len_limit)
-BEARING_METHODS: List[Tuple[str, Optional[BearingMethod], Optional[callable], bool, Optional[int]]] = [
+BEARING_METHODS: List[
+    Tuple[str, Optional[BearingMethod], Optional[callable], bool, Optional[int]]
+] = [
     # --- 通过 DiagnosisEngine 调度的方法 ---
-    ("envelope",               BearingMethod.ENVELOPE,               None, False, None),
-    ("filter_bank_sk",              BearingMethod.FILTER_BANK_SK,              None, False, None),
-    ("cpw",                    BearingMethod.CPW,                    None, False, None),
-    ("med",                    BearingMethod.MED,                    None, False, None),
-    ("teager",                 BearingMethod.TEAGER,                 None, False, None),
-    ("spectral_kurtosis",      BearingMethod.SPECTRAL_KURTOSIS,      None, False, None),
-    ("mckd",                   BearingMethod.MCKD,                   None, True,  None),
+    ("envelope", BearingMethod.ENVELOPE, None, False, None),
+    ("filter_bank_sk", BearingMethod.FILTER_BANK_SK, None, False, None),
+    ("cpw", BearingMethod.CPW, None, False, None),
+    ("med", BearingMethod.MED, None, False, None),
+    ("teager", BearingMethod.TEAGER, None, False, None),
+    ("spectral_kurtosis", BearingMethod.SPECTRAL_KURTOSIS, None, False, None),
+    ("mckd", BearingMethod.MCKD, None, True, None),
     # --- SC_SCOH: 计算密集，限制信号长度 ---
-    ("sc_scoh",                BearingMethod.SC_SCOH,                None, True,  4096),
+    ("sc_scoh", BearingMethod.SC_SCOH, None, True, 4096),
     # --- 小波类 / 模态类: 通过底层函数直接调用 ---
-    ("wp",                     BearingMethod.WP,                     wavelet_packet_bearing_analysis, False, None),
-    ("dwt",                    BearingMethod.DWT,                    dwt_bearing_analysis,            False, None),
-    ("emd_envelope",           BearingMethod.EMD_ENVELOPE,           emd_bearing_analysis,            False, None),
-    ("ceemdan_envelope",       BearingMethod.CEEMDAN_ENVELOPE,       ceemdan_bearing_analysis,        False, None),
-    ("vmd_envelope",           BearingMethod.VMD_ENVELOPE,           vmd_bearing_analysis,            False, None),
+    ("wp", BearingMethod.WP, wavelet_packet_bearing_analysis, False, None),
+    ("dwt", BearingMethod.DWT, dwt_bearing_analysis, False, None),
+    ("emd_envelope", BearingMethod.EMD_ENVELOPE, emd_bearing_analysis, False, None),
+    (
+        "ceemdan_envelope",
+        BearingMethod.CEEMDAN_ENVELOPE,
+        ceemdan_bearing_analysis,
+        False,
+        None,
+    ),
+    ("vmd_envelope", BearingMethod.VMD_ENVELOPE, vmd_bearing_analysis, False, None),
 ]
 
 # 8 种去噪方法: (display_name, DenoiseMethod enum)
 DENOISE_METHODS: List[Tuple[str, DenoiseMethod]] = [
-    ("wavelet",          DenoiseMethod.WAVELET),
-    ("vmd",              DenoiseMethod.VMD),
-    ("wavelet_vmd",      DenoiseMethod.WAVELET_VMD),
-    ("emd",              DenoiseMethod.EMD),
-    ("ceemdan",          DenoiseMethod.CEEMDAN),
-    ("savgol",           DenoiseMethod.SAVGOL),
-    ("wavelet_packet",   DenoiseMethod.WAVELET_PACKET),
-    ("ceemdan_wp",       DenoiseMethod.CEEMDAN_WP),
+    ("wavelet", DenoiseMethod.WAVELET),
+    ("vmd", DenoiseMethod.VMD),
+    ("wavelet_vmd", DenoiseMethod.WAVELET_VMD),
+    ("emd", DenoiseMethod.EMD),
+    ("ceemdan", DenoiseMethod.CEEMDAN),
+    ("savgol", DenoiseMethod.SAVGOL),
+    ("wavelet_packet", DenoiseMethod.WAVELET_PACKET),
+    ("ceemdan_wp", DenoiseMethod.CEEMDAN_WP),
 ]
 
 
 # ═══════════════════════════════════════════════════════════
 # 辅助函数
 # ═══════════════════════════════════════════════════════════
+
 
 def _apply_denoise_engine(signal: np.ndarray, dm: DenoiseMethod) -> np.ndarray:
     """通过 DiagnosisEngine.preprocess() 执行去噪"""
@@ -164,11 +181,17 @@ def _compute_accuracy_f1(statuses: List[str]) -> Tuple[float, float]:
     accuracy = (tp + tn) / total if total > 0 else 0.0
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall) > 0
+        else 0.0
+    )
     return accuracy, f1
 
 
-def _compute_critical_snr(snr_levels: List[float], accuracies: List[float], threshold: float = 0.80) -> Optional[float]:
+def _compute_critical_snr(
+    snr_levels: List[float], accuracies: List[float], threshold: float = 0.80
+) -> Optional[float]:
     """Critical SNR: 第一个使 Accuracy < threshold 的 SNR"""
     for snr, acc in zip(snr_levels, accuracies):
         if acc < threshold:
@@ -176,7 +199,9 @@ def _compute_critical_snr(snr_levels: List[float], accuracies: List[float], thre
     return None  # 全部高于阈值
 
 
-def _compute_robustness_index(snr_levels: List[float], accuracies: List[float]) -> float:
+def _compute_robustness_index(
+    snr_levels: List[float], accuracies: List[float]
+) -> float:
     """Robustness Index: SNR-Accuracy 曲线的 AUC / 最大可能 AUC"""
     if len(snr_levels) < 2:
         return 0.0
@@ -197,6 +222,7 @@ def _compute_robustness_index(snr_levels: List[float], accuracies: List[float]) 
 # ═══════════════════════════════════════════════════════════
 # A) 轴承方法鲁棒性评价
 # ═══════════════════════════════════════════════════════════
+
 
 def evaluate_bearing_robustness() -> Dict[str, Any]:
     """评价 13 种轴承诊断方法在不同 SNR 下的鲁棒性"""
@@ -225,7 +251,11 @@ def evaluate_bearing_robustness() -> Dict[str, Any]:
     fault_signal = load_npy(fault_file[0])
     healthy_signal = load_npy(healthy_file[0]) if healthy_file else None
     rot_freq_fault = estimate_rot_freq_spectrum(fault_signal, SAMPLE_RATE)
-    rot_freq_healthy = estimate_rot_freq_spectrum(healthy_signal, SAMPLE_RATE) if healthy_signal is not None else 0.0
+    rot_freq_healthy = (
+        estimate_rot_freq_spectrum(healthy_signal, SAMPLE_RATE)
+        if healthy_signal is not None
+        else 0.0
+    )
 
     snr_levels = [20, 10, 5, 0, -5, -10]
 
@@ -233,12 +263,20 @@ def evaluate_bearing_robustness() -> Dict[str, Any]:
 
     for snr_db in snr_levels:
         noisy_fault = add_awgn(fault_signal, snr_db)
-        noisy_healthy = add_awgn(healthy_signal, snr_db) if healthy_signal is not None else None
+        noisy_healthy = (
+            add_awgn(healthy_signal, snr_db) if healthy_signal is not None else None
+        )
 
-        for (name, bm_enum, direct_fn, needs_params, sig_len_limit) in BEARING_METHODS:
+        for name, bm_enum, direct_fn, needs_params, sig_len_limit in BEARING_METHODS:
             # 信号截断（SC_SCOH 等计算密集方法）
-            test_signal_fault = noisy_fault[:sig_len_limit] if sig_len_limit else noisy_fault
-            test_signal_healthy = (noisy_healthy[:sig_len_limit] if sig_len_limit else noisy_healthy) if noisy_healthy is not None else None
+            test_signal_fault = (
+                noisy_fault[:sig_len_limit] if sig_len_limit else noisy_fault
+            )
+            test_signal_healthy = (
+                (noisy_healthy[:sig_len_limit] if sig_len_limit else noisy_healthy)
+                if noisy_healthy is not None
+                else None
+            )
 
             bearing_params = HUSTBEAR_BEARING if needs_params else None
             bpfo_snr = 0.0
@@ -256,7 +294,10 @@ def evaluate_bearing_robustness() -> Dict[str, Any]:
                     if test_signal_healthy is not None:
                         result_healthy = direct_fn(test_signal_healthy, SAMPLE_RATE)
                         health_score_healthy = _compute_bearing_health_score(
-                            test_signal_healthy, SAMPLE_RATE, result_healthy, rot_freq_healthy
+                            test_signal_healthy,
+                            SAMPLE_RATE,
+                            result_healthy,
+                            rot_freq_healthy,
                         )
                 else:
                     # 通过 DiagnosisEngine 调度
@@ -266,15 +307,24 @@ def evaluate_bearing_robustness() -> Dict[str, Any]:
                         bearing_params=bearing_params or HUSTBEAR_BEARING,
                     )
                     result_fault = engine.analyze_bearing(
-                        test_signal_fault, SAMPLE_RATE, rot_freq=rot_freq_fault, preprocess=False
+                        test_signal_fault,
+                        SAMPLE_RATE,
+                        rot_freq=rot_freq_fault,
+                        preprocess=False,
                     )
                     # 健康样本
                     if test_signal_healthy is not None:
                         result_healthy = engine.analyze_bearing(
-                            test_signal_healthy, SAMPLE_RATE, rot_freq=rot_freq_healthy, preprocess=False
+                            test_signal_healthy,
+                            SAMPLE_RATE,
+                            rot_freq=rot_freq_healthy,
+                            preprocess=False,
                         )
                         health_score_healthy = _compute_bearing_health_score(
-                            test_signal_healthy, SAMPLE_RATE, result_healthy, rot_freq_healthy
+                            test_signal_healthy,
+                            SAMPLE_RATE,
+                            result_healthy,
+                            rot_freq_healthy,
                         )
 
                 # BPFO 检出 SNR
@@ -291,7 +341,11 @@ def evaluate_bearing_robustness() -> Dict[str, Any]:
 
                 # 分类判定
                 det_fault = _detection_status(health_score_fault, is_fault=True)
-                det_healthy = _detection_status(health_score_healthy, is_fault=False) if healthy_signal is not None else "N/A"
+                det_healthy = (
+                    _detection_status(health_score_healthy, is_fault=False)
+                    if healthy_signal is not None
+                    else "N/A"
+                )
 
             except Exception as e:
                 bpfo_snr = 0.0
@@ -300,16 +354,24 @@ def evaluate_bearing_robustness() -> Dict[str, Any]:
                 det_healthy = "ERROR"
                 print(f"  [WARN] {name}@{snr_db}dB: {e}")
 
-            all_results.append({
-                "method": name,
-                "input_snr_db": snr_db,
-                "bpfo_snr": round(bpfo_snr, 2),
-                "health_score_fault": health_score_fault,
-                "health_score_healthy": health_score_healthy if healthy_signal is not None else None,
-                "detection_fault": det_fault,
-                "detection_healthy": det_healthy if healthy_signal is not None else None,
-            })
-            print(f"  {name}@{snr_db}dB: BPFO_SNR={bpfo_snr:.2f}, HS_fault={health_score_fault}, det={det_fault}")
+            all_results.append(
+                {
+                    "method": name,
+                    "input_snr_db": snr_db,
+                    "bpfo_snr": round(bpfo_snr, 2),
+                    "health_score_fault": health_score_fault,
+                    "health_score_healthy": health_score_healthy
+                    if healthy_signal is not None
+                    else None,
+                    "detection_fault": det_fault,
+                    "detection_healthy": det_healthy
+                    if healthy_signal is not None
+                    else None,
+                }
+            )
+            print(
+                f"  {name}@{snr_db}dB: BPFO_SNR={bpfo_snr:.2f}, HS_fault={health_score_fault}, det={det_fault}"
+            )
 
     save_cache("bearing_robustness_results", all_results)
 
@@ -324,14 +386,22 @@ def evaluate_bearing_robustness() -> Dict[str, Any]:
 
     # --- 报告 ---
     report = _generate_bearing_robustness_report(all_results, summary, snr_levels)
-    with open(OUTPUT_DIR / "robustness" / "bearing_robustness_evaluation.md", "w", encoding="utf-8") as f:
+    with open(
+        OUTPUT_DIR / "robustness" / "bearing_robustness_evaluation.md",
+        "w",
+        encoding="utf-8",
+    ) as f:
         f.write(report)
-    print(f"  报告已保存: {OUTPUT_DIR / 'robustness' / 'bearing_robustness_evaluation.md'}")
+    print(
+        f"  报告已保存: {OUTPUT_DIR / 'robustness' / 'bearing_robustness_evaluation.md'}"
+    )
 
     return {"results": all_results, "summary": summary}
 
 
-def _summarize_bearing_robustness(results: List[Dict], snr_levels: List[float]) -> Dict[str, Any]:
+def _summarize_bearing_robustness(
+    results: List[Dict], snr_levels: List[float]
+) -> Dict[str, Any]:
     """按方法汇总: 每个SNR下的 Accuracy, F1, Critical SNR, Robustness Index"""
     method_names = [m[0] for m in BEARING_METHODS]
     summary = {}
@@ -379,7 +449,9 @@ def _plot_bearing_snr_accuracy(results: List[Dict], snr_levels: List[float]):
     fig, ax = plt.subplots(figsize=(12, 7))
     for method in method_names:
         s = summary[method]
-        ax.plot(s["snr_levels"], s["accuracies"], marker="o", label=method, linewidth=1.5)
+        ax.plot(
+            s["snr_levels"], s["accuracies"], marker="o", label=method, linewidth=1.5
+        )
 
     ax.axhline(y=0.80, color="red", linestyle="--", alpha=0.5, label="80% 门槛")
     ax.set_xlabel("输入信号 SNR (dB)")
@@ -399,7 +471,9 @@ def _plot_bearing_snr_f1(results: List[Dict], snr_levels: List[float]):
     fig, ax = plt.subplots(figsize=(12, 7))
     for method in method_names:
         s = summary[method]
-        ax.plot(s["snr_levels"], s["f1_scores"], marker="s", label=method, linewidth=1.5)
+        ax.plot(
+            s["snr_levels"], s["f1_scores"], marker="s", label=method, linewidth=1.5
+        )
 
     ax.set_xlabel("输入信号 SNR (dB)")
     ax.set_ylabel("F1 Score")
@@ -453,7 +527,9 @@ def _generate_bearing_robustness_report(
     for snr in snr_levels:
         row = [f"{snr}"]
         for m in method_names:
-            items = [r for r in results if r["input_snr_db"] == snr and r["method"] == m]
+            items = [
+                r for r in results if r["input_snr_db"] == snr and r["method"] == m
+            ]
             val = items[0]["bpfo_snr"] if items else 0
             row.append(f"{val:.2f}")
         lines.append("| " + " | ".join(row) + " |")
@@ -480,22 +556,28 @@ def _generate_bearing_robustness_report(
         ri = s["robustness_index"]
         lines.append(f"| {m} | {cs} | {ri:.4f} |")
 
-    lines.extend(["", "## 4. 结论", "",
-        "- 高SNR(>10dB): 大部分方法均能有效检出BPFO",
-        "- SNR降至0dB以下: kurtogram/MED/CPW的自适应优势显现",
-        "- SC_SCOH(循环平稳): 对随机噪声天然免疫，在极低SNR下仍可能检出",
-        "- 小波类(WP/DWT): 计算快，中低SNR下表现稳定",
-        "- 模态类(EMD/CEEMDAN/VMD): 分解增强对微弱冲击的捕捉，但受模态混叠影响",
-        "- MCKD: 引入故障周期约束，对已知参数场景检出能力最强",
-        "- Critical SNR 越低 → 方法越鲁棒; Robustness Index 越高 → 整体性能越好",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 4. 结论",
+            "",
+            "- 高SNR(>10dB): 大部分方法均能有效检出BPFO",
+            "- SNR降至0dB以下: kurtogram/MED/CPW的自适应优势显现",
+            "- SC_SCOH(循环平稳): 对随机噪声天然免疫，在极低SNR下仍可能检出",
+            "- 小波类(WP/DWT): 计算快，中低SNR下表现稳定",
+            "- 模态类(EMD/CEEMDAN/VMD): 分解增强对微弱冲击的捕捉，但受模态混叠影响",
+            "- MCKD: 引入故障周期约束，对已知参数场景检出能力最强",
+            "- Critical SNR 越低 → 方法越鲁棒; Robustness Index 越高 → 整体性能越好",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
 # ═══════════════════════════════════════════════════════════
 # B) 去噪方法鲁棒性评价
 # ═══════════════════════════════════════════════════════════
+
 
 def evaluate_denoise_robustness() -> Dict[str, Any]:
     """评价 8 种去噪方法在不同 SNR 下的信号恢复鲁棒性"""
@@ -527,7 +609,7 @@ def evaluate_denoise_robustness() -> Dict[str, Any]:
         noisy = add_awgn(clean_signal, snr_db)
         input_snr_actual = compute_snr_db(clean_signal, noisy)
 
-        for (name, dm_enum) in DENOISE_METHODS:
+        for name, dm_enum in DENOISE_METHODS:
             delta_snr = 0.0
             mse = 0.0
             pearson_r = 0.0
@@ -550,17 +632,21 @@ def evaluate_denoise_robustness() -> Dict[str, Any]:
             except Exception as e:
                 print(f"  [WARN] {name}@{snr_db}dB: {e}")
 
-            all_results.append({
-                "method": name,
-                "input_snr_db": snr_db,
-                "input_snr_actual": round(input_snr_actual, 2),
-                "delta_snr": round(delta_snr, 2),
-                "mse": round(mse, 6),
-                "pearson_r": round(pearson_r, 4),
-                "psnr": round(psnr, 2),
-                "prd": round(prd, 2),
-            })
-            print(f"  {name}@{snr_db}dB: ΔSNR={delta_snr:.2f}dB, PSNR={psnr:.2f}, PRD={prd:.2f}%, r={pearson_r:.4f}")
+            all_results.append(
+                {
+                    "method": name,
+                    "input_snr_db": snr_db,
+                    "input_snr_actual": round(input_snr_actual, 2),
+                    "delta_snr": round(delta_snr, 2),
+                    "mse": round(mse, 6),
+                    "pearson_r": round(pearson_r, 4),
+                    "psnr": round(psnr, 2),
+                    "prd": round(prd, 2),
+                }
+            )
+            print(
+                f"  {name}@{snr_db}dB: ΔSNR={delta_snr:.2f}dB, PSNR={psnr:.2f}, PRD={prd:.2f}%, r={pearson_r:.4f}"
+            )
 
     save_cache("denoise_robustness_results", all_results)
 
@@ -572,9 +658,15 @@ def evaluate_denoise_robustness() -> Dict[str, Any]:
 
     # --- 报告 ---
     report = _generate_denoise_robustness_report(all_results, snr_levels)
-    with open(OUTPUT_DIR / "robustness" / "denoise_robustness_evaluation.md", "w", encoding="utf-8") as f:
+    with open(
+        OUTPUT_DIR / "robustness" / "denoise_robustness_evaluation.md",
+        "w",
+        encoding="utf-8",
+    ) as f:
         f.write(report)
-    print(f"  报告已保存: {OUTPUT_DIR / 'robustness' / 'denoise_robustness_evaluation.md'}")
+    print(
+        f"  报告已保存: {OUTPUT_DIR / 'robustness' / 'denoise_robustness_evaluation.md'}"
+    )
 
     return {"results": all_results}
 
@@ -644,7 +736,9 @@ def _plot_denoise_pearson(results: List[Dict], snr_levels: List[float]):
     save_figure(fig, "denoise_pearson_r.png", "robustness")
 
 
-def _generate_denoise_robustness_report(results: List[Dict], snr_levels: List[float]) -> str:
+def _generate_denoise_robustness_report(
+    results: List[Dict], snr_levels: List[float]
+) -> str:
     """生成去噪鲁棒性 Markdown 报告"""
     method_names = [m[0] for m in DENOISE_METHODS]
     metrics = ["delta_snr", "mse", "pearson_r", "psnr", "prd"]
@@ -660,7 +754,9 @@ def _generate_denoise_robustness_report(results: List[Dict], snr_levels: List[fl
     ]
 
     for metric, label in zip(metrics, metric_labels):
-        lines.append(f"## {snr_levels.index(snr_levels[0]) + 1 + metrics.index(metric)}. {label} 详细结果")
+        lines.append(
+            f"## {snr_levels.index(snr_levels[0]) + 1 + metrics.index(metric)}. {label} 详细结果"
+        )
         lines.append("")
         header = "| SNR (dB) | " + " | ".join(method_names) + " |"
         sep = "|----------|" + "|".join(["--------"] * len(method_names)) + "|"
@@ -669,28 +765,35 @@ def _generate_denoise_robustness_report(results: List[Dict], snr_levels: List[fl
         for snr in snr_levels:
             row = [f"{snr}"]
             for m in method_names:
-                items = [r for r in results if r["input_snr_db"] == snr and r["method"] == m]
+                items = [
+                    r for r in results if r["input_snr_db"] == snr and r["method"] == m
+                ]
                 val = items[0][metric] if items else 0
                 row.append(f"{val}")
             lines.append("| " + " | ".join(row) + " |")
         lines.append("")
 
-    lines.extend(["## 结论", "",
-        "- ΔSNR > 0 表示去噪后 SNR 提升 (有效去噪)",
-        "- PSNR 越高、PRD 越低、Pearson r 越高 → 去噪质量越好",
-        "- wavelet/vmd/wavelet_vmd: 非平稳噪声场景表现好",
-        "- savgol: 高斯噪声平滑快，但会模糊冲击",
-        "- emd/ceemdan: 自适应分解，但模态混叠可能影响恢复",
-        "- wavelet_packet: 能量阈值保留主要成分，PRD 较低",
-        "- ceemdan_wp: 级联降噪，ΔSNR 最高但计算量大",
-        "",
-    ])
+    lines.extend(
+        [
+            "## 结论",
+            "",
+            "- ΔSNR > 0 表示去噪后 SNR 提升 (有效去噪)",
+            "- PSNR 越高、PRD 越低、Pearson r 越高 → 去噪质量越好",
+            "- wavelet/vmd/wavelet_vmd: 非平稳噪声场景表现好",
+            "- savgol: 高斯噪声平滑快，但会模糊冲击",
+            "- emd/ceemdan: 自适应分解，但模态混叠可能影响恢复",
+            "- wavelet_packet: 能量阈值保留主要成分，PRD 较低",
+            "- ceemdan_wp: 级联降噪，ΔSNR 最高但计算量大",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
 # ═══════════════════════════════════════════════════════════
 # 顶层入口 (兼容旧调用)
 # ═══════════════════════════════════════════════════════════
+
 
 def evaluate_noise_robustness():
     """评价各算法在不同SNR下的鲁棒性 — 顶层入口 (轴承 + 去噪)"""

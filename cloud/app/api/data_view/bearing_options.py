@@ -1,4 +1,5 @@
 """研究和包络入口共用高级轴承方法的显式参数校验。"""
+
 from typing import Literal, Optional
 
 from fastapi import Query
@@ -12,6 +13,10 @@ def get_bearing_options(
     comb_is_stable: bool = Query(default=False),
 ) -> dict:
     """空 MCKD 目标明确转 MED；CPW 稳定性由调用方确认，不由齿数推断。"""
-    return {"target_fault": target_fault, "target_frequency_hz": target_frequency_hz,
-            "period_samples": period_samples, "comb_frequencies_hz": comb_frequencies_hz,
-            "comb_is_stable": comb_is_stable}
+    return {
+        "target_fault": target_fault,
+        "target_frequency_hz": target_frequency_hz,
+        "period_samples": period_samples,
+        "comb_frequencies_hz": comb_frequencies_hz,
+        "comb_is_stable": comb_is_stable,
+    }

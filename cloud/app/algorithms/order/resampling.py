@@ -1,4 +1,5 @@
 """连续相位积分、等角重采样与有明确刻度的阶次 FFT。"""
+
 from __future__ import annotations
 
 import numpy as np
@@ -33,7 +34,9 @@ def _validate_signal(signal: FloatArray, sample_rate_hz: float) -> FloatArray:
 def integrate_speed_trajectory(speed: SpeedTrajectory) -> PhaseTrajectory:
     """用梯形积分计算 θ(t)/(2π)=∫fr(t)dt，不采用后向欧拉累加。"""
     revolutions = cumulative_trapezoid(speed.frequency_hz, speed.time_s, initial=0.0)
-    return PhaseTrajectory(time_s=speed.time_s, revolutions=np.asarray(revolutions, dtype=np.float64))
+    return PhaseTrajectory(
+        time_s=speed.time_s, revolutions=np.asarray(revolutions, dtype=np.float64)
+    )
 
 
 def resample_constant_speed(
@@ -46,7 +49,9 @@ def resample_constant_speed(
     arr = _validate_signal(signal, sample_rate_hz)
     if speed.status != "valid" or speed.frequency_hz is None:
         raise ValueError("恒速等角重采样需要有效标量转频")
-    if isinstance(samples_per_revolution, bool) or not isinstance(samples_per_revolution, int):
+    if isinstance(samples_per_revolution, bool) or not isinstance(
+        samples_per_revolution, int
+    ):
         raise ValueError("每转采样点数必须是整数")
     if samples_per_revolution < 16:
         raise ValueError("每转采样点数至少为 16")
@@ -67,7 +72,9 @@ def resample_to_phase(
         raise ValueError("重采样信号必须与连续相位时间轴等长")
     if not np.all(np.isfinite(arr)):
         raise ValueError("重采样信号不能包含 NaN 或无穷值")
-    if isinstance(samples_per_revolution, bool) or not isinstance(samples_per_revolution, int):
+    if isinstance(samples_per_revolution, bool) or not isinstance(
+        samples_per_revolution, int
+    ):
         raise ValueError("每转采样点数必须是整数")
     if samples_per_revolution < 16:
         raise ValueError("每转采样点数至少为 16")
@@ -76,7 +83,9 @@ def resample_to_phase(
     point_count = int(np.floor(phase.revolutions[-1] * samples_per_revolution + 1e-9))
     if point_count < 16:
         raise ValueError("有效转数太少，无法进行等角重采样")
-    target_revolutions = np.arange(point_count, dtype=np.float64) / samples_per_revolution
+    target_revolutions = (
+        np.arange(point_count, dtype=np.float64) / samples_per_revolution
+    )
     samples = np.interp(target_revolutions, phase.revolutions, arr)
     return AngleDomainSignal(
         angle_revolutions=target_revolutions,
@@ -133,11 +142,24 @@ def order_band_amplitude_sum(
     """
     orders = np.asarray(order_bins, dtype=np.float64)
     values = np.asarray(amplitude, dtype=np.float64)
-    if orders.ndim != 1 or values.ndim != 1 or len(orders) != len(values) or len(orders) == 0:
+    if (
+        orders.ndim != 1
+        or values.ndim != 1
+        or len(orders) != len(values)
+        or len(orders) == 0
+    ):
         raise ValueError("阶次轴与幅值必须是非空一维等长数组")
-    if not np.all(np.isfinite(orders)) or not np.all(np.isfinite(values)) or np.any(values < 0):
+    if (
+        not np.all(np.isfinite(orders))
+        or not np.all(np.isfinite(values))
+        or np.any(values < 0)
+    ):
         raise ValueError("阶次轴与幅值必须有限，幅值不能为负")
-    if not np.isfinite(center_order) or not np.isfinite(half_width_order) or half_width_order < 0:
+    if (
+        not np.isfinite(center_order)
+        or not np.isfinite(half_width_order)
+        or half_width_order < 0
+    ):
         raise ValueError("阶次窗中心必须有限，半带宽必须有限且非负")
     mask = np.abs(orders - center_order) <= half_width_order
     return float(np.sum(values[mask])) if np.any(mask) else 0.0

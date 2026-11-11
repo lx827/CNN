@@ -3,6 +3,7 @@
 
 统一提供时域、频域、包络域、阶次域的特征提取接口。
 """
+
 import numpy as np
 from scipy import stats
 from scipy.fft import rfft, rfftfreq
@@ -10,8 +11,16 @@ from scipy.signal import hilbert, detrend
 from typing import Dict, List, Tuple, Optional
 
 from .signal_utils import (
-    prepare_signal, rms, peak_value, crest_factor, kurtosis, skewness,
-    compute_fft_spectrum, bandpass_filter, lowpass_filter, _band_energy,
+    prepare_signal,
+    rms,
+    peak_value,
+    crest_factor,
+    kurtosis,
+    skewness,
+    compute_fft_spectrum,
+    bandpass_filter,
+    lowpass_filter,
+    _band_energy,
     estimate_rot_freq_spectrum as _estimate_rot_freq_simple,
 )
 
@@ -38,7 +47,7 @@ def compute_time_features(signal: np.ndarray) -> Dict[str, float]:
     skew = skewness(arr)
 
     mean_sqrt = float(np.mean(np.sqrt(np.abs(arr))))
-    margin = peak / (mean_sqrt ** 2) if mean_sqrt > 1e-12 else 0.0
+    margin = peak / (mean_sqrt**2) if mean_sqrt > 1e-12 else 0.0
     shape_factor = rms_val / mean_abs if mean_abs > 1e-12 else 0.0
     impulse_factor = peak / mean_abs if mean_abs > 1e-12 else 0.0
     crest = crest_factor(arr)
@@ -80,10 +89,10 @@ def _compute_dynamic_baseline_features(signal: np.ndarray) -> Dict[str, float]:
     rms_series = []
     kurt_series = []
     for start in range(0, len(arr) - win + 1, win):
-        chunk = arr[start:start + win]
+        chunk = arr[start : start + win]
         if len(chunk) < 128:
             continue
-        rms_series.append(float(np.sqrt(np.mean(chunk ** 2))))
+        rms_series.append(float(np.sqrt(np.mean(chunk**2))))
         try:
             kurt_series.append(float(stats.kurtosis(chunk, fisher=False)))
         except Exception:
@@ -154,7 +163,7 @@ def compute_fft_features(
     xf, yf = compute_fft_spectrum(arr, fs)
     yf = np.array(yf)
     xf = np.array(xf)
-    total_energy = float(np.sum(yf ** 2)) + 1e-10
+    total_energy = float(np.sum(yf**2)) + 1e-10
 
     features = {}
 
@@ -177,7 +186,9 @@ def compute_fft_features(
             for n in range(1, 4):
                 sb_low = mesh_freq - n * rot_freq
                 sb_high = mesh_freq + n * rot_freq
-                sb_amp = _band_energy(xf, yf, sb_low, 2.0) + _band_energy(xf, yf, sb_high, 2.0)
+                sb_amp = _band_energy(xf, yf, sb_low, 2.0) + _band_energy(
+                    xf, yf, sb_high, 2.0
+                )
                 sideband_total += sb_amp
                 if sb_amp > mesh_amp * 0.05:
                     sideband_count += 1
@@ -210,7 +221,7 @@ def compute_channel_features(signal: List[float]) -> Dict[str, float]:
 
     # 基本统计量
     peak = float(np.max(np.abs(arr)))
-    rms_val = float(np.sqrt(np.mean(arr ** 2)))
+    rms_val = float(np.sqrt(np.mean(arr**2)))
     mean_abs = float(np.mean(np.abs(arr)))
 
     # 峭度与偏度
@@ -220,7 +231,7 @@ def compute_channel_features(signal: List[float]) -> Dict[str, float]:
     # 无量纲指标
     # Margin = Peak / (mean(sqrt(|x|)))^2
     mean_sqrt = float(np.mean(np.sqrt(np.abs(arr) + 1e-12)))
-    margin = peak / (mean_sqrt ** 2) if mean_sqrt > 1e-12 else 0.0
+    margin = peak / (mean_sqrt**2) if mean_sqrt > 1e-12 else 0.0
     shape_factor = rms_val / mean_abs if mean_abs > 1e-12 else 0.0
     impulse_factor = peak / mean_abs if mean_abs > 1e-12 else 0.0
     crest = peak / rms_val if rms_val > 1e-12 else 0.0
@@ -246,7 +257,9 @@ def compute_fft(signal: List[float], sample_rate: int = 25600):
     return xf.tolist(), yf.tolist()
 
 
-def compute_imf_energy(signal: List[float], sample_rate: int = 25600) -> Dict[str, float]:
+def compute_imf_energy(
+    signal: List[float], sample_rate: int = 25600
+) -> Dict[str, float]:
     """
     估算 IMF 能量分布
     用频带能量划分近似 IMF 分量能量占比，用于健康度评分和前端 IMF 能量图展示
@@ -304,7 +317,12 @@ def has_bearing_params(bearing_params: Optional[Dict]) -> bool:
         n = bearing_params.get("n")
         d = bearing_params.get("d")
         D = bearing_params.get("D")
-        return all(v is not None for v in [n, d, D]) and float(n or 0) > 0 and float(d or 0) > 0 and float(D or 0) > 0
+        return (
+            all(v is not None for v in [n, d, D])
+            and float(n or 0) > 0
+            and float(d or 0) > 0
+            and float(D or 0) > 0
+        )
     except (TypeError, ValueError):
         return False
 
@@ -316,10 +334,13 @@ def has_gear_params(gear_teeth: Optional[Dict]) -> bool:
     注意：调用方应先将通道级格式转换为设备级格式再传入。
     """
     try:
-        return bool(gear_teeth and (
-            float(gear_teeth.get("input") or 0) > 0 or
-            float(gear_teeth.get("sun") or 0) > 0  # 行星箱用 sun 键
-        ))
+        return bool(
+            gear_teeth
+            and (
+                float(gear_teeth.get("input") or 0) > 0
+                or float(gear_teeth.get("sun") or 0) > 0  # 行星箱用 sun 键
+            )
+        )
     except (TypeError, ValueError):
         return False
 
@@ -343,8 +364,8 @@ def _compute_bearing_fault_freqs(rot_freq: float, bearing_params: dict) -> dict:
     return {
         "BPFO": (n / 2.0) * rot_freq * (1 - dd),
         "BPFI": (n / 2.0) * rot_freq * (1 + dd),
-        "BSF":  (D / (2.0 * d)) * rot_freq * (1 - dd ** 2),
-        "FTF":  0.5 * rot_freq * (1 - dd),
+        "BSF": (D / (2.0 * d)) * rot_freq * (1 - dd**2),
+        "FTF": 0.5 * rot_freq * (1 - dd),
     }
 
 
@@ -361,7 +382,9 @@ def _compute_bearing_fault_orders(rot_freq: float, bearing_params: dict) -> dict
 # ---------------------------------------------------------------------------
 
 
-def _sign_cusum(series: np.ndarray, reference: Optional[float] = None) -> Tuple[float, float, Dict]:
+def _sign_cusum(
+    series: np.ndarray, reference: Optional[float] = None
+) -> Tuple[float, float, Dict]:
     """
     符号统计非参数 CUSUM
 
@@ -416,14 +439,18 @@ def _sign_cusum(series: np.ndarray, reference: Optional[float] = None) -> Tuple[
     n = len(x)
     H = max(4.0, n * 0.1)
 
-    return float(c_pos_max), float(c_neg_max), {
-        "method": "sign_cusum",
-        "reference": round(reference, 6),
-        "K": K,
-        "H": round(H, 2),
-        "alarm_positive": bool(c_pos_max > H),
-        "alarm_negative": bool(c_neg_max > H),
-    }
+    return (
+        float(c_pos_max),
+        float(c_neg_max),
+        {
+            "method": "sign_cusum",
+            "reference": round(reference, 6),
+            "K": K,
+            "H": round(H, 2),
+            "alarm_positive": bool(c_pos_max > H),
+            "alarm_negative": bool(c_neg_max > H),
+        },
+    )
 
 
 def _mann_whitney_cusum(
@@ -472,7 +499,7 @@ def _mann_whitney_cusum(
     # 计算每个滑动窗口与参考窗口的 Mann-Whitney z 分数
     z_scores = []
     for start in range(window_size, n - window_size + 1, max(1, window_size // 4)):
-        current_window = x[start:start + window_size]
+        current_window = x[start : start + window_size]
         if len(current_window) < window_size:
             continue
         n2 = len(current_window)
@@ -498,7 +525,11 @@ def _mann_whitney_cusum(
         z_scores.append(z)
 
     if len(z_scores) < 2:
-        return 0.0, 0.0, {"method": "mann_whitney_cusum", "error": "insufficient_z_scores"}
+        return (
+            0.0,
+            0.0,
+            {"method": "mann_whitney_cusum", "error": "insufficient_z_scores"},
+        )
 
     # CUSUM 累积 z 分数
     K_mw = 0.5  # 参考值
@@ -516,16 +547,20 @@ def _mann_whitney_cusum(
     # 决策限：基于 z 分数的 CUSUM，H ≈ 4~5
     H_mw = 4.0
 
-    return float(c_pos_max), float(c_neg_max), {
-        "method": "mann_whitney_cusum",
-        "window_size": window_size,
-        "n1": n1,
-        "K": K_mw,
-        "H": H_mw,
-        "n_z_scores": len(z_scores),
-        "alarm_positive": bool(c_pos_max > H_mw),
-        "alarm_negative": bool(c_neg_max > H_mw),
-    }
+    return (
+        float(c_pos_max),
+        float(c_neg_max),
+        {
+            "method": "mann_whitney_cusum",
+            "window_size": window_size,
+            "n1": n1,
+            "K": K_mw,
+            "H": H_mw,
+            "n_z_scores": len(z_scores),
+            "alarm_positive": bool(c_pos_max > H_mw),
+            "alarm_negative": bool(c_neg_max > H_mw),
+        },
+    )
 
 
 def compute_nonparam_cusum_features(signal: np.ndarray) -> Dict[str, float]:
@@ -566,10 +601,10 @@ def compute_nonparam_cusum_features(signal: np.ndarray) -> Dict[str, float]:
     win = max(128, len(arr) // n_windows)
     rms_series = []
     for start in range(0, len(arr) - win + 1, win):
-        chunk = arr[start:start + win]
+        chunk = arr[start : start + win]
         if len(chunk) < 128:
             continue
-        rms_series.append(float(np.sqrt(np.mean(chunk ** 2))))
+        rms_series.append(float(np.sqrt(np.mean(chunk**2))))
 
     if len(rms_series) < 4:
         return {
@@ -587,7 +622,9 @@ def compute_nonparam_cusum_features(signal: np.ndarray) -> Dict[str, float]:
     sign_c_pos, sign_c_neg, sign_info = _sign_cusum(rms_array)
 
     # Mann-Whitney CUSUM
-    mw_c_pos, mw_c_neg, mw_info = _mann_whitney_cusum(rms_array, window_size=max(5, len(rms_array) // 4))
+    mw_c_pos, mw_c_neg, mw_info = _mann_whitney_cusum(
+        rms_array, window_size=max(5, len(rms_array) // 4)
+    )
 
     return {
         "sign_cusum_positive": round(sign_c_pos, 4),

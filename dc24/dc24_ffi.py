@@ -4,6 +4,7 @@
 持同一把锁；poll 返回的 data 是借用指针（有效期到下一次 poll/start/close），
 必须在锁内立即拷贝为 bytes。本文件仅依赖标准库，导入时不加载动态库。
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -14,8 +15,8 @@ import threading
 
 # 消息标签，与 ffi.rs 的 MSG_* 常量一致。
 MSG_SAMPLES = 1  # 样本块：data 为 16 字节/采样时刻的四路小端 int32
-MSG_EVENT = 2    # 事件：UTF-8 JSON 行，以 \n 结尾
-MSG_STATE = 3    # 链路状态：UTF-8 JSON {"state":…,"detail":…}
+MSG_EVENT = 2  # 事件：UTF-8 JSON 行，以 \n 结尾
+MSG_STATE = 3  # 链路状态：UTF-8 JSON {"state":…,"detail":…}
 
 ERR_BUFFER_BYTES = 512
 
@@ -44,7 +45,9 @@ def default_search_paths() -> list[Path]:
     """默认搜索顺序：edge/target/release 优先（部署产物），其次 debug（开发构建）。"""
     root = Path(__file__).resolve().parents[1]
     name = library_filename()
-    return [root / "edge" / "target" / profile / name for profile in ("release", "debug")]
+    return [
+        root / "edge" / "target" / profile / name for profile in ("release", "debug")
+    ]
 
 
 def locate_library(explicit: str | os.PathLike | None = None) -> Path | None:
@@ -99,18 +102,33 @@ class EdgeCore:
     # ------------------------------------------------------------------ 绑定
     def _bind(self) -> None:
         lib, msg = self._lib, ctypes.POINTER(Dc24Msg)
-        lib.dc24_edge_open.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t]
+        lib.dc24_edge_open.argtypes = [
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_size_t,
+        ]
         lib.dc24_edge_open.restype = ctypes.c_void_p
-        lib.dc24_edge_start.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_char_p, ctypes.c_size_t]
+        lib.dc24_edge_start.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_char_p,
+            ctypes.c_size_t,
+        ]
         lib.dc24_edge_start.restype = ctypes.c_int32
         lib.dc24_edge_poll.argtypes = [ctypes.c_void_p, msg, ctypes.c_int32]
         lib.dc24_edge_poll.restype = ctypes.c_int32
-        lib.dc24_edge_stop.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t]
+        lib.dc24_edge_stop.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.c_size_t,
+        ]
         lib.dc24_edge_stop.restype = ctypes.c_int32
         lib.dc24_edge_running.argtypes = [ctypes.c_void_p]
         lib.dc24_edge_running.restype = ctypes.c_int32
         lib.dc24_edge_info_json.argtypes = []
-        lib.dc24_edge_info_json.restype = ctypes.c_char_p  # 指向静态内存，借用期=进程生命周期
+        lib.dc24_edge_info_json.restype = (
+            ctypes.c_char_p
+        )  # 指向静态内存，借用期=进程生命周期
         lib.dc24_edge_close.argtypes = [ctypes.c_void_p]
         lib.dc24_edge_close.restype = None
 
@@ -124,7 +142,9 @@ class EdgeCore:
         """解析 config.json 全文并绑定常驻监听；失败抛 EdgeCoreError。"""
         err = ctypes.create_string_buffer(ERR_BUFFER_BYTES)
         with self._lock:
-            handle = self._lib.dc24_edge_open(config_text.encode("utf-8"), err, len(err))
+            handle = self._lib.dc24_edge_open(
+                config_text.encode("utf-8"), err, len(err)
+            )
             if not handle:
                 raise EdgeCoreError(f"dc24_edge_open 失败: {_err_text(err)}")
             self._handle = handle
@@ -133,7 +153,9 @@ class EdgeCore:
         """启动一次采集会话（内部线程执行设备时序，立即返回）。"""
         err = ctypes.create_string_buffer(ERR_BUFFER_BYTES)
         with self._lock:
-            code = self._lib.dc24_edge_start(self._require_handle(), int(sample_rate), err, len(err))
+            code = self._lib.dc24_edge_start(
+                self._require_handle(), int(sample_rate), err, len(err)
+            )
             if code != 0:
                 raise EdgeCoreError(f"dc24_edge_start 失败: {_err_text(err)}")
 
@@ -144,7 +166,9 @@ class EdgeCore:
         """
         message = Dc24Msg()
         with self._lock:
-            code = self._lib.dc24_edge_poll(self._require_handle(), ctypes.byref(message), int(timeout_ms))
+            code = self._lib.dc24_edge_poll(
+                self._require_handle(), ctypes.byref(message), int(timeout_ms)
+            )
             if code == 0:
                 return None
             if code != 1:

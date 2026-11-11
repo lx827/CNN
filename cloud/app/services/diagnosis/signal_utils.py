@@ -1,6 +1,7 @@
 """
 通用信号处理辅助函数
 """
+
 import numpy as np
 from scipy import signal as scipy_signal
 from scipy.fft import rfft, rfftfreq
@@ -10,6 +11,7 @@ from typing import Tuple, Optional, List, Dict
 # ══════════════════════════════════════════════════════════
 # Layer 0: 原子函数（不可再分的基本操作）
 # ══════════════════════════════════════════════════════════
+
 
 def _search_peak_in_band(
     axis: np.ndarray,
@@ -133,6 +135,7 @@ def _snr_by_residual_std(original: np.ndarray, denoised: np.ndarray) -> float:
 # Layer 1: 信号预处理
 # ══════════════════════════════════════════════════════════
 
+
 def remove_dc(signal: np.ndarray) -> np.ndarray:
     """去除直流分量（零均值化）"""
     return signal - np.mean(signal)
@@ -140,7 +143,7 @@ def remove_dc(signal: np.ndarray) -> np.ndarray:
 
 def linear_detrend(signal: np.ndarray) -> np.ndarray:
     """线性去趋势"""
-    return scipy_signal.detrend(signal, type='linear')
+    return scipy_signal.detrend(signal, type="linear")
 
 
 def prepare_signal(signal, detrend: bool = False) -> np.ndarray:
@@ -151,7 +154,7 @@ def prepare_signal(signal, detrend: bool = False) -> np.ndarray:
     """
     arr = np.array(signal, dtype=np.float64)
     if detrend:
-        return scipy_signal.detrend(arr, type='linear')
+        return scipy_signal.detrend(arr, type="linear")
     return arr - np.mean(arr)
 
 
@@ -174,26 +177,35 @@ def denoise_signal(signal: np.ndarray, method: str) -> np.ndarray:
             raise ValueError("去噪输入必须是非空的一维有限数组")
         if method == "wavelet":
             from app.algorithms.decomposition.wavelet import denoise_wavelet
+
             result = denoise_wavelet(arr, wavelet="db8")
         elif method == "vmd":
             from .vmd_denoise import vmd_denoise
+
             result = vmd_denoise(arr, K=5, alpha=2000)
         elif method in ("wavelet_vmd", "wavelet_lms"):
             from .preprocessing import cascade_wavelet_vmd, cascade_wavelet_lms
-            function = cascade_wavelet_vmd if method == "wavelet_vmd" else cascade_wavelet_lms
+
+            function = (
+                cascade_wavelet_vmd if method == "wavelet_vmd" else cascade_wavelet_lms
+            )
             result, _ = function(arr)
         elif method in ("emd", "eemd", "ceemdan"):
             from .emd_denoise import emd_denoise
+
             result, _ = emd_denoise(arr, method=method)
         elif method == "savgol":
             from .savgol_denoise import sg_denoise
+
             result, _ = sg_denoise(arr)
         elif method == "wavelet_packet":
             from .wavelet_packet import wavelet_packet_denoise
+
             result, _ = wavelet_packet_denoise(arr)
         elif method == "ceemdan_wp":
             from .emd_denoise import emd_denoise
             from .wavelet_packet import wavelet_packet_denoise
+
             step1, _ = emd_denoise(arr, method="ceemdan")
             result, _ = wavelet_packet_denoise(step1)
         else:
@@ -223,7 +235,7 @@ def bandpass_filter(
     high = min(1.0 - 1e-6, f_high / nyq)
     if low >= high:
         return signal.copy()
-    b, a = scipy_signal.butter(order, [low, high], btype='band')
+    b, a = scipy_signal.butter(order, [low, high], btype="band")
     return scipy_signal.filtfilt(b, a, signal)
 
 
@@ -238,7 +250,7 @@ def lowpass_filter(
         return signal.copy()
     nyq = fs / 2.0
     cut = min(1.0 - 1e-6, f_cut / nyq)
-    b, a = scipy_signal.butter(order, cut, btype='low')
+    b, a = scipy_signal.butter(order, cut, btype="low")
     return scipy_signal.filtfilt(b, a, signal)
 
 
@@ -253,7 +265,7 @@ def highpass_filter(
         return signal.copy()
     nyq = fs / 2.0
     cut = max(1e-6, f_cut / nyq)
-    b, a = scipy_signal.butter(order, cut, btype='high')
+    b, a = scipy_signal.butter(order, cut, btype="high")
     return scipy_signal.filtfilt(b, a, signal)
 
 
@@ -275,7 +287,7 @@ def compute_power_spectrum(
 ) -> Tuple[np.ndarray, np.ndarray]:
     """计算功率谱（幅值平方）"""
     xf, yf = compute_fft_spectrum(signal, fs)
-    return xf, yf ** 2
+    return xf, yf**2
 
 
 def find_peaks_in_spectrum(
@@ -320,11 +332,13 @@ def find_peaks_in_spectrum(
             break
         peak_h = _search_peak_in_band(freqs, amps, hf, tolerance_hz)
         if peak_h:
-            result["harmonics"].append({
-                "freq": peak_h["freq"],
-                "amp": peak_h["amp"],
-                "order": h,
-            })
+            result["harmonics"].append(
+                {
+                    "freq": peak_h["freq"],
+                    "amp": peak_h["amp"],
+                    "order": h,
+                }
+            )
 
     return result
 
@@ -337,18 +351,20 @@ def compute_snr(peak_amp: float, spectrum: np.ndarray, method: str = "median") -
 def kurtosis(signal: np.ndarray, fisher: bool = False) -> float:
     """计算峭度，fisher=False 时正态分布=3"""
     from scipy import stats
+
     return float(stats.kurtosis(signal, fisher=fisher))
 
 
 def skewness(signal: np.ndarray) -> float:
     """计算偏度"""
     from scipy import stats
+
     return float(stats.skew(signal))
 
 
 def rms(signal: np.ndarray) -> float:
     """均方根"""
-    return float(np.sqrt(np.mean(signal ** 2)))
+    return float(np.sqrt(np.mean(signal**2)))
 
 
 def peak_value(signal: np.ndarray) -> float:
@@ -385,25 +401,33 @@ def _band_energy(freq, amp, center: float, bandwidth: float) -> float:
     return float(np.sum(amp[mask] ** 2))
 
 
-def _order_band_energy(order_axis, spectrum, center_order: float, bandwidth: float) -> float:
+def _order_band_energy(
+    order_axis, spectrum, center_order: float, bandwidth: float
+) -> float:
     """计算指定阶次带能量"""
     order_axis = np.asarray(order_axis)
     spectrum = np.asarray(spectrum)
-    mask = (order_axis >= center_order - bandwidth) & (order_axis <= center_order + bandwidth)
+    mask = (order_axis >= center_order - bandwidth) & (
+        order_axis <= center_order + bandwidth
+    )
     if not np.any(mask):
         return 0.0
     return float(np.sum(spectrum[mask] ** 2))
 
 
 def estimate_rot_freq_envelope(
-    sig: np.ndarray, fs: float,
+    sig: np.ndarray,
+    fs: float,
     f_center: float,
     bw: float = 60.0,
-    freq_range: Tuple[float, float] = (10, 100)
+    freq_range: Tuple[float, float] = (10, 100),
 ) -> Optional[float]:
     """兼容适配：独立包络转频候选，算法位于 algorithms.order。"""
     from app.algorithms.order import SpeedSearchRange, estimate_envelope_speed
-    result = estimate_envelope_speed(sig, fs, f_center, SpeedSearchRange(*freq_range), bw)
+
+    result = estimate_envelope_speed(
+        sig, fs, f_center, SpeedSearchRange(*freq_range), bw
+    )
     return result.frequency_hz if result.status == "valid" else None
 
 
@@ -414,6 +438,7 @@ def estimate_rot_freq_autocorr(
 ) -> Optional[float]:
     """兼容适配：独立自相关转频候选，算法位于 algorithms.order。"""
     from app.algorithms.order import SpeedSearchRange, estimate_autocorrelation_speed
+
     result = estimate_autocorrelation_speed(sig, fs, SpeedSearchRange(*freq_range))
     return result.frequency_hz if result.status == "valid" else None
 
@@ -428,8 +453,14 @@ def estimate_rot_freq_spectrum(
 ) -> float:
     """旧标量接口的薄适配；不可判定时抛错，不再返回默认转频。"""
     from app.algorithms.order import SpeedSearchRange, estimate_spectrum_speed
+
     result = estimate_spectrum_speed(
-        sig, fs, SpeedSearchRange(*freq_range), harmonics_num, bandwidth_hz, smooth_win_hz,
+        sig,
+        fs,
+        SpeedSearchRange(*freq_range),
+        harmonics_num,
+        bandwidth_hz,
+        smooth_win_hz,
     )
     if result.status != "valid" or result.frequency_hz is None:
         raise ValueError(result.reason or "标量转频不可判定")
@@ -457,16 +488,22 @@ def zoom_fft_analysis(
 
     try:
         result = compute_zoom_spectrum(
-            signal, fs,
+            signal,
+            fs,
             ZoomParameters(center_freq, bandwidth, max(16, int(zoom_factor) * 64 + 1)),
         )
     except (TypeError, ValueError) as exc:
         return {
-            "valid": False, "reason": str(exc),
-            "zoom_freq_axis": np.array([]), "zoom_spectrum": np.array([]),
-            "resolution_hz": 0.0, "original_resolution_hz": 0.0,
-            "zoom_factor": 1, "center_freq": center_freq,
-            "bandwidth": bandwidth, "n_zoom_points": 0,
+            "valid": False,
+            "reason": str(exc),
+            "zoom_freq_axis": np.array([]),
+            "zoom_spectrum": np.array([]),
+            "resolution_hz": 0.0,
+            "original_resolution_hz": 0.0,
+            "zoom_factor": 1,
+            "center_freq": center_freq,
+            "bandwidth": bandwidth,
+            "n_zoom_points": 0,
         }
     return {
         "valid": True,
@@ -506,7 +543,7 @@ def lowpass_filter_complex(
     """
     nyq = fs / 2.0
     cut = min(1.0 - 1e-6, f_cut / nyq)
-    b, a = scipy_signal.butter(order, cut, btype='low')
+    b, a = scipy_signal.butter(order, cut, btype="low")
 
     # 分离实部和虚部，分别滤波
     real_part = scipy_signal.filtfilt(b, a, np.real(signal))

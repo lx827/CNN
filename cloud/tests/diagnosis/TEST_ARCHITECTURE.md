@@ -248,16 +248,16 @@ tests/diagnosis/foundation/
 
 ```python
 # 颜色编码 —— 必须在每张图的标题或图例中声明判定标准
-COLOR_PASS    = '#52C41A'  # 绿 = 通过 / 正确 / 健康 / 在容差内
-COLOR_FAIL    = '#FF4D4F'  # 红 = 失败 / 错误 / 故障 / 超容差
-COLOR_GT      = '#D9D9D9'  # 灰 = Ground Truth / 理论值 / 期望范围 / 已知标准
-COLOR_THRESH  = '#FAAD14'  # 橙 = 阈值线 / 警告边界 / 判定分界线
-COLOR_EST     = '#165DFF'  # 蓝 = 算法估计值 / 实际计算结果 / 当前输出
+COLOR_PASS = "#52C41A"  # 绿 = 通过 / 正确 / 健康 / 在容差内
+COLOR_FAIL = "#FF4D4F"  # 红 = 失败 / 错误 / 故障 / 超容差
+COLOR_GT = "#D9D9D9"  # 灰 = Ground Truth / 理论值 / 期望范围 / 已知标准
+COLOR_THRESH = "#FAAD14"  # 橙 = 阈值线 / 警告边界 / 判定分界线
+COLOR_EST = "#165DFF"  # 蓝 = 算法估计值 / 实际计算结果 / 当前输出
 
 # 文字标记 —— 必须直接标在数据点或子图标题上
-MARK_OK = '✓ PASS'         # 通过 —— 用绿色粗体
-MARK_NG = '✗ FAIL'         # 失败 —— 用红色粗体
-MARK_WARN = '△ WARN'       # 警告 / 边界 —— 用橙色
+MARK_OK = "✓ PASS"  # 通过 —— 用绿色粗体
+MARK_NG = "✗ FAIL"  # 失败 —— 用红色粗体
+MARK_WARN = "△ WARN"  # 警告 / 边界 —— 用橙色
 ```
 
 **铁律：每张图必须包含以下至少 3 种元素：**

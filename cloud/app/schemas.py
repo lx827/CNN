@@ -2,14 +2,20 @@
 Pydantic 数据模型
 用于：API 请求校验、响应序列化
 """
+
 from pydantic import BaseModel, ConfigDict, model_validator
 from typing import List, Optional, Dict, Literal
 from datetime import datetime
-from app.services.diagnosis.domain import EvaluationStatus, DiagnosisConclusion, validate_state
+from app.services.diagnosis.domain import (
+    EvaluationStatus,
+    DiagnosisConclusion,
+    validate_state,
+)
 
 
 class DiagnosisState(BaseModel):
     """业务两轴及评分不变量；不能把缺少评估编码为健康。"""
+
     evaluation_status: EvaluationStatus
     diagnosis_conclusion: DiagnosisConclusion
     health_score: Optional[float]
@@ -17,7 +23,12 @@ class DiagnosisState(BaseModel):
 
     @model_validator(mode="after")
     def coherent_state(self):
-        validate_state(self.evaluation_status, self.diagnosis_conclusion, self.health_score, require_score=True)
+        validate_state(
+            self.evaluation_status,
+            self.diagnosis_conclusion,
+            self.health_score,
+            require_score=True,
+        )
         return self
 
 
@@ -73,6 +84,7 @@ class DeviceOut(DiagnosisState):
 # ==================== 传感器数据接入 ====================
 class IngestData(BaseModel):
     """边端上传的数据格式"""
+
     device_id: str
     timestamp: Optional[datetime] = None
     channels: Dict[str, List[float]]  # {"ch1": [0.1, -0.2, ...], "ch2": [...]}

@@ -9,6 +9,7 @@
 或:
     cd cloud && uv run python tests/diagnosis/method_eval/main.py
 """
+
 import sys
 import time
 from pathlib import Path
@@ -27,10 +28,15 @@ def main():
     print("╚══════════════════════════════════════════════════════════════╝")
 
     tests = [
-        ("1", "HUSTbear 恒速轴承评估",      "test_bearing_hustbear", "test_bearing_hustbear"),
-        ("2", "CW 变速轴承评估",            "test_bearing_cw",       "test_bearing_cw"),
-        ("3", "WTgearbox 齿轮评估",         "test_gear_wtgearbox",   "test_gear_wtgearbox"),
-        ("4", "二分类全数据集汇总",         "test_binary_all",       "test_binary_all"),
+        (
+            "1",
+            "HUSTbear 恒速轴承评估",
+            "test_bearing_hustbear",
+            "test_bearing_hustbear",
+        ),
+        ("2", "CW 变速轴承评估", "test_bearing_cw", "test_bearing_cw"),
+        ("3", "WTgearbox 齿轮评估", "test_gear_wtgearbox", "test_gear_wtgearbox"),
+        ("4", "二分类全数据集汇总", "test_binary_all", "test_binary_all"),
     ]
 
     results = {}
@@ -71,10 +77,22 @@ def _generate_master_report(results: dict):
     ]
 
     exp_map = {
-        "1": {"dir": "bearing_hustbear", "files": "binary_accuracy_comparison.svg, confusion_ensemble_5class.svg, report.md"},
-        "2": {"dir": "bearing_cw", "files": "binary_accuracy_comparison.svg, confusion_ensemble_3class.svg, report.md"},
-        "3": {"dir": "gear_wtgearbox", "files": "binary_accuracy_comparison.svg, confusion_ensemble_5class.svg, report.md"},
-        "4": {"dir": "binary_all", "files": "bar_hustbear.svg, bar_cw.svg, bar_wtgearbox.svg, radar_top5.svg, report.md"},
+        "1": {
+            "dir": "bearing_hustbear",
+            "files": "binary_accuracy_comparison.svg, confusion_ensemble_5class.svg, report.md",
+        },
+        "2": {
+            "dir": "bearing_cw",
+            "files": "binary_accuracy_comparison.svg, confusion_ensemble_3class.svg, report.md",
+        },
+        "3": {
+            "dir": "gear_wtgearbox",
+            "files": "binary_accuracy_comparison.svg, confusion_ensemble_5class.svg, report.md",
+        },
+        "4": {
+            "dir": "binary_all",
+            "files": "bar_hustbear.svg, bar_cw.svg, bar_wtgearbox.svg, radar_top5.svg, report.md",
+        },
     }
 
     for code, info in results.items():

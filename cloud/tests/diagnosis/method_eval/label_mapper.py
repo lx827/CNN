@@ -7,12 +7,16 @@
 2. fault_label 字段（启发式快速分类）
 3. fault_indicators SNR 最高项（单一方法兜底）
 """
+
 from typing import Any, Dict, List, Optional
 
 from .config import (
-    DS_TO_BEARING, DS_TO_GEAR,
-    FAULT_LABEL_TO_BEARING, FAULT_LABEL_TO_GEAR,
-    INDICATOR_TO_BEARING, INDICATOR_TO_GEAR,
+    DS_TO_BEARING,
+    DS_TO_GEAR,
+    FAULT_LABEL_TO_BEARING,
+    FAULT_LABEL_TO_GEAR,
+    INDICATOR_TO_BEARING,
+    INDICATOR_TO_GEAR,
     HEALTH_THRESHOLD,
 )
 
@@ -20,6 +24,7 @@ from .config import (
 # ═══════════════════════════════════════════════════════════
 # 轴承标签推断
 # ═══════════════════════════════════════════════════════════
+
 
 def infer_bearing_label_from_ensemble(
     result: Dict[str, Any],
@@ -115,6 +120,7 @@ def infer_bearing_label_from_single(
 # 齿轮标签推断
 # ═══════════════════════════════════════════════════════════
 
+
 def infer_gear_label_from_ensemble(
     result: Dict[str, Any],
     valid_labels: List[str],
@@ -147,7 +153,10 @@ def infer_gear_label_from_ensemble(
     best_gear = result.get("gear", {})
     if best_gear:
         try:
-            from app.services.diagnosis.health_score import _infer_gear_subtype_from_indicators
+            from app.services.diagnosis.health_score import (
+                _infer_gear_subtype_from_indicators,
+            )
+
             subtype = _infer_gear_subtype_from_indicators(best_gear)
             if subtype and subtype in valid_labels:
                 return subtype
@@ -202,6 +211,7 @@ def infer_gear_label_from_single(
 # ═══════════════════════════════════════════════════════════
 # 二分类推断（健康 vs 故障）
 # ═══════════════════════════════════════════════════════════
+
 
 def infer_binary_label(health_score: int, threshold: int = HEALTH_THRESHOLD) -> str:
     """二分类：健康 vs 故障"""

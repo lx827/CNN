@@ -1,4 +1,5 @@
 """高级轴承谱峭度：高斯基准、真实滤波器组与已知共振带。"""
+
 import os
 import sys
 import unittest
@@ -44,7 +45,9 @@ class ComplexSpectralKurtosisTests(unittest.TestCase):
         self.assertLess(pearson_minus_three, -0.8)
 
         rng = np.random.default_rng(123)
-        gaussian = (rng.standard_normal(100_000) + 1j * rng.standard_normal(100_000)) / np.sqrt(2.0)
+        gaussian = (
+            rng.standard_normal(100_000) + 1j * rng.standard_normal(100_000)
+        ) / np.sqrt(2.0)
         self.assertAlmostEqual(complex_spectral_kurtosis(gaussian), 0.0, delta=0.04)
 
     def test_constant_envelope_has_minus_one_baseline(self):
@@ -58,7 +61,9 @@ class ComplexSpectralKurtosisTests(unittest.TestCase):
         reference = complex_spectral_kurtosis(z)
         for scale in (1e-150, 1e-12, 1e12, 1e150):
             with self.subTest(scale=scale):
-                self.assertAlmostEqual(complex_spectral_kurtosis(z * scale), reference, places=11)
+                self.assertAlmostEqual(
+                    complex_spectral_kurtosis(z * scale), reference, places=11
+                )
         with self.assertRaisesRegex(ValueError, "零能量"):
             complex_spectral_kurtosis(np.zeros(128, dtype=np.complex128))
 
@@ -75,7 +80,11 @@ class FilterBankKurtogramTests(unittest.TestCase):
         self.assertLess(result.best_band.low_hz, 1152.0)
         self.assertGreater(result.best_band.high_hz, 1152.0)
         self.assertGreater(result.max_spectral_kurtosis, 0.5)
-        self.assertTrue(all(item.estimator == "complex_gaussian_sk_minus_2" for item in result.bands))
+        self.assertTrue(
+            all(
+                item.estimator == "complex_gaussian_sk_minus_2" for item in result.bands
+            )
+        )
         self.assertIsNotNone(result.representation)
 
     def test_pure_noise_is_negative_control_without_fallback_band(self):
@@ -100,7 +109,9 @@ class FilterBankKurtogramTests(unittest.TestCase):
         self.assertEqual(result.status, "computed", result.reason)
         self.assertLess(result.best_band.low_hz, 1152.0)
         self.assertGreater(result.best_band.high_hz, 1152.0)
-        self.assertTrue(all(np.isfinite(item.reweighted_score) for item in result.bands))
+        self.assertTrue(
+            all(np.isfinite(item.reweighted_score) for item in result.bands)
+        )
         best = max(result.bands, key=lambda item: item.reweighted_score)
         self.assertEqual(best.band, result.best_band)
         self.assertGreaterEqual(best.impulsiveness, 1.0)

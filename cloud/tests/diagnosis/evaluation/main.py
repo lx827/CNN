@@ -10,6 +10,7 @@
     cd /d/code/CNN
     python tests/diagnosis/evaluation/main.py
 """
+
 import sys
 from pathlib import Path
 
@@ -32,6 +33,7 @@ from evaluation.report_generator import generate_final_report
 def _limit_files(files, max_per_class=5):
     """限制每个类别的文件数量，加快评价速度"""
     from collections import defaultdict
+
     class_files = defaultdict(list)
     for f, info in files:
         lbl = info.get("label", "unknown")
@@ -73,6 +75,7 @@ def main():
     )
 
     from evaluation.config import OUTPUT_DIR
+
     print("\n" + "=" * 60)
     print("  全部评价完成！")
     print(f"  输出目录: {OUTPUT_DIR}")

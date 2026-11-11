@@ -1,4 +1,5 @@
 """联合去噪的业务编排；小波、MED/CPW 数学实现统一位于 algorithms。"""
+
 import numpy as np
 from typing import Tuple, Optional, Literal, Dict
 
@@ -49,7 +50,9 @@ def cascade_wavelet_vmd(
 
     # Step 1: 小波阈值去噪（级联场景降低阈值，避免过度去噪扭曲信号结构）
     wavelet_result = denoise_wavelet(
-        arr, wavelet=wavelet, level=wavelet_level,
+        arr,
+        wavelet=wavelet,
+        level=wavelet_level,
         threshold_mode=wavelet_mode,
         threshold_scale=wavelet_threshold_scale,
     )
@@ -57,16 +60,20 @@ def cascade_wavelet_vmd(
     # Step 2-4: VMD 分解 + 筛选重构
     # 传入原始信号作为 reference_signal，避免 IMF 与"已失真小波输出"的相关性被低估（Bug #14）
     vmd_result = vmd_denoise(
-        wavelet_result, K=vmd_K, alpha=vmd_alpha,
+        wavelet_result,
+        K=vmd_K,
+        alpha=vmd_alpha,
         corr_threshold=vmd_corr_threshold,
         kurt_threshold=vmd_kurt_threshold,
         reference_signal=arr,
     )
 
     # 计算指标
-    kurt_before = float(np.mean(arr ** 4) / (np.var(arr) ** 2 + 1e-12))
-    kurt_wavelet = float(np.mean(wavelet_result ** 4) / (np.var(wavelet_result) ** 2 + 1e-12))
-    kurt_final = float(np.mean(vmd_result ** 4) / (np.var(vmd_result) ** 2 + 1e-12))
+    kurt_before = float(np.mean(arr**4) / (np.var(arr) ** 2 + 1e-12))
+    kurt_wavelet = float(
+        np.mean(wavelet_result**4) / (np.var(wavelet_result) ** 2 + 1e-12)
+    )
+    kurt_final = float(np.mean(vmd_result**4) / (np.var(vmd_result) ** 2 + 1e-12))
 
     noise_reduction = float(np.var(arr) / (np.var(vmd_result) + 1e-12))
 
@@ -122,19 +129,20 @@ def cascade_wavelet_lms(
 
     # Step 1: 小波阈值去噪
     wavelet_result = denoise_wavelet(
-        arr, wavelet=wavelet, level=wavelet_level,
-        threshold_mode=wavelet_mode
+        arr, wavelet=wavelet, level=wavelet_level, threshold_mode=wavelet_mode
     )
 
     # Step 2: LMS 自适应滤波
     lms_result, lms_info = lms_filter(
-        wavelet_result, filter_len=lms_filter_len,
-        step_size=lms_step_size, delay=lms_delay
+        wavelet_result,
+        filter_len=lms_filter_len,
+        step_size=lms_step_size,
+        delay=lms_delay,
     )
 
     # 计算指标
-    kurt_before = float(np.mean(arr ** 4) / (np.var(arr) ** 2 + 1e-12))
-    kurt_final = float(np.mean(lms_result ** 4) / (np.var(lms_result) ** 2 + 1e-12))
+    kurt_before = float(np.mean(arr**4) / (np.var(arr) ** 2 + 1e-12))
+    kurt_final = float(np.mean(lms_result**4) / (np.var(lms_result) ** 2 + 1e-12))
     noise_reduction = float(np.var(arr) / (np.var(lms_result) + 1e-12))
 
     return lms_result, {
@@ -153,8 +161,12 @@ def cascade_wavelet_lms(
 def joint_denoise(
     signal: np.ndarray,
     strategy: Literal[
-        "wavelet_vmd", "wavelet_lms", "wavelet", "vmd",
-        "ceemdan_wp", "eemd",
+        "wavelet_vmd",
+        "wavelet_lms",
+        "wavelet",
+        "vmd",
+        "ceemdan_wp",
+        "eemd",
     ] = "wavelet_vmd",
     wavelet: str = "db8",
     wavelet_level: Optional[int] = None,
@@ -187,22 +199,28 @@ def joint_denoise(
 
     if strategy == "wavelet_vmd":
         return cascade_wavelet_vmd(
-            arr, wavelet=wavelet, wavelet_level=wavelet_level,
-            wavelet_mode=wavelet_mode, vmd_K=vmd_K, vmd_alpha=vmd_alpha
+            arr,
+            wavelet=wavelet,
+            wavelet_level=wavelet_level,
+            wavelet_mode=wavelet_mode,
+            vmd_K=vmd_K,
+            vmd_alpha=vmd_alpha,
         )
     elif strategy == "wavelet_lms":
         return cascade_wavelet_lms(
-            arr, wavelet=wavelet, wavelet_level=wavelet_level,
-            wavelet_mode=wavelet_mode, lms_filter_len=lms_filter_len,
-            lms_step_size=lms_step_size
+            arr,
+            wavelet=wavelet,
+            wavelet_level=wavelet_level,
+            wavelet_mode=wavelet_mode,
+            lms_filter_len=lms_filter_len,
+            lms_step_size=lms_step_size,
         )
     elif strategy == "wavelet":
         result = denoise_wavelet(
-            arr, wavelet=wavelet, level=wavelet_level,
-            threshold_mode=wavelet_mode
+            arr, wavelet=wavelet, level=wavelet_level, threshold_mode=wavelet_mode
         )
-        kurt_before = float(np.mean(arr ** 4) / (np.var(arr) ** 2 + 1e-12))
-        kurt_after = float(np.mean(result ** 4) / (np.var(result) ** 2 + 1e-12))
+        kurt_before = float(np.mean(arr**4) / (np.var(arr) ** 2 + 1e-12))
+        kurt_after = float(np.mean(result**4) / (np.var(result) ** 2 + 1e-12))
         return result, {
             "method": "wavelet",
             "kurtosis_before": round(kurt_before, 4),
@@ -210,8 +228,8 @@ def joint_denoise(
         }
     elif strategy == "vmd":
         result = vmd_denoise(arr, K=vmd_K, alpha=vmd_alpha)
-        kurt_before = float(np.mean(arr ** 4) / (np.var(arr) ** 2 + 1e-12))
-        kurt_after = float(np.mean(result ** 4) / (np.var(result) ** 2 + 1e-12))
+        kurt_before = float(np.mean(arr**4) / (np.var(arr) ** 2 + 1e-12))
+        kurt_after = float(np.mean(result**4) / (np.var(result) ** 2 + 1e-12))
         return result, {
             "method": "vmd",
             "kurtosis_before": round(kurt_before, 4),
@@ -222,10 +240,11 @@ def joint_denoise(
         # CEEMDAN 先抑制模态混叠 → 小波包进一步频带筛选重构
         from .emd_denoise import emd_denoise
         from .wavelet_packet import wavelet_packet_denoise
+
         step1, info1 = emd_denoise(arr, method="ceemdan", ensemble_size=30)
         step2, info2 = wavelet_packet_denoise(step1, wavelet=wavelet, level=3)
-        kurt_before = float(np.mean(arr ** 4) / (np.var(arr) ** 2 + 1e-12))
-        kurt_after = float(np.mean(step2 ** 4) / (np.var(step2) ** 2 + 1e-12))
+        kurt_before = float(np.mean(arr**4) / (np.var(arr) ** 2 + 1e-12))
+        kurt_after = float(np.mean(step2**4) / (np.var(step2) ** 2 + 1e-12))
         return step2, {
             "method": "ceemdan_wp",
             "ceemdan_info": info1,
@@ -235,9 +254,10 @@ def joint_denoise(
         }
     elif strategy == "eemd":
         from .emd_denoise import emd_denoise
+
         result, info = emd_denoise(arr, method="eemd", ensemble_size=30)
-        kurt_before = float(np.mean(arr ** 4) / (np.var(arr) ** 2 + 1e-12))
-        kurt_after = float(np.mean(result ** 4) / (np.var(result) ** 2 + 1e-12))
+        kurt_before = float(np.mean(arr**4) / (np.var(arr) ** 2 + 1e-12))
+        kurt_after = float(np.mean(result**4) / (np.var(result) ** 2 + 1e-12))
         return result, {
             "method": "eemd",
             "emd_info": info,

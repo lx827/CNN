@@ -1,4 +1,5 @@
 """倒谱显示峰值分析；不包含机械故障阈值或健康结论。"""
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -42,8 +43,11 @@ def analyze_cepstrum(
     """
     if not 0 <= search_min_s < search_max_s:
         raise ValueError("倒谱搜索区间必须满足 0 <= 下限 < 上限")
-    if isinstance(min_peak_distance_bins, bool) or not isinstance(min_peak_distance_bins, int) \
-            or min_peak_distance_bins <= 0:
+    if (
+        isinstance(min_peak_distance_bins, bool)
+        or not isinstance(min_peak_distance_bins, int)
+        or min_peak_distance_bins <= 0
+    ):
         raise ValueError("倒谱峰最小间距必须是正整数")
     if not np.isfinite(relative_amplitude) or not 0 <= relative_amplitude <= 1:
         raise ValueError("倒谱峰相对幅值必须位于 [0, 1]")
@@ -60,7 +64,9 @@ def analyze_cepstrum(
         search_quefrency = quefrency[search_mask]
         if len(search_amplitude) > 10:
             indices, _ = find_peaks(search_amplitude, distance=min_peak_distance_bins)
-            ordered = sorted(indices, key=lambda index: search_amplitude[index], reverse=True)
+            ordered = sorted(
+                indices, key=lambda index: search_amplitude[index], reverse=True
+            )
             top_amplitude = None
             for index in ordered:
                 value = float(search_amplitude[index])
@@ -69,7 +75,10 @@ def analyze_cepstrum(
                 elif value < top_amplitude * relative_amplitude:
                     break
                 quefrency_s = float(search_quefrency[index])
-                if any(abs(item.quefrency_s - quefrency_s) < merge_tolerance_s for item in peaks):
+                if any(
+                    abs(item.quefrency_s - quefrency_s) < merge_tolerance_s
+                    for item in peaks
+                ):
                     continue
                 peaks.append(CepstrumPeak(quefrency_s=quefrency_s, amplitude=value))
     return CepstrumAnalysis(representation=truncated, peaks=tuple(peaks))

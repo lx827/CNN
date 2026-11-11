@@ -53,9 +53,9 @@ CNN 集成入口：[操作说明](DC24_ACQUISITION.md)，驱动实现为 [`dc24/
 
 ```python
 body = bytes([command]) + payload
-checksum = (~sum(body)) & 0xff
-frame = b'\x7e' + len(body).to_bytes(2, 'big') + body + bytes([checksum])
-assert sum(frame[3:]) & 0xff == 0xff
+checksum = (~sum(body)) & 0xFF
+frame = b"\x7e" + len(body).to_bytes(2, "big") + body + bytes([checksum])
+assert sum(frame[3:]) & 0xFF == 0xFF
 ```
 
 ### 数据帧尾不是同一校验
@@ -179,9 +179,9 @@ B8 → 等 B8 00，再关闭连接
 
 ```python
 tag = item[0]
-counts = int.from_bytes(item[1:4], 'little', signed=True)
+counts = int.from_bytes(item[1:4], "little", signed=True)
 # 或者，将整个 4 字节项当成小端 int32，再算术右移 8 位：
-counts_again = int.from_bytes(item, 'little', signed=True) >> 8
+counts_again = int.from_bytes(item, "little", signed=True) >> 8
 assert counts == counts_again
 ```
 

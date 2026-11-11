@@ -5,6 +5,7 @@ Savitzky-Golay 多项式平滑模块
 - 小波阈值：适合脉冲型/非平稳噪声，但可能产生伪吉布斯振荡；
 - S-G 滤波：适合宽带高斯噪声背景下的平滑，保留峰形，计算极快（O(N)）。
 """
+
 import numpy as np
 from scipy.signal import savgol_filter
 from typing import Tuple, Dict
@@ -36,13 +37,20 @@ def sg_denoise(
     if window_length > N:
         window_length = N if N % 2 == 1 else N - 1
     if window_length < 3:
-        return arr, {"method": "sg", "window_length": N, "polyorder": polyorder, "note": "too_short"}
+        return arr, {
+            "method": "sg",
+            "window_length": N,
+            "polyorder": polyorder,
+            "note": "too_short",
+        }
 
     if window_length % 2 == 0:
         window_length -= 1
 
     polyorder = min(polyorder, window_length - 1)
-    smoothed = savgol_filter(arr, window_length=window_length, polyorder=polyorder, deriv=deriv)
+    smoothed = savgol_filter(
+        arr, window_length=window_length, polyorder=polyorder, deriv=deriv
+    )
 
     noise_est = _estimate_noise_mad(arr - smoothed)
     snr_imp = _snr_by_residual_std(arr, smoothed)

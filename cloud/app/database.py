@@ -10,6 +10,7 @@
   2. 创建数据库：CREATE DATABASE turbine_db CHARACTER SET utf8mb4;
   3. 修改 .env：USE_SQLITE=false + 填写 DB_HOST/DB_USER/DB_PASSWORD
 """
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.core.config import DATABASE_URL, USE_SQLITE
@@ -17,7 +18,9 @@ from app.core.config import DATABASE_URL, USE_SQLITE
 # 创建数据库引擎
 if USE_SQLITE:
     # SQLite 需要 check_same_thread=False 才能在线程/协程中正常使用
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False}, echo=False)
+    engine = create_engine(
+        DATABASE_URL, connect_args={"check_same_thread": False}, echo=False
+    )
 else:
     # MySQL 配置：pool_pre_ping 自动检测断线
     engine = create_engine(DATABASE_URL, pool_pre_ping=True, echo=False)
@@ -47,6 +50,7 @@ def init_db():
 
     # SQLite 自动迁移：为已存在的表添加新增列
     from sqlalchemy import inspect, text
+
     inspector = inspect(engine)
 
     # Device 表新增列
@@ -64,17 +68,29 @@ def init_db():
         diag_cols = {c["name"] for c in inspector.get_columns("diagnosis")}
         with engine.connect() as conn:
             if "order_analysis" not in diag_cols:
-                conn.execute(text("ALTER TABLE diagnosis ADD COLUMN order_analysis JSON"))
+                conn.execute(
+                    text("ALTER TABLE diagnosis ADD COLUMN order_analysis JSON")
+                )
             if "rot_freq" not in diag_cols:
                 conn.execute(text("ALTER TABLE diagnosis ADD COLUMN rot_freq FLOAT"))
             if "channel" not in diag_cols:
-                conn.execute(text("ALTER TABLE diagnosis ADD COLUMN channel INTEGER DEFAULT 0"))
+                conn.execute(
+                    text("ALTER TABLE diagnosis ADD COLUMN channel INTEGER DEFAULT 0")
+                )
             if "engine_result" not in diag_cols:
-                conn.execute(text("ALTER TABLE diagnosis ADD COLUMN engine_result JSON"))
+                conn.execute(
+                    text("ALTER TABLE diagnosis ADD COLUMN engine_result JSON")
+                )
             if "full_analysis" not in diag_cols:
-                conn.execute(text("ALTER TABLE diagnosis ADD COLUMN full_analysis JSON"))
+                conn.execute(
+                    text("ALTER TABLE diagnosis ADD COLUMN full_analysis JSON")
+                )
             if "denoise_method" not in diag_cols:
-                conn.execute(text("ALTER TABLE diagnosis ADD COLUMN denoise_method VARCHAR(20) DEFAULT 'none'"))
+                conn.execute(
+                    text(
+                        "ALTER TABLE diagnosis ADD COLUMN denoise_method VARCHAR(20) DEFAULT 'none'"
+                    )
+                )
             conn.commit()
 
     # Device 表继续新增列（压缩配置 + 在线状态）
@@ -82,11 +98,21 @@ def init_db():
         device_cols = {c["name"] for c in inspector.get_columns("devices")}
         with engine.connect() as conn:
             if "compression_enabled" not in device_cols:
-                conn.execute(text("ALTER TABLE devices ADD COLUMN compression_enabled INTEGER DEFAULT 1"))
+                conn.execute(
+                    text(
+                        "ALTER TABLE devices ADD COLUMN compression_enabled INTEGER DEFAULT 1"
+                    )
+                )
             if "downsample_ratio" not in device_cols:
-                conn.execute(text("ALTER TABLE devices ADD COLUMN downsample_ratio INTEGER DEFAULT 8"))
+                conn.execute(
+                    text(
+                        "ALTER TABLE devices ADD COLUMN downsample_ratio INTEGER DEFAULT 8"
+                    )
+                )
             if "is_online" not in device_cols:
-                conn.execute(text("ALTER TABLE devices ADD COLUMN is_online INTEGER DEFAULT 1"))
+                conn.execute(
+                    text("ALTER TABLE devices ADD COLUMN is_online INTEGER DEFAULT 1")
+                )
             conn.commit()
 
     # create_all 不会给已存在的表补索引；必须在旧库列迁移完成后显式补齐。
@@ -95,19 +121,39 @@ def init_db():
         if table in inspector.get_table_names():
             columns = {column["name"] for column in inspect(engine).get_columns(table)}
             with engine.begin() as conn:
-                migrated = "evaluation_status" not in columns or "diagnosis_conclusion" not in columns
+                migrated = (
+                    "evaluation_status" not in columns
+                    or "diagnosis_conclusion" not in columns
+                )
                 if "evaluation_status" not in columns:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN evaluation_status VARCHAR(24) NOT NULL DEFAULT 'not_evaluable'"))
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE {table} ADD COLUMN evaluation_status VARCHAR(24) NOT NULL DEFAULT 'not_evaluable'"
+                        )
+                    )
                 if "diagnosis_conclusion" not in columns:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN diagnosis_conclusion VARCHAR(20) NOT NULL DEFAULT 'unknown'"))
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE {table} ADD COLUMN diagnosis_conclusion VARCHAR(20) NOT NULL DEFAULT 'unknown'"
+                        )
+                    )
                 if "coverage" not in columns:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN coverage VARCHAR(12) NOT NULL DEFAULT 'none'"))
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE {table} ADD COLUMN coverage VARCHAR(12) NOT NULL DEFAULT 'none'"
+                        )
+                    )
                 if migrated:
                     if engine.dialect.name == "mysql":
-                        conn.execute(text(f"ALTER TABLE {table} MODIFY COLUMN health_score FLOAT NULL"))
+                        conn.execute(
+                            text(
+                                f"ALTER TABLE {table} MODIFY COLUMN health_score FLOAT NULL"
+                            )
+                        )
                     conn.execute(text(f"UPDATE {table} SET health_score=NULL"))
 
     from app.models import Diagnosis
+
     for index in Diagnosis.__table__.indexes:
         if index.name.startswith("ix_diagnosis_"):
             index.create(bind=engine, checkfirst=True)

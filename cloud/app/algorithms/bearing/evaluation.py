@@ -1,4 +1,5 @@
 """轴承包络指标评估；阈值只消费已提取指标，不执行信号变换。"""
+
 from dataclasses import dataclass
 from typing import Optional
 
@@ -70,7 +71,9 @@ def _statistical_indicators(analysis: EnvelopeAnalysis) -> dict[str, dict]:
         "peak_concentration": {
             "value": stats.peak_concentration,
             "score": stats.peak_concentration * 10.0,
-            "significant": bool(stats.peak_concentration > 0.6 and not rotation_dominant),
+            "significant": bool(
+                stats.peak_concentration > 0.6 and not rotation_dominant
+            ),
         },
         "envelope_crest_factor": {
             "value": stats.crest_factor,
@@ -80,7 +83,9 @@ def _statistical_indicators(analysis: EnvelopeAnalysis) -> dict[str, dict]:
     }
 
 
-def _not_evaluable(theory: float, reason: str, sidebands: Optional[SidebandEvidence]) -> dict:
+def _not_evaluable(
+    theory: float, reason: str, sidebands: Optional[SidebandEvidence]
+) -> dict:
     return {
         "status": "not_evaluable",
         "evaluable": False,
@@ -126,7 +131,9 @@ def evaluate_envelope(analysis: EnvelopeAnalysis) -> EnvelopeEvaluation:
         sideband_significant = None
         if name == "BPFI":
             strong_sidebands = sum(value > 3.0 for value in features.bpfi_sideband_snrs)
-            envelope_kurt = float(np.mean(amplitude**4) / (np.mean(amplitude**2) ** 2 + 1e-12))
+            envelope_kurt = float(
+                np.mean(amplitude**4) / (np.mean(amplitude**2) ** 2 + 1e-12)
+            )
             sideband_significant = bool(
                 strong_sidebands >= 2 and snr > 4.3 and envelope_kurt > 5.0
             )
@@ -142,12 +149,16 @@ def evaluate_envelope(analysis: EnvelopeAnalysis) -> EnvelopeEvaluation:
             "sideband_significant": sideband_significant,
             "significant": carrier_significant or bool(sideband_significant),
             "harmonic_snrs": list(features.harmonic_snrs.get(name, ())),
-            "sideband_snrs": list(features.bpfi_sideband_snrs) if name == "BPFI" else None,
+            "sideband_snrs": list(features.bpfi_sideband_snrs)
+            if name == "BPFI"
+            else None,
             **evaluate_sideband_evidence(sidebands),
         }
 
     # 主导过滤只作用于载波证据，不得覆盖 BPFI 的边带补救结论。
-    evaluable = {name: values for name, values in param_indicators.items() if values["evaluable"]}
+    evaluable = {
+        name: values for name, values in param_indicators.items() if values["evaluable"]
+    }
     if evaluable:
         ordered = sorted((values["snr"] for values in evaluable.values()), reverse=True)
         maximum = ordered[0]

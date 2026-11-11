@@ -1,4 +1,5 @@
 """基于 PyWavelets 的 DWT/WP 实现；本文件是唯一 PyWavelets adapter。"""
+
 from __future__ import annotations
 
 import copy
@@ -29,6 +30,7 @@ class PyWaveletsImplementation:
 
     def denoise(self, signal, wavelet, level, threshold_mode, threshold_scale):
         from scipy.special import expit
+
         wavelet_object = pywt.Wavelet(wavelet)
         maximum = pywt.dwt_max_level(len(signal), wavelet_object.dec_len)
         chosen = maximum if level is None else level
@@ -36,9 +38,11 @@ class PyWaveletsImplementation:
             raise ValueError(f"DWT 层数必须位于 [1, {maximum}]")
         amplitude = float(np.max(np.abs(signal)))
         normalized = signal / amplitude if amplitude else signal
-        coefficients = pywt.wavedec(normalized, wavelet_object, mode="symmetric", level=chosen)
+        coefficients = pywt.wavedec(
+            normalized, wavelet_object, mode="symmetric", level=chosen
+        )
         finest = coefficients[-1]
-        sigma = np.median(np.abs(finest - np.median(finest))) / .6744897501960817
+        sigma = np.median(np.abs(finest - np.median(finest))) / 0.6744897501960817
         threshold = threshold_scale * sigma * np.sqrt(2 * np.log(len(signal)))
         output = [coefficients[0]]
         for detail in coefficients[1:]:
@@ -49,13 +53,23 @@ class PyWaveletsImplementation:
                 updated = detail * (absolute > threshold)
             else:
                 updated = np.sign(detail) * np.maximum(
-                    absolute - threshold * expit(-2 * (absolute - threshold)), 0)
+                    absolute - threshold * expit(-2 * (absolute - threshold)), 0
+                )
             output.append(updated)
-        return _original_axis(pywt.waverec(output, wavelet_object, mode="symmetric"), len(signal)) * amplitude
+        return (
+            _original_axis(
+                pywt.waverec(output, wavelet_object, mode="symmetric"), len(signal)
+            )
+            * amplitude
+        )
 
     def dwt(
-        self, signal: FloatArray, sample_rate_hz: float,
-        wavelet: str, level: int, mode: str,
+        self,
+        signal: FloatArray,
+        sample_rate_hz: float,
+        wavelet: str,
+        level: int,
+        mode: str,
     ) -> DWTDecomposition:
         wavelet_object = pywt.Wavelet(wavelet)
         max_level = pywt.dwt_max_level(len(signal), wavelet_object.dec_len)
@@ -67,10 +81,13 @@ class PyWaveletsImplementation:
         def reconstruct_band(index: int) -> FloatArray:
             selected = [np.zeros_like(item) for item in coefficients]
             selected[index] = coefficients[index]
-            return _original_axis(pywt.waverec(selected, wavelet_object, mode=mode), len(signal))
+            return _original_axis(
+                pywt.waverec(selected, wavelet_object, mode=mode), len(signal)
+            )
 
         approximation = DWTBand(
-            kind="approximation", level=level,
+            kind="approximation",
+            level=level,
             coefficients=np.array(coefficients[0], dtype=np.float64, copy=True),
             reconstructed=reconstruct_band(0),
             coefficient_sample_rate_hz=sample_rate_hz / 2.0**level,
@@ -80,26 +97,40 @@ class PyWaveletsImplementation:
         details = []
         for detail_level in range(1, level + 1):
             index = level - detail_level + 1
-            details.append(DWTBand(
-                kind="detail", level=detail_level,
-                coefficients=np.array(coefficients[index], dtype=np.float64, copy=True),
-                reconstructed=reconstruct_band(index),
-                coefficient_sample_rate_hz=sample_rate_hz / 2.0**detail_level,
-                frequency_band_hz=(
-                    sample_rate_hz / 2.0 ** (detail_level + 1),
-                    sample_rate_hz / 2.0**detail_level,
-                ),
-                valid_interval=valid,
-            ))
+            details.append(
+                DWTBand(
+                    kind="detail",
+                    level=detail_level,
+                    coefficients=np.array(
+                        coefficients[index], dtype=np.float64, copy=True
+                    ),
+                    reconstructed=reconstruct_band(index),
+                    coefficient_sample_rate_hz=sample_rate_hz / 2.0**detail_level,
+                    frequency_band_hz=(
+                        sample_rate_hz / 2.0 ** (detail_level + 1),
+                        sample_rate_hz / 2.0**detail_level,
+                    ),
+                    valid_interval=valid,
+                )
+            )
         return DWTDecomposition(
-            input_length=len(signal), sample_rate_hz=sample_rate_hz,
-            wavelet=wavelet, mode=mode, level=level,
-            approximation=approximation, details=tuple(details), valid_interval=valid,
+            input_length=len(signal),
+            sample_rate_hz=sample_rate_hz,
+            wavelet=wavelet,
+            mode=mode,
+            level=level,
+            approximation=approximation,
+            details=tuple(details),
+            valid_interval=valid,
         )
 
     def wavelet_packet(
-        self, signal: FloatArray, sample_rate_hz: float,
-        wavelet: str, level: int, mode: str,
+        self,
+        signal: FloatArray,
+        sample_rate_hz: float,
+        wavelet: str,
+        level: int,
+        mode: str,
     ) -> WaveletPacketDecomposition:
         wavelet_object = pywt.Wavelet(wavelet)
         max_level = pywt.dwt_max_level(len(signal), wavelet_object.dec_len)
@@ -122,17 +153,28 @@ class PyWaveletsImplementation:
             while gray:
                 frequency_index ^= gray
                 gray >>= 1
-            nodes.append(WaveletPacketNode(
-                path=source.path, level=level,
-                natural_index=natural_index, frequency_index=frequency_index,
-                coefficients=np.array(source.data, dtype=np.float64, copy=True),
-                reconstructed=reconstructed,
-                coefficient_sample_rate_hz=sample_rate_hz / 2.0**level,
-                frequency_band_hz=(frequency_index * bandwidth, (frequency_index + 1) * bandwidth),
-                valid_interval=valid,
-            ))
+            nodes.append(
+                WaveletPacketNode(
+                    path=source.path,
+                    level=level,
+                    natural_index=natural_index,
+                    frequency_index=frequency_index,
+                    coefficients=np.array(source.data, dtype=np.float64, copy=True),
+                    reconstructed=reconstructed,
+                    coefficient_sample_rate_hz=sample_rate_hz / 2.0**level,
+                    frequency_band_hz=(
+                        frequency_index * bandwidth,
+                        (frequency_index + 1) * bandwidth,
+                    ),
+                    valid_interval=valid,
+                )
+            )
         return WaveletPacketDecomposition(
-            input_length=len(signal), sample_rate_hz=sample_rate_hz,
-            wavelet=wavelet, mode=mode, level=level,
-            nodes=tuple(nodes), valid_interval=valid,
+            input_length=len(signal),
+            sample_rate_hz=sample_rate_hz,
+            wavelet=wavelet,
+            mode=mode,
+            level=level,
+            nodes=tuple(nodes),
+            valid_interval=valid,
         )

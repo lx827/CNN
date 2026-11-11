@@ -10,6 +10,7 @@ CW 数据集全部为变速工况（升速/降速/升降/降升），转速范�
 运行方式：
     cd cloud && uv run python tests/diagnosis/method_eval/test_bearing_cw.py
 """
+
 import sys
 import time
 import warnings
@@ -32,11 +33,16 @@ sys.path.insert(0, str(PROJECT_ROOT / "cloud" / "tests" / "diagnosis"))
 # 导入配置
 # ═══════════════════════════════════════════════════════════
 from method_eval.config import (
-    CW_DIR, SAMPLE_RATE, MAX_SAMPLES,
+    CW_DIR,
+    SAMPLE_RATE,
+    MAX_SAMPLES,
     BEARING_PARAMS,
-    CW_LABELS, LABEL_CN,
+    CW_LABELS,
+    LABEL_CN,
     BEARING_METHODS,
-    HEALTH_THRESHOLD, ENSEMBLE_PROFILE, ENSEMBLE_MAX_SECONDS,
+    HEALTH_THRESHOLD,
+    ENSEMBLE_PROFILE,
+    ENSEMBLE_MAX_SECONDS,
     EXP_DIRS,
 )
 from method_eval.label_mapper import (
@@ -44,7 +50,9 @@ from method_eval.label_mapper import (
     infer_binary_label,
 )
 from method_eval.visualizer import (
-    apply_style, plot_confusion_matrix, plot_method_comparison_bar,
+    apply_style,
+    plot_confusion_matrix,
+    plot_method_comparison_bar,
 )
 
 apply_style()
@@ -53,7 +61,10 @@ apply_style()
 # 导入诊断引擎
 # ═══════════════════════════════════════════════════════════
 from app.services.diagnosis.engine import (
-    DiagnosisEngine, BearingMethod, DiagnosisStrategy, DenoiseMethod,
+    DiagnosisEngine,
+    BearingMethod,
+    DiagnosisStrategy,
+    DenoiseMethod,
 )
 from app.services.diagnosis.ensemble import run_research_ensemble
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
@@ -75,7 +86,11 @@ OUTPUT_DIR = EXP_DIRS["bearing_cw"]
 
 SKIP_METHODS = {"wp"}
 # 快速验证模式
-BEARING_METHODS_ACTIVE = [("标准包络", "envelope"), ("DWT", "dwt"), ("EMD", "emd_envelope")]
+BEARING_METHODS_ACTIVE = [
+    ("标准包络", "envelope"),
+    ("DWT", "dwt"),
+    ("EMD", "emd_envelope"),
+]
 # 全量模式：取消注释下面一行
 # BEARING_METHODS_ACTIVE = [(n, v) for n, v in BEARING_METHODS if v not in SKIP_METHODS]
 
@@ -83,6 +98,7 @@ BEARING_METHODS_ACTIVE = [("标准包络", "envelope"), ("DWT", "dwt"), ("EMD", 
 # ═══════════════════════════════════════════════════════════
 # 数据加载
 # ═══════════════════════════════════════════════════════════
+
 
 def get_cw_files() -> List[Tuple[Path, Dict]]:
     """获取 CW 数据集所有文件"""
@@ -100,6 +116,7 @@ def get_cw_files() -> List[Tuple[Path, Dict]]:
 # ═══════════════════════════════════════════════════════════
 # 单一方法 — 二分类
 # ═══════════════════════════════════════════════════════════
+
 
 def run_single_method_binary(
     method_name: str,
@@ -157,13 +174,19 @@ def run_single_method_binary(
     avg_time = np.mean(exec_times)
     print(f"    Acc={acc:.2%}  耗时={avg_time:.0f}ms")
 
-    return {"y_true": y_true, "y_pred": y_pred, "health_scores": health_scores,
-            "exec_times": exec_times, "accuracy": acc}
+    return {
+        "y_true": y_true,
+        "y_pred": y_pred,
+        "health_scores": health_scores,
+        "exec_times": exec_times,
+        "accuracy": acc,
+    }
 
 
 # ═══════════════════════════════════════════════════════════
 # Ensemble — 三分类 + 二分类
 # ═══════════════════════════════════════════════════════════
+
 
 def run_ensemble_all(
     files: List[Tuple[Path, Dict]],
@@ -185,7 +208,8 @@ def run_ensemble_all(
 
             t0 = time.perf_counter()
             result = run_research_ensemble(
-                signal, SAMPLE_RATE,
+                signal,
+                SAMPLE_RATE,
                 bearing_params=BEARING_PARAMS,
                 gear_teeth=None,
                 denoise_method="none",
@@ -226,16 +250,21 @@ def run_ensemble_all(
     print(f"    三类Acc={acc_3:.2%}  二分类Acc={acc_2:.2%}  耗时={avg_time:.0f}ms")
 
     return {
-        "y_true_3": y_true_3, "y_pred_3": y_pred_3,
-        "y_true_2": y_true_2, "y_pred_2": y_pred_2,
-        "health_scores": health_scores, "exec_times": exec_times,
-        "accuracy_3": acc_3, "accuracy_2": acc_2,
+        "y_true_3": y_true_3,
+        "y_pred_3": y_pred_3,
+        "y_true_2": y_true_2,
+        "y_pred_2": y_pred_2,
+        "health_scores": health_scores,
+        "exec_times": exec_times,
+        "accuracy_3": acc_3,
+        "accuracy_2": acc_2,
     }
 
 
 # ═══════════════════════════════════════════════════════════
 # 主流程
 # ═══════════════════════════════════════════════════════════
+
 
 def test_bearing_cw() -> Dict[str, Any]:
     """测试 2 入口"""
@@ -249,7 +278,8 @@ def test_bearing_cw() -> Dict[str, Any]:
     # ── 1. 加载数据 ──
     files = get_cw_files()
     if not files:
-        print("[ABORT] 无可用数据"); return {}
+        print("[ABORT] 无可用数据")
+        return {}
 
     n_total = len(files)
     n_healthy = sum(1 for _, i in files if i["label"] == "healthy")
@@ -279,10 +309,14 @@ def test_bearing_cw() -> Dict[str, Any]:
     )
 
     cm_3 = np.array(metrics_3["confusion_matrix"])
-    plot_confusion_matrix(cm_3, CW_LABELS, "Ensemble (3类变速)",
-                          ensemble_result["accuracy_3"],
-                          str(OUTPUT_DIR / "confusion_ensemble_3class.svg"),
-                          highlight=True)
+    plot_confusion_matrix(
+        cm_3,
+        CW_LABELS,
+        "Ensemble (3类变速)",
+        ensemble_result["accuracy_3"],
+        str(OUTPUT_DIR / "confusion_ensemble_3class.svg"),
+        highlight=True,
+    )
 
     table_3 = generate_classification_metrics_table(metrics_3, "CW Ensemble 三分类")
     with open(OUTPUT_DIR / "ensemble_3class_metrics.md", "w", encoding="utf-8") as f:
@@ -294,7 +328,9 @@ def test_bearing_cw() -> Dict[str, Any]:
     print("  ── 生成二分类对比报告 ──")
 
     method_names = list(binary_results.keys()) + ["Ensemble"]
-    acc_list = [binary_results[m]["accuracy"] for m in binary_results] + [ensemble_result["accuracy_2"]]
+    acc_list = [binary_results[m]["accuracy"] for m in binary_results] + [
+        ensemble_result["accuracy_2"]
+    ]
 
     plot_method_comparison_bar(
         method_names=method_names,
@@ -318,18 +354,24 @@ def test_bearing_cw() -> Dict[str, Any]:
     ]
     for name in binary_results:
         avg_t = np.mean(binary_results[name]["exec_times"])
-        lines.append(f"| {name} | {binary_results[name]['accuracy']:.2%} | {avg_t:.0f} |")
+        lines.append(
+            f"| {name} | {binary_results[name]['accuracy']:.2%} | {avg_t:.0f} |"
+        )
     avg_t_e = np.mean(ensemble_result["exec_times"])
-    lines.append(f"| **Ensemble** | **{ensemble_result['accuracy_2']:.2%}** | **{avg_t_e:.0f}** |")
+    lines.append(
+        f"| **Ensemble** | **{ensemble_result['accuracy_2']:.2%}** | **{avg_t_e:.0f}** |"
+    )
 
-    lines.extend([
-        "",
-        "## Ensemble 三分类指标",
-        "",
-        f"> 三分类准确率: {ensemble_result['accuracy_3']:.2%}",
-        "",
-        table_3,
-    ])
+    lines.extend(
+        [
+            "",
+            "## Ensemble 三分类指标",
+            "",
+            f"> 三分类准确率: {ensemble_result['accuracy_3']:.2%}",
+            "",
+            table_3,
+        ]
+    )
 
     with open(OUTPUT_DIR / "report.md", "w", encoding="utf-8") as f:
         f.write("\n".join(lines))

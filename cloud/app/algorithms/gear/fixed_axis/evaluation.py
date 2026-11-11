@@ -1,4 +1,5 @@
 """定轴原始指标的独立阈值评估；不重算 FFT、TSA 或包络。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -109,10 +110,16 @@ def evaluate_fixed_axis(
             thresholds.sideband_count_critical - 1,
         )
         # 计数采用 >= 语义，与通用 > 标量阈值分开处理。
-        sideband_count["warning"] = len(significant_orders) >= thresholds.sideband_count_warning
-        sideband_count["critical"] = len(significant_orders) >= thresholds.sideband_count_critical
+        sideband_count["warning"] = (
+            len(significant_orders) >= thresholds.sideband_count_warning
+        )
+        sideband_count["critical"] = (
+            len(significant_orders) >= thresholds.sideband_count_critical
+        )
         sideband_count["significant_orders"] = list(significant_orders)
-        sideband_count["relative_amplitude_threshold"] = thresholds.sideband_relative_amplitude
+        sideband_count["relative_amplitude_threshold"] = (
+            thresholds.sideband_relative_amplitude
+        )
     else:
         sideband_count = {
             "status": "not_evaluable",
@@ -124,10 +131,18 @@ def evaluate_fixed_axis(
         }
 
     indicators = {
-        "ser": _thresholded(sideband.ser, thresholds.ser_warning, thresholds.ser_critical),
-        "fm0": _thresholded(analysis.fm0, thresholds.fm0_warning, thresholds.fm0_critical),
-        "fm4": _thresholded(analysis.fm4, thresholds.fm4_warning, thresholds.fm4_critical),
-        "car": _thresholded(analysis.car, thresholds.car_warning, thresholds.car_critical),
+        "ser": _thresholded(
+            sideband.ser, thresholds.ser_warning, thresholds.ser_critical
+        ),
+        "fm0": _thresholded(
+            analysis.fm0, thresholds.fm0_warning, thresholds.fm0_critical
+        ),
+        "fm4": _thresholded(
+            analysis.fm4, thresholds.fm4_warning, thresholds.fm4_critical
+        ),
+        "car": _thresholded(
+            analysis.car, thresholds.car_warning, thresholds.car_critical
+        ),
         # 未验证阈值的指标只输出原始数值，warning/critical 永远不是 False 结论。
         "m6a": _raw_only(analysis.m6a),
         "m8a": _raw_only(analysis.m8a),

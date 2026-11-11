@@ -7,6 +7,7 @@ Ensemble 五分类偏向 BPFO 问题诊断脚本
 
 输出: 每个样本的 fault_label / param_hits / BPFO/BPFI/BSF SNR / 预测类别
 """
+
 import sys, json, warnings
 from pathlib import Path
 import numpy as np
@@ -81,7 +82,12 @@ def _map_label_fixed(fl):
         return "内圈(修复)"
     if fl == "bearing_bsf" or "ball" in fl:
         return "球故障(修复)"
-    if "bpfo_bpfi" in fl or "compound" in fl or fl == "bearing_bpfo_bsf" or fl == "bearing_bpfi_bsf":
+    if (
+        "bpfo_bpfi" in fl
+        or "compound" in fl
+        or fl == "bearing_bpfo_bsf"
+        or fl == "bearing_bpfi_bsf"
+    ):
         return "复合(修复)"
     if "healthy" in fl or "normal" in fl or "unknown" in fl:
         return "健康(修复)"
@@ -112,11 +118,11 @@ def diagnose():
             if sig is None:
                 continue
             try:
-                res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S)
+                res = run_research_ensemble(
+                    sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S
+                )
             except Exception as e:
-                records.append({
-                    "file": fname, "true": cls_name, "error": str(e)
-                })
+                records.append({"file": fname, "true": cls_name, "error": str(e)})
                 continue
 
             fl = res.get("fault_label", "unknown")
@@ -127,8 +133,11 @@ def diagnose():
             best_bearing = res.get("bearing", {})
             indicators = best_bearing.get("evaluation", {}).get("indicators", {})
             param_hits = [
-                name for name, item in indicators.items()
-                if isinstance(item, dict) and item.get("significant") and not name.endswith("_stat")
+                name
+                for name, item in indicators.items()
+                if isinstance(item, dict)
+                and item.get("significant")
+                and not name.endswith("_stat")
             ]
 
             # 提取 BPFO/BPFI/BSF 的 SNR
@@ -165,8 +174,16 @@ def diagnose():
     print("=" * 70)
 
     # 1. 标签映射子串匹配 bug 统计
-    buggy_mismatch = [r for r in records if r.get("true") and r.get("pred_buggy") and r["true"] not in r["pred_buggy"]]
-    fixed_mismatch = [r for r in records if r.get("true") and r.get("pred_fixed") and r["true"] not in r["pred_fixed"]]
+    buggy_mismatch = [
+        r
+        for r in records
+        if r.get("true") and r.get("pred_buggy") and r["true"] not in r["pred_buggy"]
+    ]
+    fixed_mismatch = [
+        r
+        for r in records
+        if r.get("true") and r.get("pred_fixed") and r["true"] not in r["pred_fixed"]
+    ]
 
     print(f"\n1. 原始映射(buggy) 误判数: {len(buggy_mismatch)} / {len(records)}")
     print(f"   修复映射(fixed) 误判数: {len(fixed_mismatch)} / {len(records)}")
@@ -174,11 +191,16 @@ def diagnose():
     # 2. 分析标签映射 bug 的贡献
     print("\n2. 【标签映射子串匹配 Bug】")
     print("   问题: 'bpfo' in 'bearing_bpfo_bpfi' → True，复合故障被误判为外圈")
-    bpfo_in_multi = [r for r in records
-                     if "bpfo" in r.get("fault_label_raw", "").lower()
-                     and "bpfi" in r.get("fault_label_raw", "").lower()]
+    bpfo_in_multi = [
+        r
+        for r in records
+        if "bpfo" in r.get("fault_label_raw", "").lower()
+        and "bpfi" in r.get("fault_label_raw", "").lower()
+    ]
     for r in bpfo_in_multi:
-        print(f"   {r['file']}: true={r['true']} label={r['fault_label_raw']} → buggy={r['pred_buggy']} fixed={r['pred_fixed']}")
+        print(
+            f"   {r['file']}: true={r['true']} label={r['fault_label_raw']} → buggy={r['pred_buggy']} fixed={r['pred_fixed']}"
+        )
 
     # 3. 各类别 param_hits 分布
     print("\n3. 【param_hits 分布（各类别）】")
@@ -189,6 +211,7 @@ def diagnose():
             continue
         hits_list = [tuple(r.get("param_hits", [])) for r in subset]
         from collections import Counter
+
         cnt = Counter(hits_list)
         print(f"   {cls_name} (n={len(subset)}):")
         for hits, c in cnt.most_common():
@@ -203,19 +226,36 @@ def diagnose():
             continue
         print(f"   {cls_name} (n={len(subset)}):")
         for param in ("BPFO", "BPFI", "BSF"):
-            vals = [r["snrs"][param]["snr"] for r in subset if param in r.get("snrs", {}) and r["snrs"][param]["snr"] is not None]
-            sigs = [r["snrs"][param]["significant"] for r in subset if param in r.get("snrs", {}) and r["snrs"][param]["significant"] is not None]
+            vals = [
+                r["snrs"][param]["snr"]
+                for r in subset
+                if param in r.get("snrs", {}) and r["snrs"][param]["snr"] is not None
+            ]
+            sigs = [
+                r["snrs"][param]["significant"]
+                for r in subset
+                if param in r.get("snrs", {})
+                and r["snrs"][param]["significant"] is not None
+            ]
             if vals:
-                print(f"      {param}: SNR={np.mean(vals):.1f}±{np.std(vals):.1f} (max={np.max(vals):.1f}) significant={sum(sigs)}/{len(sigs)}")
+                print(
+                    f"      {param}: SNR={np.mean(vals):.1f}±{np.std(vals):.1f} (max={np.max(vals):.1f}) significant={sum(sigs)}/{len(sigs)}"
+                )
 
     # 5. D-S 融合标签覆盖
     print("\n5. 【D-S 融合标签覆盖】")
-    ds_overrides = [r for r in records if r.get("fault_label_raw") and "ds_" in str(r["fault_label_raw"]).lower()]
+    ds_overrides = [
+        r
+        for r in records
+        if r.get("fault_label_raw") and "ds_" in str(r["fault_label_raw"]).lower()
+    ]
     print(f"   D-S 融合覆盖样本数: {len(ds_overrides)}")
 
     # 保存完整记录
     out_path = OUTPUT_DIR / "diagnose_multiclass.json"
-    out_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_path.write_text(
+        json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     print(f"\n详细记录已保存: {out_path}")
 
 

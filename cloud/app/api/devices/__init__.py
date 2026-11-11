@@ -2,6 +2,7 @@
 设备管理接口包
 提供设备列表查询、边端配置读写
 """
+
 from fastapi import APIRouter
 
 router = APIRouter(prefix="/api/devices", tags=["设备管理"])

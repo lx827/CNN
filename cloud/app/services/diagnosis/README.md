@@ -38,12 +38,12 @@ diagnosis/
 
 ```python
 engine = DiagnosisEngine(
-    strategy="standard",           # 诊断策略：standard / advanced / expert
+    strategy="standard",  # 诊断策略：standard / advanced / expert
     bearing_method=BearingMethod.ENVELOPE,  # 轴承方法
-    gear_method=GearMethod.STANDARD,        # 齿轮方法
-    denoise_method=DenoiseMethod.NONE,      # 去噪方法
-    bearing_params=None,           # 轴承参数 {n, d, D, alpha}
-    gear_teeth=None,               # 齿轮参数 {input, output}
+    gear_method=GearMethod.STANDARD,  # 齿轮方法
+    denoise_method=DenoiseMethod.NONE,  # 去噪方法
+    bearing_params=None,  # 轴承参数 {n, d, D, alpha}
+    gear_teeth=None,  # 齿轮参数 {input, output}
 )
 ```
 
@@ -171,7 +171,12 @@ engine = DiagnosisEngine(
 ### 10.1 综合分析（有参数）
 
 ```python
-from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod
+from app.services.diagnosis import (
+    DiagnosisEngine,
+    BearingMethod,
+    GearMethod,
+    DenoiseMethod,
+)
 
 engine = DiagnosisEngine(
     strategy="standard",

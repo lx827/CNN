@@ -1,4 +1,5 @@
 """诊断摘要读模型：在数据库筛选最新记录，仅加载页面需要的字段。"""
+
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session, aliased
 
@@ -14,7 +15,11 @@ def latest_diagnosis_summaries(db: Session, device_ids, *, per_batch: bool = Fal
     if not device_ids:
         return []
     newer = aliased(Diagnosis)
-    same_group = [newer.device_id == Diagnosis.device_id, newer.channel == 0, newer.denoise_method == Diagnosis.denoise_method]
+    same_group = [
+        newer.device_id == Diagnosis.device_id,
+        newer.channel == 0,
+        newer.denoise_method == Diagnosis.denoise_method,
+    ]
     if per_batch:
         same_group.append(newer.batch_index == Diagnosis.batch_index)
     newer_timestamp = or_(
@@ -25,11 +30,30 @@ def latest_diagnosis_summaries(db: Session, device_ids, *, per_batch: bool = Fal
         newer.analyzed_at == Diagnosis.analyzed_at,
         and_(newer.analyzed_at.is_(None), Diagnosis.analyzed_at.is_(None)),
     )
-    has_newer = select(newer.id).where(
-        *same_group,
-        or_(newer_timestamp, and_(same_timestamp, newer.id > Diagnosis.id)),
-    ).correlate(Diagnosis).exists()
-    return db.query(
-        Diagnosis.device_id, Diagnosis.batch_index, Diagnosis.health_score,
-        Diagnosis.evaluation_status, Diagnosis.diagnosis_conclusion, Diagnosis.coverage, Diagnosis.analyzed_at,
-    ).filter(Diagnosis.device_id.in_(device_ids), Diagnosis.channel == 0, Diagnosis.denoise_method == "none", ~has_newer).all()
+    has_newer = (
+        select(newer.id)
+        .where(
+            *same_group,
+            or_(newer_timestamp, and_(same_timestamp, newer.id > Diagnosis.id)),
+        )
+        .correlate(Diagnosis)
+        .exists()
+    )
+    return (
+        db.query(
+            Diagnosis.device_id,
+            Diagnosis.batch_index,
+            Diagnosis.health_score,
+            Diagnosis.evaluation_status,
+            Diagnosis.diagnosis_conclusion,
+            Diagnosis.coverage,
+            Diagnosis.analyzed_at,
+        )
+        .filter(
+            Diagnosis.device_id.in_(device_ids),
+            Diagnosis.channel == 0,
+            Diagnosis.denoise_method == "none",
+            ~has_newer,
+        )
+        .all()
+    )

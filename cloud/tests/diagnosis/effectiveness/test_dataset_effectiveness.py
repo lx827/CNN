@@ -16,6 +16,7 @@
     cd cloud
     uv run python tests/diagnosis/effectiveness/test_dataset_effectiveness.py
 """
+
 import sys
 import os
 import glob
@@ -56,7 +57,18 @@ HUST_FAULT_TYPES = {
 }
 
 # 恒速工况（不含 0.5X 前缀的文件）
-HUST_CS_SPEEDS = ["20Hz", "25Hz", "30Hz", "35Hz", "40Hz", "60Hz", "65Hz", "70Hz", "75Hz", "80Hz"]
+HUST_CS_SPEEDS = [
+    "20Hz",
+    "25Hz",
+    "30Hz",
+    "35Hz",
+    "40Hz",
+    "60Hz",
+    "65Hz",
+    "70Hz",
+    "75Hz",
+    "80Hz",
+]
 
 # CW 工况定义
 CW_FAULT_TYPES = {
@@ -68,6 +80,7 @@ CW_SPEED_MODES = ["A", "B", "C", "D"]
 
 
 # ==================== 数据加载 ====================
+
 
 def _glob_hust(condition, channel="X"):
     """灵活匹配 HUSTbear 文件（大小写不敏感）"""
@@ -106,6 +119,7 @@ def _load_cw(filename):
 
 # ==================== 算法分析 ====================
 
+
 def analyze_with_engine(signal, fs=FS, bearing_params=None, gear_teeth=None):
     """用 DiagnosisEngine 综合分析"""
     if signal is None:
@@ -133,6 +147,7 @@ def analyze_stat_only(signal, fs=FS):
 
 # ==================== 评估报告 ====================
 
+
 def print_section(title):
     print(f"\n{'=' * 70}")
     print(f"  {title}")
@@ -151,7 +166,16 @@ def evaluate_hustbear():
     print_section("HUSTbear 恒速工况评估（X 通道）")
 
     # 表头
-    headers = ["工况", "故障类型", "峭度", "无参HS", "无参状态", "误判?", "有参HS", "有参状态"]
+    headers = [
+        "工况",
+        "故障类型",
+        "峭度",
+        "无参HS",
+        "无参状态",
+        "误判?",
+        "有参HS",
+        "有参状态",
+    ]
     widths = [18, 12, 10, 10, 10, 8, 10, 10]
     print_row(headers, widths)
     print("-" * (sum(widths) + (len(widths) - 1) * 3))
@@ -184,14 +208,22 @@ def evaluate_hustbear():
             hs_param = result_param["health_score"]
             status_param = result_param["status"]
 
-            is_healthy = (fault_code == "H")
+            is_healthy = fault_code == "H"
             is_fp = is_healthy and status in ("warning", "fault")
             is_tp_no_param = (not is_healthy) and status in ("warning", "fault")
             is_tp_with_param = (not is_healthy) and status_param in ("warning", "fault")
 
             fp_flag = "YES" if is_fp else ""
-            row = [condition, fault_label, f"{kurt:.2f}", str(hs), status, fp_flag,
-                   str(hs_param), str(status_param)]
+            row = [
+                condition,
+                fault_label,
+                f"{kurt:.2f}",
+                str(hs),
+                status,
+                fp_flag,
+                str(hs_param),
+                str(status_param),
+            ]
             print_row(row, widths)
 
             results[fault_code].append(hs)
@@ -209,15 +241,23 @@ def evaluate_hustbear():
     # 统计摘要
     print_section("HUSTbear 恒速评估摘要")
     print(f"  健康样本总数: {healthy_total}")
-    print(f"  健康误判(warning/fault): {fp_count}  FP率: {fp_count/healthy_total*100:.1f}%")
+    print(
+        f"  健康误判(warning/fault): {fp_count}  FP率: {fp_count / healthy_total * 100:.1f}%"
+    )
     print(f"  故障样本总数: {fault_total}")
-    print(f"  无参数检出: {tp_count_no_param}  TP率: {tp_count_no_param/fault_total*100:.1f}%")
-    print(f"  有参数检出: {tp_count_with_param}  TP率: {tp_count_with_param/fault_total*100:.1f}%")
+    print(
+        f"  无参数检出: {tp_count_no_param}  TP率: {tp_count_no_param / fault_total * 100:.1f}%"
+    )
+    print(
+        f"  有参数检出: {tp_count_with_param}  TP率: {tp_count_with_param / fault_total * 100:.1f}%"
+    )
 
     for fault_code, scores in results.items():
         if scores:
-            print(f"  {HUST_FAULT_TYPES[fault_code]}: 健康度均值={np.mean(scores):.1f}, "
-                  f"范围={min(scores)}-{max(scores)}")
+            print(
+                f"  {HUST_FAULT_TYPES[fault_code]}: 健康度均值={np.mean(scores):.1f}, "
+                f"范围={min(scores)}-{max(scores)}"
+            )
 
     return fp_count, healthy_total, tp_count_no_param, tp_count_with_param, fault_total
 
@@ -250,7 +290,7 @@ def evaluate_hustbear_vs():
         hs = result["health_score"]
         status = result["status"]
 
-        is_healthy = (fault_code == "H")
+        is_healthy = fault_code == "H"
         is_fp = is_healthy and status in ("warning", "fault")
         is_tp = (not is_healthy) and status in ("warning", "fault")
 
@@ -307,27 +347,58 @@ def evaluate_cw():
                 stat_hs = stat_result["health_score"] if stat_result else "-"
                 stat_status = stat_result["status"] if stat_result else "-"
 
-                is_healthy = (fault_code == "H")
+                is_healthy = fault_code == "H"
                 is_fp = is_healthy and status in ("warning", "fault")
                 is_tp = (not is_healthy) and status in ("warning", "fault")
 
                 fp_flag = "YES" if is_fp else ""
 
                 # 详细输出 CW
-                row = [filename, fault_label, speed_mode, f"{kurt:.2f}", str(hs), status, fp_flag]
+                row = [
+                    filename,
+                    fault_label,
+                    speed_mode,
+                    f"{kurt:.2f}",
+                    str(hs),
+                    status,
+                    fp_flag,
+                ]
                 print_row(row, widths)
 
                 # 如果误判，打印 stat 和详细扣分信息
                 if is_fp:
-                    stat_fp_flag = "YES" if (stat_result and stat_result["status"] in ("warning", "fault")) else ""
-                    print(f"    >>> stat: hs={stat_hs}, status={stat_status} {stat_fp_flag}")
+                    stat_fp_flag = (
+                        "YES"
+                        if (
+                            stat_result
+                            and stat_result["status"] in ("warning", "fault")
+                        )
+                        else ""
+                    )
+                    print(
+                        f"    >>> stat: hs={stat_hs}, status={stat_status} {stat_fp_flag}"
+                    )
                     # 打印扣分项
-                    if hasattr(result, 'get'):
-                        bearing_ind = result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
+                    if hasattr(result, "get"):
+                        bearing_ind = (
+                            result.get("bearing", {})
+                            .get("evaluation", {})
+                            .get("indicators", {})
+                        )
                         gear_ind = result.get("gear", {}).get("fault_indicators", {})
-                        sig_bearing = [k for k, v in bearing_ind.items() if isinstance(v, dict) and v.get("significant")]
-                        sig_gear = [k for k, v in gear_ind.items() if isinstance(v, dict) and v.get("significant")]
-                        print(f"    >>> kurt={kurt:.2f}, significant_bearing={sig_bearing}, significant_gear={sig_gear}")
+                        sig_bearing = [
+                            k
+                            for k, v in bearing_ind.items()
+                            if isinstance(v, dict) and v.get("significant")
+                        ]
+                        sig_gear = [
+                            k
+                            for k, v in gear_ind.items()
+                            if isinstance(v, dict) and v.get("significant")
+                        ]
+                        print(
+                            f"    >>> kurt={kurt:.2f}, significant_bearing={sig_bearing}, significant_gear={sig_gear}"
+                        )
 
                 if is_healthy:
                     healthy_total += 1
@@ -340,10 +411,16 @@ def evaluate_cw():
 
     print_section("CW 评估摘要")
     print(f"  健康样本总数: {healthy_total}")
-    print(f"  健康误判(warning/fault): {fp_count}  FP率: {fp_count/healthy_total*100:.1f}%")
-    print(f"  纯统计路径误判: {stat_fp}/{healthy_total}  FP率: {stat_fp/healthy_total*100:.1f}%")
+    print(
+        f"  健康误判(warning/fault): {fp_count}  FP率: {fp_count / healthy_total * 100:.1f}%"
+    )
+    print(
+        f"  纯统计路径误判: {stat_fp}/{healthy_total}  FP率: {stat_fp / healthy_total * 100:.1f}%"
+    )
     print(f"  故障样本总数: {fault_total}")
-    print(f"  故障检出(warning/fault): {tp_count}  TP率: {tp_count/fault_total*100:.1f}%")
+    print(
+        f"  故障检出(warning/fault): {tp_count}  TP率: {tp_count / fault_total * 100:.1f}%"
+    )
 
     return fp_count, healthy_total, tp_count, fault_total
 
@@ -376,12 +453,20 @@ def evaluate_false_positive_causes():
 
         if status != "normal":
             # 分析原因
-            bearing_ind = result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
+            bearing_ind = (
+                result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
+            )
             gear_ind = result.get("gear", {}).get("fault_indicators", {})
-            stat_sig = [k for k, v in bearing_ind.items()
-                        if isinstance(v, dict) and v.get("significant")]
-            gear_sig = [k for k, v in gear_ind.items()
-                        if isinstance(v, dict) and v.get("significant")]
+            stat_sig = [
+                k
+                for k, v in bearing_ind.items()
+                if isinstance(v, dict) and v.get("significant")
+            ]
+            gear_sig = [
+                k
+                for k, v in gear_ind.items()
+                if isinstance(v, dict) and v.get("significant")
+            ]
             if kurt > 5:
                 cause_counter["kurtosis>5"] += 1
             if kurt > 8:
@@ -411,12 +496,22 @@ def evaluate_false_positive_causes():
             all_healthy_hs.append(hs)
 
             if status != "normal":
-                bearing_ind = result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
+                bearing_ind = (
+                    result.get("bearing", {})
+                    .get("evaluation", {})
+                    .get("indicators", {})
+                )
                 gear_ind = result.get("gear", {}).get("fault_indicators", {})
-                stat_sig = [k for k, v in bearing_ind.items()
-                            if isinstance(v, dict) and v.get("significant")]
-                gear_sig = [k for k, v in gear_ind.items()
-                            if isinstance(v, dict) and v.get("significant")]
+                stat_sig = [
+                    k
+                    for k, v in bearing_ind.items()
+                    if isinstance(v, dict) and v.get("significant")
+                ]
+                gear_sig = [
+                    k
+                    for k, v in gear_ind.items()
+                    if isinstance(v, dict) and v.get("significant")
+                ]
                 if kurt > 5:
                     cause_counter["kurtosis>5"] += 1
                 if kurt > 8:
@@ -440,9 +535,15 @@ def evaluate_false_positive_causes():
     warning_count = sum(1 for s in all_healthy_status if s == "warning")
     fault_count = sum(1 for s in all_healthy_status if s == "fault")
     print(f"\n  健康数据判定结果分布:")
-    print(f"    normal: {normal_count} ({normal_count/len(all_healthy_status)*100:.1f}%)")
-    print(f"    warning: {warning_count} ({warning_count/len(all_healthy_status)*100:.1f}%)")
-    print(f"    fault: {fault_count} ({fault_count/len(all_healthy_status)*100:.1f}%)")
+    print(
+        f"    normal: {normal_count} ({normal_count / len(all_healthy_status) * 100:.1f}%)"
+    )
+    print(
+        f"    warning: {warning_count} ({warning_count / len(all_healthy_status) * 100:.1f}%)"
+    )
+    print(
+        f"    fault: {fault_count} ({fault_count / len(all_healthy_status) * 100:.1f}%)"
+    )
 
     print(f"\n  健康数据健康度分布:")
     print(f"    均值: {np.mean(all_healthy_hs):.1f}")
@@ -480,19 +581,35 @@ def evaluate_fault_detection_detail():
             status = result["status"]
             detected = "YES" if status in ("warning", "fault") else "NO"
 
-            bearing_ind = result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
+            bearing_ind = (
+                result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
+            )
             gear_ind = result.get("gear", {}).get("fault_indicators", {})
-            b_sig = [k for k, v in bearing_ind.items()
-                     if isinstance(v, dict) and v.get("significant")]
-            g_sig = [k for k, v in gear_ind.items()
-                     if isinstance(v, dict) and v.get("significant")]
+            b_sig = [
+                k
+                for k, v in bearing_ind.items()
+                if isinstance(v, dict) and v.get("significant")
+            ]
+            g_sig = [
+                k
+                for k, v in gear_ind.items()
+                if isinstance(v, dict) and v.get("significant")
+            ]
 
-            row = [speed, f"{kurt:.2f}", str(hs), status, detected,
-                   str(b_sig[:3]) if b_sig else "-", str(g_sig[:3]) if g_sig else "-"]
+            row = [
+                speed,
+                f"{kurt:.2f}",
+                str(hs),
+                status,
+                detected,
+                str(b_sig[:3]) if b_sig else "-",
+                str(g_sig[:3]) if g_sig else "-",
+            ]
             print_row(row, widths)
 
 
 # ==================== 主测试函数 ====================
+
 
 def test_hustbear_effectiveness():
     """HUSTbear 恒速工况效果测试"""
@@ -502,13 +619,21 @@ def test_hustbear_effectiveness():
     tp_rate_with_param = tp_with_param / f_total if f_total > 0 else 0
 
     # 健康误判率必须低（核心目标）
-    assert fp_rate <= 0.20, f"健康误判率过高: {fp_rate*100:.1f}% (上限 20%)"
+    assert fp_rate <= 0.20, f"健康误判率过高: {fp_rate * 100:.1f}% (上限 20%)"
     # 无参数检出率允许偏低（外圈故障无参数时难以检出是正常的）
-    assert tp_rate_no_param >= 0.30, f"无参数检出率过低: {tp_rate_no_param*100:.1f}% (下限 30%)"
+    assert tp_rate_no_param >= 0.30, (
+        f"无参数检出率过低: {tp_rate_no_param * 100:.1f}% (下限 30%)"
+    )
     # 有参数检出率（HUSTbear降采样后外圈故障BPFO不可见，允许偏低）
-    assert tp_rate_with_param >= 0.40, f"有参数检出率过低: {tp_rate_with_param*100:.1f}% (下限 40%)"
-    print(f"\n  [PASS] HUSTbear恒速: FP率={fp_rate*100:.1f}%, 无参TP={tp_rate_no_param*100:.1f}%, 有参TP={tp_rate_with_param*100:.1f}%")
-    print(f"  注意: 外圈故障(O)在8192Hz降采样后BPFO共振信息丢失，检出率偏低是数据集固有限制")
+    assert tp_rate_with_param >= 0.40, (
+        f"有参数检出率过低: {tp_rate_with_param * 100:.1f}% (下限 40%)"
+    )
+    print(
+        f"\n  [PASS] HUSTbear恒速: FP率={fp_rate * 100:.1f}%, 无参TP={tp_rate_no_param * 100:.1f}%, 有参TP={tp_rate_with_param * 100:.1f}%"
+    )
+    print(
+        f"  注意: 外圈故障(O)在8192Hz降采样后BPFO共振信息丢失，检出率偏低是数据集固有限制"
+    )
 
 
 def test_hustbear_vs_effectiveness():
@@ -518,10 +643,10 @@ def test_hustbear_vs_effectiveness():
     # 变速信号峭度天然偏高（速度变化本身引入变幅），健康误判率允许更高
     if h_total >= 3:
         fp_rate = fp / h_total
-        assert fp_rate <= 0.50, f"变速健康误判率过高: {fp_rate*100:.1f}%"
+        assert fp_rate <= 0.50, f"变速健康误判率过高: {fp_rate * 100:.1f}%"
     if f_total >= 3:
         tp_rate = tp / f_total
-        assert tp_rate >= 0.40, f"变速故障检出率过低: {tp_rate*100:.1f}%"
+        assert tp_rate >= 0.40, f"变速故障检出率过低: {tp_rate * 100:.1f}%"
     print(f"\n  [PASS] HUSTbear变速: FP={fp}/{h_total}, TP={tp}/{f_total}")
 
 
@@ -531,9 +656,9 @@ def test_cw_effectiveness():
     fp_rate = fp / h_total if h_total > 0 else 0
     tp_rate = tp / f_total if f_total > 0 else 0
 
-    assert fp_rate <= 0.50, f"CW健康误判率过高: {fp_rate*100:.1f}% (上限 50%)"
-    assert tp_rate >= 0.50, f"CW故障检出率过低: {tp_rate*100:.1f}% (下限 50%)"
-    print(f"\n  [PASS] CW: FP率={fp_rate*100:.1f}%, TP率={tp_rate*100:.1f}%")
+    assert fp_rate <= 0.50, f"CW健康误判率过高: {fp_rate * 100:.1f}% (上限 50%)"
+    assert tp_rate >= 0.50, f"CW故障检出率过低: {tp_rate * 100:.1f}% (下限 50%)"
+    print(f"\n  [PASS] CW: FP率={fp_rate * 100:.1f}%, TP率={tp_rate * 100:.1f}%")
 
 
 def run_all_tests():

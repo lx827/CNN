@@ -3,6 +3,7 @@
 这里不是 Fast Kurtogram 的 1/3-二叉树实现，也不把单个 STFT bin 当时域窄带
 信号。每个候选频带都实际执行 Butterworth 带通和 Hilbert 解析变换。
 """
+
 from dataclasses import dataclass
 from typing import Optional
 
@@ -83,11 +84,15 @@ def complex_spectral_kurtosis(values: NDArray[np.complex128]) -> float:
 
 
 def _validate_parameters(parameters: FilterBankKurtogramParameters) -> None:
-    if isinstance(parameters.max_level, bool) or not isinstance(parameters.max_level, int):
+    if isinstance(parameters.max_level, bool) or not isinstance(
+        parameters.max_level, int
+    ):
         raise ValueError("滤波器组层数必须是整数")
     if not 1 <= parameters.max_level <= 6:
         raise ValueError("滤波器组层数必须位于 1~6")
-    if isinstance(parameters.filter_order, bool) or not isinstance(parameters.filter_order, int):
+    if isinstance(parameters.filter_order, bool) or not isinstance(
+        parameters.filter_order, int
+    ):
         raise ValueError("滤波器阶数必须是整数")
     if parameters.filter_order <= 0:
         raise ValueError("滤波器阶数必须为正整数")
@@ -95,7 +100,10 @@ def _validate_parameters(parameters: FilterBankKurtogramParameters) -> None:
         raise ValueError("最低搜索频率必须为有限正数")
     if not np.isfinite(parameters.selection_threshold):
         raise ValueError("选带阈值必须为有限数")
-    if not np.isfinite(parameters.envelope_low_pass_hz) or parameters.envelope_low_pass_hz <= 0:
+    if (
+        not np.isfinite(parameters.envelope_low_pass_hz)
+        or parameters.envelope_low_pass_hz <= 0
+    ):
         raise ValueError("包络低通截止频率必须为有限正数")
 
 
@@ -111,7 +119,9 @@ def _band_statistics(z: np.ndarray, level: int, band: FrequencyBand) -> BandKurt
     impulsiveness = peak / median
     signal_to_background = float(np.percentile(magnitude, 95.0)) / median
     # 明确是工程重加权分数，不把 Pearson 峭度减 3 冒充谱峭度。
-    score = max(0.0, sk) * float(np.log1p(impulsiveness) * np.log1p(signal_to_background))
+    score = max(0.0, sk) * float(
+        np.log1p(impulsiveness) * np.log1p(signal_to_background)
+    )
     return BandKurtosis(
         band=band,
         level=level,

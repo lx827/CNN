@@ -1,4 +1,5 @@
 """定轴齿轮“表示→原始指标→独立评估”的诊断 Pipeline。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -71,14 +72,16 @@ class FixedAxisGearPipeline:
         mesh_order = self.geometry.mesh_order if self.geometry else None
         sideband_maximum = (
             mesh_order + self.n_sidebands + 0.25
-            if mesh_order is not None else self.tsa_parameters.max_order
+            if mesh_order is not None
+            else self.tsa_parameters.max_order
         )
         if not include_tsa or mesh_order is None:
             return sideband_maximum
         return max(
             sideband_maximum,
             self.tsa_parameters.max_order,
-            mesh_order * self.tsa_parameters.mesh_harmonics + self.tsa_parameters.regular_sideband_order,
+            mesh_order * self.tsa_parameters.mesh_harmonics
+            + self.tsa_parameters.regular_sideband_order,
         )
 
     @staticmethod
@@ -88,7 +91,9 @@ class FixedAxisGearPipeline:
         if isinstance(order.speed, LocalSpeedEstimates):
             return order.speed.median_hz, order.speed.std_hz
         if isinstance(order.speed, SpeedTrajectory):
-            return float(np.median(order.speed.frequency_hz)), float(np.std(order.speed.frequency_hz))
+            return float(np.median(order.speed.frequency_hz)), float(
+                np.std(order.speed.frequency_hz)
+            )
         return None, 0.0
 
     def analyze(
@@ -120,7 +125,8 @@ class FixedAxisGearPipeline:
 
         spectrum = order_analysis.spectrum
         if (
-            spectrum.order_bins[-1] + spectrum.order_resolution * 1e-9 < self.required_max_order(include_tsa)
+            spectrum.order_bins[-1] + spectrum.order_resolution * 1e-9
+            < self.required_max_order(include_tsa)
             and order_analysis.angle_domain is not None
         ):
             # 非整数转数时目标阶次通常落在相邻 FFT bin 之间；多保留一个真实
@@ -139,7 +145,9 @@ class FixedAxisGearPipeline:
             )
         else:
             sideband = analyze_fixed_axis_sidebands(
-                spectrum, mesh_order=mesh_order, n_sidebands=self.n_sidebands,
+                spectrum,
+                mesh_order=mesh_order,
+                n_sidebands=self.n_sidebands,
             )
 
         tsa = None
@@ -154,8 +162,12 @@ class FixedAxisGearPipeline:
         if include_tsa:
             if mesh_order is None:
                 tsa_reason = "missing_fixed_axis_geometry"
-            elif order_analysis.angle_domain is None or not isinstance(order_analysis.speed, ScalarSpeed):
-                tsa_reason = "tsa_requires_accurate_constant_speed_with_continuous_phase"
+            elif order_analysis.angle_domain is None or not isinstance(
+                order_analysis.speed, ScalarSpeed
+            ):
+                tsa_reason = (
+                    "tsa_requires_accurate_constant_speed_with_continuous_phase"
+                )
             if tsa_reason is not None:
                 fm0 = MetricValue.unavailable("FM0", tsa_reason)
                 fm4 = MetricValue.unavailable("FM4", tsa_reason)
@@ -193,10 +205,15 @@ class FixedAxisGearPipeline:
                     nb4 = MetricValue.unavailable("NB4", tsa_reason)
 
         cepstrum = None
-        if isinstance(order_analysis.speed, ScalarSpeed) and order_analysis.tracking_method == "single_frame":
+        if (
+            isinstance(order_analysis.speed, ScalarSpeed)
+            and order_analysis.tracking_method == "single_frame"
+        ):
             try:
                 cepstrum = compute_real_cepstrum(signal, sample_rate_hz)
-                car = compute_car(cepstrum, order_analysis.speed.frequency_hz, self.car_parameters)
+                car = compute_car(
+                    cepstrum, order_analysis.speed.frequency_hz, self.car_parameters
+                )
             except ValueError as exc:
                 car = MetricValue.unavailable("CAR", str(exc))
         else:
@@ -245,4 +262,6 @@ class FixedAxisGearPipeline:
             include_tsa=include_tsa,
             history=history,
         )
-        return FixedAxisGearDiagnosis(analysis=analysis, evaluation=self.evaluate(analysis))
+        return FixedAxisGearDiagnosis(
+            analysis=analysis, evaluation=self.evaluate(analysis)
+        )

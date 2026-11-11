@@ -2,6 +2,7 @@
 启动初始化模块
 负责数据库初始化和默认设备创建
 """
+
 import logging
 from datetime import datetime, timezone
 
@@ -19,9 +20,21 @@ def init_database():
 
 # 机械参数常量
 CW_BEARING_PARAMS = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
-WTGEAR_GEAR_TEETH = {"sun": 28, "ring": 100, "planet": 36, "planet_count": 4, "input": 28}
+WTGEAR_GEAR_TEETH = {
+    "sun": 28,
+    "ring": 100,
+    "planet": 36,
+    "planet_count": 4,
+    "input": 28,
+}
 MIXED_BEARING_PARAMS = {"n": 9, "d": 7.94, "D": 39.04, "alpha": 0}
-MIXED_GEAR_TEETH = {"sun": 28, "ring": 100, "planet": 36, "planet_count": 4, "input": 28}
+MIXED_GEAR_TEETH = {
+    "sun": 28,
+    "ring": 100,
+    "planet": 36,
+    "planet_count": 4,
+    "input": 28,
+}
 
 
 def create_initial_devices():
@@ -146,13 +159,17 @@ def create_initial_devices():
         ]
 
         for dev_info in default_devices:
-            existing = db.query(Device).filter(Device.device_id == dev_info["device_id"]).first()
+            existing = (
+                db.query(Device)
+                .filter(Device.device_id == dev_info["device_id"])
+                .first()
+            )
             if not existing:
                 ch_count = dev_info.get("channel_count", 3)
                 channel_names = (
                     {"1": "轴承附近", "2": "驱动端"}
-                    if ch_count == 2 else
-                    {"1": "轴承附近", "2": "驱动端", "3": "风扇端"}
+                    if ch_count == 2
+                    else {"1": "轴承附近", "2": "驱动端", "3": "风扇端"}
                 )
                 device = Device(
                     device_id=dev_info["device_id"],
@@ -163,7 +180,8 @@ def create_initial_devices():
                     sample_rate=SENSOR_SAMPLE_RATE,
                     window_seconds=SENSOR_WINDOW_SECONDS,
                     health_score=None,
-                    evaluation_status="not_evaluable", diagnosis_conclusion="unknown",
+                    evaluation_status="not_evaluable",
+                    diagnosis_conclusion="unknown",
                     runtime_hours=dev_info.get("runtime_hours", 0),
                     upload_interval=10,
                     task_poll_interval=5,
@@ -174,10 +192,14 @@ def create_initial_devices():
                     gear_teeth=dev_info.get("gear_teeth"),
                     # 离线设备初始设为离线，其余设为在线
                     is_online=0 if dev_info["device_id"] == "WTG-010" else 1,
-                    last_seen_at=None if dev_info["device_id"] == "WTG-010" else datetime.now(timezone.utc),
+                    last_seen_at=None
+                    if dev_info["device_id"] == "WTG-010"
+                    else datetime.now(timezone.utc),
                 )
                 db.add(device)
-                bp_str = "有轴承参数" if dev_info.get("bearing_params") else "无轴承参数"
+                bp_str = (
+                    "有轴承参数" if dev_info.get("bearing_params") else "无轴承参数"
+                )
                 gt_str = "有齿轮参数" if dev_info.get("gear_teeth") else "无齿轮参数"
                 logger.info(
                     f"[启动] 创建设备: {dev_info['device_id']} "
@@ -194,8 +216,8 @@ def create_initial_devices():
                     ch_count = existing.channel_count or 3
                     existing.channel_names = (
                         {"1": "轴承附近", "2": "驱动端"}
-                        if ch_count == 2 else
-                        {"1": "轴承附近", "2": "驱动端", "3": "风扇端"}
+                        if ch_count == 2
+                        else {"1": "轴承附近", "2": "驱动端", "3": "风扇端"}
                     )
                     updated = True
                 if existing.compression_enabled is None:
@@ -207,7 +229,9 @@ def create_initial_devices():
                 # 不再在启动时强制设 is_online=1
                 # 离线监测是 is_online 的唯一写者，启动初始化不应覆盖其判断
                 if updated:
-                    logger.info(f"[启动] 为已有设备 {dev_info['device_id']} 补齐默认配置")
+                    logger.info(
+                        f"[启动] 为已有设备 {dev_info['device_id']} 补齐默认配置"
+                    )
 
         db.commit()
     finally:

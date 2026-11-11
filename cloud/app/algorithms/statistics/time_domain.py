@@ -1,4 +1,5 @@
 """时域统计、加窗统计序列与分段 RMS；不执行故障阈值评估。"""
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -91,9 +92,15 @@ def analyze_time_domain(
         raise ValueError("输入信号不能包含 NaN 或无穷值")
     if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
         raise ValueError("采样率必须是有限正数")
-    if isinstance(window_size, bool) or not isinstance(window_size, int) or window_size <= 0:
+    if (
+        isinstance(window_size, bool)
+        or not isinstance(window_size, int)
+        or window_size <= 0
+    ):
         raise ValueError("统计窗口大小必须是正整数")
-    if step is not None and (isinstance(step, bool) or not isinstance(step, int) or step <= 0):
+    if step is not None and (
+        isinstance(step, bool) or not isinstance(step, int) or step <= 0
+    ):
         raise ValueError("统计步长必须是正整数")
 
     overall = _statistics(values)
@@ -103,14 +110,17 @@ def analyze_time_domain(
     window = windows.hann(actual_window, sym=False)
     series = []
     for start in range(0, len(values) - actual_window + 1, actual_step):
-        segment = values[start:start + actual_window] * window
+        segment = values[start : start + actual_window] * window
         series.append((start / sample_rate_hz, _statistics(segment)))
 
     def column(attribute: str | None) -> FloatArray:
-        return np.asarray([
-            item[0] if attribute is None else getattr(item[1], attribute)
-            for item in series
-        ], dtype=np.float64)
+        return np.asarray(
+            [
+                item[0] if attribute is None else getattr(item[1], attribute)
+                for item in series
+            ],
+            dtype=np.float64,
+        )
 
     windowed = WindowedStatistics(
         time_s=column(None),
@@ -159,7 +169,7 @@ def segmented_rms(
     centers = []
     rms_values = []
     for start in range(0, len(values), segment_samples):
-        block = values[start:start + segment_samples]
+        block = values[start : start + segment_samples]
         analyzed = block - np.mean(block) if remove_mean else block
         centers.append((start + len(block) / 2.0) / sample_rate_hz)
         rms_values.append(float(np.sqrt(np.mean(analyzed**2))))

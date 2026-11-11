@@ -8,14 +8,21 @@
 
 所有频谱都是请求时实时计算，不预存。
 """
+
 from fastapi import APIRouter
 from app.models import Device
 from .errors import DataViewUnprocessableResponse
 
-router = APIRouter(prefix="/api/data", tags=["振动数据查看"], responses={
-    422: {"model": DataViewUnprocessableResponse,
-          "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）"},
-})
+router = APIRouter(
+    prefix="/api/data",
+    tags=["振动数据查看"],
+    responses={
+        422: {
+            "model": DataViewUnprocessableResponse,
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
+        },
+    },
+)
 
 # ── 公共工具函数（统一入口，消除重复） ──
 # prepare_signal 实际实现在 signal_utils.py，此处重导出以保持 data_view 子模块兼容
@@ -46,7 +53,6 @@ def _extract_device_param(params, device_keys):
     return params
 
 
-
 def _get_channel_name(device: Device, channel_num: int) -> str:
     """从设备配置获取通道名称"""
     if device and device.channel_names:
@@ -62,4 +68,14 @@ def _get_channel_name(device: Device, channel_num: int) -> str:
 
 
 # 导入子模块以注册路由
-from . import core, spectrum, envelope, order, cepstrum, gear, research, export, diagnosis_ops
+from . import (
+    core,
+    spectrum,
+    envelope,
+    order,
+    cepstrum,
+    gear,
+    research,
+    export,
+    diagnosis_ops,
+)

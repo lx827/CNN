@@ -1,4 +1,5 @@
 """验证实际计算端点在慢速去噪期间仍允许其他协程响应。"""
+
 import asyncio
 import os
 from pathlib import Path
@@ -25,13 +26,34 @@ class EventLoopTests(unittest.IsolatedAsyncioTestCase):
         engine = create_engine("sqlite://")
         Base.metadata.create_all(engine)
         with Session(engine) as db:
-            db.add(SensorData(device_id="TEST", batch_index=1, channel=1,
-                              data=np.sin(np.arange(1024)).tolist(), sample_rate=1024))
+            db.add(
+                SensorData(
+                    device_id="TEST",
+                    batch_index=1,
+                    channel=1,
+                    data=np.sin(np.arange(1024)).tolist(),
+                    sample_rate=1024,
+                )
+            )
             db.commit()
             for module, endpoint, kwargs in [
-                (spectrum, spectrum.get_channel_stft, dict(max_freq=500, nperseg=128, noverlap=64)),
+                (
+                    spectrum,
+                    spectrum.get_channel_stft,
+                    dict(max_freq=500, nperseg=128, noverlap=64),
+                ),
                 (cepstrum, cepstrum.get_channel_cepstrum, dict(max_quefrency=500)),
-                (order, order.get_channel_order, dict(freq_min=10, freq_max=100, samples_per_rev=64, max_order=20, rot_freq=20)),
+                (
+                    order,
+                    order.get_channel_order,
+                    dict(
+                        freq_min=10,
+                        freq_max=100,
+                        samples_per_rev=64,
+                        max_order=20,
+                        rot_freq=20,
+                    ),
+                ),
             ]:
                 with self.subTest(endpoint=endpoint.__name__):
                     release = threading.Event()
@@ -50,11 +72,25 @@ class EventLoopTests(unittest.IsolatedAsyncioTestCase):
                         release.set()
 
                     with patch.object(module, "denoise_signal", slow_denoise):
-                        request = asyncio.create_task(endpoint("TEST", 1, 1, detrend=False, denoise="vmd", db=db, **kwargs))
+                        request = asyncio.create_task(
+                            endpoint(
+                                "TEST",
+                                1,
+                                1,
+                                detrend=False,
+                                denoise="vmd",
+                                db=db,
+                                **kwargs,
+                            )
+                        )
                         tick = asyncio.create_task(ticker())
                         result, _ = await asyncio.gather(request, tick)
                     self.assertEqual(result["code"], 200)
-                    self.assertEqual(ticker_observed, [True], "去噪直接阻塞事件循环，其他请求无法被调度")
+                    self.assertEqual(
+                        ticker_observed,
+                        [True],
+                        "去噪直接阻塞事件循环，其他请求无法被调度",
+                    )
         engine.dispose()
 
 

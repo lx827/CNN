@@ -25,7 +25,9 @@ def get_logs(lines: int = 200, user=Depends(optional_auth)):
         try:
             result = subprocess.run(
                 ["journalctl", "-u", "CNN", "-n", str(lines), "--no-pager"],
-                capture_output=True, text=True, timeout=10
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             if result.returncode == 0:
                 journal_logs = result.stdout
@@ -49,5 +51,5 @@ def get_logs(lines: int = 200, user=Depends(optional_auth)):
         "data": {
             "logs": logs,
             "error": error,
-        }
+        },
     }

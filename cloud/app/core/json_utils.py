@@ -1,4 +1,5 @@
 """严格 JSON 转换，统一处理算法输出的 NumPy 类型和非有限数值。"""
+
 import math
 
 import numpy as np

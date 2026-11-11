@@ -17,6 +17,7 @@ dependencies = [
     "python-dotenv==1.0.1",
     "msgpack>=1.0.8",
     "python-jose[cryptography]>=3.3.0",
+    "ruff>=0.17.4",
 ]
 
 # 应用目录而非可分发的库:workspace 只管理其依赖,不做包构建安装

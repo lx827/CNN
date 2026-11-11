@@ -1,4 +1,5 @@
 """HUSTbear 独立设备注册：真实 SQLite 提交、幂等与冲突回滚。"""
+
 import importlib.util
 from pathlib import Path
 import sys
@@ -12,7 +13,9 @@ sys.path.insert(0, str(ROOT / "cloud"))
 from app.database import Base
 from app.models import Device
 
-spec = importlib.util.spec_from_file_location("register_hustbear", ROOT / "scripts/register_hustbear_devices.py")
+spec = importlib.util.spec_from_file_location(
+    "register_hustbear", ROOT / "scripts/register_hustbear_devices.py"
+)
 registration = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(registration)
 
@@ -28,7 +31,9 @@ class RegistrationTests(unittest.TestCase):
         self.engine.dispose()
 
     def test_independent_devices_and_idempotence(self):
-        self.db.add(Device(device_id="WTG-001", name="existing CW", bearing_params={"D": 39.04}))
+        self.db.add(
+            Device(device_id="WTG-001", name="existing CW", bearing_params={"D": 39.04})
+        )
         self.db.commit()
         self.assertEqual(len(registration.register_devices(self.db)), 5)
         self.assertEqual(registration.register_devices(self.db), [])
@@ -44,7 +49,9 @@ class RegistrationTests(unittest.TestCase):
             self.assertEqual(device.is_online, 0)
 
     def test_conflict_rolls_back_all_new_devices(self):
-        self.db.add(Device(device_id="HUST-004", name="unrelated", bearing_params={"n": 1}))
+        self.db.add(
+            Device(device_id="HUST-004", name="unrelated", bearing_params={"n": 1})
+        )
         self.db.commit()
         with self.assertRaises(ValueError):
             registration.register_devices(self.db)

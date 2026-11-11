@@ -3,6 +3,7 @@
 本模块只把结构化结果转换为旧 tuple，不包含 FFT、重采样或转频估计。
 新代码应直接使用结构化 Pipeline，不能依赖这里的 tuple 推断相位类型。
 """
+
 from typing import Tuple
 
 import numpy as np
@@ -35,7 +36,9 @@ def _order_tracking(
 ) -> Tuple[np.ndarray, np.ndarray]:
     """返回角域信号和角域采样点轴(rev)；第二轴不再是 FFT 阶次轴。"""
     result = ConstantSpeedOrderPipeline(
-        OrderParameters(samples_per_revolution=samples_per_rev, max_order=samples_per_rev / 2 - 1)
+        OrderParameters(
+            samples_per_revolution=samples_per_rev, max_order=samples_per_rev / 2 - 1
+        )
     ).run(sig, fs, ScalarSpeed(float(rot_freq), "caller_supplied"))
     if result.status != "valid" or result.angle_domain is None:
         raise ValueError(result.reason or "恒速重采样不可判定")
@@ -73,7 +76,12 @@ def _compute_order_spectrum_multi_frame(
     spectrum = _require_spectrum(result)
     if not isinstance(result.speed, LocalSpeedEstimates):
         raise TypeError("多帧结果缺少局部转频序列")
-    return spectrum.order_bins, spectrum.amplitude, result.speed.median_hz, result.speed.std_hz
+    return (
+        spectrum.order_bins,
+        spectrum.amplitude,
+        result.speed.median_hz,
+        result.speed.std_hz,
+    )
 
 
 def _compute_order_spectrum_varying_speed(

@@ -3,6 +3,7 @@
 生成 JSON 到 tests/output/eval_plots/
 用法(uv-only,见 AGENTS.md §2/§4): cd cloud && uv run python tests/diagnosis/eval_plots/run_all.py
 """
+
 import sys, json, time, warnings, os
 from pathlib import Path
 import numpy as np
@@ -12,7 +13,12 @@ warnings.filterwarnings("ignore")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 
-from app.services.diagnosis.engine import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod
+from app.services.diagnosis.engine import (
+    DiagnosisEngine,
+    BearingMethod,
+    GearMethod,
+    DenoiseMethod,
+)
 from app.services.diagnosis.ensemble import run_research_ensemble
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
 
@@ -96,8 +102,10 @@ def _bearing_detect(result, is_healthy):
     """判断轴承方法是否检出故障"""
     inds = result.get("evaluation", {}).get("indicators", {})
     has_fault = any(
-        v.get("significant") for k, v in inds.items()
-        if isinstance(v, dict) and not k.endswith("_stat"))
+        v.get("significant")
+        for k, v in inds.items()
+        if isinstance(v, dict) and not k.endswith("_stat")
+    )
     return has_fault != is_healthy
 
 
@@ -112,7 +120,9 @@ def _gear_detect(result, is_healthy):
     inds = result.get("fault_indicators", {})
     has_warn = any(
         v.get("warning") or v.get("critical")
-        for v in inds.values() if isinstance(v, dict))
+        for v in inds.values()
+        if isinstance(v, dict)
+    )
     return has_warn != is_healthy
 
 
@@ -149,8 +159,13 @@ def _classification_metrics(y_true, y_pred):
         rec = tp / max(tp + fn, 1)
         f1 = 2 * prec * rec / max(prec + rec, 0.001)
         spec = tn / max(tn + fp, 1)
-        per_class[c] = {"precision": round(prec, 4), "recall": round(rec, 4),
-                        "f1": round(f1, 4), "specificity": round(spec, 4), "tp": tp}
+        per_class[c] = {
+            "precision": round(prec, 4),
+            "recall": round(rec, 4),
+            "f1": round(f1, 4),
+            "specificity": round(spec, 4),
+            "tp": tp,
+        }
         macro_prec += prec
         macro_rec += rec
         macro_f1 += f1
@@ -162,7 +177,8 @@ def _classification_metrics(y_true, y_pred):
     # Cohen's Kappa
     pe = sum(
         sum(1 for t in y_true if t == c) * sum(1 for p in y_pred if p == c)
-        for c in classes) / (n * n)
+        for c in classes
+    ) / (n * n)
     kappa = (accuracy - pe) / max(1 - pe, 0.001)
 
     # MCC (multi-class)
@@ -173,7 +189,9 @@ def _classification_metrics(y_true, y_pred):
     row_sum = cm_np.sum(axis=1)
     col_sum = cm_np.sum(axis=0)
     cov = tp_sum * t_sum - np.dot(row_sum, col_sum)
-    denom = np.sqrt((t_sum**2 - np.dot(col_sum, col_sum)) * (t_sum**2 - np.dot(row_sum, row_sum)))
+    denom = np.sqrt(
+        (t_sum**2 - np.dot(col_sum, col_sum)) * (t_sum**2 - np.dot(row_sum, row_sum))
+    )
     mcc = cov / max(denom, 0.001)
 
     return {
@@ -201,14 +219,25 @@ def run_42_hust_binary():
         if fc == "H":
             all_files.append((f.name, True, "健康"))
         elif fc in ("B", "I", "O", "C"):
-            all_files.append((f.name, False, {"B": "球故障", "I": "内圈", "O": "外圈", "C": "复合"}[fc]))
+            all_files.append(
+                (
+                    f.name,
+                    False,
+                    {"B": "球故障", "I": "内圈", "O": "外圈", "C": "复合"}[fc],
+                )
+            )
 
     healthy = [(f, t, l) for f, t, l in all_files if t]
     fault = [(f, t, l) for f, t, l in all_files if not t]
     files = healthy + fault
     print(f"  健康:{len(healthy)} 故障:{len(fault)} 总计:{len(files)}")
 
-    results = {"total": len(files), "healthy": len(healthy), "fault": len(fault), "methods": {}}
+    results = {
+        "total": len(files),
+        "healthy": len(healthy),
+        "fault": len(fault),
+        "methods": {},
+    }
     # 跳过CEEMDAN（太慢）——用"-"标注
     METHODS = [
         ("标准包络", BearingMethod.ENVELOPE, None),
@@ -234,7 +263,9 @@ def run_42_hust_binary():
                 t1 = time.perf_counter()
                 engine = DiagnosisEngine(
                     bearing_method=method_val,
-                    bearing_params=BEARING_PARAMS, denoise_method=DenoiseMethod.NONE)
+                    bearing_params=BEARING_PARAMS,
+                    denoise_method=DenoiseMethod.NONE,
+                )
                 res = engine.analyze_bearing(sig, FS)
                 times.append((time.perf_counter() - t1) * 1000)
                 if _bearing_detect(res, is_healthy):
@@ -245,9 +276,15 @@ def run_42_hust_binary():
         acc = correct / max(total_t, 1) * 100
         avg_ms = round(np.mean(times), 1) if times else 0
         total_s = time.perf_counter() - t0
-        print(f"  [{name_cn}] {acc:.2f}% ({correct}/{total_t}) 平均{avg_ms}ms 总{total_s:.0f}s")
-        results["methods"][name_cn] = {"accuracy": round(acc, 2), "correct": correct,
-                                        "total": total_t, "avg_time_ms": avg_ms}
+        print(
+            f"  [{name_cn}] {acc:.2f}% ({correct}/{total_t}) 平均{avg_ms}ms 总{total_s:.0f}s"
+        )
+        results["methods"][name_cn] = {
+            "accuracy": round(acc, 2),
+            "correct": correct,
+            "total": total_t,
+            "avg_time_ms": avg_ms,
+        }
 
     # Ensemble
     t0 = time.perf_counter()
@@ -258,7 +295,9 @@ def run_42_hust_binary():
             continue
         try:
             t1 = time.perf_counter()
-            res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S)
+            res = run_research_ensemble(
+                sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S
+            )
             times.append((time.perf_counter() - t1) * 1000)
             if _ensemble_detect(res, is_healthy):
                 correct += 1
@@ -268,12 +307,21 @@ def run_42_hust_binary():
     acc = correct / max(total_t, 1) * 100
     avg_ms = round(np.mean(times), 1) if times else 0
     print(f"  [Ensemble] {acc:.2f}% ({correct}/{total_t}) 平均{avg_ms}ms")
-    results["methods"]["Ensemble"] = {"accuracy": round(acc, 2), "correct": correct,
-                                       "total": total_t, "avg_time_ms": avg_ms}
+    results["methods"]["Ensemble"] = {
+        "accuracy": round(acc, 2),
+        "correct": correct,
+        "total": total_t,
+        "avg_time_ms": avg_ms,
+    }
 
     # CEEMDAN 标注为跳过
-    results["methods"]["CEEMDAN"] = {"accuracy": "-", "correct": "-", "total": "-",
-                                      "avg_time_ms": "~4500", "note": "计算量极大，跳过"}
+    results["methods"]["CEEMDAN"] = {
+        "accuracy": "-",
+        "correct": "-",
+        "total": "-",
+        "avg_time_ms": "~4500",
+        "note": "计算量极大，跳过",
+    }
 
     save_json(results, "42_hust_binary.json")
     return results
@@ -303,7 +351,9 @@ def run_42_hust_multiclass():
                 continue
             try:
                 t1 = time.perf_counter()
-                res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S)
+                res = run_research_ensemble(
+                    sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S
+                )
                 times.append((time.perf_counter() - t1) * 1000)
                 fl = str(res.get("fault_label", "unknown")).lower()
                 # 精确匹配主导故障类型（修复子串匹配 Bug）
@@ -313,7 +363,12 @@ def run_42_hust_multiclass():
                     pred = "内圈"
                 elif fl == "bearing_bsf" or "ball" in fl:
                     pred = "球故障"
-                elif "compound" in fl or fl == "bearing_bpfo_bpfi" or fl == "bearing_bpfo_bsf" or fl == "bearing_bpfi_bsf":
+                elif (
+                    "compound" in fl
+                    or fl == "bearing_bpfo_bpfi"
+                    or fl == "bearing_bpfo_bsf"
+                    or fl == "bearing_bpfi_bsf"
+                ):
                     pred = "复合"
                 elif "healthy" in fl or "normal" in fl or "unknown" in fl:
                     pred = "健康"
@@ -346,7 +401,9 @@ def run_42_hust_multiclass():
     print(f"  平均耗时: {results['avg_time_ms']}ms")
     for cls_name in class_map.values():
         pc = metrics["per_class"].get(cls_name, {})
-        print(f"    {cls_name}: P={pc.get('precision','-')} R={pc.get('recall','-')} F1={pc.get('f1','-')}")
+        print(
+            f"    {cls_name}: P={pc.get('precision', '-')} R={pc.get('recall', '-')} F1={pc.get('f1', '-')}"
+        )
 
     save_json(results, "42_hust_multiclass.json")
     return results
@@ -373,7 +430,12 @@ def run_43_ottawa_binary():
     files = healthy + fault
     print(f"  健康:{len(healthy)} 故障:{len(fault)} 总计:{len(files)}")
 
-    results = {"total": len(files), "healthy": len(healthy), "fault": len(fault), "methods": {}}
+    results = {
+        "total": len(files),
+        "healthy": len(healthy),
+        "fault": len(fault),
+        "methods": {},
+    }
 
     METHODS = [
         ("标准包络", BearingMethod.ENVELOPE),
@@ -399,7 +461,9 @@ def run_43_ottawa_binary():
                 t1 = time.perf_counter()
                 engine = DiagnosisEngine(
                     bearing_method=method_val,
-                    bearing_params=BEARING_PARAMS, denoise_method=DenoiseMethod.NONE)
+                    bearing_params=BEARING_PARAMS,
+                    denoise_method=DenoiseMethod.NONE,
+                )
                 res = engine.analyze_bearing(sig, FS)
                 times.append((time.perf_counter() - t1) * 1000)
                 if _bearing_detect(res, is_healthy):
@@ -410,9 +474,15 @@ def run_43_ottawa_binary():
         acc = correct / max(total_t, 1) * 100
         avg_ms = round(np.mean(times), 1) if times else 0
         total_s = time.perf_counter() - t0
-        print(f"  [{name_cn}] {acc:.2f}% ({correct}/{total_t}) 平均{avg_ms}ms 总{total_s:.0f}s")
-        results["methods"][name_cn] = {"accuracy": round(acc, 2), "correct": correct,
-                                        "total": total_t, "avg_time_ms": avg_ms}
+        print(
+            f"  [{name_cn}] {acc:.2f}% ({correct}/{total_t}) 平均{avg_ms}ms 总{total_s:.0f}s"
+        )
+        results["methods"][name_cn] = {
+            "accuracy": round(acc, 2),
+            "correct": correct,
+            "total": total_t,
+            "avg_time_ms": avg_ms,
+        }
 
     # Ensemble
     t0 = time.perf_counter()
@@ -423,7 +493,9 @@ def run_43_ottawa_binary():
             continue
         try:
             t1 = time.perf_counter()
-            res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S)
+            res = run_research_ensemble(
+                sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S
+            )
             times.append((time.perf_counter() - t1) * 1000)
             if _ensemble_detect(res, is_healthy):
                 correct += 1
@@ -433,10 +505,19 @@ def run_43_ottawa_binary():
     acc = correct / max(total_t, 1) * 100
     avg_ms = round(np.mean(times), 1) if times else 0
     print(f"  [Ensemble] {acc:.2f}% ({correct}/{total_t}) 平均{avg_ms}ms")
-    results["methods"]["Ensemble"] = {"accuracy": round(acc, 2), "correct": correct,
-                                       "total": total_t, "avg_time_ms": avg_ms}
-    results["methods"]["CEEMDAN"] = {"accuracy": "-", "correct": "-", "total": "-",
-                                      "avg_time_ms": "~4500", "note": "计算量极大，跳过"}
+    results["methods"]["Ensemble"] = {
+        "accuracy": round(acc, 2),
+        "correct": correct,
+        "total": total_t,
+        "avg_time_ms": avg_ms,
+    }
+    results["methods"]["CEEMDAN"] = {
+        "accuracy": "-",
+        "correct": "-",
+        "total": "-",
+        "avg_time_ms": "~4500",
+        "note": "计算量极大，跳过",
+    }
 
     save_json(results, "43_ottawa_binary.json")
     return results
@@ -469,7 +550,9 @@ def run_43_ottawa_multiclass():
                 continue
             try:
                 t1 = time.perf_counter()
-                res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S)
+                res = run_research_ensemble(
+                    sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S
+                )
                 times.append((time.perf_counter() - t1) * 1000)
                 fl = str(res.get("fault_label", "unknown")).lower()
                 # 精确匹配主导故障类型（修复子串匹配 Bug）
@@ -503,7 +586,9 @@ def run_43_ottawa_multiclass():
     print(f"  Macro-F1: {metrics['macro_f1']}")
     for cls_name in class_map.values():
         pc = metrics["per_class"].get(cls_name, {})
-        print(f"    {cls_name}: P={pc.get('precision','-')} R={pc.get('recall','-')} F1={pc.get('f1','-')}")
+        print(
+            f"    {cls_name}: P={pc.get('precision', '-')} R={pc.get('recall', '-')} F1={pc.get('f1', '-')}"
+        )
 
     save_json(results, "43_ottawa_multiclass.json")
     return results
@@ -518,15 +603,25 @@ def run_44_wtg_binary():
     print("=" * 60)
 
     files_healthy = sorted(f.name for f in WTGEAR_DIR.glob("He_*-c1.npy"))
-    files_fault = sorted(f.name for f in WTGEAR_DIR.glob("*.npy")
-                         if "-c1.npy" in f.name and not f.name.startswith("He"))
+    files_fault = sorted(
+        f.name
+        for f in WTGEAR_DIR.glob("*.npy")
+        if "-c1.npy" in f.name and not f.name.startswith("He")
+    )
     files = [(f, True) for f in files_healthy] + [(f, False) for f in files_fault]
     print(f"  健康:{len(files_healthy)} 故障:{len(files_fault)} 总计:{len(files)}")
 
-    results = {"total": len(files), "healthy": len(files_healthy),
-               "fault": len(files_fault), "methods": {}}
+    results = {
+        "total": len(files),
+        "healthy": len(files_healthy),
+        "fault": len(files_fault),
+        "methods": {},
+    }
 
-    for name_cn, method_val in [("标准边频分析", GearMethod.STANDARD), ("高级综合", GearMethod.ADVANCED)]:
+    for name_cn, method_val in [
+        ("标准边频分析", GearMethod.STANDARD),
+        ("高级综合", GearMethod.ADVANCED),
+    ]:
         t0 = time.perf_counter()
         correct, total_t, times = 0, 0, []
         for fname, is_healthy in files:
@@ -541,7 +636,9 @@ def run_44_wtg_binary():
                 t1 = time.perf_counter()
                 engine = DiagnosisEngine(
                     gear_method=method_val,
-                    gear_teeth=GEAR_PARAMS, denoise_method=DenoiseMethod.NONE)
+                    gear_teeth=GEAR_PARAMS,
+                    denoise_method=DenoiseMethod.NONE,
+                )
                 res = engine.analyze_gear(sig, FS, rot_freq=rf)
                 times.append((time.perf_counter() - t1) * 1000)
                 if _gear_detect(res, is_healthy):
@@ -552,9 +649,15 @@ def run_44_wtg_binary():
         acc = correct / max(total_t, 1) * 100
         avg_ms = round(np.mean(times), 1) if times else 0
         total_s = time.perf_counter() - t0
-        print(f"  [{name_cn}] {acc:.2f}% ({correct}/{total_t}) 平均{avg_ms}ms 总{total_s:.0f}s")
-        results["methods"][name_cn] = {"accuracy": round(acc, 2), "correct": correct,
-                                        "total": total_t, "avg_time_ms": avg_ms}
+        print(
+            f"  [{name_cn}] {acc:.2f}% ({correct}/{total_t}) 平均{avg_ms}ms 总{total_s:.0f}s"
+        )
+        results["methods"][name_cn] = {
+            "accuracy": round(acc, 2),
+            "correct": correct,
+            "total": total_t,
+            "avg_time_ms": avg_ms,
+        }
 
     # Ensemble gear
     t0 = time.perf_counter()
@@ -565,7 +668,9 @@ def run_44_wtg_binary():
             continue
         try:
             t1 = time.perf_counter()
-            res = run_research_ensemble(sig, FS, gear_teeth=GEAR_PARAMS, max_seconds=MAX_S)
+            res = run_research_ensemble(
+                sig, FS, gear_teeth=GEAR_PARAMS, max_seconds=MAX_S
+            )
             times.append((time.perf_counter() - t1) * 1000)
             if _ensemble_detect(res, is_healthy):
                 correct += 1
@@ -575,8 +680,12 @@ def run_44_wtg_binary():
     acc = correct / max(total_t, 1) * 100
     avg_ms = round(np.mean(times), 1) if times else 0
     print(f"  [Ensemble] {acc:.2f}% ({correct}/{total_t}) 平均{avg_ms}ms")
-    results["methods"]["Ensemble"] = {"accuracy": round(acc, 2), "correct": correct,
-                                       "total": total_t, "avg_time_ms": avg_ms}
+    results["methods"]["Ensemble"] = {
+        "accuracy": round(acc, 2),
+        "correct": correct,
+        "total": total_t,
+        "avg_time_ms": avg_ms,
+    }
 
     # 行星齿轮箱阈值数据点（选取代表性样本的指标值）
     demo_files = [
@@ -593,14 +702,23 @@ def run_44_wtg_binary():
         if sig is None:
             continue
         try:
-            engine = DiagnosisEngine(gear_method=GearMethod.ADVANCED,
-                                     gear_teeth=GEAR_PARAMS, denoise_method=DenoiseMethod.NONE)
+            engine = DiagnosisEngine(
+                gear_method=GearMethod.ADVANCED,
+                gear_teeth=GEAR_PARAMS,
+                denoise_method=DenoiseMethod.NONE,
+            )
             res = engine.analyze_gear(sig, FS, rot_freq=speed)
             inds = res.get("fault_indicators", {})
             row = {"sample": fname, "label": label, "speed_hz": speed}
             for k in ["ser", "fm4", "order_kurtosis"]:
                 v = inds.get(k, {})
-                row[k] = round(v.get("value", 0), 2) if isinstance(v, dict) else round(v, 2) if v else 0
+                row[k] = (
+                    round(v.get("value", 0), 2)
+                    if isinstance(v, dict)
+                    else round(v, 2)
+                    if v
+                    else 0
+                )
             threshold_demo.append(row)
         except Exception:
             pass
@@ -619,7 +737,9 @@ def run_44_wtg_multiclass():
     print("=" * 60)
 
     class_map = {"He": "健康", "Br": "断齿", "Mi": "缺齿", "Rc": "裂纹", "We": "磨损"}
-    class_files = {k: sorted(f.name for f in WTGEAR_DIR.glob(f"{k}_*-c1.npy")) for k in class_map}
+    class_files = {
+        k: sorted(f.name for f in WTGEAR_DIR.glob(f"{k}_*-c1.npy")) for k in class_map
+    }
 
     y_true, y_pred, times = [], [], []
     t0 = time.perf_counter()
@@ -630,7 +750,13 @@ def run_44_wtg_multiclass():
                 continue
             try:
                 t1 = time.perf_counter()
-                res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, gear_teeth=GEAR_PARAMS, max_seconds=MAX_S)
+                res = run_research_ensemble(
+                    sig,
+                    FS,
+                    bearing_params=BEARING_PARAMS,
+                    gear_teeth=GEAR_PARAMS,
+                    max_seconds=MAX_S,
+                )
                 times.append((time.perf_counter() - t1) * 1000)
                 fl = str(res.get("fault_label", "unknown")).lower()
                 if "break" in fl or "broken" in fl:
@@ -716,7 +842,9 @@ def run_46_robustness():
     print("4.6 噪声鲁棒性")
     print("=" * 60)
 
-    or_files = sorted(f for f in HUSTBEAR_DIR.glob("*-X.npy") if _fault_code_hust(f.name) == "O")
+    or_files = sorted(
+        f for f in HUSTBEAR_DIR.glob("*-X.npy") if _fault_code_hust(f.name) == "O"
+    )
     if not or_files:
         print("  未找到外圈故障文件")
         return None
@@ -728,23 +856,34 @@ def run_46_robustness():
     results = {"snr_levels": snr_levels, "methods": {}}
 
     for name_cn, method_val in [
-        ("包络", BearingMethod.ENVELOPE), ("Kurtogram", BearingMethod.FILTER_BANK_SK),
-        ("MED", BearingMethod.MED), ("MCKD", BearingMethod.MCKD),
+        ("包络", BearingMethod.ENVELOPE),
+        ("Kurtogram", BearingMethod.FILTER_BANK_SK),
+        ("MED", BearingMethod.MED),
+        ("MCKD", BearingMethod.MCKD),
     ]:
         curve = []
         for snr_db in snr_levels:
             sig_power = np.var(sig_clean.astype(np.float64))
-            noise = np.sqrt(sig_power / (10 ** (snr_db / 10))) * np.random.randn(len(sig_clean))
+            noise = np.sqrt(sig_power / (10 ** (snr_db / 10))) * np.random.randn(
+                len(sig_clean)
+            )
             try:
                 engine = DiagnosisEngine(
                     bearing_method=method_val,
-                    bearing_params=BEARING_PARAMS, denoise_method=DenoiseMethod.NONE)
+                    bearing_params=BEARING_PARAMS,
+                    denoise_method=DenoiseMethod.NONE,
+                )
                 res = engine.analyze_bearing(sig_clean + noise, FS)
                 inds = res.get("evaluation", {}).get("indicators", {})
-                detected = any(v.get("significant") for k, v in inds.items()
-                               if isinstance(v, dict) and not k.endswith("_stat"))
+                detected = any(
+                    v.get("significant")
+                    for k, v in inds.items()
+                    if isinstance(v, dict) and not k.endswith("_stat")
+                )
                 curve.append({"snr_db": snr_db, "detected": detected})
-                print(f"    {name_cn} SNR={snr_db}dB: {'检出' if detected else '未检出'}")
+                print(
+                    f"    {name_cn} SNR={snr_db}dB: {'检出' if detected else '未检出'}"
+                )
             except Exception:
                 curve.append({"snr_db": snr_db, "detected": False})
         results["methods"][name_cn] = curve
@@ -753,10 +892,17 @@ def run_46_robustness():
     curve = []
     for snr_db in snr_levels:
         sig_power = np.var(sig_clean.astype(np.float64))
-        noise = np.sqrt(sig_power / (10 ** (snr_db / 10))) * np.random.randn(len(sig_clean))
+        noise = np.sqrt(sig_power / (10 ** (snr_db / 10))) * np.random.randn(
+            len(sig_clean)
+        )
         try:
-            res = run_research_ensemble(sig_clean + noise, FS, bearing_params=BEARING_PARAMS, max_seconds=5.0)
-            detected = res.get("status", "normal") != "normal" or res.get("health_score", 100) < 70
+            res = run_research_ensemble(
+                sig_clean + noise, FS, bearing_params=BEARING_PARAMS, max_seconds=5.0
+            )
+            detected = (
+                res.get("status", "normal") != "normal"
+                or res.get("health_score", 100) < 70
+            )
             curve.append({"snr_db": snr_db, "detected": detected})
             print(f"    Ensemble SNR={snr_db}dB: {'检出' if detected else '未检出'}")
         except Exception:
@@ -776,9 +922,13 @@ def run_47_denoise():
     print("=" * 60)
 
     # 外圈故障
-    or_files = sorted(f for f in HUSTBEAR_DIR.glob("*-X.npy") if _fault_code_hust(f.name) == "O")
+    or_files = sorted(
+        f for f in HUSTBEAR_DIR.glob("*-X.npy") if _fault_code_hust(f.name) == "O"
+    )
     # 健康
-    h_files = sorted(f for f in HUSTBEAR_DIR.glob("*-X.npy") if _fault_code_hust(f.name) == "H")
+    h_files = sorted(
+        f for f in HUSTBEAR_DIR.glob("*-X.npy") if _fault_code_hust(f.name) == "H"
+    )
 
     results = {"methods": {}}
 
@@ -792,13 +942,16 @@ def run_47_denoise():
 
         engine = DiagnosisEngine()
         for dname, dlabel in [
-            ("none", "无去噪"), ("wavelet", "小波去噪"), ("vmd", "VMD去噪"),
-            ("med", "MED去噪"), ("wavelet_vmd", "小波+VMD级联"),
+            ("none", "无去噪"),
+            ("wavelet", "小波去噪"),
+            ("vmd", "VMD去噪"),
+            ("med", "MED去噪"),
+            ("wavelet_vmd", "小波+VMD级联"),
         ]:
             engine.denoise_method = DenoiseMethod(dname)
             try:
                 proc = engine.preprocess(sig_noisy)
-                rp = np.var(sig_clean - proc[:len(sig_clean)])
+                rp = np.var(sig_clean - proc[: len(sig_clean)])
             except Exception:
                 rp = base_power
             dsnr = 10 * np.log10(max(base_power, 1e-12) / max(rp, 1e-12))

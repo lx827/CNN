@@ -1,4 +1,5 @@
 """MED/MCKD 数学反例、留一更新和 BPFO/BPFI 目标周期。"""
+
 import os
 import sys
 import unittest
@@ -31,9 +32,13 @@ class DeconvolutionObjectiveTests(unittest.TestCase):
         random[[10, 13, 29, 47, 53, 80]] = periodic[periodic != 0]
 
         # 两者仅位置不同，MED 的全局峭度相同；MCKD 只对 T=10 的周期序列给出正目标。
-        self.assertAlmostEqual(normalized_kurtosis(periodic), normalized_kurtosis(random), places=12)
+        self.assertAlmostEqual(
+            normalized_kurtosis(periodic), normalized_kurtosis(random), places=12
+        )
         self.assertGreater(correlated_kurtosis(periodic, period=10, shift_order=1), 0.0)
-        self.assertAlmostEqual(correlated_kurtosis(random, period=10, shift_order=1), 0.0, places=12)
+        self.assertAlmostEqual(
+            correlated_kurtosis(random, period=10, shift_order=1), 0.0, places=12
+        )
 
     def test_mckd_update_contains_leave_one_product_and_delayed_input(self):
         x = np.array([0.5, -1.0, 2.0, 0.25, 1.5, -0.5, 1.0, 0.75])
@@ -44,7 +49,9 @@ class DeconvolutionObjectiveTests(unittest.TestCase):
         y = X @ f
         start = period * shift_order
         valid = len(y) - start
-        shifted = [y[start - m * period: len(y) - m * period] for m in range(shift_order + 1)]
+        shifted = [
+            y[start - m * period : len(y) - m * period] for m in range(shift_order + 1)
+        ]
         beta = np.prod(np.vstack(shifted), axis=0)
 
         expected_rhs = np.zeros(len(f))
@@ -54,13 +61,15 @@ class DeconvolutionObjectiveTests(unittest.TestCase):
                 if k != m:
                     leave_one *= shifted[k]
             alpha_m = beta * leave_one
-            delayed_X = X[start - m * period: len(X) - m * period]
+            delayed_X = X[start - m * period : len(X) - m * period]
             expected_rhs += delayed_X.T @ alpha_m
         expected = np.linalg.solve(
             X.T @ X,
             (np.sum(y**2) / (2.0 * np.sum(beta**2))) * expected_rhs,
         )
-        actual = _mckd_filter_update(X, f, period=period, shift_order=shift_order, ridge=0.0)
+        actual = _mckd_filter_update(
+            X, f, period=period, shift_order=shift_order, ridge=0.0
+        )
         np.testing.assert_allclose(actual, expected, rtol=1e-11, atol=1e-11)
 
         # 旧错误把 alpha 直接放到未延迟的 X0 上；反例必须能区分两种公式。
@@ -78,7 +87,9 @@ class DeconvolutionObjectiveTests(unittest.TestCase):
         reference_ck = correlated_kurtosis(periodic, period=10, shift_order=1)
         for scale in (1e-150, 1e-8, 1e8, 1e150):
             with self.subTest(scale=scale):
-                self.assertAlmostEqual(normalized_kurtosis(periodic * scale), reference_kurtosis, places=11)
+                self.assertAlmostEqual(
+                    normalized_kurtosis(periodic * scale), reference_kurtosis, places=11
+                )
                 self.assertAlmostEqual(
                     correlated_kurtosis(periodic * scale, period=10, shift_order=1),
                     reference_ck,
@@ -96,12 +107,22 @@ class DeconvolutionPipelineTests(unittest.TestCase):
         bpfo = MCKDEnvelopePipeline().run(
             self.signal,
             self.fs,
-            MCKDParameters(target_fault="BPFO", target_frequency_hz=80.0, filter_length=16, max_iterations=3),
+            MCKDParameters(
+                target_fault="BPFO",
+                target_frequency_hz=80.0,
+                filter_length=16,
+                max_iterations=3,
+            ),
         )
         bpfi = MCKDEnvelopePipeline().run(
             self.signal,
             self.fs,
-            MCKDParameters(target_fault="BPFI", target_frequency_hz=128.0, filter_length=16, max_iterations=3),
+            MCKDParameters(
+                target_fault="BPFI",
+                target_frequency_hz=128.0,
+                filter_length=16,
+                max_iterations=3,
+            ),
         )
         self.assertEqual(bpfo.status, "computed", bpfo.reason)
         self.assertEqual(bpfi.status, "computed", bpfi.reason)
@@ -109,7 +130,9 @@ class DeconvolutionPipelineTests(unittest.TestCase):
         self.assertEqual(bpfi.metadata["target_fault"], "BPFI")
         self.assertEqual(bpfo.metadata["period_samples"], round(self.fs / 80.0))
         self.assertEqual(bpfi.metadata["period_samples"], round(self.fs / 128.0))
-        self.assertNotEqual(bpfo.metadata["period_samples"], bpfi.metadata["period_samples"])
+        self.assertNotEqual(
+            bpfo.metadata["period_samples"], bpfi.metadata["period_samples"]
+        )
 
     def test_mckd_can_derive_requested_fault_from_real_geometry(self):
         geometry = BearingGeometry(9, 7.94, 38.52, 0.0)
@@ -147,7 +170,9 @@ class DeconvolutionPipelineTests(unittest.TestCase):
         self.assertNotIn("period_samples", result.metadata)
         self.assertIsNotNone(result.representation)
 
-    def test_filter_normalization_iteration_and_objective_histories_are_scale_invariant(self):
+    def test_filter_normalization_iteration_and_objective_histories_are_scale_invariant(
+        self,
+    ):
         cases = (
             (
                 minimum_entropy_deconvolution,
@@ -161,31 +186,46 @@ class DeconvolutionPipelineTests(unittest.TestCase):
             ),
         )
         for function, parameters, period in cases:
-            reference = function(self.signal, parameters) if period is None else function(
-                self.signal, period, parameters
+            reference = (
+                function(self.signal, parameters)
+                if period is None
+                else function(self.signal, period, parameters)
             )
             for scale in (1e-8, 1e8):
                 with self.subTest(function=function.__name__, scale=scale):
-                    scaled = function(self.signal * scale, parameters) if period is None else function(
-                        self.signal * scale, period, parameters
+                    scaled = (
+                        function(self.signal * scale, parameters)
+                        if period is None
+                        else function(self.signal * scale, period, parameters)
                     )
                     self.assertEqual(scaled.iterations, reference.iterations)
                     self.assertEqual(scaled.converged, reference.converged)
                     np.testing.assert_allclose(
-                        scaled.objective_history, reference.objective_history, rtol=1e-8, atol=1e-12
+                        scaled.objective_history,
+                        reference.objective_history,
+                        rtol=1e-8,
+                        atol=1e-12,
                     )
                     np.testing.assert_allclose(
-                        scaled.filter_coefficients, reference.filter_coefficients, rtol=2e-3, atol=2e-3
+                        scaled.filter_coefficients,
+                        reference.filter_coefficients,
+                        rtol=2e-3,
+                        atol=2e-3,
                     )
                     expected_signal = reference.signal * scale
                     np.testing.assert_allclose(
                         scaled.signal,
                         expected_signal,
                         rtol=2e-3,
-                        atol=max(float(np.max(np.abs(expected_signal))) * 2e-3, np.finfo(float).tiny),
+                        atol=max(
+                            float(np.max(np.abs(expected_signal))) * 2e-3,
+                            np.finfo(float).tiny,
+                        ),
                     )
 
-    def test_single_harmonic_unregularized_rank_deficiency_is_not_a_finite_success(self):
+    def test_single_harmonic_unregularized_rank_deficiency_is_not_a_finite_success(
+        self,
+    ):
         fs = 1000.0
         signal = np.sin(2.0 * np.pi * 50.0 * np.arange(1024) / fs)
         X = sliding_window_view(signal - np.mean(signal), 16)
@@ -199,7 +239,10 @@ class DeconvolutionPipelineTests(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(np.linalg.solve(normal, rhs))))
 
         cases = (
-            (MEDEnvelopePipeline(), MEDParameters(filter_length=16, max_iterations=3, ridge=0.0)),
+            (
+                MEDEnvelopePipeline(),
+                MEDParameters(filter_length=16, max_iterations=3, ridge=0.0),
+            ),
             (
                 MCKDEnvelopePipeline(),
                 MCKDParameters(
@@ -222,7 +265,10 @@ class DeconvolutionPipelineTests(unittest.TestCase):
         fs = 1000.0
         signal = np.sin(2.0 * np.pi * 50.0 * np.arange(1024) / fs)
         cases = (
-            (MEDEnvelopePipeline(), MEDParameters(filter_length=16, max_iterations=3, ridge=1e-8)),
+            (
+                MEDEnvelopePipeline(),
+                MEDParameters(filter_length=16, max_iterations=3, ridge=1e-8),
+            ),
             (
                 MCKDEnvelopePipeline(),
                 MCKDParameters(
@@ -246,8 +292,12 @@ class DeconvolutionPipelineTests(unittest.TestCase):
         impulses = np.zeros(2048)
         impulses[np.arange(20, len(impulses), 20)] = 1.0
         ringing_time = np.arange(16) / fs
-        ringing = np.exp(-180.0 * ringing_time) * np.sin(2.0 * np.pi * 180.0 * ringing_time)
-        signal = np.convolve(impulses, ringing, mode="same") + 0.01 * rng.standard_normal(len(impulses))
+        ringing = np.exp(-180.0 * ringing_time) * np.sin(
+            2.0 * np.pi * 180.0 * ringing_time
+        )
+        signal = np.convolve(
+            impulses, ringing, mode="same"
+        ) + 0.01 * rng.standard_normal(len(impulses))
         result = MCKDEnvelopePipeline().run(
             signal,
             fs,
@@ -261,7 +311,9 @@ class DeconvolutionPipelineTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "computed", result.reason)
         self.assertGreaterEqual(result.metadata["iterations"], 2)
-        self.assertEqual(len(result.metadata["objective_history"]), result.metadata["iterations"])
+        self.assertEqual(
+            len(result.metadata["objective_history"]), result.metadata["iterations"]
+        )
         self.assertIsNotNone(result.representation)
 
     def test_zero_energy_and_numerically_undefined_updates_are_not_computed(self):
@@ -269,7 +321,12 @@ class DeconvolutionPipelineTests(unittest.TestCase):
             (MEDEnvelopePipeline(), MEDParameters(filter_length=16, max_iterations=3)),
             (
                 MCKDEnvelopePipeline(),
-                MCKDParameters(target_fault="BPFO", target_frequency_hz=80.0, filter_length=16, max_iterations=3),
+                MCKDParameters(
+                    target_fault="BPFO",
+                    target_frequency_hz=80.0,
+                    filter_length=16,
+                    max_iterations=3,
+                ),
             ),
         ):
             with self.subTest(pipeline=pipeline.method):
@@ -285,7 +342,12 @@ class DeconvolutionPipelineTests(unittest.TestCase):
             undefined = MCKDEnvelopePipeline().run(
                 self.signal,
                 self.fs,
-                MCKDParameters(target_fault="BPFO", target_frequency_hz=80.0, filter_length=16, max_iterations=3),
+                MCKDParameters(
+                    target_fault="BPFO",
+                    target_frequency_hz=80.0,
+                    filter_length=16,
+                    max_iterations=3,
+                ),
             )
         self.assertEqual(undefined.status, "indeterminate")
         self.assertEqual(undefined.reason, "numerical_deconvolution_failure")

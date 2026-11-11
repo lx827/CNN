@@ -17,6 +17,7 @@
   4. 修改 cloud/.env：NN_ENABLED=true，NN_MODEL_PATH=./models/your_model.onnx
   5. 在 predict() 函数中补充模型加载和推理代码
 """
+
 import logging
 import os
 import numpy as np
@@ -47,7 +48,7 @@ def _preprocess(signal: np.ndarray, sample_rate: int = 1000) -> np.ndarray:
     if len(signal) > fixed_len:
         signal = signal[:fixed_len]
     else:
-        signal = np.pad(signal, (0, fixed_len - len(signal)), mode='constant')
+        signal = np.pad(signal, (0, fixed_len - len(signal)), mode="constant")
     mean = np.mean(signal)
     std = np.std(signal)
     if std > 0:
