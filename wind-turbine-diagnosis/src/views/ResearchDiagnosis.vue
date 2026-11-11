@@ -13,12 +13,14 @@
       v-model:comb-frequencies="combFrequencies"
       v-model:comb-is-stable="combIsStable"
       v-model:rot-frequency="rotFrequency"
+      v-model:composite-alignment="compositeAlignment"
       :devices="devices"
       :batches="currentBatches"
       :channels="currentChannels"
       :bearing-method-group="bearingMethodGroup"
       :gear-method-group="gearMethodGroup"
       :planetary-method-group="planetaryMethodGroup"
+      :composite-method-group="compositeMethodGroup"
       :loading="loading"
       :can-run="canRun"
       @run="runAnalysis"
@@ -51,7 +53,10 @@
       </div>
       <div class="metric"><span class="label">转频</span><strong>{{ result.rot_freq_hz ?? '-' }} Hz</strong></div>
       <div class="metric" v-if="result.health_score"><span class="label">健康度</span><strong>{{ result.health_score }}</strong></div>
-      <div class="metric" v-if="selectedMethodInfo?.category === 'bearing' || result.is_planetary">
+      <div class="metric" v-if="selectedMethodInfo?.category === 'composite'">
+        <span class="label">诊断结论</span><el-tag type="info">未知 · 仅供研究</el-tag>
+      </div>
+      <div class="metric" v-else-if="selectedMethodInfo?.category === 'bearing' || result.is_planetary">
         <span class="label">方法评估</span>
         <el-tag :type="evaluationStatusType(result.evaluation?.status)">
           {{ evaluationStatusText(result.evaluation?.status) }}
@@ -67,7 +72,6 @@
       v-if="result && runMode === 'single'"
       :result="result"
       :selected-method-info="selectedMethodInfo"
-      :filter-planetary-result="filterPlanetaryResult"
     />
 
     <!-- ========== 全方法/集成诊断结果详情 ========== -->
@@ -95,9 +99,9 @@ import { useResearchDiagnosis, percent, statusType, statusText, evaluationStatus
 const {
   devices, selectedDeviceId, selectedBatchIndex, selectedChannel,
   runMode, selectedMethod, denoise, profile, loading, result,
-  targetFault, combFrequencies, combIsStable, rotFrequency,
+  targetFault, combFrequencies, combIsStable, rotFrequency, compositeAlignment,
   currentBatches, currentChannels, canRun,
-  bearingMethodGroup, gearMethodGroup, planetaryMethodGroup,
+  bearingMethodGroup, gearMethodGroup, planetaryMethodGroup, compositeMethodGroup,
   selectedMethodInfo, methodCategoryTag,
   bearingVoteRows, gearVoteRows, bestIndicatorRows, dsFaultProbRows,
   hasAllResults, allBearingRows, allGearRows, allBestIndicatorRows,

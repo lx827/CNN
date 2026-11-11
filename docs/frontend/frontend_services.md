@@ -200,20 +200,30 @@ view.connect();
 
 | 函数 | 签名 | 说明 |
 |------|------|------|
-| `bearingEvaluationIndicators` | `(result: object \| null) -> object` | 读取 `evaluation.indicators`，不回退旧顶层 `fault_indicators` |
-| `scScohIndicators` | `(result: object \| null) -> object` | 读取 SC/SCoh 专属 `sc_scoh_indicators` |
+| `bearingEvaluationIndicators` | `(result: object \| null) -> object` | `evaluation_kind` 非 `sc_scoh` 时读取 `evaluation.indicators`，不回退旧顶层 |
+| `scScohIndicators` | `(result: object \| null) -> object` | `evaluation_kind=sc_scoh` 时读取同一规范 `evaluation.indicators` |
 | `bearingEvaluationEntries` | `(result) -> Array<{key,name,info,source}>` | 包络评估指标条目，`source=evaluation` |
 | `scScohEntries` | `(result) -> Array<{key,name,info,source}>` | SC/SCoh 指标条目，`source=sc_scoh` |
 | `bearingIndicatorEntries` | `(result) -> Array` | 按包络评估、SC/SCoh 顺序合并条目，key 带来源前缀避免冲突 |
-| `significantBearingFaults` | `(result) -> Array` | 汇总 `significant/critical` 指标；真实 `snr` 与一般 `score` 分开，SC/SCoh 的 SNR 取 `scoh_snr`，并保留理论/检出频率与来源 |
+| `significantBearingFaults` | `(result) -> Array` | 汇总 `significant/critical`；真实 `snr`、一般 `score`、循环相干背景比各自保留，不混称 SNR |
 | `bearingFrequencyAnnotations` | `(result) -> Array` | 从 `detected_hz ?? theory_hz ?? frequency_hz` 生成图表标注，区分 `bearing` 与 `bearing_sc_scoh` |
-| `indicatorDisplayValue` | `(info: object) -> number \| string` | 依次选择 `value/snr/scoh_peak/scoh_snr/detected_hz`，空值返回 `-` |
+| `indicatorDisplayValue` | `(info: object) -> number \| string` | 依次选择 `value/snr/scoh_peak/detected_hz`，空值返回 `-` |
 
 **评估状态**：`evaluation.status=evaluated` 表示已完成评估，`indeterminate` 表示输入不足、不可判定，`not_evaluable` 表示频率覆盖、分辨率等条件不足、不可评估；后两者都不等于正常或故障。研究页通过 `useResearchDiagnosis.js` 导出的 `evaluationStatusType/evaluationStatusText` 统一展示。投票行读取 `strongest_score`，真实峰值/背景比与一般证据分不混称为 SNR。
+
+`bearingReasonText` 将稳定梳状先验、缺 MCKD 目标/周期、数值解卷积失败、零能量、无冲击频带与变速限制显示为可读原因。实际回退 MED 显示请求方法和回退原因；SC 无普通包络谱时不创建伪空谱。TEO 最终包络谱单位为输入单位平方，单位标签读取响应。分解质量不足不得渲染为成功去噪或健康。
 
 ---
 
 ## 3. 通用组件 (Components)
+
+### 行星对象结果与机械表单
+
+`utils/errorMessage.js::formatErrorMessage` 是公共错误显示边界。request 拦截器、DataView 与研究页共同使用：HTTP 422 的去噪对象显示实际方法和 reason，参数校验数组合并 msg，既有字符串与网络 message 继续可读；原错误仍向调用方抛出。不把 detail 对象直接交给消息组件，也不替换成成功原信号。
+
+`PlanetaryResult.vue` 在研究单方法、集成、DataView 综合与诊断详情复用。`planetaryDiagnosis.js` 只读派生原始指标、参考轴、候选事件与失败原因；SER 明确标为行星架间隔。`analysis_status=computed` 不等于诊断完成，只有 `evaluation.status=evaluated` 才显示基线结论；没有基线显示不可评估/unknown，空值显示 `-`。矩、边带和事件峰不直接命名断齿/裂纹/磨损，TSA 残差无峰不能排除同步损伤。
+
+`mechanicalGearForm/mechanicalGearPayload` 在设置流程保存结构类型与完整行星配置：sun/ring/planet/planet_count、reference_axis、fixed_member。缺失项保留空值等待用户配置，不默认太阳轴或固定齿圈；当前唯一支持的固定构件是 ring。定轴提交 input/output，行星提交完整模型；服务端继续做合法几何与物理前提门控。
 
 ### 3.1 Layout.vue
 
@@ -244,7 +254,7 @@ view.connect();
 
 **用途**：诊断结果明细展示（健康度、故障概率、阶次分析、轴承包络评估、SC/SCoh 专属指标）
 
-**数据读取**：轴承指标与特征频率来自 `bearing.evaluation.indicators`（`theory_hz/detected_hz`）；SC/SCoh 独立来自 `bearing.sc_scoh_indicators`（`scoh_peak/scoh_snr`）；齿轮指标继续来自 `gear.fault_indicators`。`bearing.evaluation.status` 为 `indeterminate` 或 `not_evaluable` 时均显示输入不足、不可判定，不按正常处理。
+**数据读取**：轴承指标统一来自 `bearing.evaluation.indicators`；SC/SCoh 通过 `evaluation_kind` 分组并保存循环频率与相干背景比。定轴可读规范评估兼容视图，行星复用 `PlanetaryResult`。`indeterminate/not_evaluable`、空健康分与质量不足均保留未知，不按正常处理。
 
 ---
 

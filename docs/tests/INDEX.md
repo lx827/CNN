@@ -163,7 +163,7 @@ uv run python tests/diagnosis/regression/test_none_params.py
 | 项目 | 说明 |
 |------|------|
 | **目的** | 验证设备参数为 None 时诊断引擎不崩溃 |
-| **测试范围** | `_compute_bearing_fault_freqs`, `_extract_spectrum_features`, `DiagnosisEngine` 各方法 |
+| **测试范围** | 参数门控、无几何统计路径、Engine 各对象方法与未知状态 |
 | **数据集** | 不需要(使用合成信号) |
 | **通过标准** | 所有 assert 通过,无异常抛出 |
 
@@ -213,7 +213,9 @@ uv run python tests/diagnosis/regression/test_none_params.py && uv run python te
 | 高级轴承业务 | `test_bearing_advanced_business.py`、`test_bearing_advanced_api.py` | 实际 MED 回退、门控、方法隔离、JSON/API |
 | 分解 #74 | `test_decomposition_wavelet.py`、`test_decomposition_emd.py`、`test_decomposition_vmd.py`、`test_decomposition_selection.py` | 频率序/时间轴、镜像/停止、有效区间/Hz、熵/零能量 |
 | 分解质量/业务 | `test_decomposition_review_counterexamples.py`、`test_decomposition_business.py` | 未收敛选中分量、直接重评、失败状态与消费者 |
+| 去噪公共错误 | `cloud/tests/test_preprocessing_failures.py` | 真实 HTTP/worker、未知方法、失败不回退、None 告警、422 对象/参数数组 schema；用 `uv run python -m unittest tests.test_preprocessing_failures -v` |
 | 行星 #72 | `../planetary/test_planetary_pipeline.py` | WT 运动学、参考轴、角域 residual、SER、基线与工况 |
+| 行星业务/API | `../planetary/test_planetary_business.py`、`../planetary/test_planetary_api.py` | 无基线不伪健康/告警、按通道完整几何、实际 HTTP 四方法与旧标识拒绝 |
 | 规则 #76 | `../regression/test_rule_pipeline_fallback.py` | 复用 Pipeline、无证据不伪健康、阈值/概率、非法嵌套参数 |
 
 不再调用已删除旧函数证明新实现兼容。真实数据分类效果和性能分别归 #78/#79。
@@ -239,11 +241,18 @@ uv run python tests/diagnosis/regression/test_none_params.py && uv run python te
 | 文件 | 用途 | 数据依赖 |
 |------|------|----------|
 | `test_planetary_pipeline.py` | 当前基础运动学/方法指标/基线评估 | 无，已知物理参数合成信号 |
+| `test_planetary_business.py`、`test_planetary_api.py` | 真实 Engine/ensemble 和隔离 SQLite HTTP 消费路径 | 无真实数据依赖 |
 
 ```bash
 cd cloud
 uv run python tests/diagnosis/planetary/test_planetary_pipeline.py
+uv run python tests/diagnosis/planetary/test_planetary_business.py
+uv run python tests/diagnosis/planetary/test_planetary_api.py
 ```
+
+前端 `wind-turbine-diagnosis/tests/planetary_contract.test.cjs` 用 `node --test tests/planetary_contract.test.cjs` 验证机械表单保留全部模型字段与只读指标/unknown 语义；不覆盖浏览器像素。
+
+`wind-turbine-diagnosis/tests/error_message.test.cjs` 验证共享格式化和实际 request 拦截器消费 422 对象、旧字符串与参数校验数组；`bearing_contract.test.cjs` 覆盖 DataView/研究的对应读取与新方法标签。用 `node --test tests/error_message.test.cjs tests/bearing_contract.test.cjs`，不代表像素或真实设备效果。
 
 ---
 

@@ -8,7 +8,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { getAllDeviceData } from '../api/data'
-import { getMethodInfo, getChannelMethodAnalysis, getChannelResearchAnalysis } from '../api/diagnosis'
+import { getMethodInfo, getChannelMethodAnalysis, getChannelResearchAnalysis, runCompositeResearch } from '../api/diagnosis'
+import { buildCompositeRequest } from '../utils/compositeResearch'
 import { getDiagnosisStatusView } from '../utils/diagnosisStatus'
 import { formatErrorMessage } from '../utils/errorMessage'
 import {
@@ -96,6 +97,7 @@ export function useResearchDiagnosis() {
   const combFrequencies = ref('')
   const combIsStable = ref(false)
   const rotFrequency = ref(null)
+  const compositeAlignment = ref('')
   const denoise = ref('none')
   const profile = ref('balanced')
   const loading = ref(false)
@@ -123,6 +125,10 @@ export function useResearchDiagnosis() {
   )
   const planetaryMethodGroup = computed(() =>
     Object.entries(methodInfoData.value).filter(([_, m]) => m.category === 'planetary').map(([k, m]) => ({ key: k, label: m.label }))
+  )
+  const compositeMethodGroup = computed(() =>
+    Object.entries(methodInfoData.value).filter(([, method]) => method.category === 'composite')
+      .map(([key, method]) => ({ key, label: method.label }))
   )
 
   const selectedMethodInfo = computed(() => methodInfoData.value[selectedMethod.value] || null)
@@ -303,7 +309,11 @@ export function useResearchDiagnosis() {
     loading.value = true
     result.value = null
     try {
-      if (runMode.value === 'single') {
+      if (runMode.value === 'single' && selectedMethodInfo.value?.category === 'composite') {
+        const body = buildCompositeRequest(selectedMethod.value, rotFrequency.value, compositeAlignment.value)
+        const res = await runCompositeResearch(selectedDeviceId.value, selectedBatchIndex.value, selectedChannel.value, body)
+        result.value = res.data
+      } else if (runMode.value === 'single') {
         const res = await getChannelMethodAnalysis(
           selectedDeviceId.value,
           selectedBatchIndex.value,
@@ -361,7 +371,7 @@ export function useResearchDiagnosis() {
     selectedChannel,
     runMode,
     selectedMethod,
-    targetFault, combFrequencies, combIsStable, rotFrequency,
+    targetFault, combFrequencies, combIsStable, rotFrequency, compositeAlignment,
     denoise,
     profile,
     loading,
@@ -372,6 +382,7 @@ export function useResearchDiagnosis() {
     bearingMethodGroup,
     gearMethodGroup,
     planetaryMethodGroup,
+    compositeMethodGroup,
     selectedMethodInfo,
     methodCategoryTag,
     bearingVoteRows,

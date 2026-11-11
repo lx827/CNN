@@ -1,6 +1,6 @@
 # 定轴与行星齿轮契约
 
-> 定轴 #71 已随 PR #85 合并；行星 #72 纯计算切片已进入开发分支，公共业务接入以 [诊断编排](../../backend/diagnosis.md) 和 [API](../../api/backend_api.md) 为准。本文描述机械与算法稳定语义，未声明真实数据分类效果。
+> 定轴 #71 已随 PR #85 合并；行星 #72 纯计算与公共业务切片已集成至开发分支/草稿 PR #89。公共接入以 [诊断编排](../../backend/diagnosis.md) 和 [API](../../api/backend_api.md) 为准，未声明真实数据分类效果。
 >
 > 实现导航：`algorithms/gear/fixed_axis/`、`gear/planetary/`、`mechanics/planetary.py` 与 `algorithms/pipelines/gear/`（均相对 `cloud/app/`）。
 
@@ -68,6 +68,8 @@ WTgearbox 的 Zs=28、Zr=100、Zp=36、Np=4：太阳轴参考的 carrier 阶次 
 
 SER 使用 carrier 间隔，搜索窗互不重叠，不能再被定轴 1 阶 SER 覆盖。TSA residual 已是角域数据，FFT 采用点/转而非原始 fs。窄带峰必须有可观测的邻域背景；全带 Hilbert 存在多分量交叉项。经典整数啮合梳 TSA 指标只在所选同步轴啮合阶次为整数且谐波覆盖充分时计算。
 
+行星 FM4/M6A/M8A 当前明确指所选轴 TSA 的 `regular-minus-mesh` 差分信号中心归一化 4/6/8 阶矩；carrier 是默认 TSA 轴。它们是该处理链的数学描述，不能据名称声称已验证所有经典行星诊断定义，更不直接套用定轴阈值。当前依据为 Willis 手算、表示恒等式和合成向量；没有完成原始文献逐项外部复现或真实健康基线标定。
+
 `PlanetaryGearPipeline` 分开 analyze/evaluate/run；evaluate 不重做表示，只检查已产生且被标定的指标。缺基线保留 `unconsumed_metrics`。有效基线也只给异常或“已校准指标未见异常”，不将异常命名为具体损伤类型。
 
 ## 错误与不可判定语义
@@ -97,6 +99,7 @@ SER 使用 carrier 间隔，搜索窗互不重叠，不能再被定轴 1 阶 SER
 | `cloud/tests/diagnosis/algorithms/test_fixed_axis_gear.py` | 手算矩/啮合、TSA 恒等式、角域轴、边带/倒谱、缺历史、直接重评 |
 | `cloud/tests/diagnosis/algorithms/test_fixed_axis_gear_api.py` | Engine/API、规范评估和兼容字段 |
 | `cloud/tests/diagnosis/planetary/test_planetary_pipeline.py` | WT 参数手算、参考轴、SER 重叠、角域 residual、覆盖不足、缺基线和重评 |
+| `cloud/tests/diagnosis/planetary/test_planetary_business.py`、`test_planetary_api.py` | Engine/ensemble/评分门控、当前通道完整几何、真实隔离 HTTP 四方法/gear_advanced 与旧标识拒绝 |
 | `cloud/tests/diagnosis/regression/` | None 参数与工况边界 |
 | `cloud/tests/diagnosis/method_eval/` | 数据集分类效果，依赖真实数据及有效参数 |
 

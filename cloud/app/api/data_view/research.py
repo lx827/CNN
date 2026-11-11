@@ -1,16 +1,23 @@
 from fastapi import Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Literal
 from .bearing_options import get_bearing_options
 from app.services.diagnosis.signal_utils import DenoisingError
 from .errors import denoising_http_error, configured_denoise
-from app.services.diagnosis.gear.planetary import analyze_planetary_gear, gear_config_for_channel
+from app.services.diagnosis.gear.planetary import (
+    analyze_planetary_gear, gear_config_for_channel, is_planetary_config, planetary_geometry_from_config,
+)
+from app.algorithms.mechanics import FixedAxisGearGeometry
+from app.algorithms.order import ScalarSpeed
+from app.algorithms.composite.cvs import CVSAlignment
+from app.algorithms.pipelines.composite import CompositeAnalysis, CompositeDiagnosis, ResearchCompositePipeline
+from app.services.diagnosis.composite import analyze_composite_research, composite_to_dict
 
 from app.database import get_db
-from app.models import SensorData, Device, Diagnosis
+from app.models import SensorData, Device
 from app.services.diagnosis import (
     DiagnosisEngine, DenoiseMethod, DiagnosisStrategy,
     BearingMethod, GearMethod,
@@ -19,42 +26,6 @@ from . import router, prepare_signal, _get_channel_name, _extract_device_param, 
 
 logger = logging.getLogger(__name__)
 
-
-def _save_research_diagnosis(db: Session, device_id: str, batch_index: int,
-                             channel: int, denoise: str, result: dict):
-    """将研究诊断结果写入 diagnosis 表缓存，供 DataView 等模块读取。"""
-    try:
-        diag = db.query(Diagnosis).filter(
-            Diagnosis.device_id == device_id,
-            Diagnosis.batch_index == batch_index,
-            Diagnosis.channel == channel,
-            Diagnosis.denoise_method == denoise,
-        ).first()
-
-        health_score = result.get("health_score")
-        status = result.get("status", "normal")
-
-        if diag:
-            diag.health_score = health_score
-            diag.status = status
-            diag.full_analysis = _sanitize_for_json(result)
-            diag.analyzed_at = datetime.now(timezone.utc)
-        else:
-            diag = Diagnosis(
-                device_id=device_id,
-                batch_index=batch_index,
-                channel=channel,
-                denoise_method=denoise,
-                health_score=health_score,
-                status=status,
-                full_analysis=_sanitize_for_json(result),
-                analyzed_at=datetime.now(timezone.utc),
-            )
-            db.add(diag)
-        db.commit()
-    except Exception as exc:
-        logger.warning("保存研究诊断缓存失败: %s", exc)
-        db.rollback()
 
 # ── 分析方法元数据（名称、分类、说明） ──
 METHOD_INFO = {
@@ -153,6 +124,82 @@ METHOD_INFO = {
     },
 }
 
+COMPOSITE_METHODS = {
+    "composite_vmd_amfm": ("vmd_amfm", "VMD 幅频解调", "按已知恒定转频及机械对象提取调幅/调频谱；调制目标与载波分开。"),
+    "composite_msb": ("modulation_bispectrum", "调制信号双谱", "四阶复谱先平均再取幅值，查看相位耦合；不将耦合峰直接判为齿轮故障。"),
+    "composite_cvs_med_msb": ("cvs_med_msb", "单行星分离 → MED → MSB", "需真实空间方位、行星编号和连续相位；缺少对齐记录时不可判定，不回退原信号。"),
+    "composite_vmd_ica": ("vmd_ica", "VMD → ICA 分量分离", "单通道分解后构造虚拟观测，再分离与选择分量；不等价于新增真实测点。"),
+    "composite_mswpee": ("mswpee", "多尺度小波包能量熵", "粗粒化后逐尺度查看小波包能量熵，保留不同采样率；不输出故障标签。"),
+}
+METHOD_INFO.update({key: {"category": "composite", "label": label, "description": description,
+                         "research_only": True, "production_eligible": False}
+                    for key, (_, label, description) in COMPOSITE_METHODS.items()})
+
+
+class CompositeResearchRequest(BaseModel):
+    method: Literal["composite_vmd_amfm", "composite_msb", "composite_cvs_med_msb", "composite_vmd_ica", "composite_mswpee"]
+    rot_freq_hz: Optional[float] = Field(default=None, gt=0)
+    options: dict = Field(default_factory=dict)
+    alignment: Optional[dict] = None
+
+
+def _run_composite_method(record, device, method, rot_freq_hz, options=None, alignment=None):
+    """同一研究调度边界，GET与POST复用；不写生产缓存或调用生产聚合。"""
+    import numpy as np
+    internal = COMPOSITE_METHODS[method][0]
+    geometry = None
+    reason = None
+    if internal in {"vmd_amfm", "modulation_bispectrum", "cvs_med_msb"}:
+        config = gear_config_for_channel(device.gear_teeth if device else None, record.channel)
+        if not config:
+            reason = "missing_mechanical_geometry"
+        elif is_planetary_config(config):
+            geometry = planetary_geometry_from_config(config)
+        else:
+            geometry = FixedAxisGearGeometry(config.get("input"), config.get("output"))
+        if rot_freq_hz is None:
+            reason = "constant_reference_speed_required"
+    if reason:
+        analysis = CompositeAnalysis(internal, "indeterminate", (), reason=reason)
+        diagnosis = CompositeDiagnosis(analysis, ResearchCompositePipeline().evaluate(analysis))
+    else:
+        context = None
+        if alignment is not None:
+            try:
+                context = CVSAlignment(**{
+                    **alignment,
+                    "carrier_phase_rad": np.asarray(alignment["carrier_phase_rad"], dtype=float),
+                    "planet_phase_rad": np.asarray(alignment["planet_phase_rad"], dtype=float),
+                })
+            except (KeyError, TypeError) as exc:
+                raise ValueError("invalid_CVS_alignment_record") from exc
+        diagnosis = analyze_composite_research(
+            internal, record.data, record.sample_rate or 25600,
+            geometry=geometry, speed=ScalarSpeed(rot_freq_hz, "explicit_research_input") if rot_freq_hz else None,
+            alignment=context, options=options,
+        )
+    return {**composite_to_dict(diagnosis), "device_id": record.device_id, "batch_index": record.batch_index,
+            "channel": record.channel, "channel_name": _get_channel_name(device, record.channel),
+            "sample_rate": record.sample_rate or 25600, "analysis_method": method,
+            "method_info": METHOD_INFO[method], "rot_freq_hz": rot_freq_hz}
+
+
+@router.post("/{device_id}/{batch_index}/{channel}/composite-analysis")
+async def post_channel_composite_analysis(device_id: str, batch_index: int, channel: int,
+                                          request: CompositeResearchRequest, db: Session = Depends(get_db)):
+    """显式研究组合；CVS相位记录放请求体，既不猜空间零位也不存诊断缓存。"""
+    record = db.query(SensorData).filter(SensorData.device_id == device_id,
+        SensorData.batch_index == batch_index, SensorData.channel == channel).first()
+    if not record or not record.data:
+        raise HTTPException(status_code=404, detail="数据不存在")
+    device = db.query(Device).filter(Device.device_id == device_id).first()
+    try:
+        result = await asyncio.to_thread(_run_composite_method, record, device, request.method,
+                                         request.rot_freq_hz, request.options, request.alignment)
+        return {"code": 200, "data": _sanitize_for_json(result)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"研究组合参数无效: {exc}") from exc
+
 
 @router.get("/method-info")
 async def get_method_info():
@@ -190,6 +237,15 @@ async def get_channel_method_analysis(
         raise HTTPException(status_code=404, detail="数据不存在")
 
     device = db.query(Device).filter(Device.device_id == device_id).first()
+
+    if method in COMPOSITE_METHODS:
+        if denoise != "none" or detrend:
+            raise HTTPException(status_code=400, detail="研究组合按自身阶段处理原始信号，请选择不去噪且不去趋势")
+        try:
+            result = await asyncio.to_thread(_run_composite_method, record, device, method, rot_freq_hz)
+            return {"code": 200, "data": _sanitize_for_json(result)}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"研究组合参数无效: {exc}") from exc
 
     try:
         sample_rate = record.sample_rate or 25600
@@ -230,8 +286,6 @@ async def get_channel_method_analysis(
                 "denoise": denoise,
                 **result,
             }
-            # 写入数据库缓存，供 DataView 读取
-            _save_research_diagnosis(db, device_id, batch_index, channel, denoise, result)
             return {"code": 200, "data": _sanitize_for_json(response_data)}
 
         # ── 运行单个轴承方法 ──
@@ -419,8 +473,6 @@ async def get_channel_research_analysis(
             "denoise": denoise,
             **result,
         }
-        # 写入数据库缓存，供 DataView 读取
-        _save_research_diagnosis(db, device_id, batch_index, channel, denoise, result)
         return {"code": 200, "data": _sanitize_for_json(response_data)}
     except DenoisingError as exc:
         raise denoising_http_error(exc) from exc
