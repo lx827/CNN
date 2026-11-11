@@ -10,6 +10,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getAllDeviceData } from '../api/data'
 import { getMethodInfo, getChannelMethodAnalysis, getChannelResearchAnalysis } from '../api/diagnosis'
 import { getDiagnosisStatusView } from '../utils/diagnosisStatus'
+import { formatErrorMessage } from '../utils/errorMessage'
 import {
   bearingIndicatorEntries,
   indicatorDisplayValue,
@@ -330,7 +331,7 @@ export function useResearchDiagnosis() {
         result.value = res.data
       }
     } catch (error) {
-      ElMessage.error(error?.response?.data?.detail || error?.message || '诊断失败')
+      ElMessage.error(formatErrorMessage(error, '诊断失败'))
     } finally {
       loading.value = false
     }

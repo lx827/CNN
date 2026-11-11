@@ -155,61 +155,57 @@ def prepare_signal(signal, detrend: bool = False) -> np.ndarray:
     return arr - np.mean(arr)
 
 
-def denoise_signal(signal: np.ndarray, method: str) -> np.ndarray:
-    """
-    通用信号去噪（供 DataView 实时计算端点复用）
-    method 可选值对应 DenoiseMethod 枚举的字符串值。
-    返回去噪后的信号；method='none' 或未知值时原样返回。
-    注意：输入信号应为已经 prepare_signal 处理过的零均值信号。
-    """
-    arr = np.asarray(signal, dtype=np.float64)
-    if not method or method == "none":
-        return arr
+class DenoisingError(ValueError):
+    """去噪未产生有效表示；业务/API 必须保留方法与原因，禁止静默回退原信号。"""
 
+    def __init__(self, method: str, reason: str):
+        self.method = method
+        self.reason = reason
+        super().__init__(f"去噪 {method} 无法完成: {reason}")
+
+
+def denoise_signal(signal: np.ndarray, method: str) -> np.ndarray:
+    """统一去噪业务分派；none 原样返回，未知方法或计算失败显式报错。"""
+    arr = np.asarray(signal, dtype=np.float64)
+    if method == "none":
+        return arr
     try:
+        if arr.ndim != 1 or not len(arr) or not np.all(np.isfinite(arr)):
+            raise ValueError("去噪输入必须是非空的一维有限数组")
         if method == "wavelet":
-            from .preprocessing import wavelet_denoise
-            return wavelet_denoise(arr, wavelet="db8")
+            from app.algorithms.decomposition.wavelet import denoise_wavelet
+            result = denoise_wavelet(arr, wavelet="db8")
         elif method == "vmd":
             from .vmd_denoise import vmd_denoise
-            return vmd_denoise(arr, K=5, alpha=2000)
-        elif method == "wavelet_vmd":
-            from .preprocessing import cascade_wavelet_vmd
-            result, _ = cascade_wavelet_vmd(arr)
-            return result
-        elif method == "wavelet_lms":
-            from .preprocessing import cascade_wavelet_lms
-            result, _ = cascade_wavelet_lms(arr)
-            return result
-        elif method == "emd":
+            result = vmd_denoise(arr, K=5, alpha=2000)
+        elif method in ("wavelet_vmd", "wavelet_lms"):
+            from .preprocessing import cascade_wavelet_vmd, cascade_wavelet_lms
+            function = cascade_wavelet_vmd if method == "wavelet_vmd" else cascade_wavelet_lms
+            result, _ = function(arr)
+        elif method in ("emd", "eemd", "ceemdan"):
             from .emd_denoise import emd_denoise
-            result, _ = emd_denoise(arr, method="emd")
-            return result
-        elif method == "ceemdan":
-            from .emd_denoise import emd_denoise
-            result, _ = emd_denoise(arr, method="ceemdan")
-            return result
+            result, _ = emd_denoise(arr, method=method)
         elif method == "savgol":
             from .savgol_denoise import sg_denoise
             result, _ = sg_denoise(arr)
-            return result
         elif method == "wavelet_packet":
             from .wavelet_packet import wavelet_packet_denoise
             result, _ = wavelet_packet_denoise(arr)
-            return result
         elif method == "ceemdan_wp":
             from .emd_denoise import emd_denoise
             from .wavelet_packet import wavelet_packet_denoise
             step1, _ = emd_denoise(arr, method="ceemdan")
-            step2, _ = wavelet_packet_denoise(step1)
-            return step2
-        elif method == "eemd":
-            from .emd_denoise import emd_denoise
-            result, _ = emd_denoise(arr, method="eemd")
-            return result
-    except Exception:
-        pass
-    return arr
+            result, _ = wavelet_packet_denoise(step1)
+        else:
+            raise ValueError("未知去噪方法")
+        result = np.asarray(result, dtype=np.float64)
+        if result.shape != arr.shape or not np.all(np.isfinite(result)):
+            raise ValueError("去噪未返回同时间轴的有限表示")
+        return result
+    except DenoisingError:
+        raise
+    except Exception as exc:
+        raise DenoisingError(str(method), str(exc)) from exc
 
 
 def bandpass_filter(

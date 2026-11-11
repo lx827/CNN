@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device
-from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
+from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum, DenoisingError
+from .errors import denoising_http_error, configured_denoise
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, DenoiseMethod
 from . import router, prepare_signal, _get_channel_name, _extract_device_param, _sanitize_for_json
 from datetime import datetime
@@ -87,20 +88,7 @@ async def get_channel_envelope(
             raise ValueError(f"不支持的轴承方法: {method}")
         bearing_method = method_map[method]
 
-        denoise_map = {
-            "none": DenoiseMethod.NONE,
-            "wavelet": DenoiseMethod.WAVELET,
-            "vmd": DenoiseMethod.VMD,
-            "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
-            "wavelet_lms": DenoiseMethod.WAVELET_LMS,
-            "emd": DenoiseMethod.EMD,
-            "ceemdan": DenoiseMethod.CEEMDAN,
-            "savgol": DenoiseMethod.SAVGOL,
-            "wavelet_packet": DenoiseMethod.WAVELET_PACKET,
-            "ceemdan_wp": DenoiseMethod.CEEMDAN_WP,
-            "eemd": DenoiseMethod.EEMD,
-        }
-        denoise_method = denoise_map.get(denoise, DenoiseMethod.NONE)
+        denoise_method = configured_denoise(denoise)
 
         engine = DiagnosisEngine(
             bearing_method=bearing_method,
@@ -135,6 +123,8 @@ async def get_channel_envelope(
         })
     except HTTPException:
         raise
+    except DenoisingError as e:
+        raise denoising_http_error(e) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"包络谱参数无效: {e}") from e
     except Exception as e:

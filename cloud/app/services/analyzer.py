@@ -19,6 +19,7 @@ from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, D
 from app.services.diagnosis.signal_utils import (
     estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum,
     _order_band_energy,
+    DenoisingError,
 )
 from app.services.diagnosis.rule_based import _rule_based_analyze
 from app.services.diagnosis.features import _get_channel_params, has_bearing_params, has_gear_params
@@ -33,7 +34,7 @@ def _safe_result(msg="分析失败"):
     return {
         "health_score": None, "status": "indeterminate",
         "fault_probabilities": {},
-        "imf_energy": {}, "order_analysis": None, "rot_freq": None,
+        "imf_energy": {}, "order_analysis": {"channels": {}}, "rot_freq": None,
         "_error": msg,
     }
 
@@ -83,6 +84,10 @@ def analyze_device(
             denoise = device.denoise_method
         else:
             denoise = ANALYZE_DENOISE_METHOD
+        try:
+            DenoiseMethod(denoise)
+        except ValueError as exc:
+            raise DenoisingError(str(denoise), "未知去噪方法") from exc
 
         channel_results = []
         for ch_idx, (ch_name, signal) in enumerate(channels_data.items(), start=1):
@@ -103,10 +108,18 @@ def analyze_device(
                 gear_method=gear_method, denoise_method=denoise,
                 bearing_params=ch_bp, gear_teeth=ch_gt,
             )
-            result = engine.analyze_research_ensemble(
-                sig_arr, sample_rate, rot_freq=rot_freq,
-                profile="runtime",
-            )
+            try:
+                result = engine.analyze_research_ensemble(
+                    sig_arr, sample_rate, rot_freq=rot_freq,
+                    profile="runtime",
+                )
+            except DenoisingError as exc:
+                # 请求的前处理未完成，不能用未经该处理的规则回退假装成功。
+                # 保留失败通道，同时允许其他有效通道形成自己的诊断。
+                result = {"health_score": None, "status": "indeterminate",
+                          "rot_freq_hz": None, "denoise": exc.method,
+                          "reason": exc.reason, "error": str(exc),
+                          "bearing": {}, "gear": {}}
             channel_results.append((ch_name, result))
 
         if not channel_results:
@@ -217,6 +230,8 @@ def analyze_device(
             "consensus_hint": consensus.get("recommendation_hint", ""),
         }
 
+    except DenoisingError as e:
+        return _safe_result(str(e))
     except Exception as e:
         logger.error(f"[分析] 新诊断引擎异常: {e}\n{_tb.format_exc()}")
 

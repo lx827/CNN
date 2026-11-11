@@ -7,7 +7,8 @@ from app.algorithms.statistics import analyze_time_domain
 from app.algorithms.transforms import compute_spectrum, compute_stft
 from app.database import get_db
 from app.models import SensorData, Device
-from app.services.diagnosis.signal_utils import denoise_signal
+from app.services.diagnosis.signal_utils import denoise_signal, DenoisingError
+from .errors import denoising_http_error
 from . import router, prepare_signal, _get_channel_name
 
 import asyncio
@@ -64,6 +65,8 @@ async def get_channel_fft(
                 "fft_amp": [round(float(value), 4) for value in spectrum.amplitude],
             }
         }
+    except DenoisingError as e:
+        raise denoising_http_error(e) from e
     except Exception as e:
         logger.error(f"FFT 计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"FFT 计算失败: {e}")
@@ -134,6 +137,8 @@ async def get_channel_stft(
                 ],
             }
         }
+    except DenoisingError as e:
+        raise denoising_http_error(e) from e
     except Exception as e:
         logger.error(f"STFT 计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"STFT 计算失败: {e}")
@@ -208,6 +213,8 @@ async def get_channel_stats(
                 },
             }
         }
+    except DenoisingError as e:
+        raise denoising_http_error(e) from e
     except Exception as e:
         logger.error(f"统计指标计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"统计指标计算失败: {e}")

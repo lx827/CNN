@@ -15,6 +15,9 @@ def _check_device_alarms(
     去重：同一设备同类未处理告警 1 小时内不重复生成。
     """
     new_alarms = []
+    # 前处理失败或无有效证据时分数为空，不能参与健康阈值或生成正常结论。
+    if health_score is None:
+        return new_alarms
 
     # 提取 Top-2 故障类型用于描述
     top_faults = sorted(

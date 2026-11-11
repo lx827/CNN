@@ -25,11 +25,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 
 from app.services.diagnosis.preprocessing import (
-    wavelet_denoise,
-    minimum_entropy_deconvolution,
     cascade_wavelet_vmd,
     cascade_wavelet_lms,
 )
+from app.algorithms.decomposition.wavelet import denoise_wavelet
+from app.algorithms.bearing.deconvolution import minimum_entropy_deconvolution, MEDParameters
 from app.services.diagnosis.vmd_denoise import vmd_denoise
 from app.services.diagnosis.emd_denoise import emd_denoise
 from app.services.diagnosis.wavelet_packet import wavelet_packet_denoise
@@ -83,9 +83,9 @@ def evaluate_denoise_methods():
     ]
 
     denoise_methods = {
-        "wavelet": lambda sig: wavelet_denoise(sig, wavelet="db8"),
+        "wavelet": lambda sig: denoise_wavelet(sig, wavelet="db8"),
         "vmd": lambda sig: vmd_denoise(sig, K=5, alpha=2000),
-        "med": lambda sig: minimum_entropy_deconvolution(sig, filter_len=64, max_iter=30)[0],
+        "med": lambda sig: minimum_entropy_deconvolution(sig, MEDParameters(filter_length=64, max_iterations=30)).signal,
         "wavelet_vmd": lambda sig: cascade_wavelet_vmd(sig)[0],
         "wavelet_lms": lambda sig: cascade_wavelet_lms(sig)[0],
         "emd": lambda sig: emd_denoise(sig, method="emd")[0],

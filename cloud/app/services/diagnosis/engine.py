@@ -7,7 +7,7 @@ import numpy as np
 from enum import Enum
 from typing import Dict, List, Optional, Any, Mapping
 
-from .signal_utils import prepare_signal, linear_detrend
+from .signal_utils import prepare_signal, linear_detrend, denoise_signal
 from app.algorithms.core import Spectrum
 from app.algorithms.mechanics import BearingGeometry, FixedAxisGearGeometry
 from app.algorithms.pipelines.gear.fixed_axis import FixedAxisGearPipeline
@@ -28,8 +28,6 @@ from app.algorithms.order import (
 from .advanced_bearing import ADVANCED_BEARING_METHODS, analyze_advanced_bearing
 from .gear.planetary import analyze_planetary_gear, is_planetary_config
 from app.algorithms.gear.planetary.types import PlanetaryBaseline, PlanetaryMomentHistory
-from .preprocessing import wavelet_denoise
-from .vmd_denoise import vmd_denoise
 from .features import compute_time_features
 from .health_score import _compute_health_score, _has_diagnosis_evidence
 from .recommendation import (
@@ -144,47 +142,9 @@ class DiagnosisEngine:
         self.planetary_history = planetary_history
 
     def preprocess(self, signal: np.ndarray) -> np.ndarray:
-        """去直流 + 线性去趋势 + 可选去噪（所有诊断路径统一入口）"""
-        arr = prepare_signal(np.array(signal, dtype=np.float64), detrend=True)
-        if self.denoise_method == DenoiseMethod.WAVELET:
-            return wavelet_denoise(arr, wavelet="db8")
-        elif self.denoise_method == DenoiseMethod.VMD:
-            return vmd_denoise(arr, K=5, alpha=2000)
-        elif self.denoise_method == DenoiseMethod.WAVELET_VMD:
-            from .preprocessing import cascade_wavelet_vmd
-            result, _ = cascade_wavelet_vmd(arr)
-            return result
-        elif self.denoise_method == DenoiseMethod.WAVELET_LMS:
-            from .preprocessing import cascade_wavelet_lms
-            result, _ = cascade_wavelet_lms(arr)
-            return result
-        elif self.denoise_method == DenoiseMethod.EMD:
-            from .emd_denoise import emd_denoise
-            result, _ = emd_denoise(arr, method="emd")
-            return result
-        elif self.denoise_method == DenoiseMethod.CEEMDAN:
-            from .emd_denoise import emd_denoise
-            result, _ = emd_denoise(arr, method="ceemdan")
-            return result
-        elif self.denoise_method == DenoiseMethod.SAVGOL:
-            from .savgol_denoise import sg_denoise
-            result, _ = sg_denoise(arr)
-            return result
-        elif self.denoise_method == DenoiseMethod.WAVELET_PACKET:
-            from .wavelet_packet import wavelet_packet_denoise
-            result, _ = wavelet_packet_denoise(arr)
-            return result
-        elif self.denoise_method == DenoiseMethod.CEEMDAN_WP:
-            from .emd_denoise import emd_denoise
-            from .wavelet_packet import wavelet_packet_denoise
-            step1, _ = emd_denoise(arr, method="ceemdan")
-            step2, _ = wavelet_packet_denoise(step1)
-            return step2
-        elif self.denoise_method == DenoiseMethod.EEMD:
-            from .emd_denoise import emd_denoise
-            result, _ = emd_denoise(arr, method="eemd")
-            return result
-        return arr
+        """去趋势后由唯一业务入口执行去噪；失败显式向上游传播。"""
+        arr = prepare_signal(np.asarray(signal, dtype=np.float64), detrend=True)
+        return denoise_signal(arr, self.denoise_method.value)
 
     @staticmethod
     def _order_speed_summary(analysis: OrderAnalysis) -> tuple[Optional[float], float]:
