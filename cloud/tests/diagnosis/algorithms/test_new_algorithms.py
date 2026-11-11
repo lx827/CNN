@@ -84,41 +84,8 @@ if "error" not in bss_result:
     print(f"  Fault component kurtosis: {fc_kurt:.2f}")
 print("  ✓ BSS 分离完成")
 
-# ── 3. 轴承 SC/SCoh 循环平稳分析 ──
-print("\n── 3. 轴承 SC/SCoh 循环平稳分析 ──")
-from app.services.diagnosis.bearing_cyclostationary import bearing_sc_scoh_analysis
-
-# HUSTbear 内圈故障 — 已知 40Hz 转频
-# HUST轴承: n=9, d/D≈0.19 (典型深沟球轴承)
-bearing_params = {"n": 9, "d": 5.5, "D": 29, "alpha": 0}
-sc_result = bearing_sc_scoh_analysis(ir_signal, FS, bearing_params=bearing_params, rot_freq=40.0)
-print(f"  转频: {sc_result['rot_freq_hz']} Hz")
-print(f"  故障频率: {sc_result['fault_freqs_hz']}")
-print(f"  最大SCoh值: {sc_result['sc_max_value']}")
-print(f"  主导故障: {sc_result['dominant_fault']}")
-
-# 输出各故障频率指标
-for name, indicator in sc_result.get("fault_indicators", {}).items():
-    if isinstance(indicator, dict):
-        print(f"    {name}: scoh_peak={indicator.get('scoh_peak', 0)}, "
-              f"snr={indicator.get('scoh_snr', 0)}, "
-              f"significant={indicator.get('significant', False)}")
-
-# 对健康信号做同样分析（验证不误报）
-sc_healthy = bearing_sc_scoh_analysis(h_signal, FS, bearing_params=bearing_params, rot_freq=40.0)
-print(f"  健康信号SCoh最大值: {sc_healthy['sc_max_value']}")
-print(f"  健康信号主导故障: {sc_healthy['dominant_fault']}")
-print("  ✓ SC/SCoh 分析完成")
-
-# CW 变速工况下 SC/SCoh
-cw_i_file = os.path.join(CW_DIR, "I-A-1.npy")  # 内圈故障升速
-cw_h_file = os.path.join(CW_DIR, "H-A-1.npy")  # 健康
-cw_i_signal = np.load(cw_i_file)[:max_s]
-cw_h_signal = np.load(cw_h_file)[:max_s]
-print(f"\n  CW 变速内圈故障: kurtosis={float(np.mean(cw_i_signal**4)/(np.var(cw_i_signal)**2)): .2f}")
-sc_cw = bearing_sc_scoh_analysis(cw_i_signal, FS, bearing_params=bearing_params, rot_freq=20.0)
-print(f"  CW SCoh最大值: {sc_cw['sc_max_value']}, 主导: {sc_cw['dominant_fault']}")
-print("  ✓ 变速工况 SC/SCoh 完成")
+# SC/SCoh 数学与业务验证已迁至 test_bearing_cyclostationary_advanced.py 和
+# test_bearing_advanced_business.py；不使用替代型号或把 CW 变速数据当恒速证据。
 
 # ── 4. ZOOM-FFT ──
 # 旧脚本把未经验证的 Zoom SER 直接用于故障/健康区分，已删除。

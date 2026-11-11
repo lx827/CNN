@@ -383,7 +383,7 @@ def main():
 
     engine = DiagnosisEngine(
         strategy="advanced",
-        bearing_method=BearingMethod.KURTOGRAM,
+        bearing_method=BearingMethod.FILTER_BANK_SK,
         bearing_params={},    # CW 无轴承参数
         gear_teeth={},        # CW 无齿轮参数
     )

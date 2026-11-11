@@ -56,7 +56,10 @@ def _envelope_after_teo(
     amplitude[0] *= 0.5
     if len(envelope) % 2 == 0:
         amplitude[-1] *= 0.5
-    spectrum = Spectrum(frequency_hz=rfftfreq(len(envelope), 1.0 / sample_rate_hz), amplitude=amplitude)
+    spectrum = Spectrum(
+        frequency_hz=rfftfreq(len(envelope), 1.0 / sample_rate_hz),
+        amplitude=amplitude, amplitude_unit="input_signal^2",
+    )
     return EnvelopeRepresentation(
         spectrum=spectrum.truncated(low_pass_hz),
         band=band,

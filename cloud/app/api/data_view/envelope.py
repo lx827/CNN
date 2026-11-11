@@ -7,6 +7,7 @@ from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _e
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, DenoiseMethod
 from . import router, prepare_signal, _get_channel_name, _extract_device_param, _sanitize_for_json
 from datetime import datetime
+from .bearing_options import get_bearing_options
 import logging
 import numpy as np
 import asyncio
@@ -20,13 +21,15 @@ async def get_channel_envelope(
     channel: int,
     max_freq: Optional[int] = 1000,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    method: str = Query(default="envelope", description="包络分析方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"),
+    method: str = Query(default="envelope", description="包络分析方法: envelope/filter_bank_sk/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"),
     denoise: str = Query(default="none", description="去噪方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    bearing_options: dict = Depends(get_bearing_options),
+    rot_freq_hz: Optional[float] = Query(default=None, gt=0),
 ):
     """
     实时计算某批次某通道的包络谱（Envelope Spectrum）
-    支持多种轴承诊断方法：标准包络 / Fast Kurtogram / CPW / MED
+    支持标准包络、滤波器组复谱峭度、CPW、MED 等显式方法。
     请求时计算，不预存。
     """
     record = db.query(SensorData).filter(
@@ -67,7 +70,7 @@ async def get_channel_envelope(
         # 方法映射
         method_map = {
             "envelope": BearingMethod.ENVELOPE,
-            "kurtogram": BearingMethod.KURTOGRAM,
+            "filter_bank_sk": BearingMethod.FILTER_BANK_SK,
             "cpw": BearingMethod.CPW,
             "med": BearingMethod.MED,
             "teager": BearingMethod.TEAGER,
@@ -80,7 +83,9 @@ async def get_channel_envelope(
             "ceemdan_envelope": BearingMethod.CEEMDAN_ENVELOPE,
             "vmd_envelope": BearingMethod.VMD_ENVELOPE,
         }
-        bearing_method = method_map.get(method, BearingMethod.ENVELOPE)
+        if method not in method_map:
+            raise ValueError(f"不支持的轴承方法: {method}")
+        bearing_method = method_map[method]
 
         denoise_map = {
             "none": DenoiseMethod.NONE,
@@ -102,6 +107,7 @@ async def get_channel_envelope(
             bearing_params=bearing_params,
             gear_teeth=gear_teeth,
             denoise_method=denoise_method,
+            bearing_options=bearing_options,
         )
 
         # CPU 密集型轴承分析放入线程池
@@ -109,7 +115,7 @@ async def get_channel_envelope(
             engine.analyze_bearing,
             signal,
             sample_rate,
-            None,
+            rot_freq_hz,
             True,
             float(max_freq or 1000.0),
         )

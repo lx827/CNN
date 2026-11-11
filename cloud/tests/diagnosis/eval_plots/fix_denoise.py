@@ -63,7 +63,7 @@ sig_c = ld(HUST, or_files[0].name)
 np.random.seed(42)
 snrs = [20, 10, 5, 0, -5]
 r2 = {"snr_levels": snrs, "methods": {}}
-for name, method in [('包络', BearingMethod.ENVELOPE), ('Kurtogram', BearingMethod.KURTOGRAM),
+for name, method in [('包络', BearingMethod.ENVELOPE), ('Kurtogram', BearingMethod.FILTER_BANK_SK),
                       ('MED', BearingMethod.MED), ('MCKD', BearingMethod.MCKD)]:
     curve = []
     print(f'[{name}]')

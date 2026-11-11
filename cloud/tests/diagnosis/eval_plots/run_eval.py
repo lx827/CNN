@@ -185,7 +185,7 @@ def run_expA_bearing():
     results = {"methods": {}}
 
     METHODS = [
-        ("包络分析", "envelope"), ("Kurtogram", "kurtogram"), ("CPW预白化", "cpw"),
+        ("包络分析", "envelope"), ("Kurtogram", "filter_bank_sk"), ("CPW预白化", "cpw"),
         ("MED增强", "med"), ("MCKD", "mckd"), ("Teager", "teager"),
         ("谱峭度重加权", "spectral_kurtosis"), ("DWT", "dwt"),
         ("EMD", "emd_envelope"), ("CEEMDAN", "ceemdan_envelope"), ("VMD", "vmd_envelope"),
@@ -314,7 +314,7 @@ def run_expD_robustness():
     results = {"snr_levels": snr_levels, "methods": {}}
 
     for name_cn, method_val in [
-        ("包络分析", "envelope"), ("Kurtogram", "kurtogram"),
+        ("包络分析", "envelope"), ("Kurtogram", "filter_bank_sk"),
         ("MED增强", "med"), ("MCKD", "mckd"),
     ]:
         jobs = [delayed(_worker_snr)(method_val, s, sig_clean) for s in snr_levels]

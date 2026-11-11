@@ -230,6 +230,8 @@ def compute_continuous_deductions(
 
     # ═══════ 轴承故障扣分 ═══════
     bearing_ind = bearing_result.get("evaluation", {}).get("indicators", {})
+    if bearing_result.get("evaluation_kind") == "sc_scoh":
+        bearing_ind = {}  # 循环平稳证据仅在专属分支计分，不能再算一次包络命中。
     freq_sig_count = sum(
         bool(v.get("significant")) for k, v in bearing_ind.items()
         if isinstance(v, dict) and not k.endswith("_stat")
@@ -412,17 +414,17 @@ def compute_continuous_deductions(
     # ═══════ SC/SCoh 循环平稳补充扣分 ═══════
     # 轴承 SC/SCoh 结果：scoh_peak > 0.3 时作为弱证据补充
     # SC/SCoh 的专属证据独立于通用包络 evaluation。
-    scoh_result = bearing_result.get("sc_scoh_indicators", {})
+    scoh_result = bearing_result.get("evaluation", {}).get("indicators", {})
     # 仅当 SC/SCoh 是分析方法时才提取（避免从 envelope 结果中误读）
     bearing_method = bearing_result.get("method", "")
     if bearing_method == "sc_scoh":
-        scoh_max = _sf(bearing_result.get("sc_max_value", 0) or
-                       max((v.get("scoh_peak", 0) for k, v in scoh_result.items()
-                            if isinstance(v, dict) and "scoh_peak" in v), default=0), 0.0)
+        scoh_max = _sf(max((v.get("scoh_peak", 0) for v in scoh_result.values()
+                           if isinstance(v, dict) and v.get("evaluable") is True
+                           and v.get("significant") is True), default=0), 0.0)
         # SCoh > 0.3 时作为补充扣分（不受 kurt>5 门控限制）
         # 但权重减半，避免误报
         scoh_ded = sigmoid_deduction(scoh_max, 0.3, 5.0, slope=4.0)
-        if scoh_ded > 0.5:
+        if scoh_max > 0 and scoh_ded > 0.5:
             deductions.append(("bearing_sc_scoh_evidence", round(scoh_ded, 2)))
 
     # ═══════ NA4/NB4 齿轮趋势指标 ═══════

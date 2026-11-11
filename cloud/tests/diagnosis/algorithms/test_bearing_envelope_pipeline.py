@@ -170,11 +170,13 @@ class BearingEnvelopePipelineTest(unittest.TestCase):
     def test_sc_scoh_evidence_uses_method_specific_channel(self) -> None:
         engine = DiagnosisEngine(bearing_method=BearingMethod.SC_SCOH)
         sc_result = {
-            "fault_indicators": {"BPFO": {"scoh_peak": 0.8}},
-            "sc_max_value": 0.8,
+            "method": "sc_scoh", "evaluation_kind": "sc_scoh", "analysis_status": "computed",
+            "evaluation": {"status": "evaluated", "indicators": {
+                "BPFO": {"scoh_peak": 0.8, "significant": True, "evaluable": True},
+            }},
         }
         with mock.patch(
-            "app.services.diagnosis.engine.bearing_sc_scoh_analysis",
+            "app.services.diagnosis.engine.analyze_advanced_bearing",
             return_value=sc_result,
         ):
             result = engine.analyze_bearing(
@@ -182,7 +184,8 @@ class BearingEnvelopePipelineTest(unittest.TestCase):
             )
 
         self.assertNotIn("fault_indicators", result)
-        self.assertEqual(result["sc_scoh_indicators"], sc_result["fault_indicators"])
+        self.assertEqual(result["evaluation"], sc_result["evaluation"])
+        self.assertNotIn("sc_scoh_indicators", result)
         deductions = compute_continuous_deductions(
             {"kurtosis": 3.0, "crest_factor": 3.0},
             None,

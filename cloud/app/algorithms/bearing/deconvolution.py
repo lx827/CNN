@@ -348,6 +348,14 @@ class MCKDEnvelopePipeline:
             )
         if target_frequency is not None and (not np.isfinite(target_frequency) or target_frequency <= 0):
             raise ValueError("MCKD 目标故障频率必须为有限正数")
+        if (target_frequency is not None and target_frequency > sample_rate_hz / 2
+                or period is not None and period < 2):
+            return DeconvolutionEnvelopeResult(
+                status="indeterminate", method=self.method, representation=None,
+                reason="target_above_analysis_bandwidth",
+            )
+        if period is not None and target_frequency is not None and period != int(round(sample_rate_hz / target_frequency)):
+            raise ValueError("MCKD 显式频率与采样周期不一致")
         if period is None:
             period = int(round(sample_rate_hz / target_frequency))
         try:
