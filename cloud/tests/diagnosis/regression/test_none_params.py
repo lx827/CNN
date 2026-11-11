@@ -19,7 +19,7 @@ import numpy as np
 from app.services.diagnosis.features import _compute_bearing_fault_freqs
 from app.algorithms.order import ScalarSpeed
 from app.algorithms.pipelines.gear.fixed_axis import FixedAxisGearPipeline
-from app.services.diagnosis.rule_based import _rule_based_analyze
+from app.services.analyzer import analyze_device
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod
 
 
@@ -58,17 +58,17 @@ def test_fixed_axis_pipeline_without_geometry_has_no_mesh_evidence():
     print("  [PASS] 定轴 Pipeline 缺少几何参数时不伪造啮合/SER 证据")
 
 
-def test_rule_fallback_with_none_teeth_is_indeterminate():
-    """已配置却缺失的齿数不能在规则回退中变成健康诊断。"""
+def test_orchestration_with_none_teeth_is_unknown():
+    """已配置却缺失的齿数不能在统一编排中变成健康诊断。"""
     time = np.arange(8192) / 8192
     signal = np.sin(2 * np.pi * 25.0 * time)
     device = SimpleNamespace(gear_teeth={"input": None, "output": None}, bearing_params=None)
-    result = _rule_based_analyze({"ch1": signal}, sample_rate=8192, device=device)
-    assert result["status"] == "indeterminate"
+    result = analyze_device({"ch1": signal}, sample_rate=8192, device=device, rot_freq=25, denoise_method="none")
+    assert result["evaluation_status"] in {"indeterminate", "not_evaluable"}
+    assert result["diagnosis_conclusion"] == "unknown"
     assert result["health_score"] is None
-    assert result["fault_probabilities"] == {}
-    assert result["order_analysis"]["reason"] == "invalid_fixed_axis_geometry"
-    print("  [PASS] 规则回退 gear_teeth=None 保留不可判定")
+    assert "status" not in result and "fault_probabilities" not in result
+    print("  [PASS] 统一编排 gear_teeth=None 保留未知与空评分")
 
 
 def test_diagnosis_engine_bearing_with_none_params():
@@ -118,7 +118,7 @@ def run_all_tests():
     test_bearing_fault_freqs_with_none_alpha()
     test_bearing_fault_freqs_with_all_none()
     test_fixed_axis_pipeline_without_geometry_has_no_mesh_evidence()
-    test_rule_fallback_with_none_teeth_is_indeterminate()
+    test_orchestration_with_none_teeth_is_unknown()
     test_diagnosis_engine_bearing_with_none_params()
     test_diagnosis_engine_gear_with_none_teeth()
     test_diagnosis_engine_advanced_gear_with_none_teeth()

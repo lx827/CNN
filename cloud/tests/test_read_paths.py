@@ -20,7 +20,9 @@ from app.models import Device, SensorData, Diagnosis
 from app.api.monitor import get_latest_monitor, get_monitor_history
 from app.api.dashboard import get_dashboard
 from app.api.data_view.core import get_all_device_data, get_device_batches
-from app.api.data_view.research import _save_research_diagnosis
+from app.services.diagnosis_store import save_diagnosis, read_diagnosis
+from app.services.diagnosis.domain import DiagnosisKey
+from tests.diagnosis_fixtures import snapshot
 from app.api.data_view import _sanitize_for_json
 from unittest.mock import patch
 from app import database
@@ -78,8 +80,8 @@ class ReadPathTests(unittest.TestCase):
         self.add_batches(1)
         now = datetime(2026, 10, 21)
         self.db.add_all([
-            Diagnosis(device_id="TEST", batch_index=1, health_score=40, status="critical", analyzed_at=now),
-            Diagnosis(device_id="TEST", batch_index=1, health_score=90, status="normal", analyzed_at=now - timedelta(days=1)),
+            Diagnosis(device_id="TEST", batch_index=1, health_score=40, evaluation_status="evaluated", diagnosis_conclusion="fault", coverage="complete", analyzed_at=now),
+            Diagnosis(device_id="TEST", batch_index=1, health_score=90, evaluation_status="evaluated", diagnosis_conclusion="normal", coverage="complete", analyzed_at=now - timedelta(days=1)),
         ])
         self.db.commit()
         all_batches = get_all_device_data(self.db)["data"][0]["batches"]
@@ -109,13 +111,16 @@ class ReadPathTests(unittest.TestCase):
         print(f"dashboard SELECT count: {len(self.statements)}")
         self.assertLessEqual(len(self.statements), 3)
 
-    def test_research_cache_persists_insert_and_update(self):
-        _save_research_diagnosis(self.db, "TEST", 1, 1, "wavelet", {"health_score": 80, "status": "warning"})
-        diag = self.db.query(Diagnosis).one_or_none()
-        self.assertIsNotNone(diag, "研究诊断应实际写入缓存，不能吞掉异常后假装保存成功")
-        _save_research_diagnosis(self.db, "TEST", 1, 1, "wavelet", {"health_score": 60, "status": "warning"})
-        self.db.expire_all()
-        self.assertEqual(self.db.query(Diagnosis).one().full_analysis["health_score"], 60)
+    def test_exact_channel_cache_appends_and_rejects_research_results(self):
+        key = DiagnosisKey("TEST", 1, 1, "wavelet")
+        save_diagnosis(self.db, key, snapshot("TEST", denoise="wavelet"))
+        save_diagnosis(self.db, key, snapshot("TEST", denoise="wavelet", conclusion="fault"))
+        self.db.commit()
+        self.assertEqual(self.db.query(Diagnosis).count(), 2)
+        self.assertEqual(read_diagnosis(self.db, key)["diagnosis_conclusion"], "fault")
+        self.assertIsNone(read_diagnosis(self.db, DiagnosisKey("TEST", 1, 1, "none")))
+        with self.assertRaises(ValueError):
+            save_diagnosis(self.db, key, {**snapshot("TEST", denoise="wavelet"), "research_only": True})
 
     def test_numpy_and_nonfinite_values_are_valid_strict_json(self):
         value = {"array": np.array([1., np.nan, np.inf]), "nested": (np.float32(-np.inf), np.int64(2))}

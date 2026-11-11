@@ -9,6 +9,8 @@ from app.services.diagnosis import DiagnosisEngine, DiagnosisKey
 from app.services.diagnosis.gear.planetary import gear_config_for_channel
 from app.services.diagnosis_store import save_diagnosis
 from . import router, _sanitize_for_json
+from .errors import configured_denoise, denoising_http_error
+from app.services.diagnosis.signal_utils import DenoisingError
 
 def _channel_params(values, channel):
     if not isinstance(values, dict):
@@ -20,12 +22,12 @@ async def _run(db, device_id, batch_index, channel, denoise, mode, method="stand
     if record is None:
         raise HTTPException(404, detail="通道数据不存在")
     device = db.query(Device).filter(Device.device_id == device_id).first()
-    key = DiagnosisKey(device_id, batch_index, channel, denoise)
     try:
+        key = DiagnosisKey(device_id, batch_index, channel, denoise)
         engine = DiagnosisEngine(
             bearing_params=_channel_params(getattr(device, "bearing_params", None), channel),
             gear_teeth=gear_config_for_channel(getattr(device, "gear_teeth", None), channel),
-            denoise_method=denoise, gear_method=method, diagnosis_key=key,
+            denoise_method=configured_denoise(denoise), gear_method=method, diagnosis_key=key,
         )
         rate = record.sample_rate or getattr(device, "sample_rate", None)
         if not rate:
@@ -42,6 +44,9 @@ async def _run(db, device_id, batch_index, channel, denoise, mode, method="stand
         save_diagnosis(db, key, payload)
         db.commit()
         return {"code": 200, "data": _sanitize_for_json(payload)}
+    except DenoisingError as exc:
+        db.rollback()
+        raise denoising_http_error(exc) from exc
     except ValueError as exc:
         db.rollback()
         raise HTTPException(422, detail=str(exc)) from exc

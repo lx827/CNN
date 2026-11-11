@@ -15,7 +15,7 @@ from app.algorithms.pipelines.bearing import BearingEnvelopePipeline
 from app.services.diagnosis import BearingMethod, DiagnosisEngine
 from app.services.diagnosis.engine import bearing_geometry_from_config
 from app.services.diagnosis.ensemble import run_research_ensemble
-from app.services.diagnosis.health_score_continuous import compute_continuous_deductions
+from app.services.diagnosis.assessment import reassess_diagnosis, AssessmentPolicy
 
 
 FS = 8192.0
@@ -168,7 +168,7 @@ class BearingEnvelopePipelineTest(unittest.TestCase):
                 bearing_geometry_from_config(malformed)
 
     def test_sc_scoh_evidence_uses_method_specific_channel(self) -> None:
-        engine = DiagnosisEngine(bearing_method=BearingMethod.SC_SCOH)
+        engine = DiagnosisEngine(bearing_method=BearingMethod.SC_SCOH, bearing_params={"n": 9, "d": 7.94, "D": 38.52})
         sc_result = {
             "method": "sc_scoh", "evaluation_kind": "sc_scoh", "analysis_status": "computed",
             "evaluation": {"status": "evaluated", "indicators": {
@@ -180,19 +180,15 @@ class BearingEnvelopePipelineTest(unittest.TestCase):
             return_value=sc_result,
         ):
             result = engine.analyze_bearing(
-                np.zeros(128), FS, rot_freq=25.0, preprocess=False
+                np.sin(np.arange(128)), FS, rot_freq=25.0, preprocess=False
             )
 
         self.assertNotIn("fault_indicators", result)
-        self.assertEqual(result["evaluation"], sc_result["evaluation"])
+        self.assertEqual(result["evaluation"]["indicators"], sc_result["evaluation"]["indicators"])
         self.assertNotIn("sc_scoh_indicators", result)
-        deductions = compute_continuous_deductions(
-            {"kurtosis": 3.0, "crest_factor": 3.0},
-            None,
-            result,
-            {"fault_indicators": {}},
-        )
-        self.assertIn("bearing_sc_scoh_evidence", {name for name, _ in deductions})
+        reevaluated = reassess_diagnosis(result, AssessmentPolicy(weights={"scoh_evidence": 2., "bpfo": 100.}))
+        self.assertEqual(reevaluated.health_score, 76.)
+        self.assertEqual(reevaluated.deductions[0].code, "bearing_cyclic")
 
 
 if __name__ == "__main__":
