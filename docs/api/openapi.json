@@ -816,6 +816,16 @@
                 "schema": {}
               }
             }
+          },
+          "422": {
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -871,11 +881,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -959,11 +969,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -1005,11 +1015,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -1060,11 +1070,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -1078,7 +1088,7 @@
           "振动数据查看"
         ],
         "summary": "Get Channel Fft",
-        "description": "实时计算某批次某通道的 FFT 频谱\n请求时计算，不预存。自动适配实际采样率。",
+        "description": "实时计算 Hann 单边峰值幅值谱；响应字段保持兼容。",
         "operationId": "get_channel_fft_api_data__device_id___batch_index___channel__fft_get",
         "security": [
           {
@@ -1165,11 +1175,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -1183,7 +1193,7 @@
           "振动数据查看"
         ],
         "summary": "Get Channel Stft",
-        "description": "实时计算某批次某通道的 STFT 时频谱\n请求时计算，不预存。自动适配实际采样率。\n窗口长度 nperseg 和重叠 noverlap 可从前端调整。",
+        "description": "实时 STFT；time 为帧中心秒，freq 为 Hz，magnitude 为单边幅值 dB。",
         "operationId": "get_channel_stft_api_data__device_id___batch_index___channel__stft_get",
         "security": [
           {
@@ -1298,11 +1308,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -1316,7 +1326,7 @@
           "振动数据查看"
         ],
         "summary": "Get Channel Stats",
-        "description": "实时计算某批次某通道的统计特征指标\n包括：峰值、RMS、峭度、偏度、裕度、波形因子、脉冲因子、峰值因子、加窗峰度\n加窗参数 window_size 和 step 可从前端调整",
+        "description": "实时总体统计与周期 Hann 加窗序列；算法层不序列化数组。",
         "operationId": "get_channel_stats_api_data__device_id___batch_index___channel__stats_get",
         "security": [
           {
@@ -1413,11 +1423,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -1431,7 +1441,7 @@
           "振动数据查看"
         ],
         "summary": "Get Channel Envelope",
-        "description": "实时计算某批次某通道的包络谱（Envelope Spectrum）\n支持多种轴承诊断方法：标准包络 / Fast Kurtogram / CPW / MED\n请求时计算，不预存。",
+        "description": "实时计算某批次某通道的包络谱（Envelope Spectrum）\n支持标准包络、滤波器组复谱峭度、CPW、MED 等显式方法。\n请求时计算，不预存。",
         "operationId": "get_channel_envelope_api_data__device_id___batch_index___channel__envelope_get",
         "security": [
           {
@@ -1501,11 +1511,11 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "包络分析方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope",
+              "description": "包络分析方法: envelope/filter_bank_sk/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope",
               "default": "envelope",
               "title": "Method"
             },
-            "description": "包络分析方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"
+            "description": "包络分析方法: envelope/filter_bank_sk/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"
           },
           {
             "name": "denoise",
@@ -1518,6 +1528,102 @@
               "title": "Denoise"
             },
             "description": "去噪方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+          },
+          {
+            "name": "rot_freq_hz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rot Freq Hz"
+            }
+          },
+          {
+            "name": "target_fault",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "BPFO",
+                    "BPFI",
+                    "BSF",
+                    "FTF"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Fault"
+            }
+          },
+          {
+            "name": "target_frequency_hz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Frequency Hz"
+            }
+          },
+          {
+            "name": "period_samples",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Samples"
+            }
+          },
+          {
+            "name": "comb_frequencies_hz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "default": [],
+              "title": "Comb Frequencies Hz"
+            }
+          },
+          {
+            "name": "comb_is_stable",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Comb Is Stable"
+            }
           }
         ],
         "responses": {
@@ -1530,11 +1636,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -1548,7 +1654,7 @@
           "振动数据查看"
         ],
         "summary": "Get Channel Order",
-        "description": "实时计算阶次谱（Order Tracking / 阶次跟踪）\n改进：采用短时多帧平均，自适应处理缓慢转速变化；支持直接传入转频。\n\n流程：\n  1. 若传入 rot_freq，直接用它做阶次跟踪（跳过估计）\n  2. 否则将信号分帧（默认 1 秒/帧，50% 重叠）\n  3. 每帧估计转频（频谱法 + 包络解调辅助），并用 MAD 剔除异常帧\n  4. 各帧独立阶次跟踪后，插值到公共阶次轴并平均\n  5. 返回平均阶次谱 + 转速变化信息\n\n参数：\n  freq_min/freq_max: 转频搜索范围，默认 10~100 Hz\n  samples_per_rev:   每转采样点数，默认 1024\n  max_order:         返回的最大阶次，默认 50\n  rot_freq:          直接指定转频(Hz)，传入则跳过自动估计\n\n返回：\n  rot_freq:      中位数转频 (Hz)\n  rot_rpm:       中位数转速 (RPM)\n  rot_freq_std:  转频标准差 (Hz)，反映转速波动程度\n  orders:        阶次轴\n  spectrum:      阶次谱幅值",
+        "description": "实时计算阶次谱：恒速等角采样、缓变逐帧谱平均或快速变速连续相位跟踪。\n\n响应字段保持兼容；orders 为 FFT bin 阶次轴，spectrum 为单边峰值幅值。\n自动估计使用未去噪信号，显式 denoise 只影响重采样输入。快速变速无可靠\n脊线时返回 400，不回退固定转频或缓变正常谱。",
         "operationId": "get_channel_order_api_data__device_id___batch_index___channel__order_get",
         "security": [
           {
@@ -1694,11 +1800,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -1712,7 +1818,7 @@
           "振动数据查看"
         ],
         "summary": "Get Channel Cepstrum",
-        "description": "实时计算功率倒谱（Cepstrum / 倒谱分析）\n\n流程：\n  1. FFT → 对数幅度谱 → IFFT → 倒谱\n  2. 倒频率轴反映频谱中的周期性结构\n  3. 自动检测显著峰值并标注对应频率\n\n参数：\n  max_quefrency: 最大倒频率（毫秒），默认 500 ms\n\n返回：\n  quefrency:  倒频率轴（ms）\n  cepstrum:   倒谱幅值\n  peaks:      检测到的峰值列表 [{quefrency_ms, freq_hz, amplitude}]",
+        "description": "实时 log-amplitude 实倒谱及显示峰；不输出机械故障结论。",
         "operationId": "get_channel_cepstrum_api_data__device_id___batch_index___channel__cepstrum_get",
         "security": [
           {
@@ -1796,11 +1902,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -1896,11 +2002,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -1979,11 +2085,11 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "轴承方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope",
+              "description": "轴承方法: envelope/filter_bank_sk/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope",
               "default": "envelope",
               "title": "Bearing Method"
             },
-            "description": "轴承方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"
+            "description": "轴承方法: envelope/filter_bank_sk/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"
           },
           {
             "name": "gear_method",
@@ -2020,11 +2126,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -2108,11 +2214,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -2136,6 +2242,16 @@
                 "schema": {}
               }
             }
+          },
+          "422": {
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -2151,7 +2267,7 @@
           "振动数据查看"
         ],
         "summary": "Get Channel Method Analysis",
-        "description": "独立运行单个分析方法或全部方法。\n\nmethod 参数值：\n- 'all': 运行所有轴承+齿轮方法（等效 full-analysis）\n- 轴承方法: envelope / kurtogram / cpw / med / teager / spectral_kurtosis / wp / dwt / emd_envelope / ceemdan_envelope / vmd_envelope\n- 齿轮方法: gear_standard / gear_advanced\n- 行星箱方法: planetary_narrowband / planetary_fullband / planetary_tsa_envelope\n              / planetary_hp_envelope / planetary_vmd_demod / planetary_sc_scoh / planetary_msb",
+        "description": "独立运行单个分析方法或全部方法。\n\nmethod 参数值：\n- 'all': 运行所有轴承+齿轮方法（等效 full-analysis）\n- 轴承方法: envelope / filter_bank_sk / cpw / med / teager / spectral_kurtosis / wp / dwt / emd_envelope / ceemdan_envelope / vmd_envelope\n- 齿轮方法: gear_standard / gear_advanced\n- 行星箱方法: planetary_narrowband / planetary_fullband / planetary_tsa_residual / planetary_highpass",
         "operationId": "get_channel_method_analysis_api_data__device_id___batch_index___channel__method_analysis_get",
         "security": [
           {
@@ -2221,6 +2337,102 @@
               "title": "Detrend"
             },
             "description": "是否线性去趋势"
+          },
+          {
+            "name": "rot_freq_hz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rot Freq Hz"
+            }
+          },
+          {
+            "name": "target_fault",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "BPFO",
+                    "BPFI",
+                    "BSF",
+                    "FTF"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Fault"
+            }
+          },
+          {
+            "name": "target_frequency_hz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Frequency Hz"
+            }
+          },
+          {
+            "name": "period_samples",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Samples"
+            }
+          },
+          {
+            "name": "comb_frequencies_hz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "default": [],
+              "title": "Comb Frequencies Hz"
+            }
+          },
+          {
+            "name": "comb_is_stable",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Comb Is Stable"
+            }
           }
         ],
         "responses": {
@@ -2233,11 +2445,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -2251,7 +2463,7 @@
           "振动数据查看"
         ],
         "summary": "Get Channel Research Analysis",
-        "description": "Run a user-triggered, multi-algorithm research diagnosis.\n\nThis endpoint is intentionally separate from real-time monitoring because\nkurtogram, MED, TEO and TSA metrics are CPU-heavy.",
+        "description": "Run a user-triggered, multi-algorithm research diagnosis.\n\nThis endpoint is intentionally separate from real-time monitoring because\nfilter_bank_sk, MED, TEO and TSA metrics are CPU-heavy.",
         "operationId": "get_channel_research_analysis_api_data__device_id___batch_index___channel__research_analysis_get",
         "security": [
           {
@@ -2333,6 +2545,102 @@
               "default": 5.0,
               "title": "Max Seconds"
             }
+          },
+          {
+            "name": "rot_freq_hz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rot Freq Hz"
+            }
+          },
+          {
+            "name": "target_fault",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "BPFO",
+                    "BPFI",
+                    "BSF",
+                    "FTF"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Fault"
+            }
+          },
+          {
+            "name": "target_frequency_hz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Frequency Hz"
+            }
+          },
+          {
+            "name": "period_samples",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Samples"
+            }
+          },
+          {
+            "name": "comb_frequencies_hz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "default": [],
+              "title": "Comb Frequencies Hz"
+            }
+          },
+          {
+            "name": "comb_is_stable",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Comb Is Stable"
+            }
           }
         ],
         "responses": {
@@ -2345,11 +2653,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -2433,11 +2741,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -2497,11 +2805,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -2579,11 +2887,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -2634,11 +2942,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -2680,11 +2988,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
                 }
               }
             }
@@ -4580,6 +4888,54 @@
         ],
         "title": "CreateJob"
       },
+      "DataViewUnprocessableResponse": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DenoisingFailureDetail"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RequestValidationIssue"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "DataViewUnprocessableResponse",
+        "description": "422包含显式去噪不可评估，或FastAPI请求参数验证失败。"
+      },
+      "DenoisingFailureDetail": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "not_evaluable",
+            "title": "Status"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "method",
+          "reason"
+        ],
+        "title": "DenoisingFailureDetail"
+      },
       "DirectoryResult": {
         "properties": {
           "id": {
@@ -4715,6 +5071,39 @@
           "save_directory"
         ],
         "title": "RecordRequest"
+      },
+      "RequestValidationIssue": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Loc"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Msg"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "RequestValidationIssue"
       },
       "StartSession": {
         "properties": {

@@ -4,6 +4,8 @@
 
 本轮集中收口 #72/#73/#74/#76/#80，开发分支为 `codex/diagnosis-development`，工作区 `C:/Users/25619/.codex/worktrees/diagnosis-development/CNN`，草稿 PR 为 **#89**。本交接不声明 PR 已合并或生产已部署；合并状态与最终提交以 GitHub/Git 为准。
 
+最后公开源码基线为开发提交 `99d5aa7de501c1efe29ee53d3bc8c5f92629df84`（#74 最终实现 `de2c821218553e82e3a1611787761bc9aced4bd5`）。随后开发 `cce59929b6f18aded0086759c52cb515bd11fe75` 仅合入 SFC 测试夹具修复 `5941f08`，API 未变。本轮在公开源码上只真实导出一次 OpenAPI，共 69 路径。
+
 早前要求在 #73 秩亏提交处暂停、保留共享 integration 的交接状态已被用户后续指令替代。旧 integration 已安全删除，不要按旧记录恢复它或重复开始已经完成的审查。主控负责串行集成，文档由独立实施分支集中维护。
 
 ## 已形成的稳定结构
@@ -29,6 +31,12 @@
 ## 验证结论的范围
 
 数学/物理依据、手算已知解、独立参考、物理真值合成信号和反例优先；自动测试主要保护业务编排、状态、API 和回归。测试通过不证明真实设备检出效果，不用测试数量替代算法论证。已完成的独立审查和定向返修不再重开重复 review。
+
+实现方确认最终 P0 三件退出均为 0，分别为 None 7、CPW 5、order 17 项，日志实际 `[FAIL]` 为 0。集中受影响业务 66 项全过，含数值真实 HTTP/事件循环/读路径/worker JSON、去噪 422 schema/真实 worker、定轴/行星/高级轴承业务 API、分解业务与已知反例；行星物理合成 19 项的既有证据沿用。前端首次 42/46 通过，4 失败仅为测试夹具缺 PlanetaryResult stub；`5941f08` 修复后定向 bearing_contract 14/14 通过，其他 32 项沿用首次通过证据，没有冒称重跑全部 46；最终 build 退出 0，8.86 秒。
+
+实现日志目录为 `C:/Users/25619/AppData/Local/Temp/cnn-final-de2c821/`，含 P0 日志、`business-unified.log`、`frontend-bearing.log`、`frontend-build.log`。文档实施未重复算法/业务/前端测试。
+
+文档检查：首次系统 `bash` 因找不到 uv 未进入检查器；改用 Git Bash 并加入 uv PATH 后，集中检查退出 0：53 个 Markdown、219 个相对链接、5 算法族各 9 必需章节，链接/结构/镜像清理全部 PASS。该文档检查不替代正确性验证。
 
 生产仍为 **2C2G**：现有线程池 `max_workers=2`，后台分析 `Semaphore(1)`，逐批串行；DataView 数值入口在慢去噪前执行业务窗口限制。DC24 的未标定 counts 仅用于显示与完整分析数组保存，不进入设备诊断、评分或告警。
 

@@ -47,6 +47,8 @@
 
 **诊断去噪错误（2026-11-11）**：DataView 时域、CSV 导出、FFT/STFT/stats/cepstrum/order、包络、gear/analyze/full-analysis/method-analysis/research-analysis 的去噪失败返回 HTTP **422**，响应 `detail` 为对象，含 `status=not_evaluable`、实际去噪 `method` 与失败 `reason`。无合法分量、选中分量质量不足和未知去噪方法都明确拒绝，不返回原信号假装成功。该 422 不表示设备故障；结果对象内的算法前提状态与 HTTP 去噪执行错误须分开处理。其他端点既有认证/数据不存在/非法分析方法错误仍服从各自 HTTP 语义。
 
+同一 HTTP 422 也可表示 FastAPI 请求参数校验失败，此时 `detail` 是问题数组（位置/消息/类型）。OpenAPI 使用 `DataViewUnprocessableResponse` 的 `anyOf` 如实声明对象与数组两种形状。前端共享 `formatErrorMessage` 处理结构化原因、旧字符串、参数校验数组及网络错误。
+
 ### 认证方式
 
 | 场景 | 方式 | 头部 |
