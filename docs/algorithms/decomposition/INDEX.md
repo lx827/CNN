@@ -38,6 +38,7 @@ S-G、LMS、ICA 与级联各有前提，单通道扩展不会创造多测点可�
 - DWT/WP 层数与记录、滤波器长度兼容。WP 频率序按 Gray 对应频带排列；细节重构清除未选近似和细节。
 - 小波分量先重构到原时间轴再计算相关和能量，禁止用抽取系数与原信号头部作物理比较。
 - EMD 的镜像点和抛物线精化位置/幅值实际参与插值；SD 满足停止时接受本轮更新。EEMD/CEEMDAN 记录种子；当前 CEEMDAN 对应 Torres 2011，不混称 improved-CEEMDAN。
+- EMD 族可在现有算法族替换接口内注入单 IMF 筛分核；实例持有核，归一化、多 IMF、随机噪声、集成公式与结果状态继续复用 Python 外层。默认仍使用 Python 筛分，核异常直接传播，初始极值不足与筛分上限保留原有含义。
 - VMD 奇数/长记录按结果有效区间使用，参考信号同步切片，不补零伪装全长输出。
 - 转速估计信号与故障增强信号分离，见 [阶次契约](../order/INDEX.md)。
 
@@ -82,9 +83,12 @@ DWT 约 O(N)，WP 随层数保留更多节点；VMD 为迭代数、模态数与 
 |------|------------|
 | `test_decomposition_wavelet.py` | WP 频率序/采样率、单细节、重构与节点能量 |
 | `test_decomposition_emd.py` | 简单 IMF、端点、单调/短信号、SD、残差、种子 |
+| `test_emd_sift_contract.py` | 公开族入口的筛分注入、全配置组合、零噪声分支、随机序列、尺度/边界和误差判据负对照 |
 | `test_decomposition_vmd.py` | 双模态 Hz、返回结构、奇数/长输入有效区间 |
 | `test_decomposition_selection.py` | 时间轴、Pearson/excess、零能量、熵、空选择 |
 | `test_decomposition_review_counterexamples.py` | 熵归一化、未收敛质量、选中项门控与重评 |
 | `test_decomposition_business.py` | 去噪/模态包络消费者、失败隔离与状态 |
 
 真实数据效果需按 [数据集说明](../../datasets.md) 分别建立；测试通过不替代物理有效性和设备校准。
+
+未来原生核的比较使用 [冻结误差契约](../../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json) 与可重建的手写对照信号；局部包络/IMF 及完整模态/残差按输入和参考幅值缩放后分别检查逐点误差和相对 L2。普通对照要求元数据与迭代一致，停止阈值附近的分支差异另作数值与质量核验，不自动放宽预算。当前资产只验证 Python 替换边界，不代表原生实现或性能已通过。

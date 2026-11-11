@@ -64,6 +64,8 @@ PCHIP、镜像数量、IMF/筛分上限可对齐，但 PyEMD 多停止测试不�
 
 这是后续候选的接口契约，尚未实现 ABI。原生函数粒度以当前 campaign 的热点为准，不先假定 Rust/C++ 或某个库更快。先比较重复分解、固定矩阵求解复用、STFT/FFT 调用次数、数组驻留与窗口顺序，原始证据和采纳决定留在数据根详报。
 
+EMD 首批实施已按 [ADR 0006](../adr/0006-native-diagnosis-compute-package.md) 收敛为单 IMF 完整筛分核。当前 Python adapter 通过实例核复用外层算法，仍以 Python 为默认；下表完整分解的原生 ABI 是后续候选，不能视为当前已实现接口。比较前冻结的 [数值契约](../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json) 区分局部与完整分解误差预算；手写对照信号和公开入口断言见 [对照资产](../../cloud/tests/diagnosis/algorithms/emd_reference_contract.py) 与 [筛分替换测试](../../cloud/tests/diagnosis/algorithms/test_emd_sift_contract.py)。既有固定 SHA256 输入和参数身份继续复用，不提交生成数组或数值结果。
+
 | 候选粒度 | 输入与单位 | 输出与工作区 |
 |---|---|---|
 | `emd_decompose_f64` | 连续 float64、长度、fs Hz、EMD/ensemble 参数、uint64 seed | 行主序 `[mode, sample]`、独立 residual、有效区间、逐模态迭代与收敛；趋势另标 |
