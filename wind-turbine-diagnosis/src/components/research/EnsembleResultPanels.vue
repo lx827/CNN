@@ -57,8 +57,8 @@ import { getDiagnosisView } from '../../utils/diagnosisStatus'
 const props = defineProps({ result: { type: Object, required: true } })
 const methodRows = computed(() => ['bearing_results', 'gear_results'].flatMap(kind =>
   Object.entries(props.result[kind] || {}).map(([method, local]) => ({
-    key: `${kind}:${method}`, method, view: getDiagnosisView(local?.diagnosis),
-    reason: local?.diagnosis?.reason || local?.reason || local?.error,
+    key: `${kind}:${method}`, method, view: getDiagnosisView(local),
+    reason: local?.reason || local?.error,
   }))))
 const planetaryResults = computed(() => Object.fromEntries(Object.entries(props.result.gear_results || {}).filter(([, local]) => local?.is_planetary)))
 </script>

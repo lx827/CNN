@@ -7,8 +7,8 @@
         <div class="panel-title">方法分析结果</div>
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="评估状态">
-            <el-tag :type="evaluationStatusType(result.evaluation?.status)" size="small">
-              {{ evaluationStatusText(result.evaluation?.status) }}
+            <el-tag :type="evaluationStatusType(result.evaluation_status)" size="small">
+              {{ evaluationStatusText(result.evaluation_status) }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item v-if="result.algorithm" label="实际算法">{{ result.algorithm }}</el-descriptions-item>

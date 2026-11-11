@@ -51,17 +51,17 @@
         <el-tag :type="methodCategoryTag" size="large">{{ result.requested_method ? result.method.toUpperCase() + '（' + result.requested_method.toUpperCase() + ' 未指定目标）' : selectedMethodInfo?.label || selectedMethod }}</el-tag>
       </div>
       <div class="metric"><span class="label">转频</span><strong>{{ result.rot_freq_hz ?? '-' }} Hz</strong></div>
-      <div class="metric" v-if="result.health_score != null"><span class="label">健康度</span><strong>{{ getDiagnosisView(result.diagnosis || result).scoreText }}</strong></div>
+      <div class="metric" v-if="result.health_score != null"><span class="label">健康度</span><strong>{{ getDiagnosisView(result).scoreText }}</strong></div>
       <div class="metric" v-if="selectedMethodInfo?.category === 'composite'">
         <span class="label">诊断结论</span><el-tag type="info">未知 · 仅供研究</el-tag>
       </div>
       <div class="metric" v-else-if="selectedMethodInfo?.category === 'bearing' || result.is_planetary">
         <span class="label">方法评估</span>
-        <el-tag :type="evaluationStatusType(result.evaluation?.status)">
-          {{ evaluationStatusText(result.evaluation?.status) }}
+        <el-tag :type="evaluationStatusType(result.evaluation_status)">
+          {{ evaluationStatusText(result.evaluation_status) }}
         </el-tag>
       </div>
-      <div class="metric" v-else-if="result.diagnosis || result.evaluation_status"><span class="label">诊断结论</span><el-tag :type="getDiagnosisView(result.diagnosis || result).tagType">{{ getDiagnosisView(result.diagnosis || result).text }}</el-tag></div>
+      <div class="metric" v-else-if="result.evaluation_status"><span class="label">诊断结论</span><el-tag :type="getDiagnosisView(result).tagType">{{ getDiagnosisView(result).text }}</el-tag></div>
     </div>
 
     <el-empty v-if="!result && !loading" :description="runMode === 'single' ? '请选择分析方法后运行' : '请点击运行开始诊断'" />

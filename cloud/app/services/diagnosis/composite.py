@@ -169,6 +169,5 @@ def composite_to_dict(diagnosis: CompositeDiagnosis) -> dict:
             "analysis": convert(diagnosis.analysis), "evaluation": convert(diagnosis.evaluation),
             "research_only": True, "production_eligible": False,
             "evidence_family": diagnosis.analysis.evidence_family,
-            "health_score": None, "fault_probabilities": {}, "fault_indicators": {},
             "validation": {"real_dataset_effectiveness": "not_validated",
                            "fault_thresholds": "not_calibrated", "independent_vote": False}}
