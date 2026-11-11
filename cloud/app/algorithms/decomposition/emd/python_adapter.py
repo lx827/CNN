@@ -8,6 +8,7 @@ Torres et al. (2011) CEEMDAN。
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 
 import numpy as np
@@ -179,6 +180,9 @@ def _sift(
     return current, parameters.max_sifts, False
 
 
+_SiftKernel = Callable[[FloatArray, EMDParameters], tuple[FloatArray, int, bool] | None]
+
+
 def _indeterminate(
     method: str, signal: FloatArray, fs: float, reason: str, seed: int | None = None
 ) -> EMDResult:
@@ -198,7 +202,12 @@ def _indeterminate(
 
 
 def _emd(
-    signal: FloatArray, fs: float, parameters: EMDParameters, method: str = "emd"
+    signal: FloatArray,
+    fs: float,
+    parameters: EMDParameters,
+    method: str = "emd",
+    *,
+    sift_kernel: _SiftKernel = _sift,
 ) -> EMDResult:
     amplitude = float(np.max(np.abs(signal)))
     if amplitude == 0 or float(np.std(signal / amplitude)) == 0:
@@ -208,7 +217,7 @@ def _emd(
     converged = []
     residual = signal / amplitude
     for _ in range(parameters.max_imfs):
-        sifted = _sift(residual, parameters)
+        sifted = sift_kernel(residual, parameters)
         if sifted is None:
             break
         imf, count, did_converge = sifted
@@ -242,10 +251,19 @@ def _emd(
 class PythonEMDImplementation:
     """仓库内纯 Python 实现；不是 EMD-signal/PyEMD 的包装或依赖。"""
 
+    def __init__(self, *, sift_kernel: _SiftKernel = _sift) -> None:
+        """共享 Python 外层，仅替换单 IMF 筛分核。
+
+        核接收已归一化的一维有限数组和筛分参数，借用只读输入；返回独立
+        IMF 数组、迭代次数与收敛标志，或以 None 表示初始极值不足。
+        默认核保持现有数学行为。核中的异常直接向调用方传播。
+        """
+        self._sift_kernel = sift_kernel
+
     def emd(
         self, signal: FloatArray, sample_rate_hz: float, parameters: EMDParameters
     ) -> EMDResult:
-        return _emd(signal, sample_rate_hz, parameters)
+        return _emd(signal, sample_rate_hz, parameters, sift_kernel=self._sift_kernel)
 
     def eemd(
         self,
@@ -258,14 +276,25 @@ class PythonEMDImplementation:
         if scale == 0.0:
             return _indeterminate("eemd", signal, sample_rate_hz, "zero_variance", seed)
         if parameters.noise_scale == 0.0:
-            result = _emd(signal, sample_rate_hz, parameters.emd, method="eemd")
+            result = _emd(
+                signal,
+                sample_rate_hz,
+                parameters.emd,
+                method="eemd",
+                sift_kernel=self._sift_kernel,
+            )
             return replace(result, seed=seed)
         normalized = signal / scale
         rng = np.random.default_rng(seed)
         members = []
         for _ in range(parameters.ensemble_size):
             noise = rng.normal(0.0, parameters.noise_scale, len(signal))
-            result = _emd(normalized + noise, sample_rate_hz, parameters.emd)
+            result = _emd(
+                normalized + noise,
+                sample_rate_hz,
+                parameters.emd,
+                sift_kernel=self._sift_kernel,
+            )
             if result.imfs:
                 members.append(result)
         if not members:
@@ -309,7 +338,13 @@ class PythonEMDImplementation:
                 "ceemdan", signal, sample_rate_hz, "zero_variance", seed
             )
         if parameters.noise_scale == 0.0:
-            result = _emd(signal, sample_rate_hz, parameters.emd, method="ceemdan")
+            result = _emd(
+                signal,
+                sample_rate_hz,
+                parameters.emd,
+                method="ceemdan",
+                sift_kernel=self._sift_kernel,
+            )
             return replace(result, seed=seed)
         normalized = signal / scale
         rng = np.random.default_rng(seed)
@@ -318,7 +353,12 @@ class PythonEMDImplementation:
         for _ in range(parameters.ensemble_size):
             noise = rng.normal(0.0, 1.0, len(signal))
             white_noises.append(noise)
-            result = _emd(noise, sample_rate_hz, parameters.emd)
+            result = _emd(
+                noise,
+                sample_rate_hz,
+                parameters.emd,
+                sift_kernel=self._sift_kernel,
+            )
             noise_modes.append(result.imfs)
 
         residual = normalized.copy()
@@ -341,7 +381,12 @@ class PythonEMDImplementation:
                 else:
                     noise = np.zeros(len(signal))
                 trial = residual + parameters.noise_scale * amplitude * noise
-                result = _emd(trial, sample_rate_hz, single_mode_parameters)
+                result = _emd(
+                    trial,
+                    sample_rate_hz,
+                    single_mode_parameters,
+                    sift_kernel=self._sift_kernel,
+                )
                 if not result.imfs:
                     continue
                 first_imfs.append(result.imfs[0])
