@@ -11,65 +11,10 @@ import numpy as np
 from scipy import signal as scipy_signal
 from scipy.fft import rfft, irfft
 from typing import Tuple, Optional, Literal, Dict
-import pywt
 
-from .signal_utils import prepare_signal, bandpass_filter, lowpass_filter, _estimate_noise_mad
+from app.algorithms.decomposition.wavelet import denoise_wavelet as wavelet_denoise
+from .signal_utils import prepare_signal, bandpass_filter, lowpass_filter
 from .vmd_denoise import vmd_denoise
-
-
-def wavelet_denoise(
-    signal: np.ndarray,
-    wavelet: str = "db8",
-    level: Optional[int] = None,
-    threshold_mode: Literal["soft", "hard", "improved"] = "soft",
-    threshold_scale: float = 1.0,
-) -> np.ndarray:
-    """
-    小波阈值去噪
-
-    Args:
-        signal: 输入信号
-        wavelet: 小波基，轴承/齿轮冲击推荐 db8/sym8/coif5
-        level: 分解层数，默认自动计算 floor(log2(N)) - 2
-        threshold_mode: 阈值模式 soft/hard/improved
-        threshold_scale: 阈值缩放系数
-
-    Returns:
-        去噪后的信号
-    """
-    arr = np.array(signal, dtype=np.float64)
-    N = len(arr)
-
-    if level is None:
-        level = max(1, int(np.floor(np.log2(N))) - 2)
-    level = min(level, pywt.dwt_max_level(N, pywt.Wavelet(wavelet).dec_len))
-
-    # 小波分解
-    coeffs = pywt.wavedec(arr, wavelet, level=level)
-
-    # 用最后一层细节系数估计噪声标准差（鲁棒估计）
-    detail = coeffs[-1]
-    sigma = _estimate_noise_mad(detail)
-
-    # 通用阈值
-    threshold = threshold_scale * sigma * np.sqrt(2 * np.log(N))
-
-    # 对各层系数进行阈值处理（保留近似系数）
-    denoised_coeffs = [coeffs[0]]  # 近似系数不变
-    for i, detail_coeff in enumerate(coeffs[1:], 1):
-        if threshold_mode == "soft":
-            denoised = np.sign(detail_coeff) * np.maximum(np.abs(detail_coeff) - threshold, 0)
-        elif threshold_mode == "hard":
-            denoised = detail_coeff * (np.abs(detail_coeff) > threshold).astype(float)
-        else:  # improved - 改进非线性阈值，抑制伪吉布斯振荡
-            beta = 2.0
-            abs_c = np.abs(detail_coeff)
-            shrink = abs_c - threshold / (1 + np.exp(beta * (abs_c - threshold)))
-            denoised = np.sign(detail_coeff) * np.maximum(shrink, 0)
-        denoised_coeffs.append(denoised)
-
-    # 重构
-    return pywt.waverec(denoised_coeffs, wavelet)[:N]
 
 
 def cepstrum_pre_whitening(
