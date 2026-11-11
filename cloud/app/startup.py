@@ -54,8 +54,6 @@ def create_initial_devices():
                 "device_id": "WTG-001",
                 "name": "CW轴承-健康",
                 "location": "CW数据集 · 恒速/变速工况 · 健康轴承",
-                "health_score": 87,
-                "status": "normal",
                 "runtime_hours": 3456,
                 "channel_count": 3,
                 "bearing_params": CW_BEARING_PARAMS,
@@ -65,8 +63,6 @@ def create_initial_devices():
                 "device_id": "WTG-002",
                 "name": "CW轴承-内圈故障",
                 "location": "CW数据集 · 变速工况 · 内圈故障轴承",
-                "health_score": 50,
-                "status": "fault",
                 "runtime_hours": 2890,
                 "channel_count": 3,
                 "bearing_params": CW_BEARING_PARAMS,
@@ -76,8 +72,6 @@ def create_initial_devices():
                 "device_id": "WTG-003",
                 "name": "CW轴承-外圈故障",
                 "location": "CW数据集 · 恒速/变速工况 · 外圈故障轴承",
-                "health_score": 50,
-                "status": "fault",
                 "runtime_hours": 4102,
                 "channel_count": 3,
                 "bearing_params": CW_BEARING_PARAMS,
@@ -88,8 +82,6 @@ def create_initial_devices():
                 "device_id": "WTG-004",
                 "name": "WTgear-断齿",
                 "location": "WTgearbox数据集 · 恒速工况 · 齿轮断齿故障",
-                "health_score": 45,
-                "status": "fault",
                 "runtime_hours": 1567,
                 "channel_count": 2,
                 "bearing_params": None,  # 仅齿轮诊断
@@ -99,8 +91,6 @@ def create_initial_devices():
                 "device_id": "WTG-005",
                 "name": "WTgear-缺齿",
                 "location": "WTgearbox数据集 · 恒速工况 · 齿轮缺齿故障",
-                "health_score": 45,
-                "status": "fault",
                 "runtime_hours": 2000,
                 "channel_count": 2,
                 "bearing_params": None,  # 仅齿轮诊断
@@ -110,8 +100,6 @@ def create_initial_devices():
                 "device_id": "WTG-006",
                 "name": "WTgear-齿根裂纹",
                 "location": "WTgearbox数据集 · 恒速工况 · 齿轮齿根裂纹",
-                "health_score": 55,
-                "status": "warning",
                 "runtime_hours": 3000,
                 "channel_count": 2,
                 "bearing_params": None,  # 仅齿轮诊断
@@ -121,8 +109,6 @@ def create_initial_devices():
                 "device_id": "WTG-007",
                 "name": "WTgear-磨损",
                 "location": "WTgearbox数据集 · 恒速工况 · 齿轮磨损故障",
-                "health_score": 60,
-                "status": "warning",
                 "runtime_hours": 4000,
                 "channel_count": 2,
                 "bearing_params": None,  # 仅齿轮诊断
@@ -132,8 +118,6 @@ def create_initial_devices():
                 "device_id": "WTG-008",
                 "name": "WTgear-健康",
                 "location": "WTgearbox数据集 · 恒速工况 · 健康齿轮箱",
-                "health_score": 87,
-                "status": "normal",
                 "runtime_hours": 5000,
                 "channel_count": 2,
                 "bearing_params": None,  # 仅齿轮诊断
@@ -144,8 +128,6 @@ def create_initial_devices():
                 "device_id": "WTG-009",
                 "name": "混合-轴承+齿轮",
                 "location": "混合数据 · 轴承故障通道 + 齿轮故障通道",
-                "health_score": 60,
-                "status": "warning",
                 "runtime_hours": 6000,
                 "channel_count": 3,
                 "bearing_params": MIXED_BEARING_PARAMS,
@@ -156,8 +138,6 @@ def create_initial_devices():
                 "device_id": "WTG-010",
                 "name": "离线模拟",
                 "location": "模拟离线 · 不上传数据 · 仅用于离线检测验证",
-                "health_score": 87,
-                "status": "normal",
                 "runtime_hours": 100,
                 "channel_count": 3,
                 "bearing_params": None,  # 无参数 → 统计指标
@@ -182,8 +162,8 @@ def create_initial_devices():
                     channel_names=channel_names,
                     sample_rate=SENSOR_SAMPLE_RATE,
                     window_seconds=SENSOR_WINDOW_SECONDS,
-                    health_score=dev_info["health_score"],
-                    status=dev_info["status"],
+                    health_score=None,
+                    evaluation_status="not_evaluable", diagnosis_conclusion="unknown",
                     runtime_hours=dev_info.get("runtime_hours", 0),
                     upload_interval=10,
                     task_poll_interval=5,
@@ -201,7 +181,7 @@ def create_initial_devices():
                 gt_str = "有齿轮参数" if dev_info.get("gear_teeth") else "无齿轮参数"
                 logger.info(
                     f"[启动] 创建设备: {dev_info['device_id']} "
-                    f"(健康度 {dev_info['health_score']}, 状态 {dev_info['status']}, "
+                    f"(尚未评估，评分未知，"
                     f"{bp_str}, {gt_str})"
                 )
             else:

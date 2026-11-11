@@ -3,9 +3,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device
+from app.schemas import DiagnosisResponse
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum, DenoisingError
 from .errors import denoising_http_error, configured_denoise
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, DenoiseMethod
+from app.services.diagnosis.domain import DiagnosisKey
+from app.services.diagnosis.gear.planetary import gear_config_for_channel
 from . import router, prepare_signal, _get_channel_name, _extract_device_param, _sanitize_for_json
 from datetime import datetime
 from .bearing_options import get_bearing_options
@@ -15,7 +18,7 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
-@router.get("/{device_id}/{batch_index}/{channel}/envelope")
+@router.get("/{device_id}/{batch_index}/{channel}/envelope", response_model=DiagnosisResponse)
 async def get_channel_envelope(
     device_id: str,
     batch_index: int,
@@ -44,7 +47,7 @@ async def get_channel_envelope(
 
     try:
         sample_rate = record.sample_rate or 25600
-        signal = prepare_signal(record.data, detrend=detrend)
+        signal = prepare_signal(record.data[:int(sample_rate * 5)], detrend=detrend)
 
         if len(signal) < 64:
             raise HTTPException(status_code=400, detail="信号长度不足（至少64点），无法计算包络谱")
@@ -62,8 +65,9 @@ async def get_channel_envelope(
             bearing_params = device.bearing_params or {}
             gear_teeth = device.gear_teeth or {}
         # 兼容前端通道级格式 {"1":{n:9,d:7.94}} → 设备级 {n:9,d:7.94}
-        bearing_params = _extract_device_param(bearing_params, ("n", "d", "D", "alpha"))
-        gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
+        if not any(name in bearing_params for name in ("n", "d", "D")):
+            bearing_params = bearing_params.get(str(channel), {})
+        gear_teeth = gear_config_for_channel(gear_teeth, channel)
 
         # 未配置轴承几何参数时不再注入默认型号；
         # 诊断引擎会改走包络统计指标，尽量判断是否存在异常冲击。
@@ -96,6 +100,7 @@ async def get_channel_envelope(
             gear_teeth=gear_teeth,
             denoise_method=denoise_method,
             bearing_options=bearing_options,
+            diagnosis_key=DiagnosisKey(device_id, batch_index, channel, denoise),
         )
 
         # CPU 密集型轴承分析放入线程池
