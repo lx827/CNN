@@ -5,26 +5,19 @@
       <div class="group-title">📋 综合结论</div>
       <el-descriptions :column="2" size="small" border>
         <el-descriptions-item label="健康度">
-          <span :class="scoreClass(data.health_score)">{{ data.health_score }}</span>
+          <el-text :type="statusView.tone">{{ statusView.scoreText }}</el-text>
         </el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="statusView.tagType" size="small" effect="dark">{{ statusView.text }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="故障概率">
-          {{ data.fault_likelihood != null ? (data.fault_likelihood * 100).toFixed(1) + '%' : '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="故障类型">
-          {{ faultLabelText(data.fault_label) }}
-        </el-descriptions-item>
-        <el-descriptions-item v-if="data.bearing?.evaluation" label="轴承包络评估" :span="2">
-          <el-tag :type="data.bearing.evaluation.status === 'evaluated' ? 'success' : 'info'" size="small">
-            {{ data.bearing.evaluation.status === 'evaluated' ? '已完成评估' : '输入不足，不可判定' }}
-          </el-tag>
+        <el-descriptions-item label="故障命题">
+          {{ data.fault_propositions?.join('、') || '-' }}
         </el-descriptions-item>
         <el-descriptions-item label="转频" :span="2">
           {{ displayRotFreq != null ? displayRotFreq.toFixed(2) + ' Hz / ' + (displayRotFreq * 60).toFixed(0) + ' RPM' : '-' }}
         </el-descriptions-item>
       </el-descriptions>
+      <DiagnosisCoverage :result="data" />
       <el-text v-if="data.recommendation" type="info" size="small" style="margin-top: 6px; display: block;">
         💡 {{ data.recommendation }}
       </el-text>
@@ -110,30 +103,22 @@
 <script setup>
 import { computed } from 'vue'
 import PlanetaryResult from './research/PlanetaryResult.vue'
+import DiagnosisCoverage from './DiagnosisCoverage.vue'
 import {
   bearingEvaluationIndicators,
   scScohEntries,
 } from '../utils/bearingDiagnosis'
-import { getDiagnosisStatusView } from '../utils/diagnosisStatus'
+import { getDiagnosisView } from '../utils/diagnosisStatus'
 
 const props = defineProps({
-  orderAnalysis: { type: Object, default: null },
+  diagnosis: { type: Object, default: null },
   rotFreq: { type: Number, default: null },
   rotRpm: { type: Number, default: null },
 })
 
-// engine_result 是 order_analysis 的核心数据
-const data = computed(() => {
-  if (!props.orderAnalysis) return null
-  // order_analysis 可能是嵌套结构 { engine_result: {...}, channels: {...} }
-  if (props.orderAnalysis.engine_result) {
-    return props.orderAnalysis.engine_result
-  }
-  // 也可能直接是 engine_result 本身
-  return props.orderAnalysis
-})
+const data = computed(() => props.diagnosis)
 
-const statusView = computed(() => getDiagnosisStatusView(data.value?.status))
+const statusView = computed(() => getDiagnosisView(data.value))
 
 const displayRotFreq = computed(() => {
   if (props.rotFreq != null) return props.rotFreq
@@ -141,18 +126,6 @@ const displayRotFreq = computed(() => {
 })
 
 // ---- 综合结论 ----
-function scoreClass(hs) {
-  if (hs >= 85) return 'score-good'
-  if (hs >= 60) return 'score-warning'
-  return 'score-danger'
-}
-function faultLabelText(label) {
-  if (!label || label === 'unknown') return '未知'
-  if (label === 'bearing_abnormal') return '轴承异常'
-  if (label === 'gear_abnormal') return '齿轮异常'
-  if (label.startsWith('bearing_')) return '轴承 ' + label.replace('bearing_', '')
-  return label
-}
 
 // ---- 时域特征 ----
 const timeFeatureDefs = {

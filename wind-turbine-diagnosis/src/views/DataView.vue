@@ -47,7 +47,7 @@
         />
       </template>
 
-      <DiagnosisAlert :status="selectedBatch.diagnosis_status" :description="diagnosisDesc" />
+      <DiagnosisAlert :diagnosis="selectedBatch" :description="diagnosisDesc" />
 
       <!-- 时域波形：始终自动加载 -->
       <TimeDomainPanel :chart-option="timeOption" />
@@ -94,13 +94,11 @@
 
       <!-- 综合故障诊断 -->
       <ComprehensiveSection
-        v-model:analyze-strategy="analyzeStrategy"
         v-model:analyze-denoise="analyzeDenoise"
         v-model:full-analysis-denoise="fullAnalysisDenoise"
         :computed-strategy-analyze="computedStrategyAnalyze"
         :loading-strategy-analyze="loadingStrategyAnalyze"
         :strategy-analyze-data="strategyAnalyzeData"
-        :analyze-strategy-label="analyzeStrategyLabel"
         :computed-full-analysis="computedFullAnalysis"
         :loading-full-analysis="loadingFullAnalysis"
         :full-analysis-data="fullAnalysisData"
@@ -152,6 +150,7 @@
       <!-- 阶次/包络诊断明细 -->
       <DiagnosisDetailSection
         :show-detail="showDiagnosisDetail"
+        :diagnosis="diagnosisDetailData"
         :loading-detail="loadingDiagnosisDetail"
         :batch="selectedBatch"
         :order-data="orderData"
@@ -190,8 +189,8 @@ const {
   loadingFFT, loadingSTFT, loadingEnvelope, loadingStats, loadingOrder, loadingCepstrum, loadingGear,
   statsData, orderData, cepstrumData, gearData, envelopeData,
   computedFullAnalysis, loadingFullAnalysis, fullAnalysisData, fullAnalysisDenoise,
-  computedStrategyAnalyze, loadingStrategyAnalyze, strategyAnalyzeData, analyzeStrategy, analyzeDenoise, analyzeStrategyLabel,
-  showDiagnosisDetail, loadingDiagnosisDetail, faultFreqAnnotations,
+  computedStrategyAnalyze, loadingStrategyAnalyze, strategyAnalyzeData, analyzeDenoise,
+  showDiagnosisDetail, loadingDiagnosisDetail, diagnosisDetailData, faultFreqAnnotations,
   statsWindowSize, statsStep, stftNperseg, stftNoverlap,
   orderFreqMin, orderFreqMax, orderSamplesPerRev, cepstrumMaxQuefrency,
   bearingSummaryTable, gearSummaryTable, diagnosisDesc,

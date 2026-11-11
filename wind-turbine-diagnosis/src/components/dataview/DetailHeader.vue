@@ -5,13 +5,13 @@
       批次 <b>{{ batch?.batch_index }}</b>
       <el-tag v-if="batch?.is_special" type="danger" size="small" effect="dark">特殊数据</el-tag>
       <el-tag
-        v-if="batch?.diagnosis_status"
-        :type="getStatusType(batch.diagnosis_status)"
+        v-if="batch"
+        :type="getDiagnosisView(batch).tagType"
         size="small"
         effect="dark"
       >
-        {{ getStatusText(batch.diagnosis_status) }}
-        <span v-if="batch.health_score != null">({{ batch.health_score }}分)</span>
+        {{ getDiagnosisView(batch).label }}
+        <span v-if="getDiagnosisView(batch).scoreText !== '-'">({{ getDiagnosisView(batch).scoreText }}分)</span>
       </el-tag>
       <el-tag type="info" size="small">采样率 {{ batch?.sample_rate || 25600 }} Hz</el-tag>
     </span>
@@ -87,7 +87,7 @@
 </template>
 
 <script setup>
-import { getStatusText, getStatusType } from '../../utils/status'
+import { getDiagnosisView } from '../../utils/diagnosisStatus'
 import { Cpu } from '@element-plus/icons-vue'
 
 const props = defineProps({

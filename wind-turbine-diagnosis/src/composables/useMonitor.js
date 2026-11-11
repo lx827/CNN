@@ -11,6 +11,7 @@ import { requestCollection, getTaskStatus } from '../api/system'
 import { getDevices } from '../api/devices'
 import { getWebSocketClient } from '../utils/websocket'
 import { ElMessage } from 'element-plus'
+import { getDiagnosisView } from '../utils/diagnosisStatus'
 
 export function useMonitor() {
   const activeChannel = ref(0)
@@ -45,8 +46,9 @@ export function useMonitor() {
     chList.forEach((ch) => {
       list.push({
         name: ch.channel_name || ch.name || `振动传感器 ${ch.id || ch.channel}`,
-        status: 'normal',
-        statusText: '正常',
+        status: getDiagnosisView(ch).tone,
+        statusText: getDiagnosisView(ch).label,
+        is_offline: ch.is_offline,
         type: 'vibration'
       })
     })
@@ -247,31 +249,8 @@ export function useMonitor() {
   }
 
   const updateSensorStatus = (chList) => {
-    // 根据通道数据更新传感器状态显示
-    // 先重建传感器列表（适应不同通道数）
+    // 诊断来自当前通道持久化结果；RMS 只用于振动图表。
     buildSensors(chList)
-    // 更新振动通道状态
-    chList.forEach((ch, idx) => {
-      if (sensors.value[idx]) {
-        // rms 缺失时不应默认显示正常
-        if (ch.rms == null) {
-          sensors.value[idx].status = 'info'
-          sensors.value[idx].statusText = '数据缺失'
-          return
-        }
-        const rms = ch.rms
-        if (rms > 5) {
-          sensors.value[idx].status = 'danger'
-          sensors.value[idx].statusText = '异常'
-        } else if (rms > 2) {
-          sensors.value[idx].status = 'warning'
-          sensors.value[idx].statusText = '警告'
-        } else {
-          sensors.value[idx].status = 'normal'
-          sensors.value[idx].statusText = '正常'
-        }
-      }
-    })
   }
 
   // ============ 图表更新 ============

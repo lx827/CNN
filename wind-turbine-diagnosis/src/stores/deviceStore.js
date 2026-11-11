@@ -10,15 +10,15 @@ export const useDeviceStore = defineStore('device', () => {
 
   // ========== Getters ==========
   const selectedDevice = computed(() =>
-    deviceList.value.find(d => d.device_id === selectedDeviceId.value) || null
+    deviceList.value.find(d => d.deviceId === selectedDeviceId.value) || null
   )
 
   const onlineDevices = computed(() =>
-    deviceList.value.filter(d => d.status !== 'offline')
+    deviceList.value.filter(d => !d.is_offline)
   )
 
   const offlineDevices = computed(() =>
-    deviceList.value.filter(d => d.status === 'offline')
+    deviceList.value.filter(d => d.is_offline)
   )
 
   // ========== Actions ==========
@@ -33,8 +33,8 @@ export const useDeviceStore = defineStore('device', () => {
       deviceList.value = res.data?.devices || []
       // 如果没有选中设备，默认选中第一个在线设备
       if (!selectedDeviceId.value && deviceList.value.length > 0) {
-        const firstOnline = deviceList.value.find(d => d.status !== 'offline')
-        selectedDeviceId.value = firstOnline?.device_id || deviceList.value[0].device_id
+        const firstOnline = deviceList.value.find(d => !d.is_offline)
+        selectedDeviceId.value = firstOnline?.deviceId || deviceList.value[0].deviceId
       }
     } finally {
       loading.value = false
