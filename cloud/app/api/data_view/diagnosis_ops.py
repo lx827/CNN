@@ -14,7 +14,7 @@ from . import router, _sanitize_for_json
 
 @router.put("/{device_id}/{batch_index}/diagnosis")
 async def update_batch_diagnosis(device_id: str, batch_index: int,
-                                 rot_freq: Optional[float] = Body(default=None),
+                                 rot_freq: Optional[float] = Body(default=None, embed=True),
                                  db: Session = Depends(get_db)):
     """只更新准确 batch/none 转频缓存；不创建诊断或修改通道缓存。"""
     import math
