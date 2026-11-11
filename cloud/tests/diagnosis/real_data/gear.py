@@ -89,6 +89,10 @@ def _tag(stream: BinaryIO, endian: str, limit: int) -> tuple[int, int, int, int]
     if len(raw) != 8:
         raise ValueError("Truncated MAT element tag")
     first_word = struct.unpack(endian + "I", raw[:4])[0]
+    # miCOMPRESSED 不适用本 reader 的普通元素对齐检查；先明确拒绝，
+    # 避免将合法压缩文件误报为截断并掩盖真正的不支持原因。
+    if first_word == 15:
+        raise ValueError("Only uncompressed miMATRIX elements are supported")
     if first_word > 0xFFFF:
         small_type, small_size = struct.unpack(endian + "HH", raw[:4])
         if small_size > 4:
