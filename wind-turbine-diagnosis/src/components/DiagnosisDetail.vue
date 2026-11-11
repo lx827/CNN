@@ -68,6 +68,8 @@
       </el-descriptions>
     </div>
 
+    <PlanetaryResult v-if="data.gear?.is_planetary" :result="data.gear" />
+
     <!-- 齿轮故障指示器 -->
     <div class="detail-group" v-if="gearIndicators.length">
       <div class="group-title">⚙ 齿轮故障指示器</div>
@@ -107,6 +109,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import PlanetaryResult from './research/PlanetaryResult.vue'
 import {
   bearingEvaluationIndicators,
   scScohEntries,
@@ -144,7 +147,7 @@ function scoreClass(hs) {
   return 'score-danger'
 }
 function faultLabelText(label) {
-  if (!label || label === 'unknown') return '未检出异常'
+  if (!label || label === 'unknown') return '未知'
   if (label === 'bearing_abnormal') return '轴承异常'
   if (label === 'gear_abnormal') return '齿轮异常'
   if (label.startsWith('bearing_')) return '轴承 ' + label.replace('bearing_', '')

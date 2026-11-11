@@ -88,10 +88,11 @@ def test_gear_confidence():
         "fault_indicators": {
             "ser": {"warning": True, "value": 9.0},
         },
-        "planet_count": 4,
+        "planet_count": 4, "is_planetary": True,
+        "evaluation": {"status": "not_evaluable", "conclusion": "unknown"},
     }
     c3 = _gear_confidence(res3, has_gear_params=True, time_features={"kurtosis": 4.0, "crest_factor": 8.0})
-    planetary_ok = c3["confidence"] > 0.1  # 行星箱在低 kurt 下也应有一定置信度
+    planetary_ok = c3["confidence"] == 0 and c3["evaluable"] is False
     results.append({"test": "gear_planetary_low_kurt", "conf": c3["confidence"], "passed": planetary_ok})
     print(f"  [{'PASS' if planetary_ok else 'FAIL'}] 行星箱低kurt: conf={c3['confidence']:.2f}")
 

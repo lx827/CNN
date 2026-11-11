@@ -147,18 +147,6 @@ export function useResearchDiagnosis() {
     return false
   })
 
-  // 行星箱方法结果过滤（排除大数组/不可展示字段）
-  const filterPlanetaryResult = computed(() => {
-    if (!result.value || selectedMethodInfo.value?.category !== 'planetary') return {}
-    const filtered = {}
-    for (const [k, v] of Object.entries(result.value)) {
-      if (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') {
-        filtered[k] = v
-      }
-    }
-    return filtered
-  })
-
   // 投票行数据
   const bearingVoteRows = computed(() => voteRows(result.value?.ensemble?.bearing_votes))
   const gearVoteRows = computed(() => voteRows(result.value?.ensemble?.gear_votes))
@@ -224,10 +212,11 @@ export function useResearchDiagnosis() {
         .map(([name, v]) => ({ indicator: name, level: v.critical ? 'critical' : 'warning' }))
       return {
         method,
-        ser: r.ser != null ? Number(r.ser) : null,
-        car: r.car != null ? Number(r.car) : null,
-        fm0: r.fm0 != null ? Number(r.fm0) : null,
-        fm4: r.fm4 != null ? Number(r.fm4) : null,
+        ser: r.is_planetary ? r.sideband_analysis?.ser?.value ?? null : r.ser != null ? Number(r.ser) : null,
+        car: r.is_planetary ? r.metrics?.car?.value ?? null : r.car != null ? Number(r.car) : null,
+        fm0: r.is_planetary ? r.metrics?.fm0?.value ?? null : r.fm0 != null ? Number(r.fm0) : null,
+        fm4: r.is_planetary ? r.metrics?.fm4?.value ?? null : r.fm4 != null ? Number(r.fm4) : null,
+        evaluationStatus: r.evaluation?.status,
         sideband_count: r.sidebands?.length ?? (r.sideband_count ?? 0),
         indicators: fi,
         alerts,
@@ -384,7 +373,6 @@ export function useResearchDiagnosis() {
     planetaryMethodGroup,
     selectedMethodInfo,
     methodCategoryTag,
-    filterPlanetaryResult,
     bearingVoteRows,
     gearVoteRows,
     bestIndicatorRows,
