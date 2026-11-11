@@ -1,0 +1,18 @@
+{
+  "cloud_url": "http://8.137.96.104:8000",
+  "agent_id": "dc24-pi",
+  "api_key_env": "EDGE_API_KEY",
+  "listen_ip": "192.168.2.100",
+  "device_ip": "192.168.2.101",
+  "port": 6800,
+  "storage": "/var/lib/dc24-edge",
+  "mode": "cloud",
+  "sample_rate": null,
+  "duration_seconds": null,
+  "interval_seconds": null,
+  "min_free_bytes": 268435456,
+  "http_timeout_seconds": 4,
+  "upload_timeout_seconds": 180,
+  "device_wait_seconds": 45,
+  "data_timeout_seconds": 10
+}

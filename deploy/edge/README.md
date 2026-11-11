@@ -119,11 +119,11 @@ journalctl -u dc24-edge -f
 
 本目录所有文件均不含 Rust 源码目录名:构建上下文由脚本探测传入(当前 `edge-rust/`,平移工单合入后 `edge/`),`Dockerfile` 内只有 `/build` 这样的容器内路径。**目录平移后本目录零改动。** 文中以"Rust 边端源码目录"指代该目录。
 
-## 本机验证状态(2026-11-07)
+## 本机验证状态
 
-- 本机(Windows 11)+ WSL(Ubuntu-22.04)内均**未安装 Docker**(`docker` 命令不存在,Docker Desktop 未安装),`docker buildx build` 无法执行,**ARM64 构建在本机未实际验证**。
-- Docker 就绪后的验证入口:`cd deploy/edge && ./build.sh --with-tests`,核对 `out/aarch64-unknown-linux-gnu/` 三件套与 `file` 输出。
-- Rust 边端自述"完整构建与端到端测试尚未通过"(见 [edge-rust/README.md](../../edge-rust/README.md));本封装只负责构建容器,若源码现状编不过,构建会在 `cargo build` 一层如实失败并停在失败点,按工单 #52 口径这同样算交付——失败日志即记录。
+**2026-11-11 全链路实机验证通过**:WSL(Ubuntu-22.04)Docker 29.x + buildx,`./build.sh` 产出 ARM64 产物(2.1MB,stripped)→ 部署树莓派 MIC-DT-Pi(Debian 13,glibc 兼容)→ `--check` PASS → DC24 采集卡主动连入保持 ESTAB(含断线自动重连)→ 云端下发 2000Hz 会话,实时窗口推流全部 200。部署用 [edge/deploy/pi/deploy_pi.sh](../../edge/deploy/pi/deploy_pi.sh) 一条命令完成,现场与链路记录见 [树莓派直连配置](../../docs/树莓派直连配置.md)。
+
+2026-11-07 记录(历史):彼时本机与 WSL 均未装 Docker,构建未验证;Rust 源码状态以 [edge/README.md](../../edge/README.md) 为准。
 
 ## 常见问题
 
