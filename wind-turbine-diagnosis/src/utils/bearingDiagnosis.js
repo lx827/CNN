@@ -78,3 +78,22 @@ export const indicatorDisplayValue = info => {
   if (!info || typeof info !== 'object') return '-'
   return info.value ?? info.snr ?? info.scoh_peak ?? info.detected_hz ?? '-'
 }
+
+export const bearingMethodLabel = (key) => {
+  const map = {
+    envelope: '标准包络分析',
+    filter_bank_sk: '二叉滤波器组谱峭度',
+    cpw: 'CPW预白化+包络',
+    teager: 'TEO能量算子+包络',
+    spectral_kurtosis: '自适应谱峭度包络',
+    med: 'MED最小熵解卷积+包络',
+    mckd: 'MCKD最大相关峭度解卷积+包络',
+    sc_scoh: '谱相关/谱相干',
+    wp: 'WP小波包+包络',
+    dwt: 'DWT离散小波+包络',
+    emd_envelope: 'EMD经验模态+包络',
+    ceemdan_envelope: 'CEEMDAN互补集合+包络',
+    vmd_envelope: 'VMD变分模态+包络',
+  }
+  return map[key] || key
+}

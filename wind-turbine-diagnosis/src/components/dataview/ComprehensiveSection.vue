@@ -240,7 +240,7 @@
 <script setup>
 import { computed } from 'vue'
 import PlanetaryResult from '../research/PlanetaryResult.vue'
-import { bearingMethodLabel } from '../../composables/useDataView'
+import { bearingMethodLabel } from '../../utils/bearingDiagnosis'
 import { bearingIndicatorEntries as bearingEntries } from '../../utils/bearingDiagnosis'
 import DiagnosisCoverage from '../DiagnosisCoverage.vue'
 import { getDiagnosisView } from '../../utils/diagnosisStatus'
