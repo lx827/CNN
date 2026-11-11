@@ -21,7 +21,7 @@
       </div>
       <div v-if="showDetail">
         <DiagnosisDetail
-          :order-analysis="batch.order_analysis"
+          :diagnosis="diagnosis"
           :rot-freq="orderData?.rot_freq ?? batch.rot_freq"
           :rot-rpm="orderData?.rot_rpm ?? (batch.rot_freq ? batch.rot_freq * 60 : null)"
         />
@@ -37,6 +37,7 @@
 import DiagnosisDetail from '../../components/DiagnosisDetail.vue'
 
 defineProps({
+  diagnosis: { type: Object, default: null },
   showDetail: { type: Boolean, default: false },
   loadingDetail: { type: Boolean, default: false },
   batch: { type: Object, required: true },

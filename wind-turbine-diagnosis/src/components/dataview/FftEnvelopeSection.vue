@@ -70,8 +70,8 @@
           实际频带 {{ envelopeData.band.low_hz }}~{{ envelopeData.band.high_hz }} Hz
           （中心 {{ envelopeData.band.center_hz }} Hz）
         </el-tag>
-        <el-tag v-if="envelopeData.evaluation" :type="envelopeData.evaluation.status === 'evaluated' ? 'success' : 'info'" size="small" effect="plain">
-          {{ envelopeData.evaluation.status === 'evaluated' ? '包络评估已完成' : '输入不足，不可判定' }}
+        <el-tag :type="getDiagnosisView(envelopeData).tagType" size="small" effect="plain">
+          包络诊断：{{ getDiagnosisView(envelopeData).label }}
         </el-tag>
         <el-tag v-if="scScohHitCount > 0" type="warning" size="small" effect="plain">
           SC/SCoh 显著指标 {{ scScohHitCount }} 项
@@ -104,6 +104,7 @@
 </template>
 
 <script setup>
+import { getDiagnosisView } from '../../utils/diagnosisStatus'
 import { computed } from 'vue'
 import VibrationChart from '../../components/charts/VibrationChart.vue'
 import { scScohEntries } from '../../utils/bearingDiagnosis'
