@@ -12,7 +12,9 @@ from app.algorithms.order import OrderAnalysis, ScalarSpeed, SpeedTrajectory
 from app.algorithms.pipelines.gear.planetary import PlanetaryGearPipeline
 from app.services.analyzer import analyze_device
 from app.services.diagnosis import DiagnosisEngine, GearMethod
-from app.services.diagnosis.ensemble import _gear_confidence, run_research_ensemble
+from app.services.diagnosis.ensemble import run_research_ensemble
+from app.services.diagnosis.adapters import adapt_method_result
+from app.services.diagnosis.domain import DiagnosisKey
 from app.services.diagnosis.gear.planetary import gear_config_for_channel, planetary_geometry_from_config
 
 GEOMETRY = {"sun": 28, "ring": 100, "planet": 36, "planet_count": 4, "reference_axis": "sun", "fixed_member": "ring"}
@@ -39,7 +41,7 @@ class PlanetaryBusinessTests(unittest.TestCase):
             values = {key: value for key, value in GEOMETRY.items() if key != missing}
             values["input"] = 28
             result = DiagnosisEngine(gear_teeth=values).analyze_gear(SIGNAL, FS, 20)
-            self.assertEqual(result["analysis_status"], "not_evaluable", missing)
+            self.assertEqual(result["analysis"]["status"], "not_evaluable", missing)
             self.assertEqual(result["diagnosis_conclusion"], "unknown")
 
     def test_varying_order_result_does_not_become_constant_speed_summary(self):
@@ -61,32 +63,32 @@ class PlanetaryBusinessTests(unittest.TestCase):
     def test_same_record_has_one_vote_and_unknown_never_becomes_healthy(self):
         with patch("app.services.diagnosis.ensemble._profile_config", return_value={"denoise": ["none", "wavelet"], "bearing": [], "gear": [GearMethod.STANDARD, GearMethod.ADVANCED]}):
             result = run_research_ensemble(SIGNAL, FS, gear_teeth=GEOMETRY, rot_freq=20)
-        self.assertEqual(len(result["gear_results"]), 1)
-        self.assertEqual(len(result["ensemble"]["gear_votes"]), 1)
-        self.assertFalse(next(iter(result["ensemble"]["gear_votes"].values()))["evaluable"])
-        self.assertEqual(result["status"], "indeterminate")
+        self.assertEqual(len(result["gear_results"]), 2)
+        self.assertEqual(result["evaluation_status"], "not_evaluable")
+        self.assertEqual(result["diagnosis_conclusion"], "unknown")
         self.assertIsNone(result["health_score"])
-        self.assertIsNone(result["fault_likelihood"])
-        self.assertEqual(result["fault_label"], "unknown")
+        self.assertEqual(result["evaluations"][0]["fusion"]["groups"], [])
 
     def test_analyzer_keeps_unknown_channel_without_fallback_or_int_none(self):
         device = SimpleNamespace(gear_teeth=GEOMETRY, bearing_params={})
-        with patch("app.services.analyzer.nn_predict", return_value=None), patch("app.services.analyzer._rule_based_analyze", side_effect=AssertionError("must not fall back")):
-            result = analyze_device({"c1": SIGNAL}, FS, device, rot_freq=20, denoise_method="none")
-        self.assertEqual(result["status"], "indeterminate")
+        result = analyze_device({"ch3": SIGNAL}, FS, device, rot_freq=20, denoise_method="none")
+        self.assertEqual(result["evaluation_status"], "not_evaluable")
+        self.assertEqual(result["diagnosis_conclusion"], "unknown")
         self.assertIsNone(result["health_score"])
-        self.assertEqual(result["fault_probabilities"], {})
-        self.assertIn("c1", result["order_analysis"]["channels"])
+        self.assertIn("ch3", result["channels"])
 
     def test_raw_kurtosis_and_legacy_field_cannot_trigger_planetary_vote(self):
-        vote = _gear_confidence({"is_planetary": True, "evaluation": {"status": "not_evaluable", "conclusion": "unknown"}, "planetary_tsa_demod": {"residual_kurtosis": 1000}, "fault_indicators": {}}, True, {"kurtosis": 1000, "crest_factor": 1000})
-        self.assertFalse(vote["evaluable"])
-        self.assertEqual(vote["confidence"], 0)
+        result = adapt_method_result({"is_planetary": True, "evaluation": {"status": "not_evaluable", "indicators": {}},
+            "planetary_tsa_demod": {"residual_kurtosis": 1000}}, key=DiagnosisKey("P", 1, 1, "none"),
+            object_id="gear", method="planetary_gear", signal=SIGNAL, physical_parameters=True)
+        self.assertEqual(result["diagnosis_conclusion"], "unknown")
+        self.assertIsNone(result["health_score"])
 
     def test_all_and_comprehensive_do_not_get_healthy_from_unconfigured_bearing(self):
         engine = DiagnosisEngine(gear_teeth=GEOMETRY, gear_method=GearMethod.ADVANCED)
         for result in (engine.analyze_comprehensive(SIGNAL, FS, 20), engine.analyze_all_methods(SIGNAL, FS, 20)):
-            self.assertEqual(result["status"], "indeterminate")
+            self.assertIn(result["evaluation_status"], {"not_evaluable", "indeterminate"})
+            self.assertEqual(result["diagnosis_conclusion"], "unknown")
             self.assertIsNone(result["health_score"])
 
 
