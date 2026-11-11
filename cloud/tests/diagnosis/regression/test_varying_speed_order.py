@@ -2,6 +2,7 @@
 
 运行：cd cloud && uv run python tests/diagnosis/regression/test_varying_speed_order.py
 """
+
 import os
 import sys
 

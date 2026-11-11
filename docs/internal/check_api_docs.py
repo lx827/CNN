@@ -3,13 +3,14 @@ import os
 import re
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]   # docs/internal/ -> 仓库根
+_REPO_ROOT = Path(__file__).resolve().parents[2]  # docs/internal/ -> 仓库根
 API_DIR = _REPO_ROOT / "cloud" / "app" / "api"
 DOCS_DIR = _REPO_ROOT / "docs" / "backend" / "app" / "api"
 ALGO_DIR = _REPO_ROOT / "docs" / "algorithms"
 
 # 算法相关文件
 ALGO_FILES = {"gear.py", "envelope.py", "order.py", "cepstrum.py", "diagnosis_ops.py"}
+
 
 def get_type_hint_str(node):
     """将 AST 注解节点转换为字符串"""
@@ -39,6 +40,7 @@ def get_type_hint_str(node):
         else:
             return None
 
+
 def extract_defs(py_path):
     """从 .py 文件中提取函数和类定义"""
     with open(py_path, "r", encoding="utf-8") as f:
@@ -47,7 +49,7 @@ def extract_defs(py_path):
 
     results = {
         "functions": [],  # list of dict
-        "classes": [],    # list of dict with methods
+        "classes": [],  # list of dict with methods
     }
 
     for node in ast.iter_child_nodes(tree):
@@ -63,7 +65,9 @@ def extract_defs(py_path):
                 arg_type = get_type_hint_str(arg.annotation)
                 func_info["args"].append((arg_name, arg_type))
             # defaults offset
-            defaults = [None] * (len(node.args.args) - len(node.args.defaults)) + [ast.unparse(d) for d in node.args.defaults]
+            defaults = [None] * (len(node.args.args) - len(node.args.defaults)) + [
+                ast.unparse(d) for d in node.args.defaults
+            ]
             results["functions"].append(func_info)
 
         elif isinstance(node, ast.ClassDef):
@@ -89,6 +93,7 @@ def extract_defs(py_path):
 
     return results
 
+
 def check_md_coverage(md_path, py_defs):
     """检查 md 文件是否覆盖了 py 中的定义"""
     if not md_path.exists():
@@ -113,9 +118,13 @@ def check_md_coverage(md_path, py_defs):
         if name in md_content:
             covered_functions.append(name)
             # 检查参数列表
-            has_args = len(func["args"]) == 0 or any(arg[0] in md_content for arg in func["args"])
+            has_args = len(func["args"]) == 0 or any(
+                arg[0] in md_content for arg in func["args"]
+            )
             # 检查类型注解：仅当源码有注解时才检查 md 是否覆盖
-            source_types = [arg[1] for arg in func["args"] if arg[1]] + ([func["returns"]] if func.get("returns") else [])
+            source_types = [arg[1] for arg in func["args"] if arg[1]] + (
+                [func["returns"]] if func.get("returns") else []
+            )
             type_hint_ok = True
             if source_types:
                 type_hint_ok = all(t in md_content for t in source_types)
@@ -139,17 +148,25 @@ def check_md_coverage(md_path, py_defs):
                     missing_functions.append({**method, "class": name})
                 else:
                     covered_functions.append(full_sig)
-                    has_args = len(method["args"]) == 0 or any(arg[0] in md_content for arg in method["args"])
-                    source_types = [arg[1] for arg in method["args"] if arg[1]] + ([method["returns"]] if method.get("returns") else [])
+                    has_args = len(method["args"]) == 0 or any(
+                        arg[0] in md_content for arg in method["args"]
+                    )
+                    source_types = [arg[1] for arg in method["args"] if arg[1]] + (
+                        [method["returns"]] if method.get("returns") else []
+                    )
                     type_hint_ok = True
                     if source_types:
                         type_hint_ok = all(t in md_content for t in source_types)
-                    return_ok = method.get("returns") is None or method["returns"] in md_content
+                    return_ok = (
+                        method.get("returns") is None or method["returns"] in md_content
+                    )
                     if not (has_args and type_hint_ok and return_ok):
                         type_hint_missing.append(full_sig)
 
     # 算法链接检查：检查是否链接到 docs/algorithms/
-    algo_link = bool(re.search(r'\.\./algorithms/|docs/algorithms/|/algorithms/', md_content))
+    algo_link = bool(
+        re.search(r"\.\./algorithms/|docs/algorithms/|/algorithms/", md_content)
+    )
 
     return {
         "exists": True,
@@ -159,6 +176,7 @@ def check_md_coverage(md_path, py_defs):
         "type_hint_missing": type_hint_missing,
         "algo_link": algo_link,
     }
+
 
 def format_signature(item, is_class=False):
     if is_class:
@@ -170,8 +188,10 @@ def format_signature(item, is_class=False):
         return f"{item['class']}.{name}({args}){ret}"
     return f"{name}({args}){ret}"
 
+
 def main():
     import sys
+
     out_path = _REPO_ROOT / "check_api_docs_report.md"
     with open(out_path, "w", encoding="utf-8") as out:
         sys.stdout = out
@@ -212,14 +232,18 @@ def main():
             rel_str = str(rel).replace("\\", "/")
             print(f"### 文件: api/{rel_str} -> docs/backend/app/api/{rel_str[:-3]}.md")
             print(f"- **状态**: {status}")
-            print(f"- **已覆盖函数/方法**: {result['covered_functions'] if result['covered_functions'] else '[]'}")
+            print(
+                f"- **已覆盖函数/方法**: {result['covered_functions'] if result['covered_functions'] else '[]'}"
+            )
             missing_sigs = []
             for f in result["missing_functions"]:
                 missing_sigs.append(format_signature(f))
             for c in result["missing_classes"]:
                 missing_sigs.append(format_signature(c, is_class=True))
             print(f"- **缺失函数/类**: {missing_sigs if missing_sigs else '[]'}")
-            print(f"- **类型注解缺失**: {result['type_hint_missing'] if result['type_hint_missing'] else '[]'}")
+            print(
+                f"- **类型注解缺失**: {result['type_hint_missing'] if result['type_hint_missing'] else '[]'}"
+            )
             if is_algo:
                 print(f"- **算法链接**: {'有' if result['algo_link'] else '无'}")
             else:
@@ -235,6 +259,7 @@ def main():
         print(f"- **算法文件总数**: {algo_total}")
         print(f"- **算法文件有链接**: {algo_linked}")
         sys.stdout = sys.__stdout__
+
 
 if __name__ == "__main__":
     main()

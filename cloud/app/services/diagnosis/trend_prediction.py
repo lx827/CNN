@@ -15,6 +15,7 @@
     # Kalman 滤波平滑
     result = kalman_smooth_health_scores(health_scores)
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
@@ -25,6 +26,7 @@ import numpy as np
 # ═══════════════════════════════════════════════════════════════
 # Holt-Winters 三阶指数平滑
 # ═══════════════════════════════════════════════════════════════
+
 
 def holt_winters_forecast(
     health_scores: List[float],
@@ -83,7 +85,11 @@ def holt_winters_forecast(
         return empty_result
 
     y = np.array(health_scores, dtype=np.float64)
-    t = np.array(timestamps, dtype=np.float64) if timestamps else np.arange(len(y), dtype=np.float64)
+    t = (
+        np.array(timestamps, dtype=np.float64)
+        if timestamps
+        else np.arange(len(y), dtype=np.float64)
+    )
 
     n = len(y)
 
@@ -112,7 +118,9 @@ def holt_winters_forecast(
         slope, intercept = _simple_linear_regression(step_indices, y)
         # slope = 每步健康度变化量，intercept = 第 0 步的预测健康度
         dt = float(np.mean(np.diff(t))) if n >= 2 else 1.0
-        forecast_vals = [float(intercept + slope * (n + i + 1)) for i in range(forecast_steps)]
+        forecast_vals = [
+            float(intercept + slope * (n + i + 1)) for i in range(forecast_steps)
+        ]
         forecast_ts = [float(t[-1] + dt * (i + 1)) for i in range(forecast_steps)]
         # 限制预测值在 0-100
         forecast_vals = [max(0.0, min(100.0, v)) for v in forecast_vals]
@@ -120,7 +128,9 @@ def holt_winters_forecast(
         # 转换为每时间单位退化速率（用于 deg_rate 返回值）
         deg_rate_per_time = slope / dt if dt > 0 else slope
 
-        trend_dir = "degrading" if slope < -0.5 else ("improving" if slope > 0.5 else "stable")
+        trend_dir = (
+            "degrading" if slope < -0.5 else ("improving" if slope > 0.5 else "stable")
+        )
 
         return {
             "forecast_values": forecast_vals,
@@ -163,8 +173,8 @@ def holt_winters_forecast(
             # 用前两个周期的平均值差来估计季节分量
             season_init = np.zeros(m, dtype=np.float64)
             avg1 = float(np.mean(y[:m]))
-            avg2 = float(np.mean(y[m:2 * m]))
-            overall_avg = float(np.mean(y[:2 * m]))
+            avg2 = float(np.mean(y[m : 2 * m]))
+            overall_avg = float(np.mean(y[: 2 * m]))
             for j in range(m):
                 season_init[j] = (y[j] - avg1 + y[m + j] - avg2) / 2.0
             # 归一化季节分量使得总和为 0
@@ -181,7 +191,9 @@ def holt_winters_forecast(
             m = season_length
             # Holt-Winters 加法模型
             season_offset = season[i - m] if i >= m else season[i % m]
-            level[i] = alpha * (y[i] - season_offset) + (1 - alpha) * (level[i - 1] + trend[i - 1])
+            level[i] = alpha * (y[i] - season_offset) + (1 - alpha) * (
+                level[i - 1] + trend[i - 1]
+            )
             trend[i] = beta * (level[i] - level[i - 1]) + (1 - beta) * trend[i - 1]
             season_idx = i - m if i >= m else i
             season[i] = gamma * (y[i] - level[i]) + (1 - gamma) * season[season_idx]
@@ -250,6 +262,7 @@ def holt_winters_forecast(
 # Kalman 滤波平滑
 # ═══════════════════════════════════════════════════════════════
 
+
 def kalman_smooth_health_scores(
     health_scores: List[float],
     process_noise: float = 1.0,
@@ -311,8 +324,14 @@ def kalman_smooth_health_scores(
                     for i in range(n)
                 ]
 
-        avg_rate = float(np.mean(rates[-3:]) if n >= 3 else (rates[-1] if n >= 1 else 0.0))
-        trend = "degrading" if avg_rate < -1.0 else ("improving" if avg_rate > 1.0 else "stable")
+        avg_rate = float(
+            np.mean(rates[-3:]) if n >= 3 else (rates[-1] if n >= 1 else 0.0)
+        )
+        trend = (
+            "degrading"
+            if avg_rate < -1.0
+            else ("improving" if avg_rate > 1.0 else "stable")
+        )
 
         return {
             "smoothed_scores": [round(v, 2) for v in smoothed],
@@ -326,32 +345,41 @@ def kalman_smooth_health_scores(
     dt = 1.0
 
     # 状态转移矩阵 F
-    F = np.array([
-        [1.0, dt],
-        [0.0, 1.0],
-    ], dtype=np.float64)
+    F = np.array(
+        [
+            [1.0, dt],
+            [0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
 
     # 观测矩阵 H
     H = np.array([[1.0, 0.0]], dtype=np.float64)
 
     # 过程噪声协方差 Q
     # Q 的结构：health_score 过程噪声小，退化速率过程噪声稍大
-    q_health = process_noise ** 2
-    q_rate = process_noise ** 2 * 2.0  # 速率估计不确定性更大
-    Q = np.array([
-        [q_health, 0.0],
-        [0.0, q_rate],
-    ], dtype=np.float64)
+    q_health = process_noise**2
+    q_rate = process_noise**2 * 2.0  # 速率估计不确定性更大
+    Q = np.array(
+        [
+            [q_health, 0.0],
+            [0.0, q_rate],
+        ],
+        dtype=np.float64,
+    )
 
     # 观测噪声协方差 R
-    R = np.array([[measurement_noise ** 2]], dtype=np.float64)
+    R = np.array([[measurement_noise**2]], dtype=np.float64)
 
     # 初始化状态
     x = np.array([float(y[0]), 0.0], dtype=np.float64)  # [health, rate]
-    P = np.array([
-        [measurement_noise ** 2, 0.0],
-        [0.0, 10.0],  # 速率初始不确定性较大
-    ], dtype=np.float64)
+    P = np.array(
+        [
+            [measurement_noise**2, 0.0],
+            [0.0, 10.0],  # 速率初始不确定性较大
+        ],
+        dtype=np.float64,
+    )
 
     smoothed_scores = []
     estimated_rates = []
@@ -412,6 +440,7 @@ def kalman_smooth_health_scores(
 # ═══════════════════════════════════════════════════════════════
 # 辅助函数
 # ═══════════════════════════════════════════════════════════════
+
 
 def _simple_linear_regression(
     x: np.ndarray,

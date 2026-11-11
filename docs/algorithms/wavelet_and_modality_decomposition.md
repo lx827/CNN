@@ -150,33 +150,33 @@ def wavelet_bearing_diagnosis(signal, fs, bearing_params, rot_freq):
     import pywt
     from scipy.signal import hilbert
     from scipy.fft import rfft, rfftfreq
-    
+
     # Step 1: 小波包分解
     level = 3
-    wp = pywt.WaveletPacket(data=signal, wavelet='db8', mode='symmetric')
-    nodes = wp.get_level(level, order='natural')
-    
+    wp = pywt.WaveletPacket(data=signal, wavelet="db8", mode="symmetric")
+    nodes = wp.get_level(level, order="natural")
+
     # Step 2: 计算各节点敏感指标
     scores = []
     for node in nodes:
         coeff = np.array(node.data)
         energy = np.sum(coeff**2)
-        kurt = np.mean(((coeff - np.mean(coeff)) / np.std(coeff))**4)
+        kurt = np.mean(((coeff - np.mean(coeff)) / np.std(coeff)) ** 4)
         scores.append(0.5 * energy / max(energies) + 0.5 * kurt / max(kurts))
-    
+
     # Step 3: 选择最敏感节点并重构
     best_idx = np.argmax(scores)
     best_node = nodes[best_idx]
-    y = best_node.reconstruct(update=False)[:len(signal)]
-    
+    y = best_node.reconstruct(update=False)[: len(signal)]
+
     # Step 4: Hilbert包络分析
     envelope = np.abs(hilbert(y))
     envelope = envelope - np.mean(envelope)
-    
+
     # Step 5: FFT包络谱
     yf = np.abs(rfft(envelope))
-    xf = rfftfreq(len(envelope), 1/fs)
-    
+    xf = rfftfreq(len(envelope), 1 / fs)
+
     # Step 6: 故障频率匹配
     freqs = _compute_bearing_fault_freqs(rot_freq, bearing_params)
     results = {}
@@ -193,7 +193,7 @@ def wavelet_bearing_diagnosis(signal, fs, bearing_params, rot_freq):
             if peak > 3 * np.median(yf[band]):
                 detected_harmonics += 1
         results[fault_type] = detected_harmonics
-    
+
     return results
 ```
 
@@ -352,37 +352,36 @@ $$k_{node} = \left\lfloor \frac{f_{mesh} \pm k \cdot f_r}{\Delta f} \right\rfloo
 # 参考实现位置：cloud/app/services/diagnosis/gear/metrics.py
 # 小波去噪 → TSA → 齿轮指标 的联合流程
 
+
 def wavelet_gear_analysis(signal, fs, rot_freq, gear_teeth):
     from scipy.signal import hilbert
-    
+
     # Step 1: 小波去噪
     denoised = wavelet_denoise(signal, wavelet="db8", threshold_mode="soft")
-    
+
     # Step 2: TSA（基于估计转频等角度重采样）
-    tsa_signal, residual, differential = compute_tsa_residual(
-        denoised, fs, rot_freq
-    )
-    
+    tsa_signal, residual, differential = compute_tsa_residual(denoised, fs, rot_freq)
+
     # Step 3: 计算啮合频率及频谱
     mesh_freq = gear_teeth * rot_freq
     xf, yf = compute_fft(tsa_signal, fs)
-    
+
     # Step 4: 齿轮指标
     fm0 = compute_fm0(tsa_signal, mesh_freq, xf, yf)
     fm4 = compute_fm4(differential)
     ser = compute_ser(xf, yf, mesh_freq, rot_freq)
-    
+
     # Step 5: 小波包能量熵
     wp_result = compute_wavelet_packet_energy_entropy(
         denoised, fs, level=3, gear_mesh_freq=mesh_freq
     )
-    
+
     return {
         "fm0": fm0,
         "fm4": fm4,
         "ser": ser,
         "wp_entropy": wp_result["normalized_entropy"],
-        "mesh_concentration": wp_result["mesh_band_concentration"]
+        "mesh_concentration": wp_result["mesh_band_concentration"],
     }
 ```
 

@@ -1,4 +1,5 @@
 """敏感分量原始指标测试；不引入选择去噪阈值。"""
+
 import os
 import sys
 import unittest
@@ -33,8 +34,12 @@ class ComponentRawMetricsTest(unittest.TestCase):
         metrics = compute_component_metrics(impulse, 1000.0)
         expected_pearson = len(impulse) - 2.0 + 1.0 / (len(impulse) - 1.0)
         self.assertAlmostEqual(metrics.kurtosis_pearson, expected_pearson, places=8)
-        self.assertAlmostEqual(metrics.kurtosis_excess, expected_pearson - 3.0, places=8)
-        zero = compute_component_metrics(np.zeros(1000), 1000.0, reference=np.zeros(1000))
+        self.assertAlmostEqual(
+            metrics.kurtosis_excess, expected_pearson - 3.0, places=8
+        )
+        zero = compute_component_metrics(
+            np.zeros(1000), 1000.0, reference=np.zeros(1000)
+        )
         self.assertIsNone(zero.correlation)
         self.assertIsNone(zero.kurtosis_pearson)
         self.assertIsNone(zero.kurtosis_excess)
@@ -46,11 +51,14 @@ class ComponentRawMetricsTest(unittest.TestCase):
     def test_time_axis_mismatch_is_rejected_instead_of_truncating(self):
         reference = np.arange(128, dtype=float)
         with self.assertRaises(ValueError):
-            compute_component_metrics(np.arange(32, dtype=float), 1000.0, reference=reference)
+            compute_component_metrics(
+                np.arange(32, dtype=float), 1000.0, reference=reference
+            )
         with self.assertRaises(ValueError):
             compute_component_metrics_batch(
                 [np.arange(32, dtype=float), np.arange(64, dtype=float)],
-                1000.0, reference=reference,
+                1000.0,
+                reference=reference,
             )
 
     def test_invalid_inputs_fail(self):

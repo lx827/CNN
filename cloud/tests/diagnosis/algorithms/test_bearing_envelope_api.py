@@ -1,4 +1,5 @@
 """标准包络 HTTP 接口的新响应契约测试，使用隔离内存 SQLite。"""
+
 import os
 import sys
 import unittest
@@ -29,19 +30,25 @@ class BearingEnvelopeApiTest(unittest.TestCase):
         db = session_factory()
         fs = 8192
         time = np.arange(fs) / fs
-        signal = (1.0 + 0.5 * np.cos(2 * np.pi * 90 * time)) * np.sin(2 * np.pi * 2000 * time)
-        db.add(Device(
-            device_id="TEST-ENVELOPE",
-            name="包络测试设备",
-            bearing_params={"n": 9, "d": 7.94, "D": 38.52, "alpha": 0},
-        ))
-        db.add(SensorData(
-            device_id="TEST-ENVELOPE",
-            batch_index=1,
-            channel=1,
-            data=signal.tolist(),
-            sample_rate=fs,
-        ))
+        signal = (1.0 + 0.5 * np.cos(2 * np.pi * 90 * time)) * np.sin(
+            2 * np.pi * 2000 * time
+        )
+        db.add(
+            Device(
+                device_id="TEST-ENVELOPE",
+                name="包络测试设备",
+                bearing_params={"n": 9, "d": 7.94, "D": 38.52, "alpha": 0},
+            )
+        )
+        db.add(
+            SensorData(
+                device_id="TEST-ENVELOPE",
+                batch_index=1,
+                channel=1,
+                data=signal.tolist(),
+                sample_rate=fs,
+            )
+        )
         db.commit()
 
         def override_get_db():

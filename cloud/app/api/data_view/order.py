@@ -23,19 +23,34 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
+
 @router.get("/{device_id}/{batch_index}/{channel}/order")
 async def get_channel_order(
     device_id: str,
     batch_index: int,
     channel: int,
-    freq_min: float = Query(default=10.0, ge=1.0, le=500.0, description="转频搜索下限 (Hz)"),
-    freq_max: float = Query(default=100.0, ge=1.0, le=500.0, description="转频搜索上限 (Hz)"),
-    samples_per_rev: int = Query(default=1024, ge=64, le=4096, description="每转采样点数"),
+    freq_min: float = Query(
+        default=10.0, ge=1.0, le=500.0, description="转频搜索下限 (Hz)"
+    ),
+    freq_max: float = Query(
+        default=100.0, ge=1.0, le=500.0, description="转频搜索上限 (Hz)"
+    ),
+    samples_per_rev: int = Query(
+        default=1024, ge=64, le=4096, description="每转采样点数"
+    ),
     max_order: int = Query(default=50, ge=5, le=200, description="返回的最大阶次"),
-    rot_freq: Optional[float] = Query(default=None, ge=1.0, le=500.0, description="直接指定转频(Hz)，传入则跳过自动估计"),
+    rot_freq: Optional[float] = Query(
+        default=None,
+        ge=1.0,
+        le=500.0,
+        description="直接指定转频(Hz)，传入则跳过自动估计",
+    ),
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
-    db: Session = Depends(get_db)
+    denoise: str = Query(
+        default="none",
+        description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+    ),
+    db: Session = Depends(get_db),
 ):
     """实时计算阶次谱：恒速等角采样、缓变逐帧谱平均或快速变速连续相位跟踪。
 
@@ -43,11 +58,15 @@ async def get_channel_order(
     自动估计使用未去噪信号，显式 denoise 只影响重采样输入。快速变速无可靠
     脊线时返回 400，不回退固定转频或缓变正常谱。
     """
-    record = db.query(SensorData).filter(
-        SensorData.device_id == device_id,
-        SensorData.batch_index == batch_index,
-        SensorData.channel == channel
-    ).first()
+    record = (
+        db.query(SensorData)
+        .filter(
+            SensorData.device_id == device_id,
+            SensorData.batch_index == batch_index,
+            SensorData.channel == channel,
+        )
+        .first()
+    )
 
     if not record or not record.data:
         raise HTTPException(status_code=404, detail="数据不存在")
@@ -64,12 +83,15 @@ async def get_channel_order(
             raise ValueError("freq_min 必须小于 freq_max")
 
         parameters = OrderParameters(
-            samples_per_revolution=samples_per_rev, max_order=float(max_order),
+            samples_per_revolution=samples_per_rev,
+            max_order=float(max_order),
         )
         if rot_freq is not None:
             analysis = await asyncio.to_thread(
                 ConstantSpeedOrderPipeline(parameters).run,
-                sig, sample_rate, ScalarSpeed(float(rot_freq), "query_parameter"),
+                sig,
+                sample_rate,
+                ScalarSpeed(float(rot_freq), "query_parameter"),
             )
         else:
             analysis = await asyncio.to_thread(
@@ -77,7 +99,9 @@ async def get_channel_order(
                     parameters=parameters,
                     search=SpeedSearchRange(freq_min, freq_max),
                 ).run,
-                sig, sample_rate, raw_sig,
+                sig,
+                sample_rate,
+                raw_sig,
             )
         if analysis.status != "valid" or analysis.spectrum is None:
             raise ValueError(analysis.reason or "转频/相位不可判定，未生成正常阶次谱")
@@ -100,12 +124,17 @@ async def get_channel_order(
 
         # 仅更新明确的批次级记录；不创建“正常”诊断，也不触碰通道/去噪缓存。
         try:
-            diag = db.query(Diagnosis).filter(
-                Diagnosis.device_id == device_id,
-                Diagnosis.batch_index == batch_index,
-                Diagnosis.channel == 0,
-                Diagnosis.denoise_method == "none",
-            ).order_by(Diagnosis.analyzed_at.desc(), Diagnosis.id.desc()).first()
+            diag = (
+                db.query(Diagnosis)
+                .filter(
+                    Diagnosis.device_id == device_id,
+                    Diagnosis.batch_index == batch_index,
+                    Diagnosis.channel == 0,
+                    Diagnosis.denoise_method == "none",
+                )
+                .order_by(Diagnosis.analyzed_at.desc(), Diagnosis.id.desc())
+                .first()
+            )
             if diag is not None:
                 existing_order = diag.order_analysis or {}
                 existing_order["rot_freq_hz"] = round(rot_freq_val, 3)
@@ -134,7 +163,7 @@ async def get_channel_order(
                 "samples_per_rev": samples_per_rev,
                 "orders": [round(float(o), 6) for o in order_axis.tolist()],
                 "spectrum": [round(float(a), 6) for a in spectrum.tolist()],
-            }
+            },
         }
     except DenoisingError as e:
         raise denoising_http_error(e) from e
@@ -143,5 +172,3 @@ async def get_channel_order(
     except Exception as e:
         logger.error(f"阶次谱计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"阶次谱计算失败: {e}")
-
-

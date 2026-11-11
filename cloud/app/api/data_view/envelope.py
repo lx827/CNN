@@ -4,12 +4,21 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device
 from app.schemas import DiagnosisResponse
-from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum, DenoisingError
+from app.services.diagnosis.signal_utils import (
+    estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum,
+    DenoisingError,
+)
 from .errors import denoising_http_error, configured_denoise
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, DenoiseMethod
 from app.services.diagnosis.domain import DiagnosisKey
 from app.services.diagnosis.gear.planetary import gear_config_for_channel
-from . import router, prepare_signal, _get_channel_name, _extract_device_param, _sanitize_for_json
+from . import (
+    router,
+    prepare_signal,
+    _get_channel_name,
+    _extract_device_param,
+    _sanitize_for_json,
+)
 from datetime import datetime
 from .bearing_options import get_bearing_options
 import logging
@@ -18,15 +27,24 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
-@router.get("/{device_id}/{batch_index}/{channel}/envelope", response_model=DiagnosisResponse)
+
+@router.get(
+    "/{device_id}/{batch_index}/{channel}/envelope", response_model=DiagnosisResponse
+)
 async def get_channel_envelope(
     device_id: str,
     batch_index: int,
     channel: int,
     max_freq: Optional[int] = 1000,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    method: str = Query(default="envelope", description="包络分析方法: envelope/filter_bank_sk/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"),
-    denoise: str = Query(default="none", description="去噪方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
+    method: str = Query(
+        default="envelope",
+        description="包络分析方法: envelope/filter_bank_sk/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope",
+    ),
+    denoise: str = Query(
+        default="none",
+        description="去噪方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+    ),
     db: Session = Depends(get_db),
     bearing_options: dict = Depends(get_bearing_options),
     rot_freq_hz: Optional[float] = Query(default=None, gt=0),
@@ -36,21 +54,27 @@ async def get_channel_envelope(
     支持标准包络、滤波器组复谱峭度、CPW、MED 等显式方法。
     请求时计算，不预存。
     """
-    record = db.query(SensorData).filter(
-        SensorData.device_id == device_id,
-        SensorData.batch_index == batch_index,
-        SensorData.channel == channel
-    ).first()
+    record = (
+        db.query(SensorData)
+        .filter(
+            SensorData.device_id == device_id,
+            SensorData.batch_index == batch_index,
+            SensorData.channel == channel,
+        )
+        .first()
+    )
 
     if not record or not record.data:
         raise HTTPException(status_code=404, detail="数据不存在")
 
     try:
         sample_rate = record.sample_rate or 25600
-        signal = prepare_signal(record.data[:int(sample_rate * 5)], detrend=detrend)
+        signal = prepare_signal(record.data[: int(sample_rate * 5)], detrend=detrend)
 
         if len(signal) < 64:
-            raise HTTPException(status_code=400, detail="信号长度不足（至少64点），无法计算包络谱")
+            raise HTTPException(
+                status_code=400, detail="信号长度不足（至少64点），无法计算包络谱"
+            )
 
         # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）
         max_samples = sample_rate * 5
@@ -114,18 +138,20 @@ async def get_channel_envelope(
         )
 
         # 新契约直接返回结构化 spectrum、band、features 和 evaluation。
-        return _sanitize_for_json({
-            "code": 200,
-            "data": {
-                "device_id": record.device_id,
-                "batch_index": record.batch_index,
-                "channel": record.channel,
-                "channel_name": _get_channel_name(device, record.channel),
-                "sample_rate": sample_rate,
-                "is_special": bool(record.is_special),
-                **result,
+        return _sanitize_for_json(
+            {
+                "code": 200,
+                "data": {
+                    "device_id": record.device_id,
+                    "batch_index": record.batch_index,
+                    "channel": record.channel,
+                    "channel_name": _get_channel_name(device, record.channel),
+                    "sample_rate": sample_rate,
+                    "is_special": bool(record.is_special),
+                    **result,
+                },
             }
-        })
+        )
     except HTTPException:
         raise
     except DenoisingError as e:
@@ -135,5 +161,3 @@ async def get_channel_envelope(
     except Exception as e:
         logger.error(f"包络谱计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"包络谱计算失败: {e}")
-
-

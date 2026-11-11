@@ -12,11 +12,12 @@
 5. 联合降噪（wavelet+VMD）— 级联去噪效果
 6. 非参数 CUSUM — 健康vs故障漂移检测
 """
+
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import numpy as np
 from data_paths import HUSTBEAR_DIR, CW_DIR, WTGEARBOX_DIR
@@ -45,27 +46,39 @@ max_s = int(FS * 5)
 ir_signal = ir_signal[:max_s]
 h_signal = h_signal[:max_s]
 
-print(f"  内圈故障信号: kurtosis={float(np.mean(ir_signal**4)/(np.var(ir_signal)**2)): .2f}")
-print(f"  健康信号: kurtosis={float(np.mean(h_signal**4)/(np.var(h_signal)**2)): .2f}")
+print(
+    f"  内圈故障信号: kurtosis={float(np.mean(ir_signal**4) / (np.var(ir_signal) ** 2)): .2f}"
+)
+print(
+    f"  健康信号: kurtosis={float(np.mean(h_signal**4) / (np.var(h_signal) ** 2)): .2f}"
+)
 
 # 标准 LMS
 result_lms, info_lms = lms_filter(ir_signal, filter_len=32, step_size=0.01)
-print(f"  LMS: kurt_before={info_lms['kurtosis_before']}, kurt_after={info_lms['kurtosis_after']}, "
-      f"NR={info_lms['noise_reduction_ratio']}")
+print(
+    f"  LMS: kurt_before={info_lms['kurtosis_before']}, kurt_after={info_lms['kurtosis_after']}, "
+    f"NR={info_lms['noise_reduction_ratio']}"
+)
 
 # NLMS
 result_nlms, info_nlms = nlms_filter(ir_signal, filter_len=32, step_size=0.5)
-print(f"  NLMS: kurt_before={info_nlms['kurtosis_before']}, kurt_after={info_nlms['kurtosis_after']}, "
-      f"NR={info_nlms['noise_reduction_ratio']}")
+print(
+    f"  NLMS: kurt_before={info_nlms['kurtosis_before']}, kurt_after={info_nlms['kurtosis_after']}, "
+    f"NR={info_nlms['noise_reduction_ratio']}"
+)
 
 # VSSLMS
 result_vss, info_vss = vsslms_filter(ir_signal, filter_len=32, mu_init=0.01)
-print(f"  VSSLMS: kurt_before={info_vss['kurtosis_before']}, kurt_after={info_vss['kurtosis_after']}, "
-      f"NR={info_vss['noise_reduction_ratio']}")
+print(
+    f"  VSSLMS: kurt_before={info_vss['kurtosis_before']}, kurt_after={info_vss['kurtosis_after']}, "
+    f"NR={info_vss['noise_reduction_ratio']}"
+)
 
 # 对健康信号做同样处理（验证不会误增强噪声）
 _, info_h_lms = lms_filter(h_signal, filter_len=32, step_size=0.01)
-print(f"  健康信号LMS: kurt_before={info_h_lms['kurtosis_before']}, kurt_after={info_h_lms['kurtosis_after']}")
+print(
+    f"  健康信号LMS: kurt_before={info_h_lms['kurtosis_before']}, kurt_after={info_h_lms['kurtosis_after']}"
+)
 
 print("  ✓ LMS 滤波完成")
 
@@ -82,24 +95,34 @@ print("\n── 4. ZOOM-FFT：独立数学测试已覆盖，本脚本不做生�
 
 # ── 5. 联合降噪 ──
 print("\n── 5. 联合降噪 (wavelet+VMD 级联) ──")
-from app.services.diagnosis.preprocessing import cascade_wavelet_vmd, cascade_wavelet_lms, joint_denoise
+from app.services.diagnosis.preprocessing import (
+    cascade_wavelet_vmd,
+    cascade_wavelet_lms,
+    joint_denoise,
+)
 
 # 小波+VMD级联
 casc_wv_result, casc_wv_info = cascade_wavelet_vmd(ir_signal)
-print(f"  Wavelet+VMD: kurt_before={casc_wv_info['kurtosis_before']}, "
-      f"kurt_after_wavelet={casc_wv_info['kurtosis_after_wavelet']}, "
-      f"kurt_after_cascade={casc_wv_info['kurtosis_after_cascade']}, "
-      f"NR={casc_wv_info['noise_reduction_ratio']}")
+print(
+    f"  Wavelet+VMD: kurt_before={casc_wv_info['kurtosis_before']}, "
+    f"kurt_after_wavelet={casc_wv_info['kurtosis_after_wavelet']}, "
+    f"kurt_after_cascade={casc_wv_info['kurtosis_after_cascade']}, "
+    f"NR={casc_wv_info['noise_reduction_ratio']}"
+)
 
 # 小波+LMS级联
 casc_wl_result, casc_wl_info = cascade_wavelet_lms(ir_signal)
-print(f"  Wavelet+LMS: kurt_before={casc_wl_info['kurtosis_before']}, "
-      f"kurt_after={casc_wl_info['kurtosis_after_cascade']}, "
-      f"NR={casc_wl_info['noise_reduction_ratio']}")
+print(
+    f"  Wavelet+LMS: kurt_before={casc_wl_info['kurtosis_before']}, "
+    f"kurt_after={casc_wl_info['kurtosis_after_cascade']}, "
+    f"NR={casc_wl_info['noise_reduction_ratio']}"
+)
 
 # 统一入口 joint_denoise
 jd_result, jd_info = joint_denoise(ir_signal, strategy="wavelet_vmd")
-print(f"  joint_denoise(wavelet_vmd): kurt_after={jd_info.get('kurtosis_after_cascade', 0)}")
+print(
+    f"  joint_denoise(wavelet_vmd): kurt_after={jd_info.get('kurtosis_after_cascade', 0)}"
+)
 
 print("  ✓ 联合降噪完成")
 
@@ -110,25 +133,37 @@ from app.services.diagnosis.features import compute_nonparam_cusum_features
 np_cusum_ir = compute_nonparam_cusum_features(ir_signal)
 np_cusum_h = compute_nonparam_cusum_features(h_signal)
 print(f"  内圈故障:")
-print(f"    sign_cusum_pos={np_cusum_ir['sign_cusum_positive']}, "
-      f"neg={np_cusum_ir['sign_cusum_negative']}, "
-      f"alarm={np_cusum_ir['sign_cusum_alarm']}")
-print(f"    mw_cusum_pos={np_cusum_ir['mw_cusum_positive']}, "
-      f"neg={np_cusum_ir['mw_cusum_negative']}, "
-      f"alarm={np_cusum_ir['mw_cusum_alarm']}")
+print(
+    f"    sign_cusum_pos={np_cusum_ir['sign_cusum_positive']}, "
+    f"neg={np_cusum_ir['sign_cusum_negative']}, "
+    f"alarm={np_cusum_ir['sign_cusum_alarm']}"
+)
+print(
+    f"    mw_cusum_pos={np_cusum_ir['mw_cusum_positive']}, "
+    f"neg={np_cusum_ir['mw_cusum_negative']}, "
+    f"alarm={np_cusum_ir['mw_cusum_alarm']}"
+)
 print(f"  健康信号:")
-print(f"    sign_cusum_pos={np_cusum_h['sign_cusum_positive']}, "
-      f"neg={np_cusum_h['sign_cusum_negative']}, "
-      f"alarm={np_cusum_h['sign_cusum_alarm']}")
-print(f"    mw_cusum_pos={np_cusum_h['mw_cusum_positive']}, "
-      f"neg={np_cusum_h['mw_cusum_negative']}, "
-      f"alarm={np_cusum_h['mw_cusum_alarm']}")
+print(
+    f"    sign_cusum_pos={np_cusum_h['sign_cusum_positive']}, "
+    f"neg={np_cusum_h['sign_cusum_negative']}, "
+    f"alarm={np_cusum_h['sign_cusum_alarm']}"
+)
+print(
+    f"    mw_cusum_pos={np_cusum_h['mw_cusum_positive']}, "
+    f"neg={np_cusum_h['mw_cusum_negative']}, "
+    f"alarm={np_cusum_h['mw_cusum_alarm']}"
+)
 
 # WTgearbox 断齿 vs 健康
 np_cusum_br = compute_nonparam_cusum_features(br_signal)
 np_cusum_he = compute_nonparam_cusum_features(he_signal)
-print(f"  断齿: sign_alarm={np_cusum_br['sign_cusum_alarm']}, mw_alarm={np_cusum_br['mw_cusum_alarm']}")
-print(f"  健康: sign_alarm={np_cusum_he['sign_cusum_alarm']}, mw_alarm={np_cusum_he['mw_cusum_alarm']}")
+print(
+    f"  断齿: sign_alarm={np_cusum_br['sign_cusum_alarm']}, mw_alarm={np_cusum_br['mw_cusum_alarm']}"
+)
+print(
+    f"  健康: sign_alarm={np_cusum_he['sign_cusum_alarm']}, mw_alarm={np_cusum_he['mw_cusum_alarm']}"
+)
 print("  ✓ 非参数 CUSUM 完成")
 
 print("\n" + "=" * 70)

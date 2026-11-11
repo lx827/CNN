@@ -1,4 +1,5 @@
 """固定齿圈、同模数简单行星排；Willis 方程和啮合事件模型。"""
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -22,13 +23,21 @@ class PlanetaryGearGeometry:
     def __post_init__(self) -> None:
         for name in ("sun_teeth", "ring_teeth", "planet_teeth", "planet_count"):
             value = getattr(self, name)
-            if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value < (1 if name == "planet_count" else 2):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, np.integer))
+                or value < (1 if name == "planet_count" else 2)
+            ):
                 raise ValueError(f"{name} 必须是合法正整数")
         if self.ring_teeth != self.sun_teeth + 2 * self.planet_teeth:
             raise ValueError("简单同模数行星排必须满足 Zr=Zs+2Zp")
         if (self.sun_teeth + self.ring_teeth) % self.planet_count:
             raise ValueError("当前均布行星模型要求 (Zs+Zr)/Np 为整数")
-        if self.planet_count > 1 and (self.sun_teeth + self.planet_teeth) * np.sin(np.pi / self.planet_count) <= self.planet_teeth:
+        if (
+            self.planet_count > 1
+            and (self.sun_teeth + self.planet_teeth) * np.sin(np.pi / self.planet_count)
+            <= self.planet_teeth
+        ):
             raise ValueError("相邻行星轮节圆发生干涉")
         if self.reference_axis not in {"sun", "carrier"}:
             raise ValueError("行星分析参考轴必须明确为 sun 或 carrier")
@@ -82,4 +91,11 @@ class PlanetaryGearGeometry:
 
     @property
     def signature(self) -> tuple:
-        return (self.sun_teeth, self.ring_teeth, self.planet_teeth, self.planet_count, self.reference_axis, self.fixed_member)
+        return (
+            self.sun_teeth,
+            self.ring_teeth,
+            self.planet_teeth,
+            self.planet_count,
+            self.reference_axis,
+            self.fixed_member,
+        )

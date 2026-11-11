@@ -1,4 +1,5 @@
 """实信号 STFT 表示；时间轴为帧中心秒，频率轴为 Hz。"""
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -24,14 +25,23 @@ class STFTRepresentation:
     padded: bool = True
 
     def __post_init__(self) -> None:
-        if self.time_s.ndim != 1 or self.frequency_hz.ndim != 1 or self.amplitude.ndim != 2:
+        if (
+            self.time_s.ndim != 1
+            or self.frequency_hz.ndim != 1
+            or self.amplitude.ndim != 2
+        ):
             raise ValueError("STFT 时间/频率轴必须是一维，幅值必须是二维矩阵")
         expected = (len(self.frequency_hz), len(self.time_s))
         if self.amplitude.shape != expected:
             raise ValueError(f"STFT 幅值形状必须为 {expected}")
-        if not all(np.all(np.isfinite(values)) for values in (
-            self.time_s, self.frequency_hz, self.amplitude,
-        )):
+        if not all(
+            np.all(np.isfinite(values))
+            for values in (
+                self.time_s,
+                self.frequency_hz,
+                self.amplitude,
+            )
+        ):
             raise ValueError("STFT 表示不能包含 NaN 或无穷值")
         if np.any(self.amplitude < 0):
             raise ValueError("STFT 幅值不能为负数")
@@ -60,8 +70,10 @@ def compute_stft(
         raise ValueError("输入信号不能包含 NaN 或无穷值")
     if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
         raise ValueError("采样率必须是有限正数")
-    if any(isinstance(value, bool) or not isinstance(value, (int, np.integer))
-           for value in (nperseg, noverlap, nfft)):
+    if any(
+        isinstance(value, bool) or not isinstance(value, (int, np.integer))
+        for value in (nperseg, noverlap, nfft)
+    ):
         raise ValueError("STFT 窗口、重叠和 FFT 点数必须是整数")
     if nperseg < 2 or nperseg > len(values):
         raise ValueError("STFT 窗口长度必须在 2 与信号长度之间")

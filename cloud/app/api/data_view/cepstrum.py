@@ -19,17 +19,26 @@ async def get_channel_cepstrum(
     device_id: str,
     batch_index: int,
     channel: int,
-    max_quefrency: float = Query(default=500.0, ge=10.0, le=2000.0, description="最大倒频率 (ms)"),
+    max_quefrency: float = Query(
+        default=500.0, ge=10.0, le=2000.0, description="最大倒频率 (ms)"
+    ),
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
-    db: Session = Depends(get_db)
+    denoise: str = Query(
+        default="none",
+        description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+    ),
+    db: Session = Depends(get_db),
 ):
     """实时 log-amplitude 实倒谱及显示峰；不输出机械故障结论。"""
-    record = db.query(SensorData).filter(
-        SensorData.device_id == device_id,
-        SensorData.batch_index == batch_index,
-        SensorData.channel == channel
-    ).first()
+    record = (
+        db.query(SensorData)
+        .filter(
+            SensorData.device_id == device_id,
+            SensorData.batch_index == batch_index,
+            SensorData.channel == channel,
+        )
+        .first()
+    )
 
     if not record or not record.data:
         raise HTTPException(status_code=404, detail="数据不存在")
@@ -70,7 +79,7 @@ async def get_channel_cepstrum(
                     }
                     for peak in analysis.peaks
                 ],
-            }
+            },
         }
     except DenoisingError as e:
         raise denoising_http_error(e) from e

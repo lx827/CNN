@@ -1,4 +1,5 @@
 """复频谱频移 SC/SCoh 估计、候选循环频率搜索与专属评估。"""
+
 from dataclasses import dataclass, field
 from typing import Optional, Mapping, Sequence
 
@@ -57,16 +58,27 @@ def compute_sc_scoh(
         raise ValueError("SC/SCoh 输入必须是一维有限数组且至少 128 点")
     if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
         raise ValueError("采样率必须为有限正数")
-    if isinstance(segment_length, bool) or not isinstance(segment_length, int) or segment_length < 32:
+    if (
+        isinstance(segment_length, bool)
+        or not isinstance(segment_length, int)
+        or segment_length < 32
+    ):
         raise ValueError("分段长度必须是至少为 32 的整数")
     if segment_length > len(x):
         raise ValueError("分段长度不能超过输入长度")
     if not np.isfinite(overlap_ratio) or not 0.0 <= overlap_ratio < 1.0:
         raise ValueError("重叠率必须位于 [0,1)")
-    alpha = np.asarray(tuple(sorted(set(float(value) for value in cyclic_frequencies_hz))), dtype=np.float64)
+    alpha = np.asarray(
+        tuple(sorted(set(float(value) for value in cyclic_frequencies_hz))),
+        dtype=np.float64,
+    )
     if alpha.ndim != 1 or len(alpha) == 0:
         raise ValueError("必须至少提供一个候选循环频率")
-    if not np.all(np.isfinite(alpha)) or np.any(alpha < 0) or np.any(alpha > sample_rate_hz / 2.0):
+    if (
+        not np.all(np.isfinite(alpha))
+        or np.any(alpha < 0)
+        or np.any(alpha > sample_rate_hz / 2.0)
+    ):
         raise ValueError("循环频率必须有限且位于 [0,Nyquist]")
 
     step = max(1, int(round(segment_length * (1.0 - overlap_ratio))))
@@ -90,8 +102,12 @@ def compute_sc_scoh(
 
     for index, cyclic_frequency in enumerate(alpha):
         # e^{+j*pi*alpha*t} 使 X(f-alpha/2)，e^{-j*pi*alpha*t} 使 X(f+alpha/2)。
-        x_lo = fft(windowed * np.exp(1j * np.pi * cyclic_frequency * global_time_s), axis=1)[:, : len(carrier)] / np.sqrt(scale)
-        x_hi = fft(windowed * np.exp(-1j * np.pi * cyclic_frequency * global_time_s), axis=1)[:, : len(carrier)] / np.sqrt(scale)
+        x_lo = fft(
+            windowed * np.exp(1j * np.pi * cyclic_frequency * global_time_s), axis=1
+        )[:, : len(carrier)] / np.sqrt(scale)
+        x_hi = fft(
+            windowed * np.exp(-1j * np.pi * cyclic_frequency * global_time_s), axis=1
+        )[:, : len(carrier)] / np.sqrt(scale)
         cross = x_lo * np.conj(x_hi)
         sc[index] = np.mean(cross, axis=0)
         psd_lo = np.mean(np.abs(x_lo) ** 2, axis=0)
@@ -160,7 +176,9 @@ def evaluate_cyclic_candidates(
         return CyclicEvaluation(status="indeterminate", indicators={})
     if not np.isfinite(relative_tolerance) or relative_tolerance <= 0:
         raise ValueError("循环频率相对容差必须为有限正数")
-    if not 0.0 <= coherence_threshold <= 1.0 or not np.isfinite(background_ratio_threshold):
+    if not 0.0 <= coherence_threshold <= 1.0 or not np.isfinite(
+        background_ratio_threshold
+    ):
         raise ValueError("SCoh 阈值或背景比阈值无效")
 
     alpha = representation.cyclic_frequencies_hz
@@ -169,11 +187,15 @@ def evaluate_cyclic_candidates(
     resolution = representation.cyclic_resolution_hz
     indicators: dict[str, dict] = {}
     peaks: dict[str, tuple[int, int]] = {}
-    tolerances = {name: float(target) * relative_tolerance for name, target in candidates.items()}
+    tolerances = {
+        name: float(target) * relative_tolerance for name, target in candidates.items()
+    }
 
     for name, raw_target in candidates.items():
         target = float(raw_target)
-        tolerance = target * relative_tolerance if np.isfinite(target) and target > 0 else 0.0
+        tolerance = (
+            target * relative_tolerance if np.isfinite(target) and target > 0 else 0.0
+        )
         if not np.isfinite(target) or target <= 0:
             indicators[name] = _not_evaluable(target, "invalid_target_frequency")
             continue
@@ -187,16 +209,25 @@ def evaluate_cyclic_candidates(
             indicators[name] = _not_evaluable(target, "zero_energy")
             continue
         if tolerance < resolution:
-            indicators[name] = _not_evaluable(target, "insufficient_cyclic_frequency_resolution")
+            indicators[name] = _not_evaluable(
+                target, "insufficient_cyclic_frequency_resolution"
+            )
             continue
         duplicated = any(
-            other != name and abs(target - float(other_target)) < max(resolution, tolerance + tolerances[other])
+            other != name
+            and abs(target - float(other_target))
+            < max(resolution, tolerance + tolerances[other])
             for other, other_target in candidates.items()
         )
         if duplicated:
-            reason = "shared_cyclic_target" if any(
-                other != name and target == float(other_target) for other, other_target in candidates.items()
-            ) else "shared_cyclic_resolution_cell"
+            reason = (
+                "shared_cyclic_target"
+                if any(
+                    other != name and target == float(other_target)
+                    for other, other_target in candidates.items()
+                )
+                else "shared_cyclic_resolution_cell"
+            )
             indicators[name] = _not_evaluable(target, reason)
             continue
         indices = np.flatnonzero(np.abs(alpha - target) <= tolerance)
@@ -212,7 +243,9 @@ def evaluate_cyclic_candidates(
                 best_value = value
                 best_pair = (int(alpha_index), carrier_index)
         alpha_index, carrier_index = best_pair
-        background_indices = np.flatnonzero(np.abs(alpha - target) > max(2.0 * tolerance, resolution))
+        background_indices = np.flatnonzero(
+            np.abs(alpha - target) > max(2.0 * tolerance, resolution)
+        )
         if len(background_indices) == 0:
             indicators[name] = _not_evaluable(target, "insufficient_cyclic_background")
             continue
@@ -223,7 +256,9 @@ def evaluate_cyclic_candidates(
         coherence_ratio = _peak_background_ratio(scoh_peak, coherence_background)
         sc_ratio = _peak_background_ratio(sc_peak, sc_background)
         if coherence_ratio is None or sc_ratio is None:
-            indicators[name] = _not_evaluable(target, "undefined_zero_peak_and_background")
+            indicators[name] = _not_evaluable(
+                target, "undefined_zero_peak_and_background"
+            )
             continue
         peaks[name] = (alpha_index, carrier_index)
         indicators[name] = {
@@ -232,7 +267,9 @@ def evaluate_cyclic_candidates(
             "reason": None,
             "theory_cyclic_frequency_hz": target,
             "detected_cyclic_frequency_hz": float(alpha[alpha_index]),
-            "carrier_frequency_hz": float(representation.carrier_frequencies_hz[carrier_index]),
+            "carrier_frequency_hz": float(
+                representation.carrier_frequencies_hz[carrier_index]
+            ),
             "scoh_peak": scoh_peak,
             "sc_peak": sc_peak,
             "coherence_background_ratio": coherence_ratio,
@@ -251,10 +288,16 @@ def evaluate_cyclic_candidates(
         if pair in seen:
             for duplicated_name in (seen[pair], name):
                 target = float(candidates[duplicated_name])
-                indicators[duplicated_name] = _not_evaluable(target, "shared_cyclic_peak")
+                indicators[duplicated_name] = _not_evaluable(
+                    target, "shared_cyclic_peak"
+                )
         else:
             seen[pair] = name
-    status = "evaluated" if any(item.get("evaluable") for item in indicators.values()) else "indeterminate"
+    status = (
+        "evaluated"
+        if any(item.get("evaluable") for item in indicators.values())
+        else "indeterminate"
+    )
     return CyclicEvaluation(status=status, indicators=indicators)
 
 
@@ -274,7 +317,9 @@ class CyclostationaryPipeline:
     ) -> CyclostationaryResult:
         if candidates is None and geometry is not None and rot_frequency_hz is not None:
             frequencies = geometry.fault_frequencies(rot_frequency_hz)
-            candidates = {name: frequencies[name] for name in ("BPFO", "BPFI", "BSF", "FTF")}
+            candidates = {
+                name: frequencies[name] for name in ("BPFO", "BPFI", "BSF", "FTF")
+            }
         if not candidates:
             return CyclostationaryResult(
                 status="indeterminate",
@@ -296,7 +341,11 @@ class CyclostationaryPipeline:
                 failure_reasons[name] = "target_above_analysis_bandwidth"
         if len(failure_reasons) == len(candidates):
             unique_reasons = set(failure_reasons.values())
-            reason = unique_reasons.pop() if len(unique_reasons) == 1 else "no_valid_cyclic_candidates"
+            reason = (
+                unique_reasons.pop()
+                if len(unique_reasons) == 1
+                else "no_valid_cyclic_candidates"
+            )
             return CyclostationaryResult(
                 status="indeterminate",
                 method=self.method,
@@ -313,8 +362,16 @@ class CyclostationaryPipeline:
 
         x = np.asarray(signal, dtype=np.float64)
         n = len(x) if x.ndim == 1 else 0
-        step = max(1, int(round(segment_length * (1.0 - overlap_ratio)))) if isinstance(segment_length, int) else 1
-        segment_count = len(np.arange(0, n - segment_length + 1, step)) if n >= segment_length else 0
+        step = (
+            max(1, int(round(segment_length * (1.0 - overlap_ratio))))
+            if isinstance(segment_length, int)
+            else 1
+        )
+        segment_count = (
+            len(np.arange(0, n - segment_length + 1, step))
+            if n >= segment_length
+            else 0
+        )
         if n < 128 or segment_count < 4:
             return CyclostationaryResult(
                 status="indeterminate",
@@ -340,7 +397,9 @@ class CyclostationaryPipeline:
                 evaluation=CyclicEvaluation(
                     status="indeterminate",
                     indicators={
-                        name: _not_evaluable(target, failure_reasons.get(name, "zero_energy"))
+                        name: _not_evaluable(
+                            target, failure_reasons.get(name, "zero_energy")
+                        )
                         for name, target in candidates.items()
                     },
                 ),
@@ -375,7 +434,9 @@ class CyclostationaryPipeline:
             representation=representation,
             evaluation=evaluation,
             metadata={
-                "candidate_source": "explicit" if geometry is None else "bearing_geometry_and_rotation",
+                "candidate_source": "explicit"
+                if geometry is None
+                else "bearing_geometry_and_rotation",
                 "physical_cyclic_resolution_hz": 1.0 / duration,
             },
         )

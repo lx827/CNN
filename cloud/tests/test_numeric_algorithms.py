@@ -1,4 +1,5 @@
 """云端通用数值原语的独立数学测试，不依赖数据集或数据库。"""
+
 import sys
 import unittest
 from pathlib import Path
@@ -8,7 +9,11 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "cloud"))
 
-from app.algorithms.cepstrum import CepstrumRepresentation, analyze_cepstrum, compute_cepstrum
+from app.algorithms.cepstrum import (
+    CepstrumRepresentation,
+    analyze_cepstrum,
+    compute_cepstrum,
+)
 from app.algorithms.statistics import analyze_time_domain
 from app.algorithms.transforms import compute_spectrum, compute_stft
 from app.services import acquisition_analysis
@@ -31,7 +36,9 @@ class NumericAlgorithmTests(unittest.TestCase):
         self.assertAlmostEqual(dc.power[0], 9.0, places=12)
         self.assertAlmostEqual(np.sum(dc.amplitude[2:]), 0.0, places=12)
 
-        nyquist = compute_spectrum(4.0 * (-1.0) ** np.arange(count), fs, remove_mean=False)
+        nyquist = compute_spectrum(
+            4.0 * (-1.0) ** np.arange(count), fs, remove_mean=False
+        )
         self.assertAlmostEqual(nyquist.amplitude[-1], 4.0, places=12)
         self.assertAlmostEqual(nyquist.power[-1], 16.0, places=12)
         self.assertAlmostEqual(nyquist.frequency_hz[-1], fs / 2, places=12)
@@ -40,13 +47,17 @@ class NumericAlgorithmTests(unittest.TestCase):
         fs, count = 1024.0, 1024
         signal = np.sin(2 * np.pi * 64 * np.arange(count) / fs)
         result = compute_stft(signal, fs, nperseg=256, noverlap=128, nfft=256)
-        self.assertEqual(result.amplitude.shape, (len(result.frequency_hz), len(result.time_s)))
+        self.assertEqual(
+            result.amplitude.shape, (len(result.frequency_hz), len(result.time_s))
+        )
         self.assertEqual(len(result.frequency_hz), 129)
         self.assertEqual(len(result.time_s), 9)
         self.assertAlmostEqual(result.time_s[0], 0.0, places=12)
         self.assertAlmostEqual(result.time_s[1] - result.time_s[0], 0.125, places=12)
         frequency_index = np.argmin(np.abs(result.frequency_hz - 64.0))
-        self.assertAlmostEqual(np.max(result.amplitude[frequency_index]), 1.0, places=12)
+        self.assertAlmostEqual(
+            np.max(result.amplitude[frequency_index]), 1.0, places=12
+        )
         self.assertAlmostEqual(np.max(result.amplitude_db()), 0.0, places=8)
         self.assertEqual(result.amplitude_unit, "input_signal")
 
@@ -84,10 +95,12 @@ class NumericAlgorithmTests(unittest.TestCase):
     def test_dc24_four_channel_counts_rms_segments_and_full_arrays(self):
         rate, count = 1000, 1500
         time = np.arange(count) / rate
-        values = np.column_stack([
-            np.rint(100 * (channel + 1) * np.sin(2 * np.pi * 50 * time))
-            for channel in range(4)
-        ])
+        values = np.column_stack(
+            [
+                np.rint(100 * (channel + 1) * np.sin(2 * np.pi * 50 * time))
+                for channel in range(4)
+            ]
+        )
         options = {"fft": True, "rms": True, "envelope": False}
         result, arrays = acquisition_analysis.analyze_counts(values, rate, options)
         self.assertEqual(result["unit"], "ADC counts")
@@ -105,27 +118,38 @@ class NumericAlgorithmTests(unittest.TestCase):
             self.assertAlmostEqual(amplitude[peak_index], expected_amplitude, delta=0.5)
             curve = arrays[f"ch{channel}_rms_curve"]
             np.testing.assert_allclose(curve[:, 0], [0.5, 1.25])
-            np.testing.assert_allclose(curve[:, 1], np.std(values[:, channel]), rtol=1e-12)
+            np.testing.assert_allclose(
+                curve[:, 1], np.std(values[:, channel]), rtol=1e-12
+            )
 
     def test_dc24_rejects_invalid_envelope_bands(self):
         values = np.zeros((64, 4))
         for low, high in [(None, 100), (0, 100), (200, 100), (100, 500)]:
             with self.subTest(low=low, high=high):
                 with self.assertRaises(ValueError):
-                    acquisition_analysis.analyze_counts(values, 1000, {
-                        "fft": False, "rms": False, "envelope": True,
-                        "band_low": low, "band_high": high,
-                    })
+                    acquisition_analysis.analyze_counts(
+                        values,
+                        1000,
+                        {
+                            "fft": False,
+                            "rms": False,
+                            "envelope": True,
+                            "band_low": low,
+                            "band_high": high,
+                        },
+                    )
 
     def test_display_decimation_does_not_change_full_analysis(self):
         rate = 1000
-        values = np.column_stack([
-            np.arange(1500) % 17 * (channel + 1) for channel in range(4)
-        ])
+        values = np.column_stack(
+            [np.arange(1500) % 17 * (channel + 1) for channel in range(4)]
+        )
         options = {"fft": True, "rms": True, "envelope": False}
         _, full_arrays = acquisition_analysis.analyze_counts(values, rate, options)
         with patch.object(acquisition_analysis, "display_points", return_value=[]):
-            result, decimated_arrays = acquisition_analysis.analyze_counts(values, rate, options)
+            result, decimated_arrays = acquisition_analysis.analyze_counts(
+                values, rate, options
+            )
         self.assertTrue(all(not item["waveform"] for item in result["channels"]))
         self.assertEqual(full_arrays.keys(), decimated_arrays.keys())
         for key in full_arrays:

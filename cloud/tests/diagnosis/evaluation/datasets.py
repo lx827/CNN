@@ -1,6 +1,7 @@
 """
 数据集加载与分类
 """
+
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -9,6 +10,7 @@ from .config import HUSTBEAR_DIR, CW_DIR, WTGEARBOX_DIR
 from .utils import load_npy
 
 MAX_PER_CLASS = 5  # 每个类别最多取5个文件，控制运行时间
+
 
 def _limit_files(files, max_per_class=MAX_PER_CLASS):
     class_files = defaultdict(list)
@@ -63,11 +65,26 @@ def classify_cw(filename: str) -> Dict:
     parts = name.split("-")
     health_state = parts[0]
     if health_state == "H":
-        return {"label": "healthy", "fault": None, "speed_mode": parts[1], "seq": parts[2]}
+        return {
+            "label": "healthy",
+            "fault": None,
+            "speed_mode": parts[1],
+            "seq": parts[2],
+        }
     elif health_state == "I":
-        return {"label": "inner", "fault": "inner", "speed_mode": parts[1], "seq": parts[2]}
+        return {
+            "label": "inner",
+            "fault": "inner",
+            "speed_mode": parts[1],
+            "seq": parts[2],
+        }
     elif health_state == "O":
-        return {"label": "outer", "fault": "outer", "speed_mode": parts[1], "seq": parts[2]}
+        return {
+            "label": "outer",
+            "fault": "outer",
+            "speed_mode": parts[1],
+            "seq": parts[2],
+        }
     return {"label": "unknown", "fault": None}
 
 
@@ -79,8 +96,18 @@ def classify_wtgearbox(filename: str) -> Dict:
     channel_part = parts[1] if len(parts) > 1 else "c1"
     fault_parts = main_part.split("_")
     category = fault_parts[0]
-    mapping = {"He": "healthy", "Br": "break", "Mi": "missing", "Rc": "crack", "We": "wear"}
-    return {"label": mapping.get(category, "unknown"), "fault": mapping.get(category), "channel": channel_part}
+    mapping = {
+        "He": "healthy",
+        "Br": "break",
+        "Mi": "missing",
+        "Rc": "crack",
+        "We": "wear",
+    }
+    return {
+        "label": mapping.get(category, "unknown"),
+        "fault": mapping.get(category),
+        "channel": channel_part,
+    }
 
 
 def get_hustbear_files() -> List[Tuple[Path, Dict]]:

@@ -5,6 +5,7 @@
     cd cloud
     uv run python tests/diagnosis/eval_plots/plot_all.py
 """
+
 import json, sys
 from pathlib import Path
 import numpy as np
@@ -14,31 +15,34 @@ OUTPUT_DIR = PROJECT_ROOT / "cloud" / "tests" / "output" / "eval_plots"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
 # ── 全局样式 ──────────────────────────────────────────────
-plt.rcParams.update({
-    "font.family": "sans-serif",
-    "font.sans-serif": ["SimHei", "Microsoft YaHei", "DejaVu Sans"],
-    "axes.unicode_minus": False,
-    "font.size": 12,
-    "axes.titlesize": 14,
-    "axes.labelsize": 13,
-    "xtick.labelsize": 11,
-    "ytick.labelsize": 11,
-    "legend.fontsize": 10,
-    "figure.dpi": 200,
-    "savefig.dpi": 200,
-    "savefig.format": "svg",
-    "savefig.bbox": "tight",
-    "axes.grid": True,
-    "grid.alpha": 0.25,
-    "grid.linestyle": "--",
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-})
+plt.rcParams.update(
+    {
+        "font.family": "sans-serif",
+        "font.sans-serif": ["SimHei", "Microsoft YaHei", "DejaVu Sans"],
+        "axes.unicode_minus": False,
+        "font.size": 12,
+        "axes.titlesize": 14,
+        "axes.labelsize": 13,
+        "xtick.labelsize": 11,
+        "ytick.labelsize": 11,
+        "legend.fontsize": 10,
+        "figure.dpi": 200,
+        "savefig.dpi": 200,
+        "savefig.format": "svg",
+        "savefig.bbox": "tight",
+        "axes.grid": True,
+        "grid.alpha": 0.25,
+        "grid.linestyle": "--",
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+    }
+)
 
 # ── 配色 ──────────────────────────────────────────────────
 C = {
@@ -71,23 +75,46 @@ def plot_expA_bearing():
 
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    colors = [C["red"] if "Ensemble" in n else C["blue"] if n == "MCKD" else C["gray"] for n in names]
-    bars = ax.bar(range(len(names)), accs, color=colors, edgecolor="white", linewidth=0.5, width=0.65)
+    colors = [
+        C["red"] if "Ensemble" in n else C["blue"] if n == "MCKD" else C["gray"]
+        for n in names
+    ]
+    bars = ax.bar(
+        range(len(names)),
+        accs,
+        color=colors,
+        edgecolor="white",
+        linewidth=0.5,
+        width=0.65,
+    )
 
     # 数值标注
     for bar, acc in zip(bars, accs):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.5,
-                f"{acc:.1f}%", ha="center", va="bottom", fontsize=9, fontweight="bold",
-                color=C["dark"] if acc < 90 else C["red"])
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 1.5,
+            f"{acc:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            fontweight="bold",
+            color=C["dark"] if acc < 90 else C["red"],
+        )
 
     ax.set_xticks(range(len(names)))
     ax.set_xticklabels(names, rotation=30, ha="right", fontsize=10)
     ax.set_ylabel("Accuracy (%)", fontsize=13)
     ax.set_ylim(0, 105)
-    ax.set_title("HUSTbear 轴承故障诊断 — 各方法二分类准确率对比", fontsize=14, fontweight="bold", pad=15)
+    ax.set_title(
+        "HUSTbear 轴承故障诊断 — 各方法二分类准确率对比",
+        fontsize=14,
+        fontweight="bold",
+        pad=15,
+    )
 
     # 图例
     from matplotlib.patches import Patch
+
     legend_elements = [
         Patch(facecolor=C["red"], label="Ensemble 集成方法"),
         Patch(facecolor=C["blue"], label="MCKD (最优单一方法)"),
@@ -114,17 +141,36 @@ def plot_expB_gear():
 
     fig, ax = plt.subplots(figsize=(9, 6))
     colors = [C["red"] if "Ensemble" in n else C["teal"] for n in names]
-    bars = ax.bar(range(len(names)), accs, color=colors, edgecolor="white", linewidth=0.5, width=0.5)
+    bars = ax.bar(
+        range(len(names)),
+        accs,
+        color=colors,
+        edgecolor="white",
+        linewidth=0.5,
+        width=0.5,
+    )
 
     for bar, acc in zip(bars, accs):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.5,
-                f"{acc:.1f}%", ha="center", va="bottom", fontsize=11, fontweight="bold")
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 1.5,
+            f"{acc:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=11,
+            fontweight="bold",
+        )
 
     ax.set_xticks(range(len(names)))
     ax.set_xticklabels(names, fontsize=12)
     ax.set_ylabel("Accuracy (%)", fontsize=13)
     ax.set_ylim(0, 105)
-    ax.set_title("WTgearbox 行星齿轮箱故障诊断 — 二分类准确率", fontsize=14, fontweight="bold", pad=15)
+    ax.set_title(
+        "WTgearbox 行星齿轮箱故障诊断 — 二分类准确率",
+        fontsize=14,
+        fontweight="bold",
+        pad=15,
+    )
     ax.yaxis.set_major_locator(mticker.MultipleLocator(10))
     fig.tight_layout()
     for fmt in ["svg", "png"]:
@@ -145,22 +191,41 @@ def plot_expC_denoise():
     fig, ax = plt.subplots(figsize=(9, 6))
 
     base_colors = [C["gray"], C["blue"], C["teal"], C["orange"], C["red"]]
-    colors = base_colors[:len(names)]
-    bars = ax.bar(range(len(names)), snrs, color=colors, edgecolor="white", linewidth=0.5, width=0.55)
+    colors = base_colors[: len(names)]
+    bars = ax.bar(
+        range(len(names)),
+        snrs,
+        color=colors,
+        edgecolor="white",
+        linewidth=0.5,
+        width=0.55,
+    )
 
     for bar, val in zip(bars, snrs):
         y_pos = bar.get_height() + 0.4 if val >= 0 else bar.get_height() - 1.5
-        ax.text(bar.get_x() + bar.get_width() / 2, y_pos,
-                f"{val:+.1f} dB", ha="center", va="bottom" if val >= 0 else "top",
-                fontsize=11, fontweight="bold")
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            y_pos,
+            f"{val:+.1f} dB",
+            ha="center",
+            va="bottom" if val >= 0 else "top",
+            fontsize=11,
+            fontweight="bold",
+        )
 
     ax.set_xticks(range(len(names)))
     ax.set_xticklabels(names, fontsize=12)
     ax.set_ylabel("ΔSNR (dB)", fontsize=13)
-    ax.set_title("各去噪方法效果对比 (HUSTbear 外圈故障, 0dB AWGN)", fontsize=14, fontweight="bold", pad=15)
+    ax.set_title(
+        "各去噪方法效果对比 (HUSTbear 外圈故障, 0dB AWGN)",
+        fontsize=14,
+        fontweight="bold",
+        pad=15,
+    )
     ax.axhline(y=0, color=C["light"], linewidth=1, linestyle="-")
 
     from matplotlib.patches import Patch
+
     legend_elements = [
         Patch(facecolor=C["red"], label="小波+VMD级联 (最优)"),
         Patch(facecolor=C["orange"], label="MED去噪"),
@@ -186,22 +251,44 @@ def plot_expD_robustness():
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    color_map = {"Ensemble集成": C["red"], "MCKD": C["blue"], "MED增强": C["orange"],
-                 "Kurtogram": C["teal"], "包络分析": C["gray"]}
-    marker_map = {"Ensemble集成": "s", "MCKD": "D", "MED增强": "o",
-                  "Kurtogram": "^", "包络分析": "v"}
+    color_map = {
+        "Ensemble集成": C["red"],
+        "MCKD": C["blue"],
+        "MED增强": C["orange"],
+        "Kurtogram": C["teal"],
+        "包络分析": C["gray"],
+    }
+    marker_map = {
+        "Ensemble集成": "s",
+        "MCKD": "D",
+        "MED增强": "o",
+        "Kurtogram": "^",
+        "包络分析": "v",
+    }
 
     for name, curve in methods.items():
         x = [c["snr_db"] for c in curve]
         y = [100 if c["detected"] else 0 for c in curve]
         c = color_map.get(name, C["gray"])
         m = marker_map.get(name, "o")
-        ax.plot(x, y, color=c, marker=m, markersize=10, linewidth=2.5,
-                markerfacecolor="white", markeredgewidth=2, label=name, zorder=5)
+        ax.plot(
+            x,
+            y,
+            color=c,
+            marker=m,
+            markersize=10,
+            linewidth=2.5,
+            markerfacecolor="white",
+            markeredgewidth=2,
+            label=name,
+            zorder=5,
+        )
 
     ax.set_xlabel("SNR (dB)", fontsize=13)
     ax.set_ylabel("故障检出率 (%)", fontsize=13)
-    ax.set_title("噪声鲁棒性对比 — HUSTbear 外圈故障", fontsize=14, fontweight="bold", pad=15)
+    ax.set_title(
+        "噪声鲁棒性对比 — HUSTbear 外圈故障", fontsize=14, fontweight="bold", pad=15
+    )
     ax.set_xticks(snr_levels)
     ax.set_ylim(-5, 115)
     ax.set_yticks([0, 25, 50, 75, 100])
@@ -209,10 +296,22 @@ def plot_expD_robustness():
     ax.legend(loc="lower left", fontsize=9, framealpha=0.9)
 
     # 标注
-    ax.annotate("强噪声区", xy=(-5, 10), fontsize=10, color=C["dark"],
-                ha="center", bbox=dict(boxstyle="round,pad=0.3", facecolor=C["bg"], alpha=0.8))
-    ax.annotate("低噪声区", xy=(20, 95), fontsize=10, color=C["dark"],
-                ha="center", bbox=dict(boxstyle="round,pad=0.3", facecolor=C["bg"], alpha=0.8))
+    ax.annotate(
+        "强噪声区",
+        xy=(-5, 10),
+        fontsize=10,
+        color=C["dark"],
+        ha="center",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor=C["bg"], alpha=0.8),
+    )
+    ax.annotate(
+        "低噪声区",
+        xy=(20, 95),
+        fontsize=10,
+        color=C["dark"],
+        ha="center",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor=C["bg"], alpha=0.8),
+    )
 
     fig.tight_layout()
     for fmt in ["svg", "png"]:
@@ -242,24 +341,49 @@ def plot_cross_dataset():
     methods_b = b_data["methods"]
 
     datasets = ["HUSTbear (恒速轴承)", "WTgearbox (行星齿轮)"]
-    mckd_vals = [methods_a.get("MCKD", {}).get("accuracy", 0),
-                 methods_b.get("高级综合", {}).get("accuracy", 0)]
-    ens_vals = [methods_a.get("Ensemble集成", {}).get("accuracy", 0),
-                methods_b.get("Ensemble集成", {}).get("accuracy", 0)]
+    mckd_vals = [
+        methods_a.get("MCKD", {}).get("accuracy", 0),
+        methods_b.get("高级综合", {}).get("accuracy", 0),
+    ]
+    ens_vals = [
+        methods_a.get("Ensemble集成", {}).get("accuracy", 0),
+        methods_b.get("Ensemble集成", {}).get("accuracy", 0),
+    ]
 
     fig, ax = plt.subplots(figsize=(8, 5.5))
     x = np.arange(len(datasets))
     w = 0.3
 
-    bars1 = ax.bar(x - w/2, mckd_vals, w, color=C["blue"], edgecolor="white", label="最优单一方法")
-    bars2 = ax.bar(x + w/2, ens_vals, w, color=C["red"], edgecolor="white", label="Ensemble集成")
+    bars1 = ax.bar(
+        x - w / 2,
+        mckd_vals,
+        w,
+        color=C["blue"],
+        edgecolor="white",
+        label="最优单一方法",
+    )
+    bars2 = ax.bar(
+        x + w / 2, ens_vals, w, color=C["red"], edgecolor="white", label="Ensemble集成"
+    )
 
     for bar, val in zip(bars1, mckd_vals):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1.5, f"{val:.1f}%",
-                ha="center", fontsize=10, fontweight="bold")
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 1.5,
+            f"{val:.1f}%",
+            ha="center",
+            fontsize=10,
+            fontweight="bold",
+        )
     for bar, val in zip(bars2, ens_vals):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1.5, f"{val:.1f}%",
-                ha="center", fontsize=10, fontweight="bold")
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 1.5,
+            f"{val:.1f}%",
+            ha="center",
+            fontsize=10,
+            fontweight="bold",
+        )
 
     ax.set_xticks(x)
     ax.set_xticklabels(datasets, fontsize=12)
@@ -280,6 +404,7 @@ def plot_cross_dataset():
 # 多分类混淆矩阵
 # ═══════════════════════════════════════════════════════════
 
+
 def plot_confusion_matrix(data, class_names, title, filename):
     cm = np.array(data["confusion_matrix"])
     n = len(class_names)
@@ -289,19 +414,36 @@ def plot_confusion_matrix(data, class_names, title, filename):
         for j in range(n):
             val = cm[i, j]
             color = "white" if val > cm.max() * 0.5 else C["dark"]
-            ax.text(j, i, str(val), ha="center", va="center", fontsize=13,
-                    fontweight="bold", color=color)
-    ax.set_xticks(range(n)); ax.set_yticks(range(n))
+            ax.text(
+                j,
+                i,
+                str(val),
+                ha="center",
+                va="center",
+                fontsize=13,
+                fontweight="bold",
+                color=color,
+            )
+    ax.set_xticks(range(n))
+    ax.set_yticks(range(n))
     ax.set_xticklabels(class_names, fontsize=10, rotation=25, ha="right")
     ax.set_yticklabels(class_names, fontsize=11)
-    ax.set_xlabel("预测", fontsize=13); ax.set_ylabel("真实", fontsize=13)
+    ax.set_xlabel("预测", fontsize=13)
+    ax.set_ylabel("真实", fontsize=13)
     ax.set_title(title, fontsize=14, fontweight="bold", pad=15)
     cbar = fig.colorbar(im, ax=ax, shrink=0.85)
     metrics = data.get("metrics", {})
     acc = metrics.get("accuracy", 0)
     mf1 = metrics.get("macro_f1", 0)
-    ax.text(0.5, -0.15, f"Accuracy: {acc:.1f}%  |  Macro-F1: {mf1:.3f}",
-            transform=ax.transAxes, ha="center", fontsize=10, color=C["dark"])
+    ax.text(
+        0.5,
+        -0.15,
+        f"Accuracy: {acc:.1f}%  |  Macro-F1: {mf1:.3f}",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=10,
+        color=C["dark"],
+    )
     fig.tight_layout()
     for fmt in ["svg", "png"]:
         fig.savefig(OUTPUT_DIR / filename.format(fmt), dpi=150)
@@ -319,7 +461,9 @@ def plot_multiclass():
             print(f"  [SKIP] {json_name}")
             continue
         data = load_json(json_name)
-        plot_confusion_matrix(data, data["class_names"], title, f"exp{exp}_confusion.{{}}")
+        plot_confusion_matrix(
+            data, data["class_names"], title, f"exp{exp}_confusion.{{}}"
+        )
 
 
 def main():

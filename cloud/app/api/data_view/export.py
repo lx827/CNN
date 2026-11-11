@@ -12,24 +12,32 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 @router.get("/{device_id}/{batch_index}/{channel}/export")
 def export_channel_csv(
     device_id: str,
     batch_index: int,
     channel: int,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
-    db: Session = Depends(get_db)
+    denoise: str = Query(
+        default="none",
+        description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+    ),
+    db: Session = Depends(get_db),
 ):
     """
     导出某批次某通道的时域数据为 CSV
     格式：时间(s), 振幅
     """
-    record = db.query(SensorData).filter(
-        SensorData.device_id == device_id,
-        SensorData.batch_index == batch_index,
-        SensorData.channel == channel
-    ).first()
+    record = (
+        db.query(SensorData)
+        .filter(
+            SensorData.device_id == device_id,
+            SensorData.batch_index == batch_index,
+            SensorData.channel == channel,
+        )
+        .first()
+    )
 
     if not record:
         raise HTTPException(status_code=404, detail="数据不存在")
@@ -52,9 +60,7 @@ def export_channel_csv(
     filename = f"{device_id}_batch{batch_index}_ch{channel}.csv"
 
     return StreamingResponse(
-        io.BytesIO(output.getvalue().encode('utf-8-sig')),
+        io.BytesIO(output.getvalue().encode("utf-8-sig")),
         media_type="text/csv; charset=utf-8-sig",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
-
-

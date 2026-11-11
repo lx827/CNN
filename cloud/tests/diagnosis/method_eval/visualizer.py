@@ -7,8 +7,10 @@
 3. 召回率热力图
 4. 雷达图（综合能力对比）
 """
+
 import numpy as np
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -22,15 +24,18 @@ from .config import STYLE, LABEL_CN
 # ═══════════════════════════════════════════════════════════
 def apply_style():
     """应用统一绘图风格"""
-    plt.rcParams.update({
-        "font.family": STYLE["font.family"],
-        "font.size": STYLE["font.size"],
-        "axes.titlesize": STYLE["axes.titlesize"],
-        "axes.labelsize": STYLE["axes.labelsize"],
-        "figure.dpi": STYLE["figure.dpi"],
-        "savefig.bbox": STYLE["savefig.bbox"],
-        "axes.unicode_minus": False,
-    })
+    plt.rcParams.update(
+        {
+            "font.family": STYLE["font.family"],
+            "font.size": STYLE["font.size"],
+            "axes.titlesize": STYLE["axes.titlesize"],
+            "axes.labelsize": STYLE["axes.labelsize"],
+            "figure.dpi": STYLE["figure.dpi"],
+            "savefig.bbox": STYLE["savefig.bbox"],
+            "axes.unicode_minus": False,
+        }
+    )
+
 
 apply_style()
 
@@ -40,6 +45,7 @@ COLORS = STYLE["colors"]
 # ═══════════════════════════════════════════════════════════
 # 1. 混淆矩阵（默认 Blues 风格）
 # ═══════════════════════════════════════════════════════════
+
 
 def plot_confusion_matrix(
     cm: np.ndarray,
@@ -78,9 +84,16 @@ def plot_confusion_matrix(
             val_raw = int(cm[i, j])
             # 数值较大时用白色文字，否则用黑色
             text_color = "white" if val_norm > 0.5 else "black"
-            ax.text(j, i, f"{val_norm:.0%}\n({val_raw})",
-                    ha="center", va="center", fontsize=10,
-                    color=text_color, fontweight="bold" if i == j else "normal")
+            ax.text(
+                j,
+                i,
+                f"{val_norm:.0%}\n({val_raw})",
+                ha="center",
+                va="center",
+                fontsize=10,
+                color=text_color,
+                fontweight="bold" if i == j else "normal",
+            )
 
     ax.set_xticks(range(n))
     ax.set_yticks(range(n))
@@ -92,7 +105,9 @@ def plot_confusion_matrix(
     title_color = COLORS["our_method"] if highlight else "#333333"
     ax.set_title(
         f"{method_name}\n准确率 = {accuracy:.1%}",
-        fontsize=14, fontweight="bold", color=title_color,
+        fontsize=14,
+        fontweight="bold",
+        color=title_color,
     )
 
     # 添加颜色条
@@ -108,6 +123,7 @@ def plot_confusion_matrix(
 # ═══════════════════════════════════════════════════════════
 # 2. 多方法性能柱状图
 # ═══════════════════════════════════════════════════════════
+
 
 def plot_method_comparison_bar(
     method_names: List[str],
@@ -142,16 +158,23 @@ def plot_method_comparison_bar(
 
     fig, ax = plt.subplots(figsize=(max(10, n * 1.2), 6))
 
-    bars = ax.bar(range(n), values, color=bar_colors, edgecolor="white",
-                  linewidth=0.5, width=0.7)
+    bars = ax.bar(
+        range(n), values, color=bar_colors, edgecolor="white", linewidth=0.5, width=0.7
+    )
 
     # 标注数值
     for i, (bar, val) in enumerate(zip(bars, values)):
         is_highlight = highlight_indices and i in highlight_indices
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
-                f"{val:.1%}" if val <= 1 else f"{val:.1f}",
-                ha="center", va="bottom", fontsize=10, fontweight="bold",
-                color=COLORS["our_method"] if is_highlight else "#333333")
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.01,
+            f"{val:.1%}" if val <= 1 else f"{val:.1f}",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+            fontweight="bold",
+            color=COLORS["our_method"] if is_highlight else "#333333",
+        )
 
     ax.set_xticks(range(n))
     ax.set_xticklabels(method_names, rotation=30, ha="right", fontsize=11)
@@ -191,6 +214,7 @@ def plot_method_comparison_bar(
 # 3. 召回率热力图
 # ═══════════════════════════════════════════════════════════
 
+
 def plot_recall_heatmap(
     methods: List[str],
     labels: List[str],
@@ -210,8 +234,16 @@ def plot_recall_heatmap(
         for j in range(n_labels):
             val = recall_matrix[i, j]
             text_color = "white" if val > 0.7 else "black"
-            ax.text(j, i, f"{val:.0%}", ha="center", va="center",
-                    fontsize=10, color=text_color, fontweight="bold")
+            ax.text(
+                j,
+                i,
+                f"{val:.0%}",
+                ha="center",
+                va="center",
+                fontsize=10,
+                color=text_color,
+                fontweight="bold",
+            )
 
     ax.set_xticks(range(n_labels))
     ax.set_xticklabels(labels_cn, fontsize=11)
@@ -233,6 +265,7 @@ def plot_recall_heatmap(
 # ═══════════════════════════════════════════════════════════
 # 4. 雷达图（综合能力对比）
 # ═══════════════════════════════════════════════════════════
+
 
 def plot_radar_chart(
     method_names: List[str],
@@ -260,8 +293,14 @@ def plot_radar_chart(
         linewidth = 2.5 if is_highlight else 1.2
         alpha = 0.9 if is_highlight else 0.4
 
-        ax.plot(angles, values, color=color, linewidth=linewidth, alpha=alpha,
-                label=method_names[i])
+        ax.plot(
+            angles,
+            values,
+            color=color,
+            linewidth=linewidth,
+            alpha=alpha,
+            label=method_names[i],
+        )
         ax.fill(angles, values, color=color, alpha=alpha * 0.2)
 
     ax.set_xticks(angles[:-1])

@@ -3,16 +3,19 @@ Layer 3 集成层 — 独立绘图脚本
 
 读取 layer3/output/*.json 生成对比图，无需重跑分析。
 """
+
 import json
 from pathlib import Path
 import numpy as np
 
 try:
     import matplotlib
-    matplotlib.use('Agg')
+
+    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
-    plt.rcParams['axes.unicode_minus'] = False
+
+    plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
+    plt.rcParams["axes.unicode_minus"] = False
     HAS_MPL = True
 except ImportError:
     HAS_MPL = False
@@ -26,7 +29,7 @@ def load_json(name):
     if not p.exists():
         return None
     try:
-        return json.loads(p.read_text(encoding='utf-8'))
+        return json.loads(p.read_text(encoding="utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         return json.loads(p.read_bytes())
 
@@ -46,15 +49,15 @@ def plot_engine():
     fig, ax = plt.subplots(figsize=(8, 4))
     x = np.arange(len(categories))
     failed = [t - p for t, p in zip(cat_total, cat_passed)]
-    ax.bar(x, cat_passed, color='#52C41A', label='通过')
-    ax.bar(x, failed, bottom=cat_passed, color='#FF4D4F', label='失败')
+    ax.bar(x, cat_passed, color="#52C41A", label="通过")
+    ax.bar(x, failed, bottom=cat_passed, color="#FF4D4F", label="失败")
     ax.set_xticks(x)
-    ax.set_xticklabels([c.replace('_', '\n') for c in categories], fontsize=9)
+    ax.set_xticklabels([c.replace("_", "\n") for c in categories], fontsize=9)
     ax.set_ylabel("测试数")
     ax.set_title("Layer 3: engine.py — 引擎集成")
     ax.legend()
     for i, (t, p) in enumerate(zip(cat_total, cat_passed)):
-        ax.text(i, t + 0.1, f"{p}/{t}", ha='center', fontsize=9)
+        ax.text(i, t + 0.1, f"{p}/{t}", ha="center", fontsize=9)
     ax.set_ylim(0, max(cat_total) * 1.3)
     plt.tight_layout()
     fig.savefig(PLOT_DIR / "engine_integration.png", dpi=150)
@@ -73,7 +76,7 @@ def plot_ensemble():
     if profile_items:
         labels = [it["test"].replace("ensemble_profile_", "") for it in profile_items]
         values = [it["hs"] for it in profile_items]
-        colors = ['#52C41A' if it.get("passed") else '#FF4D4F' for it in profile_items]
+        colors = ["#52C41A" if it.get("passed") else "#FF4D4F" for it in profile_items]
         axes[0].bar(labels, values, color=colors)
         axes[0].set_ylabel("健康度")
         axes[0].set_title("不同 profile 健康度")
@@ -83,11 +86,22 @@ def plot_ensemble():
     disc = data.get("ensemble_discrimination", [])
     for it in disc:
         if "healthy_hs" in it:
-            axes[1].barh(["健康", "故障"], [it["healthy_hs"], it["fault_hs"]], color=['#52C41A', '#FF4D4F'])
+            axes[1].barh(
+                ["健康", "故障"],
+                [it["healthy_hs"], it["fault_hs"]],
+                color=["#52C41A", "#FF4D4F"],
+            )
             axes[1].set_xlabel("健康度")
             axes[1].set_title(f"区分度: hs_diff={it.get('hs_diff', 0):.1f}")
-            axes[1].text(it["healthy_hs"] + 1, 0, f"lik={it['healthy_likelihood']:.3f}", va='center')
-            axes[1].text(it["fault_hs"] + 1, 1, f"lik={it['fault_likelihood']:.3f}", va='center')
+            axes[1].text(
+                it["healthy_hs"] + 1,
+                0,
+                f"lik={it['healthy_likelihood']:.3f}",
+                va="center",
+            )
+            axes[1].text(
+                it["fault_hs"] + 1, 1, f"lik={it['fault_likelihood']:.3f}", va="center"
+            )
 
     plt.tight_layout()
     fig.savefig(PLOT_DIR / "ensemble_integration.png", dpi=150)
@@ -110,7 +124,7 @@ def plot_analyzer():
             if "health_score" in it:
                 labels.append(it["test"].replace("analyzer_", ""))
                 values.append(it["health_score"])
-                colors.append('#52C41A' if it.get("passed") else '#FF4D4F')
+                colors.append("#52C41A" if it.get("passed") else "#FF4D4F")
 
     if labels:
         x = np.arange(len(labels))
@@ -119,11 +133,11 @@ def plot_analyzer():
         ax.set_xticklabels(labels, fontsize=9)
         ax.set_ylabel("健康度")
         ax.set_title("Layer 3: analyzer.py — 各场景健康度")
-        ax.axhline(y=80, color='orange', linestyle='--', label='warning')
-        ax.axhline(y=50, color='red', linestyle='--', label='fault')
+        ax.axhline(y=80, color="orange", linestyle="--", label="warning")
+        ax.axhline(y=50, color="red", linestyle="--", label="fault")
         ax.legend()
         ax.set_ylim(0, 110)
-        ax.grid(axis='y', alpha=0.3)
+        ax.grid(axis="y", alpha=0.3)
 
     plt.tight_layout()
     fig.savefig(PLOT_DIR / "analyzer_integration.png", dpi=150)
@@ -133,7 +147,11 @@ def plot_analyzer():
 
 def plot_summary():
     summary_data = {}
-    for json_name in ["engine_integration", "ensemble_integration", "analyzer_integration"]:
+    for json_name in [
+        "engine_integration",
+        "ensemble_integration",
+        "analyzer_integration",
+    ]:
         data = load_json(f"{json_name}.json")
         if data and "summary" in data:
             summary_data[json_name.replace("_integration", "")] = data["summary"]
@@ -145,11 +163,14 @@ def plot_summary():
     labels = list(summary_data.keys())
     totals = [v.get("total", 0) for v in summary_data.values()]
     passed = [v.get("passed", 0) for v in summary_data.values()]
-    failed = [v.get("failed", v.get("total", 0) - v.get("passed", 0)) for v in summary_data.values()]
+    failed = [
+        v.get("failed", v.get("total", 0) - v.get("passed", 0))
+        for v in summary_data.values()
+    ]
 
     x = range(len(labels))
-    ax.bar(x, passed, color='#52C41A', label='通过')
-    ax.bar(x, failed, bottom=passed, color='#FF4D4F', label='失败')
+    ax.bar(x, passed, color="#52C41A", label="通过")
+    ax.bar(x, failed, bottom=passed, color="#FF4D4F", label="失败")
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.set_ylabel("测试数")
@@ -158,7 +179,7 @@ def plot_summary():
     ax.legend()
 
     for i, (t, p) in enumerate(zip(totals, passed)):
-        ax.text(i, t + 0.2, f"{p}/{t}", ha='center')
+        ax.text(i, t + 0.2, f"{p}/{t}", ha="center")
 
     plt.tight_layout()
     fig.savefig(PLOT_DIR / "layer3_summary.png", dpi=150)

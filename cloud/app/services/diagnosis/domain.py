@@ -1,4 +1,5 @@
 """业务诊断的唯一状态与证据契约；不推断物理阈值，不执行数值算法。"""
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -22,6 +23,7 @@ class DiagnosisConclusion(str, Enum):
 
 class FaultProposition(str, Enum):
     """可以共存的物理命题；不把内圈和外圈强行当作互斥 D-S 单例。"""
+
     BEARING_OUTER = "bearing_outer"
     BEARING_INNER = "bearing_inner"
     BEARING_ROLLING = "bearing_rolling"
@@ -41,9 +43,26 @@ class EvidenceFamily(str, Enum):
 
 # 名称使用精确集合，不以字符串子串决定方法含义；调用方适配仅规范大小写。
 METHOD_FAMILIES = {
-    **dict.fromkeys(("envelope", "filter_bank_sk", "spectral_kurtosis", "cpw", "med", "mckd", "teager", "dwt", "wp", "emd_envelope", "ceemdan_envelope", "vmd_envelope"), EvidenceFamily.BEARING_ENVELOPE),
+    **dict.fromkeys(
+        (
+            "envelope",
+            "filter_bank_sk",
+            "spectral_kurtosis",
+            "cpw",
+            "med",
+            "mckd",
+            "teager",
+            "dwt",
+            "wp",
+            "emd_envelope",
+            "ceemdan_envelope",
+            "vmd_envelope",
+        ),
+        EvidenceFamily.BEARING_ENVELOPE,
+    ),
     "sc_scoh": EvidenceFamily.BEARING_CYCLIC,
-    "standard": EvidenceFamily.GEAR_ORDER, "advanced": EvidenceFamily.GEAR_ORDER,
+    "standard": EvidenceFamily.GEAR_ORDER,
+    "advanced": EvidenceFamily.GEAR_ORDER,
     "planetary_gear": EvidenceFamily.PLANETARY,
     "statistics": EvidenceFamily.STATISTICS,
 }
@@ -60,7 +79,12 @@ def canonical_proposition(value: str | FaultProposition) -> FaultProposition:
         return value
     if not isinstance(value, str):
         raise ValueError("invalid_fault_proposition")
-    names = {"bpfo": "bearing_outer", "bpfi": "bearing_inner", "bsf": "bearing_rolling", "ftf": "bearing_cage"}
+    names = {
+        "bpfo": "bearing_outer",
+        "bpfi": "bearing_inner",
+        "bsf": "bearing_rolling",
+        "ftf": "bearing_cage",
+    }
     normalized = value.strip().casefold()
     return FaultProposition(names.get(normalized, normalized))
 
@@ -68,6 +92,7 @@ def canonical_proposition(value: str | FaultProposition) -> FaultProposition:
 @dataclass(frozen=True)
 class DiagnosisKey:
     """通道缓存与批次摘要共用身份；channel=0 只表示批次摘要。"""
+
     device_id: str
     batch_index: int
     channel: int
@@ -82,7 +107,9 @@ class DiagnosisKey:
                 raise ValueError(f"invalid_diagnosis_{name}")
         if not isinstance(self.denoise_method, str) or not self.denoise_method.strip():
             raise ValueError("missing_denoise_identity")
-        object.__setattr__(self, "denoise_method", self.denoise_method.strip().casefold())
+        object.__setattr__(
+            self, "denoise_method", self.denoise_method.strip().casefold()
+        )
 
     @property
     def record_id(self) -> str:
@@ -92,6 +119,7 @@ class DiagnosisKey:
 @dataclass(frozen=True)
 class PenaltyRequest:
     """对象评估产生的业务扣分请求；权重只在 assessment 中乘一次。"""
+
     code: str
     amount: float
 
@@ -100,13 +128,23 @@ class PenaltyRequest:
             raise ValueError("invalid_penalty_request")
 
 
-def validate_state(evaluation_status: EvaluationStatus, conclusion: DiagnosisConclusion, health_score: float | None = None, *, require_score: bool = False) -> None:
+def validate_state(
+    evaluation_status: EvaluationStatus,
+    conclusion: DiagnosisConclusion,
+    health_score: float | None = None,
+    *,
+    require_score: bool = False,
+) -> None:
     if evaluation_status != EvaluationStatus.EVALUATED:
         if conclusion != DiagnosisConclusion.UNKNOWN or health_score is not None:
             raise ValueError("unavailable_diagnosis_requires_unknown_and_null_score")
     elif conclusion == DiagnosisConclusion.UNKNOWN:
         raise ValueError("evaluated_diagnosis_requires_explicit_conclusion")
-    elif require_score and (health_score is None or not isfinite(health_score) or not 0 <= health_score <= 100):
+    elif require_score and (
+        health_score is None
+        or not isfinite(health_score)
+        or not 0 <= health_score <= 100
+    ):
         raise ValueError("evaluated_diagnosis_requires_finite_score")
 
 
@@ -117,6 +155,7 @@ class Evidence:
     confidence 是显式工程可靠度，用于 D-S 支持量，不宣称已校准故障概率。
     正常必须来自可观测、正能量的有效阴性；空列表和算法失败不构成阴性。
     """
+
     evidence_id: str
     key: DiagnosisKey
     object_id: str
@@ -132,25 +171,61 @@ class Evidence:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "method", canonical_method(self.method))
-        object.__setattr__(self, "evaluation_status", EvaluationStatus(self.evaluation_status))
-        object.__setattr__(self, "diagnosis_conclusion", DiagnosisConclusion(self.diagnosis_conclusion))
-        object.__setattr__(self, "propositions", tuple(dict.fromkeys(canonical_proposition(value) for value in self.propositions)))
+        object.__setattr__(
+            self, "evaluation_status", EvaluationStatus(self.evaluation_status)
+        )
+        object.__setattr__(
+            self, "diagnosis_conclusion", DiagnosisConclusion(self.diagnosis_conclusion)
+        )
+        object.__setattr__(
+            self,
+            "propositions",
+            tuple(
+                dict.fromkeys(
+                    canonical_proposition(value) for value in self.propositions
+                )
+            ),
+        )
         object.__setattr__(self, "dependencies", frozenset(self.dependencies))
-        if not self.evidence_id or not self.object_id or not self.dependencies or any(not isinstance(v, str) or not v for v in self.dependencies):
+        if (
+            not self.evidence_id
+            or not self.object_id
+            or not self.dependencies
+            or any(not isinstance(v, str) or not v for v in self.dependencies)
+        ):
             raise ValueError("missing_evidence_identity_or_dependency")
         if self.key.channel == 0:
             raise ValueError("method_evidence_requires_real_channel")
         validate_state(self.evaluation_status, self.diagnosis_conclusion)
         if self.evaluation_status == EvaluationStatus.EVALUATED:
-            if self.signal_rms is None or not isfinite(self.signal_rms) or self.signal_rms <= 0:
+            if (
+                self.signal_rms is None
+                or not isfinite(self.signal_rms)
+                or self.signal_rms <= 0
+            ):
                 raise ValueError("evaluated_evidence_requires_positive_signal_energy")
-            if self.confidence is None or not isfinite(self.confidence) or not 0 < self.confidence <= 1:
+            if (
+                self.confidence is None
+                or not isfinite(self.confidence)
+                or not 0 < self.confidence <= 1
+            ):
                 raise ValueError("evaluated_evidence_requires_explicit_reliability")
-            if self.diagnosis_conclusion == DiagnosisConclusion.NORMAL and (self.propositions or self.penalties):
+            if self.diagnosis_conclusion == DiagnosisConclusion.NORMAL and (
+                self.propositions or self.penalties
+            ):
                 raise ValueError("normal_evidence_cannot_carry_fault_or_penalty")
-            if self.diagnosis_conclusion in {DiagnosisConclusion.WARNING, DiagnosisConclusion.FAULT} and not self.propositions:
+            if (
+                self.diagnosis_conclusion
+                in {DiagnosisConclusion.WARNING, DiagnosisConclusion.FAULT}
+                and not self.propositions
+            ):
                 raise ValueError("anomalous_evidence_requires_explicit_proposition")
-        elif self.confidence is not None or self.propositions or self.penalties or not self.reason:
+        elif (
+            self.confidence is not None
+            or self.propositions
+            or self.penalties
+            or not self.reason
+        ):
             raise ValueError("unavailable_evidence_requires_reason_without_votes")
 
     @property
@@ -160,13 +235,22 @@ class Evidence:
     @classmethod
     def from_dict(cls, value: Mapping) -> "Evidence":
         return cls(
-            evidence_id=value["evidence_id"], key=DiagnosisKey(**value["key"]),
-            object_id=value["object_id"], method=value["method"], dependencies=frozenset(value["dependencies"]),
+            evidence_id=value["evidence_id"],
+            key=DiagnosisKey(**value["key"]),
+            object_id=value["object_id"],
+            method=value["method"],
+            dependencies=frozenset(value["dependencies"]),
             evaluation_status=EvaluationStatus(value["evaluation_status"]),
             diagnosis_conclusion=DiagnosisConclusion(value["diagnosis_conclusion"]),
-            confidence=value["confidence"], signal_rms=value["signal_rms"],
-            propositions=tuple(canonical_proposition(item) for item in value.get("propositions", ())),
-            penalties=tuple(PenaltyRequest(**item) for item in value.get("penalties", ())), reason=value.get("reason"),
+            confidence=value["confidence"],
+            signal_rms=value["signal_rms"],
+            propositions=tuple(
+                canonical_proposition(item) for item in value.get("propositions", ())
+            ),
+            penalties=tuple(
+                PenaltyRequest(**item) for item in value.get("penalties", ())
+            ),
+            reason=value.get("reason"),
         )
 
 
@@ -193,6 +277,7 @@ class FusionResult:
 @dataclass(frozen=True)
 class Evaluation:
     """对象局部结论保留全部原始方法证据和依赖分组，不隐藏未评估方法。"""
+
     object_id: str
     evaluation_status: EvaluationStatus
     diagnosis_conclusion: DiagnosisConclusion
@@ -201,12 +286,19 @@ class Evaluation:
     reason: str | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "evaluation_status", EvaluationStatus(self.evaluation_status))
-        object.__setattr__(self, "diagnosis_conclusion", DiagnosisConclusion(self.diagnosis_conclusion))
+        object.__setattr__(
+            self, "evaluation_status", EvaluationStatus(self.evaluation_status)
+        )
+        object.__setattr__(
+            self, "diagnosis_conclusion", DiagnosisConclusion(self.diagnosis_conclusion)
+        )
         validate_state(self.evaluation_status, self.diagnosis_conclusion)
         if any(value.object_id != self.object_id for value in self.evidence):
             raise ValueError("evaluation_object_identity_mismatch")
-        if self.evaluation_status == EvaluationStatus.EVALUATED and not any(value.evaluation_status == EvaluationStatus.EVALUATED for value in self.evidence):
+        if self.evaluation_status == EvaluationStatus.EVALUATED and not any(
+            value.evaluation_status == EvaluationStatus.EVALUATED
+            for value in self.evidence
+        ):
             raise ValueError("evaluated_object_requires_observable_evidence")
 
 
@@ -234,16 +326,29 @@ class Diagnosis:
     reason: str | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "evaluation_status", EvaluationStatus(self.evaluation_status))
-        object.__setattr__(self, "diagnosis_conclusion", DiagnosisConclusion(self.diagnosis_conclusion))
-        validate_state(self.evaluation_status, self.diagnosis_conclusion, self.health_score, require_score=True)
+        object.__setattr__(
+            self, "evaluation_status", EvaluationStatus(self.evaluation_status)
+        )
+        object.__setattr__(
+            self, "diagnosis_conclusion", DiagnosisConclusion(self.diagnosis_conclusion)
+        )
+        validate_state(
+            self.evaluation_status,
+            self.diagnosis_conclusion,
+            self.health_score,
+            require_score=True,
+        )
         if self.coverage not in {"none", "partial", "complete"}:
             raise ValueError("invalid_diagnosis_coverage")
-        if self.evaluation_status == EvaluationStatus.EVALUATED and not any(value.evaluation_status == EvaluationStatus.EVALUATED for value in self.evaluations):
+        if self.evaluation_status == EvaluationStatus.EVALUATED and not any(
+            value.evaluation_status == EvaluationStatus.EVALUATED
+            for value in self.evaluations
+        ):
             raise ValueError("evaluated_diagnosis_requires_evaluated_object")
 
     def to_dict(self) -> dict:
         """API/缓存只序列化此契约；不输出旧 status 或正常默认值。"""
+
         def convert(value):
             if isinstance(value, Enum):
                 return value.value
@@ -254,4 +359,5 @@ class Diagnosis:
             if isinstance(value, (tuple, list)):
                 return [convert(item) for item in value]
             return value
+
         return {"contract_version": 1, **convert(asdict(self))}

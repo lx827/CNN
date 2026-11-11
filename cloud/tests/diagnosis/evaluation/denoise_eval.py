@@ -12,6 +12,7 @@
 - NCC: 归一化互相关
 - Crest Factor Improvement: 峰值因子改善度
 """
+
 import sys
 import os
 import time
@@ -29,7 +30,10 @@ from app.services.diagnosis.preprocessing import (
     cascade_wavelet_lms,
 )
 from app.algorithms.decomposition.wavelet import denoise_wavelet
-from app.algorithms.bearing.deconvolution import minimum_entropy_deconvolution, MEDParameters
+from app.algorithms.bearing.deconvolution import (
+    minimum_entropy_deconvolution,
+    MEDParameters,
+)
 from app.services.diagnosis.vmd_denoise import vmd_denoise
 from app.services.diagnosis.emd_denoise import emd_denoise
 from app.services.diagnosis.wavelet_packet import wavelet_packet_denoise
@@ -85,14 +89,20 @@ def evaluate_denoise_methods():
     denoise_methods = {
         "wavelet": lambda sig: denoise_wavelet(sig, wavelet="db8"),
         "vmd": lambda sig: vmd_denoise(sig, K=5, alpha=2000),
-        "med": lambda sig: minimum_entropy_deconvolution(sig, MEDParameters(filter_length=64, max_iterations=30)).signal,
+        "med": lambda sig: (
+            minimum_entropy_deconvolution(
+                sig, MEDParameters(filter_length=64, max_iterations=30)
+            ).signal
+        ),
         "wavelet_vmd": lambda sig: cascade_wavelet_vmd(sig)[0],
         "wavelet_lms": lambda sig: cascade_wavelet_lms(sig)[0],
         "emd": lambda sig: emd_denoise(sig, method="emd")[0],
         "ceemdan": lambda sig: emd_denoise(sig, method="ceemdan")[0],
         "savgol": lambda sig: sg_denoise(sig, window_length=51),
         # ── 新增方法 ──
-        "wavelet_packet": lambda sig: wavelet_packet_denoise(sig, wavelet="db8", level=3)[0],
+        "wavelet_packet": lambda sig: wavelet_packet_denoise(
+            sig, wavelet="db8", level=3
+        )[0],
         "ceemdan_wp": lambda sig: _cascade_ceemdan_wp(sig),
         "eemd": lambda sig: emd_denoise(sig, method="eemd")[0],
     }
@@ -103,14 +113,20 @@ def evaluate_denoise_methods():
         noisy_neg5db = add_awgn(signal, -5.0)
 
         for method_name, method_fn in denoise_methods.items():
-            for snr_label, noisy_sig in [("5dB", noisy_5db), ("0dB", noisy_0db), ("-5dB", noisy_neg5db)]:
+            for snr_label, noisy_sig in [
+                ("5dB", noisy_5db),
+                ("0dB", noisy_0db),
+                ("-5dB", noisy_neg5db),
+            ]:
                 try:
                     t0 = time.perf_counter()
                     denoised = method_fn(noisy_sig)
                     exec_time = (time.perf_counter() - t0) * 1000
 
                     if len(denoised) != len(signal):
-                        denoised = np.interp(np.arange(len(signal)), np.arange(len(denoised)), denoised)
+                        denoised = np.interp(
+                            np.arange(len(signal)), np.arange(len(denoised)), denoised
+                        )
 
                     # ── 原有指标 ──
                     snr_before = compute_snr_db(signal, noisy_sig)
@@ -129,25 +145,27 @@ def evaluate_denoise_methods():
                     crest_after = compute_crest_factor(denoised)
                     crest_improvement = crest_before - crest_after
 
-                    results.append({
-                        "case": case_name,
-                        "method": method_name,
-                        "noise_snr": snr_label,
-                        "snr_before_db": round(snr_before, 2),
-                        "snr_after_db": round(snr_after, 2),
-                        "snr_improvement_db": round(snr_after - snr_before, 2),
-                        "mse": round(mse_val, 6),
-                        "correlation": round(corr, 4),
-                        "exec_time_ms": round(exec_time, 2),
-                        "kurtosis_before": round(kurt_before, 2),
-                        "kurtosis_after": round(kurt_after, 2),
-                        "psnr": round(psnr, 2),
-                        "prd": round(prd, 4),
-                        "ncc": round(ncc, 4),
-                        "crest_before": round(crest_before, 4),
-                        "crest_after": round(crest_after, 4),
-                        "crest_improvement": round(crest_improvement, 4),
-                    })
+                    results.append(
+                        {
+                            "case": case_name,
+                            "method": method_name,
+                            "noise_snr": snr_label,
+                            "snr_before_db": round(snr_before, 2),
+                            "snr_after_db": round(snr_after, 2),
+                            "snr_improvement_db": round(snr_after - snr_before, 2),
+                            "mse": round(mse_val, 6),
+                            "correlation": round(corr, 4),
+                            "exec_time_ms": round(exec_time, 2),
+                            "kurtosis_before": round(kurt_before, 2),
+                            "kurtosis_after": round(kurt_after, 2),
+                            "psnr": round(psnr, 2),
+                            "prd": round(prd, 4),
+                            "ncc": round(ncc, 4),
+                            "crest_before": round(crest_before, 4),
+                            "crest_after": round(crest_after, 4),
+                            "crest_improvement": round(crest_improvement, 4),
+                        }
+                    )
                 except Exception as e:
                     print(f"  [ERR] {method_name} @ {case_name}/{snr_label}: {e}")
 
@@ -155,7 +173,9 @@ def evaluate_denoise_methods():
     _plot_denoise_results(results)
 
     report = _generate_denoise_report(results)
-    with open(OUTPUT_DIR / "denoise" / "denoise_evaluation.md", "w", encoding="utf-8") as f:
+    with open(
+        OUTPUT_DIR / "denoise" / "denoise_evaluation.md", "w", encoding="utf-8"
+    ) as f:
         f.write(report)
     print(f"  报告已保存: {OUTPUT_DIR / 'denoise' / 'denoise_evaluation.md'}")
     return results
@@ -188,9 +208,15 @@ def _plot_denoise_results(results: List[Dict]):
         for i, snr in enumerate(snr_levels):
             vals = []
             for m in methods:
-                items = [r for r in results if r["case"]==case_key and r["noise_snr"]==snr and r["method"]==m]
+                items = [
+                    r
+                    for r in results
+                    if r["case"] == case_key
+                    and r["noise_snr"] == snr
+                    and r["method"] == m
+                ]
                 vals.append(items[0]["snr_improvement_db"] if items else 0)
-            ax.bar(x + i*width, vals, width, label=snr)
+            ax.bar(x + i * width, vals, width, label=snr)
         ax.set_ylabel("SNR Improvement (dB)")
         ax.set_title(f"{case_title}")
         ax.set_xticks(x + width)
@@ -202,7 +228,10 @@ def _plot_denoise_results(results: List[Dict]):
     save_figure(fig, "snr_comparison.png", "denoise")
 
     fig, ax = plt.subplots(figsize=(8, 4.5))
-    times = [np.mean([r["exec_time_ms"] for r in results if r["method"]==m]) for m in methods]
+    times = [
+        np.mean([r["exec_time_ms"] for r in results if r["method"] == m])
+        for m in methods
+    ]
     ax.barh(methods, times, color="steelblue")
     ax.set_xlabel("平均执行时间 (ms)")
     ax.set_title("去噪算法执行时间对比")
@@ -218,9 +247,15 @@ def _plot_denoise_results(results: List[Dict]):
         for i, snr in enumerate(snr_levels):
             vals = []
             for m in methods:
-                items = [r for r in results if r["case"]==case_key and r["noise_snr"]==snr and r["method"]==m]
+                items = [
+                    r
+                    for r in results
+                    if r["case"] == case_key
+                    and r["noise_snr"] == snr
+                    and r["method"] == m
+                ]
                 vals.append(items[0]["psnr"] if items else 0)
-            ax.bar(x + i*width, vals, width, label=snr)
+            ax.bar(x + i * width, vals, width, label=snr)
         ax.set_ylabel("PSNR (dB)")
         ax.set_title(f"PSNR — {case_title}")
         ax.set_xticks(x + width)
@@ -231,19 +266,27 @@ def _plot_denoise_results(results: List[Dict]):
 
     # ── 新增: PRD + NCC 对比图 ──
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-    for idx, (metric, ylabel, title_prefix) in enumerate([
-        ("prd", "PRD (%)", "PRD"),
-        ("ncc", "NCC", "NCC"),
-    ]):
+    for idx, (metric, ylabel, title_prefix) in enumerate(
+        [
+            ("prd", "PRD (%)", "PRD"),
+            ("ncc", "NCC", "NCC"),
+        ]
+    ):
         ax = axes[idx]
         x = np.arange(len(methods))
         width = 0.25
         for i, snr in enumerate(snr_levels):
             vals = []
             for m in methods:
-                items = [r for r in results if r["case"]=="outer_fault" and r["noise_snr"]==snr and r["method"]==m]
+                items = [
+                    r
+                    for r in results
+                    if r["case"] == "outer_fault"
+                    and r["noise_snr"] == snr
+                    and r["method"] == m
+                ]
                 vals.append(items[0][metric] if items else 0)
-            ax.bar(x + i*width, vals, width, label=snr)
+            ax.bar(x + i * width, vals, width, label=snr)
         ax.set_ylabel(ylabel)
         ax.set_title(f"{title_prefix} — 外圈故障")
         ax.set_xticks(x + width)
@@ -274,7 +317,6 @@ def _generate_denoise_report(results: List[Dict]) -> str:
         "| wavelet_packet | 小波包能量熵降噪 | 频带能量筛选，齿轮故障频带重分布 |",
         "| ceemdan_wp | CEEMDAN+小波包级联 | 模态混叠抑制+频带筛选，变速工况齿轮 |",
         "| eemd | 集成经验模态分解 | 抗模态混叠，CEEMDAN轻量替代 |",
-
         "",
         "## 2. SNR Improvement 对比",
         "",
@@ -289,16 +331,22 @@ def _generate_denoise_report(results: List[Dict]) -> str:
         for m in methods:
             row = [m]
             for snr in ["5dB", "0dB", "-5dB"]:
-                items = [r for r in results if r["case"]==case and r["method"]==m and r["noise_snr"]==snr]
+                items = [
+                    r
+                    for r in results
+                    if r["case"] == case and r["method"] == m and r["noise_snr"] == snr
+                ]
                 val = items[0]["snr_improvement_db"] if items else 0
                 row.append(f"{val:+.2f} dB")
             lines.append("| " + " | ".join(row) + " |")
         lines.append("")
 
-    lines.extend([
-        "## 3. PSNR 对比",
-        "",
-    ])
+    lines.extend(
+        [
+            "## 3. PSNR 对比",
+            "",
+        ]
+    )
     for case in ["healthy", "outer_fault"]:
         case_title = "健康信号" if case == "healthy" else "外圈故障信号"
         lines.append(f"### {case_title}")
@@ -309,16 +357,22 @@ def _generate_denoise_report(results: List[Dict]) -> str:
         for m in methods:
             row = [m]
             for snr in ["5dB", "0dB", "-5dB"]:
-                items = [r for r in results if r["case"]==case and r["method"]==m and r["noise_snr"]==snr]
+                items = [
+                    r
+                    for r in results
+                    if r["case"] == case and r["method"] == m and r["noise_snr"] == snr
+                ]
                 val = items[0]["psnr"] if items else 0
                 row.append(f"{val:.2f}")
             lines.append("| " + " | ".join(row) + " |")
         lines.append("")
 
-    lines.extend([
-        "## 4. PRD 对比 (越低越好)",
-        "",
-    ])
+    lines.extend(
+        [
+            "## 4. PRD 对比 (越低越好)",
+            "",
+        ]
+    )
     for case in ["healthy", "outer_fault"]:
         case_title = "健康信号" if case == "healthy" else "外圈故障信号"
         lines.append(f"### {case_title}")
@@ -329,16 +383,22 @@ def _generate_denoise_report(results: List[Dict]) -> str:
         for m in methods:
             row = [m]
             for snr in ["5dB", "0dB", "-5dB"]:
-                items = [r for r in results if r["case"]==case and r["method"]==m and r["noise_snr"]==snr]
+                items = [
+                    r
+                    for r in results
+                    if r["case"] == case and r["method"] == m and r["noise_snr"] == snr
+                ]
                 val = items[0]["prd"] if items else 0
                 row.append(f"{val:.4f}%")
             lines.append("| " + " | ".join(row) + " |")
         lines.append("")
 
-    lines.extend([
-        "## 5. NCC 对比 (越接近1越好)",
-        "",
-    ])
+    lines.extend(
+        [
+            "## 5. NCC 对比 (越接近1越好)",
+            "",
+        ]
+    )
     for case in ["healthy", "outer_fault"]:
         case_title = "健康信号" if case == "healthy" else "外圈故障信号"
         lines.append(f"### {case_title}")
@@ -349,18 +409,24 @@ def _generate_denoise_report(results: List[Dict]) -> str:
         for m in methods:
             row = [m]
             for snr in ["5dB", "0dB", "-5dB"]:
-                items = [r for r in results if r["case"]==case and r["method"]==m and r["noise_snr"]==snr]
+                items = [
+                    r
+                    for r in results
+                    if r["case"] == case and r["method"] == m and r["noise_snr"] == snr
+                ]
                 val = items[0]["ncc"] if items else 0
                 row.append(f"{val:.4f}")
             lines.append("| " + " | ".join(row) + " |")
         lines.append("")
 
-    lines.extend([
-        "## 6. Crest Factor Improvement 对比",
-        "",
-        "> Crest Improvement = crest_before - crest_after; 正值表示去噪降低了峰值因子",
-        "",
-    ])
+    lines.extend(
+        [
+            "## 6. Crest Factor Improvement 对比",
+            "",
+            "> Crest Improvement = crest_before - crest_after; 正值表示去噪降低了峰值因子",
+            "",
+        ]
+    )
     for case in ["healthy", "outer_fault"]:
         case_title = "健康信号" if case == "healthy" else "外圈故障信号"
         lines.append(f"### {case_title}")
@@ -371,40 +437,56 @@ def _generate_denoise_report(results: List[Dict]) -> str:
         for m in methods:
             row = [m]
             for snr in ["5dB", "0dB", "-5dB"]:
-                items = [r for r in results if r["case"]==case and r["method"]==m and r["noise_snr"]==snr]
+                items = [
+                    r
+                    for r in results
+                    if r["case"] == case and r["method"] == m and r["noise_snr"] == snr
+                ]
                 val = items[0]["crest_improvement"] if items else 0
                 row.append(f"{val:+.4f}")
             lines.append("| " + " | ".join(row) + " |")
         lines.append("")
 
-    lines.extend([
-        "## 7. 计算效率对比",
-        "",
-        "| 方法 | 平均执行时间 (ms) | 2G服务器适用性 |",
-        "|------|------------------|---------------|",
-    ])
+    lines.extend(
+        [
+            "## 7. 计算效率对比",
+            "",
+            "| 方法 | 平均执行时间 (ms) | 2G服务器适用性 |",
+            "|------|------------------|---------------|",
+        ]
+    )
     methods = sorted(set(r["method"] for r in results))
     for m in methods:
         t = np.mean([r["exec_time_ms"] for r in results if r["method"] == m])
         suitability = "✅" if t < 500 else ("⚠️" if t < 2000 else "❌")
         lines.append(f"| {m} | {t:.1f} | {suitability} |")
 
-    lines.extend([
-        "",
-        "## 8. 结论与建议",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 8. 结论与建议",
+            "",
+        ]
+    )
     if results:
         best_snr = max(results, key=lambda r: r["snr_improvement_db"])
         fastest = min(results, key=lambda r: r["exec_time_ms"])
         best_psnr = max(results, key=lambda r: r["psnr"])
         best_ncc = max(results, key=lambda r: r["ncc"])
         lowest_prd = min(results, key=lambda r: r["prd"])
-        lines.append(f"- **SNR提升最佳**: `{best_snr['method']}` ({best_snr['snr_improvement_db']:+.2f} dB)")
-        lines.append(f"- **PSNR最佳**: `{best_psnr['method']}` ({best_psnr['psnr']:.2f} dB)")
+        lines.append(
+            f"- **SNR提升最佳**: `{best_snr['method']}` ({best_snr['snr_improvement_db']:+.2f} dB)"
+        )
+        lines.append(
+            f"- **PSNR最佳**: `{best_psnr['method']}` ({best_psnr['psnr']:.2f} dB)"
+        )
         lines.append(f"- **NCC最佳**: `{best_ncc['method']}` ({best_ncc['ncc']:.4f})")
-        lines.append(f"- **PRD最低**: `{lowest_prd['method']}` ({lowest_prd['prd']:.4f}%)")
-        lines.append(f"- **速度最快**: `{fastest['method']}` ({fastest['exec_time_ms']:.1f} ms)")
+        lines.append(
+            f"- **PRD最低**: `{lowest_prd['method']}` ({lowest_prd['prd']:.4f}%)"
+        )
+        lines.append(
+            f"- **速度最快**: `{fastest['method']}` ({fastest['exec_time_ms']:.1f} ms)"
+        )
     lines.append("")
     lines.append("### 场景推荐")
     lines.append("")

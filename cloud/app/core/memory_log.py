@@ -5,6 +5,7 @@
 通过自定义 logging.Handler，将应用运行中的关键日志保留在内存中，
 前端 /api/logs/ 接口可直接读取。
 """
+
 import logging
 import sys
 from collections import deque
@@ -22,7 +23,9 @@ class RingBufferHandler(logging.Handler):
         self.capacity = capacity
         self._buffer = deque(maxlen=capacity)
         self.setFormatter(
-            logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+            logging.Formatter(
+                "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+            )
         )
 
     def emit(self, record: logging.LogRecord):
@@ -70,7 +73,10 @@ def setup_memory_logging(capacity: int = 2000, level: int = logging.INFO):
         root.handlers.append(_ring_handler)
 
     # 如果已有 StreamHandler，保持它继续向控制台输出
-    has_stream = any(isinstance(h, logging.StreamHandler) and not isinstance(h, RingBufferHandler) for h in root.handlers)
+    has_stream = any(
+        isinstance(h, logging.StreamHandler) and not isinstance(h, RingBufferHandler)
+        for h in root.handlers
+    )
     if not has_stream:
         console = logging.StreamHandler(sys.stdout)
         console.setLevel(level)

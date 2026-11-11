@@ -6,10 +6,11 @@
     cd cloud
     uv run python tests/diagnosis/regression/test_cpw_robustness.py
 """
+
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 import numpy as np
 from app.services.diagnosis import DiagnosisEngine, BearingMethod
@@ -63,6 +64,7 @@ def test_cpw_with_zero_rot_freq():
 def test_cpw_empty_comb_freqs():
     """CPW: 缺稳定梳状前提必须不可判定，不冒充预白化。"""
     from app.algorithms.bearing.cepstral import CPWEnvelopePipeline
+
     sig = np.random.randn(1024)
     out = CPWEnvelopePipeline().run(sig, 8192, comb_frequencies=[])
     assert out.status == "indeterminate" and out.representation is None
@@ -73,6 +75,7 @@ def test_cpw_empty_comb_freqs():
 def test_cpw_none_in_comb_freqs():
     """CPW: 非法梳状输入不能被静默过滤后继续声称已预白化。"""
     from app.algorithms.bearing.cepstral import CPWEnvelopePipeline
+
     sig = np.random.randn(1024)
     try:
         CPWEnvelopePipeline().run(sig, 8192, comb_frequencies=[None, 25.0, None])

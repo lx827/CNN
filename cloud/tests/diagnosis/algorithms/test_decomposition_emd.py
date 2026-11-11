@@ -1,4 +1,5 @@
 """EMD/EEMD/CEEMDAN 的分解、边界、停止和固定种子测试。"""
+
 import os
 import sys
 import unittest
@@ -30,7 +31,9 @@ class EMDDecompositionTest(unittest.TestCase):
     def test_simple_imfs_and_completeness(self):
         signal, high, low = two_tones()
         result = decompose_emd(
-            signal, FS, EMDParameters(max_imfs=4, max_sifts=100, sd_threshold=0.2),
+            signal,
+            FS,
+            EMDParameters(max_imfs=4, max_sifts=100, sd_threshold=0.2),
         )
         self.assertEqual(result.status, "valid")
         self.assertGreaterEqual(len(result.imfs), 2)
@@ -45,7 +48,8 @@ class EMDDecompositionTest(unittest.TestCase):
         t = np.arange(600) / FS
         signal = np.sin(2 * np.pi * 20.0 * t) + 0.2 * np.linspace(-1.0, 1.0, len(t))
         result = decompose_emd(
-            signal, FS,
+            signal,
+            FS,
             EMDParameters(max_imfs=2, max_sifts=20, sd_threshold=1e6),
         )
         self.assertEqual(result.status, "valid")
@@ -72,7 +76,8 @@ class EMDDecompositionTest(unittest.TestCase):
         signal, _, _ = two_tones(300)
         params = EnsembleParameters(
             emd=EMDParameters(max_imfs=3, max_sifts=40),
-            ensemble_size=4, noise_scale=0.15,
+            ensemble_size=4,
+            noise_scale=0.15,
         )
         first = decompose_eemd(signal, FS, seed=123, parameters=params)
         second = decompose_eemd(signal, FS, seed=123, parameters=params)
@@ -88,7 +93,8 @@ class EMDDecompositionTest(unittest.TestCase):
         signal, _, _ = two_tones(300)
         params = EnsembleParameters(
             emd=EMDParameters(max_imfs=3, max_sifts=40),
-            ensemble_size=4, noise_scale=0.15,
+            ensemble_size=4,
+            noise_scale=0.15,
         )
         first = decompose_ceemdan(signal, FS, seed=321, parameters=params)
         second = decompose_ceemdan(signal, FS, seed=321, parameters=params)

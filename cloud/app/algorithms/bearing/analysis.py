@@ -1,4 +1,5 @@
 """包络谱原始指标提取；本模块不应用故障显著性阈值。"""
+
 from dataclasses import dataclass
 from typing import Optional
 
@@ -127,16 +128,22 @@ def _unique_peak_assignments(
         if len(indices) == 0:
             issues[key] = "target_not_resolvable"
             continue
-        local_indices = [int(index) for index in indices if _is_local_peak(amplitude, int(index))]
+        local_indices = [
+            int(index) for index in indices if _is_local_peak(amplitude, int(index))
+        ]
         local_candidates[key] = local_indices
         for index in local_indices:
-            normalized_distance = abs(float(frequency[index]) - target) / max(tolerance, 1e-12)
-            candidate_pairs.append((
-                -float(amplitude[index]),
-                normalized_distance,
-                index,
-                key,
-            ))
+            normalized_distance = abs(float(frequency[index]) - target) / max(
+                tolerance, 1e-12
+            )
+            candidate_pairs.append(
+                (
+                    -float(amplitude[index]),
+                    normalized_distance,
+                    index,
+                    key,
+                )
+            )
 
     # 全局排序与目标声明顺序无关：先比幅值，再比归一化距离。
     candidate_pairs.sort()
@@ -224,12 +231,15 @@ def _extract_statistics(
                 harmonic_bins.add(index)
         harmonic_ratio = (
             float(np.sum(amplitude[sorted(harmonic_bins)] ** 2)) / power_proxy
-            if harmonic_bins else 0.0
+            if harmonic_bins
+            else 0.0
         )
 
         high_cutoff = max(500.0, rot_frequency_hz * 2.0)
         mask = frequency >= high_cutoff
-        high_ratio = float(np.sum(amplitude[mask] ** 2)) / power_proxy if np.any(mask) else 0.0
+        high_ratio = (
+            float(np.sum(amplitude[mask] ** 2)) / power_proxy if np.any(mask) else 0.0
+        )
     return EnvelopeStatistics(
         peak_snr=peak_snr,
         kurtosis=kurt,
@@ -300,9 +310,10 @@ def analyze_envelope_spectrum(
         for name in ("BPFO", "BPFI", "BSF"):
             target = fault_frequencies[name]
             if name not in issues:
-                energy_ratios[name] = _band_energy(
-                    spectrum, target, max(1.0, target * 0.02)
-                ) / denominator
+                energy_ratios[name] = (
+                    _band_energy(spectrum, target, max(1.0, target * 0.02))
+                    / denominator
+                )
             harmonic_energy = 0.0
             snrs = []
             for harmonic in range(2, 5):
@@ -324,19 +335,23 @@ def analyze_envelope_spectrum(
                     key = f"{name}:SB{order}:{side}"
                     theory, _ = targets[key]
                     if key not in issues:
-                        observable_targets.append(SidebandTarget(
-                            order=order,
-                            side=side,
-                            theory_frequency_hz=theory,
-                        ))
+                        observable_targets.append(
+                            SidebandTarget(
+                                order=order,
+                                side=side,
+                                theory_frequency_hz=theory,
+                            )
+                        )
                     peak = peaks.get(key)
                     if peak is not None:
-                        observations.append(SidebandObservation(
-                            order=order,
-                            side=side,
-                            theory_frequency_hz=theory,
-                            snr=peak.snr,
-                        ))
+                        observations.append(
+                            SidebandObservation(
+                                order=order,
+                                side=side,
+                                theory_frequency_hz=theory,
+                                snr=peak.snr,
+                            )
+                        )
             sidebands[name] = compute_sideband_metrics(
                 tuple(observations),
                 tuple(observable_targets),
@@ -350,14 +365,19 @@ def analyze_envelope_spectrum(
         spectrum=spectrum,
         features=EnvelopeFeatures(
             spectral_power_proxy=power_proxy,
-            spectral_power_unit=(f"({spectrum.amplitude_unit})^2" if "^" in spectrum.amplitude_unit
-                                 else f"{spectrum.amplitude_unit}^2"),
+            spectral_power_unit=(
+                f"({spectrum.amplitude_unit})^2"
+                if "^" in spectrum.amplitude_unit
+                else f"{spectrum.amplitude_unit}^2"
+            ),
             frequency_resolution_hz=resolution,
             statistics=statistics,
             fault_frequency_hz=fault_frequencies,
             energy_ratios=energy_ratios,
             harmonic_energy_ratios=harmonic_ratios,
-            peaks={name: peaks[name] for name in ("BPFO", "BPFI", "BSF") if name in peaks},
+            peaks={
+                name: peaks[name] for name in ("BPFO", "BPFI", "BSF") if name in peaks
+            },
             peak_issues=issues,
             harmonic_snrs=harmonic_snrs,
             bpfi_sideband_snrs=bpfi_sideband_snrs,

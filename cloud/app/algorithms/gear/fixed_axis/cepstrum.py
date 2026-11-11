@@ -1,4 +1,5 @@
 """定轴 CAR 实倒谱表示与幅值比；与 CPW 预白化完全分离。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -65,7 +66,9 @@ def compute_car(
         return MetricValue.unavailable("CAR", "invalid_constant_rot_frequency")
     quefrency = cepstrum.quefrency_s
     amplitude = np.abs(cepstrum.amplitude)
-    targets = np.arange(1, parameters.n_harmonics + 1, dtype=np.float64) / rot_frequency_hz
+    targets = (
+        np.arange(1, parameters.n_harmonics + 1, dtype=np.float64) / rot_frequency_hz
+    )
     maximum_quefrency = float(quefrency[-1])
     if targets[-1] + parameters.tolerance_s > maximum_quefrency:
         return MetricValue.unavailable(
@@ -81,7 +84,9 @@ def compute_car(
         mask = np.abs(quefrency - target) <= parameters.tolerance_s
         if not np.any(mask):
             return MetricValue.unavailable(
-                "CAR", "target_quefrency_not_resolvable", target_quefrency_s=float(target),
+                "CAR",
+                "target_quefrency_not_resolvable",
+                target_quefrency_s=float(target),
             )
         excluded |= mask
         local_indices = np.flatnonzero(mask)
@@ -90,7 +95,9 @@ def compute_car(
         peak_quefrencies.append(float(quefrency[local_peak]))
     background_mask = (quefrency > targets[-1] + parameters.tolerance_s) & ~excluded
     if np.sum(background_mask) < 8:
-        return MetricValue.unavailable("CAR", "insufficient_independent_cepstrum_background")
+        return MetricValue.unavailable(
+            "CAR", "insufficient_independent_cepstrum_background"
+        )
     background = float(np.median(amplitude[background_mask]))
     if background <= np.finfo(np.float64).tiny:
         return MetricValue.unavailable("CAR", "zero_cepstrum_background")

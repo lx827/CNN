@@ -9,6 +9,7 @@
     - health_trend/hi_trajectory.png (健康度轨迹曲线)
     - health_trend/deduction_monotonicity.png (扣分单调性验证)
 """
+
 import sys
 import time
 from pathlib import Path
@@ -20,21 +21,33 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 
 from app.services.diagnosis import (
-    DiagnosisEngine, GearMethod, DiagnosisStrategy, DenoiseMethod,
+    DiagnosisEngine,
+    GearMethod,
+    DiagnosisStrategy,
+    DenoiseMethod,
 )
 from app.services.diagnosis.health_score_continuous import (
-    sigmoid_deduction, cascade_deduction, multi_threshold_deduction,
+    sigmoid_deduction,
+    cascade_deduction,
+    multi_threshold_deduction,
 )
 from app.services.diagnosis.health_score import _compute_health_score
 
 from .config import (
-    OUTPUT_DIR, SAMPLE_RATE, WTGEARBOX_GEAR, MESH_FREQ_COEFF,
+    OUTPUT_DIR,
+    SAMPLE_RATE,
+    WTGEARBOX_GEAR,
+    MESH_FREQ_COEFF,
 )
 from .datasets import get_wtgearbox_files
 from .utils import (
-    load_npy, save_cache, save_figure,
-    compute_monotonicity, compute_trendability,
-    compute_prognosability, compute_hi_robustness,
+    load_npy,
+    save_cache,
+    save_figure,
+    compute_monotonicity,
+    compute_trendability,
+    compute_prognosability,
+    compute_hi_robustness,
 )
 
 import matplotlib.pyplot as plt
@@ -89,9 +102,15 @@ def evaluate_health_trend():
 
     print(f"  报告已保存: {trend_dir / 'monotonicity_report.md'}")
     print(f"  PHM 指标:")
-    print(f"    Monotonicity     = {phm_metrics['monotonicity']:.4f}  (目标 ≥ {TARGET_MONOTONICITY})")
-    print(f"    Trendability     = {phm_metrics['trendability']:.4f}  (目标 |r| ≥ {TARGET_TRENDABILITY})")
-    print(f"    Prognosability   = {phm_metrics['prognosability']:.4f}  (目标 ≥ {TARGET_PROGNOSABILITY})")
+    print(
+        f"    Monotonicity     = {phm_metrics['monotonicity']:.4f}  (目标 ≥ {TARGET_MONOTONICITY})"
+    )
+    print(
+        f"    Trendability     = {phm_metrics['trendability']:.4f}  (目标 |r| ≥ {TARGET_TRENDABILITY})"
+    )
+    print(
+        f"    Prognosability   = {phm_metrics['prognosability']:.4f}  (目标 ≥ {TARGET_PROGNOSABILITY})"
+    )
     print(f"    HI Robustness    = {phm_metrics['hi_robustness']:.4f}")
 
     return {
@@ -104,6 +123,7 @@ def evaluate_health_trend():
 # ═══════════════════════════════════════════════════════════
 # Step 1: 伪退化序列构造
 # ═══════════════════════════════════════════════════════════
+
 
 def _construct_degradation_sequence(wt_files) -> List[Dict]:
     """
@@ -176,7 +196,9 @@ def _construct_degradation_sequence(wt_files) -> List[Dict]:
                     gear_teeth=WTGEARBOX_GEAR,
                 )
                 result = engine.analyze_comprehensive(
-                    signal, SAMPLE_RATE, rot_freq=rot_freq,
+                    signal,
+                    SAMPLE_RATE,
+                    rot_freq=rot_freq,
                 )
                 hs = result.get("health_score", 100)
             except Exception as e:
@@ -187,14 +209,16 @@ def _construct_degradation_sequence(wt_files) -> List[Dict]:
         mean_hs = float(np.mean(health_scores))
         std_hs = float(np.std(health_scores)) if len(health_scores) > 1 else 0.0
 
-        degradation_data.append({
-            "severity_idx": severity_idx,
-            "label": label,
-            "health_scores": health_scores,
-            "mean_hs": mean_hs,
-            "std_hs": std_hs,
-            "n_samples": len(health_scores),
-        })
+        degradation_data.append(
+            {
+                "severity_idx": severity_idx,
+                "label": label,
+                "health_scores": health_scores,
+                "mean_hs": mean_hs,
+                "std_hs": std_hs,
+                "n_samples": len(health_scores),
+            }
+        )
 
     # 检查单调性方向：严重度增加 → 健康度应下降
     # 如果不是严格单调下降，记录但不中断
@@ -202,8 +226,10 @@ def _construct_degradation_sequence(wt_files) -> List[Dict]:
         prev_hs = degradation_data[i - 1]["mean_hs"]
         curr_hs = degradation_data[i]["mean_hs"]
         if curr_hs > prev_hs:
-            print(f"  [WARN] 非单调: {degradation_data[i-1]['label']}={prev_hs:.1f} → "
-                  f"{degradation_data[i]['label']}={curr_hs:.1f} (健康度反而上升)")
+            print(
+                f"  [WARN] 非单调: {degradation_data[i - 1]['label']}={prev_hs:.1f} → "
+                f"{degradation_data[i]['label']}={curr_hs:.1f} (健康度反而上升)"
+            )
 
     return degradation_data
 
@@ -211,6 +237,7 @@ def _construct_degradation_sequence(wt_files) -> List[Dict]:
 # ═══════════════════════════════════════════════════════════
 # Step 2: PHM 指标计算
 # ═══════════════════════════════════════════════════════════
+
 
 def _compute_phm_metrics(degradation_data: List[Dict]) -> Dict[str, float]:
     """
@@ -266,6 +293,7 @@ def _compute_phm_metrics(degradation_data: List[Dict]) -> Dict[str, float]:
 
     # 补充计算: Spearman 秩相关（单调趋势的秩版本）
     from scipy import stats as sp_stats
+
     if len(hi_series) >= 3:
         spearman_r, spearman_p = sp_stats.spearmanr(hi_series, time_points)
     else:
@@ -296,6 +324,7 @@ def _compute_phm_metrics(degradation_data: List[Dict]) -> Dict[str, float]:
 # Step 3: 扣分函数单调性验证
 # ═══════════════════════════════════════════════════════════
 
+
 def _validate_deduction_monotonicity() -> Dict:
     """
     验证 sigmoid_deduction / cascade_deduction 在特征值递增时单调递增。
@@ -311,7 +340,9 @@ def _validate_deduction_monotonicity() -> Dict:
 
     # ─── sigmoid 单调性 ───
     sig_values = np.linspace(0, 30, 61)
-    sig_deductions = [sigmoid_deduction(v, threshold=5.0, max_deduction=15.0) for v in sig_values]
+    sig_deductions = [
+        sigmoid_deduction(v, threshold=5.0, max_deduction=15.0) for v in sig_values
+    ]
     # 检查单调递增
     sig_monotonic = all(
         sig_deductions[i] <= sig_deductions[i + 1] + 1e-10
@@ -346,8 +377,7 @@ def _validate_deduction_monotonicity() -> Dict:
     # ─── 齿轮峭度 cascade 单调性 ───
     kurt_gear_values = np.linspace(0, 30, 61)
     kurt_gear_deds = [
-        cascade_deduction(v, [10, 12, 20], [15, 25, 40])
-        for v in kurt_gear_values
+        cascade_deduction(v, [10, 12, 20], [15, 25, 40]) for v in kurt_gear_values
     ]
     kurt_gear_mono = all(
         kurt_gear_deds[i] <= kurt_gear_deds[i + 1] + 1e-10
@@ -363,13 +393,9 @@ def _validate_deduction_monotonicity() -> Dict:
 
     # ─── 峰值因子 cascade 单调性 ───
     crest_values = np.linspace(0, 20, 41)
-    crest_deds = [
-        cascade_deduction(v, [7, 10, 15], [5, 10, 15])
-        for v in crest_values
-    ]
+    crest_deds = [cascade_deduction(v, [7, 10, 15], [5, 10, 15]) for v in crest_values]
     crest_mono = all(
-        crest_deds[i] <= crest_deds[i + 1] + 1e-10
-        for i in range(len(crest_deds) - 1)
+        crest_deds[i] <= crest_deds[i + 1] + 1e-10 for i in range(len(crest_deds) - 1)
     )
     results["cascade_crest_factor"] = {
         "values": list(crest_values),
@@ -382,8 +408,7 @@ def _validate_deduction_monotonicity() -> Dict:
     # ─── 齿轮峰值因子 cascade 单调性 ───
     crest_gear_values = np.linspace(0, 20, 41)
     crest_gear_deds = [
-        cascade_deduction(v, [12, 15], [10, 15])
-        for v in crest_gear_values
+        cascade_deduction(v, [12, 15], [10, 15]) for v in crest_gear_values
     ]
     crest_gear_mono = all(
         crest_gear_deds[i] <= crest_gear_deds[i + 1] + 1e-10
@@ -402,7 +427,9 @@ def _validate_deduction_monotonicity() -> Dict:
     results["summary"] = {
         "all_monotonic": all_monotonic,
         "n_tests": len(results) - 1,  # 排除 summary 本身
-        "n_passed": sum(1 for k, r in results.items() if k != "summary" and r["monotonic"]),
+        "n_passed": sum(
+            1 for k, r in results.items() if k != "summary" and r["monotonic"]
+        ),
     }
 
     return results
@@ -411,6 +438,7 @@ def _validate_deduction_monotonicity() -> Dict:
 # ═══════════════════════════════════════════════════════════
 # Step 4: 图表生成
 # ═══════════════════════════════════════════════════════════
+
 
 def _save_trajectory_plot(degradation_data: List[Dict], trend_dir: Path):
     """
@@ -431,9 +459,14 @@ def _save_trajectory_plot(degradation_data: List[Dict], trend_dir: Path):
 
     # 健康度轨迹 ± 标准差阴影
     ax.errorbar(
-        severity_indices, mean_hs, yerr=std_hs,
-        marker="o", markersize=8, capsize=4,
-        linewidth=2, color="#2196F3",
+        severity_indices,
+        mean_hs,
+        yerr=std_hs,
+        marker="o",
+        markersize=8,
+        capsize=4,
+        linewidth=2,
+        color="#2196F3",
         label="健康度轨迹 (mean ± std)",
     )
 
@@ -447,8 +480,14 @@ def _save_trajectory_plot(degradation_data: List[Dict], trend_dir: Path):
         slope, intercept = np.polyfit(severity_indices, mean_hs, 1)
         trend_x = np.linspace(min(severity_indices), max(severity_indices), 50)
         trend_y = slope * trend_x + intercept
-        ax.plot(trend_x, trend_y, "--", color="#FF5722", linewidth=1.5,
-                label=f"线性趋势 (slope={slope:.1f})")
+        ax.plot(
+            trend_x,
+            trend_y,
+            "--",
+            color="#FF5722",
+            linewidth=1.5,
+            label=f"线性趋势 (slope={slope:.1f})",
+        )
 
     # 健康阈值线
     ax.axhline(y=85, color="#4CAF50", linestyle=":", alpha=0.6, label="健康阈值 (85)")
@@ -466,8 +505,15 @@ def _save_trajectory_plot(degradation_data: List[Dict], trend_dir: Path):
 
     # 在每个点旁标注数值
     for i, (xi, yi) in enumerate(zip(severity_indices, mean_hs)):
-        ax.annotate(f"{yi:.0f}", (xi, yi), textcoords="offset points",
-                    xytext=(0, 12), ha="center", fontsize=9, color="#1565C0")
+        ax.annotate(
+            f"{yi:.0f}",
+            (xi, yi),
+            textcoords="offset points",
+            xytext=(0, 12),
+            ha="center",
+            fontsize=9,
+            color="#1565C0",
+        )
 
     plt.tight_layout()
     fig.savefig(trend_dir / "hi_trajectory.png", dpi=150, bbox_inches="tight")
@@ -527,8 +573,13 @@ def _save_deduction_monotonicity_plot(deduction_results: Dict, trend_dir: Path):
 
         for th in thresholds:
             ax.axvline(x=th, color="#9E9E9E", linestyle="--", alpha=0.5)
-            ax.annotate(f"θ={th}", (th, ax.get_ylim()[1] * 0.95),
-                        fontsize=8, color="#757575", ha="center")
+            ax.annotate(
+                f"θ={th}",
+                (th, ax.get_ylim()[1] * 0.95),
+                fontsize=8,
+                color="#757575",
+                ha="center",
+            )
 
     # 隐藏空白子图
     for idx in range(n_tests, len(axes_flat)):
@@ -553,6 +604,7 @@ def _save_deduction_monotonicity_plot(deduction_results: Dict, trend_dir: Path):
 # ═══════════════════════════════════════════════════════════
 # 报告生成
 # ═══════════════════════════════════════════════════════════
+
 
 def _generate_report(
     degradation_data: List[Dict],
@@ -592,13 +644,15 @@ def _generate_report(
         )
 
     # ═══════ PHM 指标 ═══════
-    lines.extend([
-        "",
-        "## 2. PHM 趋势指标",
-        "",
-        "| 指标 | 值 | 目标 | 达标 | 说明 |",
-        "|------|-----|------|------|------|",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 2. PHM 趋势指标",
+            "",
+            "| 指标 | 值 | 目标 | 达标 | 说明 |",
+            "|------|-----|------|------|------|",
+        ]
+    )
 
     mono = phm_metrics["monotonicity"]
     trend = phm_metrics["trendability"]
@@ -624,36 +678,33 @@ def _generate_report(
         f"| Prognosability | {progn:.4f} | ≥ {TARGET_PROGNOSABILITY} | {progn_pass} "
         f"| 终端分散度（可预测性） |"
     )
+    lines.append(f"| HI Robustness | {robust:.4f} | — | — | HI 对随机波动的鲁棒性 |")
     lines.append(
-        f"| HI Robustness | {robust:.4f} | — | — "
-        f"| HI 对随机波动的鲁棒性 |"
+        f"| Spearman ρ | {spear_r:.4f} | — | — | 秩单调相关系数 (p={spear_p:.4f}) |"
     )
-    lines.append(
-        f"| Spearman ρ | {spear_r:.4f} | — | — "
-        f"| 秩单调相关系数 (p={spear_p:.4f}) |"
-    )
-    lines.append(
-        f"| 线性斜率 | {slope:.2f} | — | — "
-        f"| 每严重度等级的健康度下降量 |"
-    )
+    lines.append(f"| 线性斜率 | {slope:.2f} | — | — | 每严重度等级的健康度下降量 |")
 
     # ═══════ 扣分单调性 ═══════
-    lines.extend([
-        "",
-        "## 3. 扣分函数单调性验证",
-        "",
-        "验证 sigmoid_deduction / cascade_deduction 在特征值递增时单调递增，"
-        "确保健康度不会因特征恶化而意外上升。",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 3. 扣分函数单调性验证",
+            "",
+            "验证 sigmoid_deduction / cascade_deduction 在特征值递增时单调递增，"
+            "确保健康度不会因特征恶化而意外上升。",
+            "",
+        ]
+    )
 
     summary = deduction_results.get("summary", {})
     all_mono = summary.get("all_monotonic", False)
     n_passed = summary.get("n_passed", 0)
     n_total = summary.get("n_tests", 0)
 
-    lines.append(f"**结果: {n_passed}/{n_total} 测试通过** — "
-                 f"{'全部单调 ✓' if all_mono else '存在非单调 ✗'}")
+    lines.append(
+        f"**结果: {n_passed}/{n_total} 测试通过** — "
+        f"{'全部单调 ✓' if all_mono else '存在非单调 ✗'}"
+    )
     lines.append("")
     lines.append("| 测试项 | 单调性 | 最大扣分 | 最小扣分 |")
     lines.append("|--------|--------|----------|----------|")
@@ -668,71 +719,95 @@ def _generate_report(
         )
 
     # ═══════ 结论与建议 ═══════
-    lines.extend([
-        "",
-        "## 4. 结论与建议",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 4. 结论与建议",
+            "",
+        ]
+    )
 
     if mono >= TARGET_MONOTONICITY:
-        lines.append("- **Monotonicity 达标**: 健康度随故障严重度单调下降，适合趋势监控")
+        lines.append(
+            "- **Monotonicity 达标**: 健康度随故障严重度单调下降，适合趋势监控"
+        )
     else:
-        lines.append(f"- **Monotonicity 未达标** ({mono:.4f} < {TARGET_MONOTONICITY}): "
-                      "建议优化扣分权重或增加门控条件")
+        lines.append(
+            f"- **Monotonicity 未达标** ({mono:.4f} < {TARGET_MONOTONICITY}): "
+            "建议优化扣分权重或增加门控条件"
+        )
 
     if trend >= TARGET_TRENDABILITY:
         lines.append("- **Trendability 达标**: HI 与退化等级强相关，线性趋势明显")
     else:
-        lines.append(f"- **Trendability 未达标** ({trend:.4f} < {TARGET_TRENDABILITY}): "
-                      "建议调整扣分阈值或增加特征维度")
+        lines.append(
+            f"- **Trendability 未达标** ({trend:.4f} < {TARGET_TRENDABILITY}): "
+            "建议调整扣分阈值或增加特征维度"
+        )
 
     if progn >= TARGET_PROGNOSABILITY:
         lines.append("- **Prognosability 达标**: 终端分散度低，预后预测可靠")
     else:
-        lines.append(f"- **Prognosability 未达标** ({progn:.4f} < {TARGET_PROGNOSABILITY}): "
-                      "建议增加同工况样本数以降低终端分散")
+        lines.append(
+            f"- **Prognosability 未达标** ({progn:.4f} < {TARGET_PROGNOSABILITY}): "
+            "建议增加同工况样本数以降低终端分散"
+        )
 
     if all_mono:
-        lines.append("- **扣分函数全部单调**: sigmoid/cascade 连续扣分无跳变/回退，"
-                      "健康度评分在特征恶化时稳定下降")
+        lines.append(
+            "- **扣分函数全部单调**: sigmoid/cascade 连续扣分无跳变/回退，"
+            "健康度评分在特征恶化时稳定下降"
+        )
     else:
         lines.append("- **扣分函数存在非单调**: 需检查对应阈值/斜率参数")
 
     # 趋势适用性建议
-    lines.extend([
-        "",
-        "### 4.1 趋势监控适用性判定",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "### 4.1 趋势监控适用性判定",
+            "",
+        ]
+    )
 
     if mono >= TARGET_MONOTONICITY and trend >= TARGET_TRENDABILITY:
-        lines.append("**判定: 适合趋势监控** — HI 指标满足单调性和趋势性要求，"
-                      "可用于在线健康度退化趋势跟踪和预警阈值设定。")
+        lines.append(
+            "**判定: 适合趋势监控** — HI 指标满足单调性和趋势性要求，"
+            "可用于在线健康度退化趋势跟踪和预警阈值设定。"
+        )
     elif mono >= 0.6 and trend >= 0.7:
-        lines.append("**判定: 有限适用** — HI 趋势性尚可但不够稳定，"
-                      "建议结合多指标融合或加权平滑后使用。")
+        lines.append(
+            "**判定: 有限适用** — HI 趋势性尚可但不够稳定，"
+            "建议结合多指标融合或加权平滑后使用。"
+        )
     else:
-        lines.append("**判定: 不适合趋势监控** — HI 单调性/趋势性不足，"
-                      "仅适合单点故障检测，不建议用于退化预测。")
+        lines.append(
+            "**判定: 不适合趋势监控** — HI 单调性/趋势性不足，"
+            "仅适合单点故障检测，不建议用于退化预测。"
+        )
 
     # 预后预测适用性
     if progn >= TARGET_PROGNOSABILITY:
         lines.append("**判定: 适合预后预测** — 终端分散度低，RUL 预估可行。")
     else:
-        lines.append("**判定: 预后预测需谨慎** — 终端分散度较高，"
-                      "RUL 预估不确定性大，建议增加历史数据基线。")
+        lines.append(
+            "**判定: 预后预测需谨慎** — 终端分散度较高，"
+            "RUL 预估不确定性大，建议增加历史数据基线。"
+        )
 
-    lines.extend([
-        "",
-        "### 4.2 场景推荐",
-        "",
-        "| 场景 | 适用性 | 推荐做法 |",
-        "|------|--------|---------|",
-        "| 在线趋势监控 | 单调性+趋势性 | 健康度滑动平均 + 阈值预警 |",
-        "| RUL 预测 | 预后性+趋势性 | 双参数指数退化模型 |",
-        "| 单点故障检测 | 健康阈值 < 85 | 健康度二分类 + 严重度标签 |",
-        "| 定期巡检 | 全指标 | 扣分明细分析 + 维护建议 |",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "### 4.2 场景推荐",
+            "",
+            "| 场景 | 适用性 | 推荐做法 |",
+            "|------|--------|---------|",
+            "| 在线趋势监控 | 单调性+趋势性 | 健康度滑动平均 + 阈值预警 |",
+            "| RUL 预测 | 预后性+趋势性 | 双参数指数退化模型 |",
+            "| 单点故障检测 | 健康阈值 < 85 | 健康度二分类 + 严重度标签 |",
+            "| 定期巡检 | 全指标 | 扣分明细分析 + 维护建议 |",
+            "",
+        ]
+    )
 
     return "\n".join(lines)

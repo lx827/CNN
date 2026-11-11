@@ -1,6 +1,7 @@
 """
 评价框架通用工具函数
 """
+
 import json
 import time
 import warnings
@@ -14,10 +15,18 @@ warnings.filterwarnings("ignore")
 
 # matplotlib设置
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "WenQuanYi Micro Hei",
-                                    "Noto Sans CJK SC", "PingFang SC", "DejaVu Sans"]
+
+plt.rcParams["font.sans-serif"] = [
+    "SimHei",
+    "Microsoft YaHei",
+    "WenQuanYi Micro Hei",
+    "Noto Sans CJK SC",
+    "PingFang SC",
+    "DejaVu Sans",
+]
 plt.rcParams["axes.unicode_minus"] = False
 
 from .config import CACHE_DIR, OUTPUT_DIR, HEALTH_THRESHOLD, MAX_SAMPLES
@@ -27,11 +36,12 @@ from .config import CACHE_DIR, OUTPUT_DIR, HEALTH_THRESHOLD, MAX_SAMPLES
 # 信号质量指标
 # ═══════════════════════════════════════════════════════════
 
+
 def compute_snr_db(clean: np.ndarray, noisy: np.ndarray) -> float:
     """计算信噪比 (dB)"""
     noise = noisy - clean
-    signal_power = np.mean(clean ** 2)
-    noise_power = np.mean(noise ** 2)
+    signal_power = np.mean(clean**2)
+    noise_power = np.mean(noise**2)
     if noise_power < 1e-18:
         return 100.0
     return 10.0 * np.log10(signal_power / noise_power)
@@ -45,14 +55,14 @@ def compute_mse(clean: np.ndarray, estimated: np.ndarray) -> float:
 def compute_correlation(clean: np.ndarray, estimated: np.ndarray) -> float:
     """计算Pearson相关系数"""
     if len(clean) != len(estimated):
-        estimated = estimated[:len(clean)]
+        estimated = estimated[: len(clean)]
     c = np.corrcoef(clean, estimated)[0, 1]
     return float(c) if not np.isnan(c) else 0.0
 
 
 def add_awgn(signal: np.ndarray, target_snr_db: float) -> np.ndarray:
     """添加加性高斯白噪声"""
-    sig_power = np.mean(signal ** 2)
+    sig_power = np.mean(signal**2)
     noise_power = sig_power / (10 ** (target_snr_db / 10.0))
     noise = np.random.normal(0, np.sqrt(noise_power), len(signal))
     return signal + noise
@@ -61,6 +71,7 @@ def add_awgn(signal: np.ndarray, target_snr_db: float) -> np.ndarray:
 # ═══════════════════════════════════════════════════════════
 # 谱分析辅助
 # ═══════════════════════════════════════════════════════════
+
 
 def estimate_fault_freq_snr(envelope_freq, envelope_amp, rot_freq, target_freq_coeff):
     """估计特定故障频率在包络谱中的SNR
@@ -95,7 +106,9 @@ def estimate_fault_freq_snr(envelope_freq, envelope_amp, rot_freq, target_freq_c
     return float(peak_amp / background)
 
 
-def count_harmonics(envelope_freq, envelope_amp, rot_freq, max_harmonics=5, threshold=2.0):
+def count_harmonics(
+    envelope_freq, envelope_amp, rot_freq, max_harmonics=5, threshold=2.0
+):
     """计数检出的谐波数"""
     if rot_freq is None or rot_freq <= 0:
         return 0
@@ -134,12 +147,15 @@ def compute_peak_clarity(envelope_amp):
 # 分类与统计
 # ═══════════════════════════════════════════════════════════
 
+
 def health_score_to_binary(hs: int, threshold: int = HEALTH_THRESHOLD) -> int:
     """健康度转二分类：1=异常, 0=正常"""
     return 1 if hs < threshold else 0
 
 
-def compute_classification_metrics(health_scores: Dict[str, List[int]]) -> Dict[str, Any]:
+def compute_classification_metrics(
+    health_scores: Dict[str, List[int]],
+) -> Dict[str, Any]:
     """
     从健康度分数计算分类指标
     health_scores: {label: [hs1, hs2, ...]}
@@ -164,7 +180,11 @@ def compute_classification_metrics(health_scores: Dict[str, List[int]]) -> Dict[
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall) > 0
+        else 0.0
+    )
     accuracy = (tp + tn) / len(y_true) if len(y_true) > 0 else 0.0
 
     healthy_mean = np.mean(healthy_scores)
@@ -207,8 +227,9 @@ def compute_auc_manual(y_true: List[int], y_scores: List[float]) -> float:
     if not pos_scores or not neg_scores:
         return 0.5
     # Mann-Whitney U
-    u_stat = sum(1 for ps in pos_scores for ns in neg_scores if ps > ns) + \
-             0.5 * sum(1 for ps in pos_scores for ns in neg_scores if ps == ns)
+    u_stat = sum(1 for ps in pos_scores for ns in neg_scores if ps > ns) + 0.5 * sum(
+        1 for ps in pos_scores for ns in neg_scores if ps == ns
+    )
     return u_stat / (len(pos_scores) * len(neg_scores))
 
 
@@ -221,12 +242,13 @@ def compute_excess_kurtosis(signal: np.ndarray) -> float:
     sigma2 = np.var(x)
     if sigma2 < 1e-18:
         return 0.0
-    return float(np.mean((x - mu) ** 4) / (sigma2 ** 2) - 3.0)
+    return float(np.mean((x - mu) ** 4) / (sigma2**2) - 3.0)
 
 
 # ═══════════════════════════════════════════════════════════
 # 缓存与IO
 # ═══════════════════════════════════════════════════════════
+
 
 def cache_path(name: str) -> Path:
     return CACHE_DIR / f"{name}.json"
@@ -276,7 +298,10 @@ def load_npy(path: Path, max_samples: int = MAX_SAMPLES) -> np.ndarray:
 # 论文级分类指标（新增）
 # ═══════════════════════════════════════════════════════════
 
-def compute_confusion_matrix(y_true: List[str], y_pred: List[str], labels: List[str]) -> np.ndarray:
+
+def compute_confusion_matrix(
+    y_true: List[str], y_pred: List[str], labels: List[str]
+) -> np.ndarray:
     """计算多分类混淆矩阵"""
     n = len(labels)
     cm = np.zeros((n, n), dtype=int)
@@ -289,7 +314,9 @@ def compute_confusion_matrix(y_true: List[str], y_pred: List[str], labels: List[
     return cm
 
 
-def compute_balanced_accuracy(y_true: List[str], y_pred: List[str], labels: List[str]) -> float:
+def compute_balanced_accuracy(
+    y_true: List[str], y_pred: List[str], labels: List[str]
+) -> float:
     """计算 Balanced Accuracy = (TPR + TNR) / 2 的多分类平均"""
     cm = compute_confusion_matrix(y_true, y_pred, labels)
     cm_total = int(cm.sum())
@@ -308,7 +335,9 @@ def compute_balanced_accuracy(y_true: List[str], y_pred: List[str], labels: List
     return float(np.mean(per_class_tpr) + np.mean(per_class_tnr)) / 2
 
 
-def compute_cohen_kappa(y_true: List[str], y_pred: List[str], labels: List[str]) -> float:
+def compute_cohen_kappa(
+    y_true: List[str], y_pred: List[str], labels: List[str]
+) -> float:
     """计算 Cohen's Kappa = (p_o - p_e) / (1 - p_e)"""
     cm = compute_confusion_matrix(y_true, y_pred, labels)
     total = int(cm.sum())
@@ -360,7 +389,9 @@ def compute_macro_f1(y_true: List[str], y_pred: List[str], labels: List[str]) ->
     return float(np.mean(f1s))
 
 
-def compute_weighted_f1(y_true: List[str], y_pred: List[str], labels: List[str]) -> float:
+def compute_weighted_f1(
+    y_true: List[str], y_pred: List[str], labels: List[str]
+) -> float:
     """计算 Weighted-F1 = 按样本数加权平均"""
     cm = compute_confusion_matrix(y_true, y_pred, labels)
     total = int(cm.sum())
@@ -381,7 +412,9 @@ def compute_weighted_f1(y_true: List[str], y_pred: List[str], labels: List[str])
     return float(sum(f * w for f, w in zip(f1s, weights)))
 
 
-def compute_fdr_far_mdr_fia(y_true: List[str], y_pred: List[str], labels: List[str]) -> Dict[str, float]:
+def compute_fdr_far_mdr_fia(
+    y_true: List[str], y_pred: List[str], labels: List[str]
+) -> Dict[str, float]:
     """计算 FDD 专用指标: FDR, FAR, MDR, FIA, Detection Score"""
     healthy_label = "healthy"
     fault_labels = [l for l in labels if l != healthy_label]
@@ -390,9 +423,21 @@ def compute_fdr_far_mdr_fia(y_true: List[str], y_pred: List[str], labels: List[s
 
     # 全局二分类视角
     tp = sum(int(cm[i, i]) for i, l in enumerate(labels) if l != healthy_label)
-    fn = sum(int(cm[i, :].sum()) - int(cm[i, i]) for i, l in enumerate(labels) if l != healthy_label)
-    fp = sum(int(cm[:, i].sum()) - int(cm[i, i]) for i, l in enumerate(labels) if l != healthy_label)
-    tn = int(cm[labels.index(healthy_label), labels.index(healthy_label)]) if healthy_label in labels else 0
+    fn = sum(
+        int(cm[i, :].sum()) - int(cm[i, i])
+        for i, l in enumerate(labels)
+        if l != healthy_label
+    )
+    fp = sum(
+        int(cm[:, i].sum()) - int(cm[i, i])
+        for i, l in enumerate(labels)
+        if l != healthy_label
+    )
+    tn = (
+        int(cm[labels.index(healthy_label), labels.index(healthy_label)])
+        if healthy_label in labels
+        else 0
+    )
 
     fdr = float(tp) / float(tp + fn) if (tp + fn) > 0 else 0.0
     far = float(fp) / float(fp + tn) if (fp + tn) > 0 else 0.0
@@ -413,6 +458,7 @@ def compute_fdr_far_mdr_fia(y_true: List[str], y_pred: List[str], labels: List[s
 # ═══════════════════════════════════════════════════════════
 # ROC / PR 曲线计算
 # ═══════════════════════════════════════════════════════════
+
 
 def compute_roc_curve(y_true_binary: List[int], scores: List[float]) -> Dict[str, Any]:
     """计算单类 ROC 曲线 (FPR, TPR, AUC)"""
@@ -475,12 +521,18 @@ def compute_pr_curve(y_true_binary: List[int], scores: List[float]) -> Dict[str,
     # AUC-PR
     auc = 0.0
     for i in range(1, len(recall_list)):
-        auc += (recall_list[i] - recall_list[i - 1]) * (precision_list[i] + precision_list[i - 1]) / 2
+        auc += (
+            (recall_list[i] - recall_list[i - 1])
+            * (precision_list[i] + precision_list[i - 1])
+            / 2
+        )
 
     return {"recall": recall_list, "precision": precision_list, "auc": round(auc, 4)}
 
 
-def compute_multiclass_roc_pr(y_true: List[str], scores: List[float], labels: List[str]) -> Dict[str, Any]:
+def compute_multiclass_roc_pr(
+    y_true: List[str], scores: List[float], labels: List[str]
+) -> Dict[str, Any]:
     """计算多分类 One-vs-Rest ROC 和 PR 曲线"""
     result = {"roc": {}, "pr": {}, "macro_auc_roc": 0.0, "macro_auc_pr": 0.0}
     auc_roc_list = []
@@ -503,6 +555,7 @@ def compute_multiclass_roc_pr(y_true: List[str], scores: List[float], labels: Li
 # 去噪补充指标
 # ═══════════════════════════════════════════════════════════
 
+
 def compute_psnr(clean: np.ndarray, denoised: np.ndarray) -> float:
     """计算 PSNR = 20 * log10(max(|x|) / sqrt(MSE))"""
     mse = float(np.mean((clean - denoised) ** 2))
@@ -517,7 +570,7 @@ def compute_psnr(clean: np.ndarray, denoised: np.ndarray) -> float:
 def compute_prd(clean: np.ndarray, denoised: np.ndarray) -> float:
     """计算 PRD (百分比均方根差) = sqrt(sum((d-c)^2)) / sqrt(sum(c^2)) * 100"""
     diff_sq = float(np.sum((clean - denoised) ** 2))
-    clean_sq = float(np.sum(clean ** 2))
+    clean_sq = float(np.sum(clean**2))
     if clean_sq < 1e-18:
         return 100.0
     return float(np.sqrt(diff_sq / clean_sq) * 100)
@@ -526,12 +579,12 @@ def compute_prd(clean: np.ndarray, denoised: np.ndarray) -> float:
 def compute_ncc(clean: np.ndarray, denoised: np.ndarray) -> float:
     """计算归一化互相关 NCC"""
     if len(clean) != len(denoised):
-        denoised = denoised[:len(clean)]
+        denoised = denoised[: len(clean)]
     c_mean = np.mean(clean)
     d_mean = np.mean(denoised)
     c_centered = clean - c_mean
     d_centered = denoised - d_mean
-    denom = np.sqrt(np.sum(c_centered ** 2) * np.sum(d_centered ** 2))
+    denom = np.sqrt(np.sum(c_centered**2) * np.sum(d_centered**2))
     if denom < 1e-18:
         return 0.0
     return float(np.sum(c_centered * d_centered) / denom)
@@ -539,7 +592,7 @@ def compute_ncc(clean: np.ndarray, denoised: np.ndarray) -> float:
 
 def compute_crest_factor(signal: np.ndarray) -> float:
     """计算峰值因子 = max(|x|) / RMS(x)"""
-    rms = float(np.sqrt(np.mean(signal ** 2)))
+    rms = float(np.sqrt(np.mean(signal**2)))
     peak = float(np.max(np.abs(signal)))
     if rms < 1e-18:
         return 0.0
@@ -549,6 +602,7 @@ def compute_crest_factor(signal: np.ndarray) -> float:
 # ═══════════════════════════════════════════════════════════
 # 健康度趋势指标 (PHM 领域)
 # ═══════════════════════════════════════════════════════════
+
 
 def compute_monotonicity(hi_series: List[float]) -> float:
     """计算 HI 单调性 Monotonicity = |#(d>0) - #(d<0)| / (K-1), 范围 [0,1]"""
@@ -568,7 +622,9 @@ def compute_trendability(hi_series: List[float], time_points: List[float]) -> fl
     return abs(float(r))
 
 
-def compute_prognosability(hi_series_at_start: List[float], hi_series_at_end: List[float]) -> float:
+def compute_prognosability(
+    hi_series_at_start: List[float], hi_series_at_end: List[float]
+) -> float:
     """计算 Prognosability = exp(-std(end_values) / mean(|start - end|))"""
     if not hi_series_at_end or not hi_series_at_start:
         return 0.0
@@ -592,8 +648,13 @@ def compute_hi_robustness(hi_series: List[float], noise_std: float = 0.5) -> flo
     return float(np.exp(-mean_diff / noise_std))
 
 
-def plot_confusion_matrix(cm: np.ndarray, labels: List[str], title: str,
-                          subdir: str = "classification", normalize: bool = True) -> Path:
+def plot_confusion_matrix(
+    cm: np.ndarray,
+    labels: List[str],
+    title: str,
+    subdir: str = "classification",
+    normalize: bool = True,
+) -> Path:
     """绘制并保存混淆矩阵图（统一配色：深蓝对角线，浅灰错误格，不用黑色掩盖）"""
     if normalize:
         cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
@@ -604,21 +665,29 @@ def plot_confusion_matrix(cm: np.ndarray, labels: List[str], title: str,
         display_cm = cm
         fmt = "d"
 
-    fig, ax = plt.subplots(figsize=(max(6, len(labels) * 0.8), max(5, len(labels) * 0.7)))
+    fig, ax = plt.subplots(
+        figsize=(max(6, len(labels) * 0.8), max(5, len(labels) * 0.7))
+    )
 
     # 手动构建颜色矩阵（不用 cmap，避免深色掩盖问题）
     n = len(labels)
-    correct_color = np.array([0.2, 0.4, 0.8])     # 深蓝
+    correct_color = np.array([0.2, 0.4, 0.8])  # 深蓝
     incorrect_color = np.array([0.92, 0.92, 0.95])  # 浅灰白
 
     cmap_data = np.ones((n, n, 3))  # 默认白色背景
     for i in range(n):
         for j in range(n):
-            intensity = float(display_cm[i, j]) if normalize else float(display_cm[i, j]) / max(1, display_cm.max())
+            intensity = (
+                float(display_cm[i, j])
+                if normalize
+                else float(display_cm[i, j]) / max(1, display_cm.max())
+            )
             if i == j:
                 cmap_data[i, j] = correct_color * min(intensity * 1.2, 1.0)
             else:
-                cmap_data[i, j] = incorrect_color * intensity + np.array([1.0, 1.0, 1.0]) * (1 - intensity)
+                cmap_data[i, j] = incorrect_color * intensity + np.array(
+                    [1.0, 1.0, 1.0]
+                ) * (1 - intensity)
 
     im = ax.imshow(cmap_data, interpolation="nearest", vmin=0, vmax=1)
 
@@ -635,14 +704,25 @@ def plot_confusion_matrix(cm: np.ndarray, labels: List[str], title: str,
             val_norm = display_cm[i, j]
             text = format(val_norm, fmt)
             text_color = "white" if (i == j and val_norm > 0.3) else "black"
-            ax.text(j, i, text, ha="center", va="center", color=text_color,
-                    fontweight="bold" if i == j else "normal")
+            ax.text(
+                j,
+                i,
+                text,
+                ha="center",
+                va="center",
+                color=text_color,
+                fontweight="bold" if i == j else "normal",
+            )
 
-    path = save_figure(fig, f"confusion_matrix_{title.replace(' ', '_').lower()}.png", subdir)
+    path = save_figure(
+        fig, f"confusion_matrix_{title.replace(' ', '_').lower()}.png", subdir
+    )
     return path
 
 
-def plot_roc_curves(roc_data: Dict[str, Dict], title: str, subdir: str = "classification") -> Path:
+def plot_roc_curves(
+    roc_data: Dict[str, Dict], title: str, subdir: str = "classification"
+) -> Path:
     """绘制多分类 ROC 曲线"""
     fig, ax = plt.subplots(figsize=(7, 6))
     for lbl, roc in roc_data.items():
@@ -660,7 +740,9 @@ def plot_roc_curves(roc_data: Dict[str, Dict], title: str, subdir: str = "classi
     return save_figure(fig, f"roc_{title.replace(' ', '_').lower()}.png", subdir)
 
 
-def plot_pr_curves(pr_data: Dict[str, Dict], title: str, subdir: str = "classification") -> Path:
+def plot_pr_curves(
+    pr_data: Dict[str, Dict], title: str, subdir: str = "classification"
+) -> Path:
     """绘制多分类 PR 曲线"""
     fig, ax = plt.subplots(figsize=(7, 6))
     for lbl, pr in pr_data.items():

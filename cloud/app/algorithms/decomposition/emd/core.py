@@ -1,4 +1,5 @@
 """EMD/EEMD/CEEMDAN 公共参数、结果和算法族 adapter 契约。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -37,7 +38,9 @@ class EMDParameters:
         if self.stopping_rule not in ("sd", "rilling"):
             raise ValueError("停止准则只支持 sd 或 rilling")
         sd1, sd2, fraction = self.rilling_thresholds
-        if not (0 < sd1 <= sd2 and 0 <= fraction <= 1) or not np.all(np.isfinite(self.rilling_thresholds)):
+        if not (0 < sd1 <= sd2 and 0 <= fraction <= 1) or not np.all(
+            np.isfinite(self.rilling_thresholds)
+        ):
             raise ValueError("Rilling 阈值必须满足 0 < sd1 <= sd2, 0 <= fraction <= 1")
 
 
@@ -50,7 +53,11 @@ class EnsembleParameters:
     noise_scale: float = 0.2
 
     def __post_init__(self) -> None:
-        if isinstance(self.ensemble_size, bool) or not isinstance(self.ensemble_size, int) or self.ensemble_size <= 0:
+        if (
+            isinstance(self.ensemble_size, bool)
+            or not isinstance(self.ensemble_size, int)
+            or self.ensemble_size <= 0
+        ):
             raise ValueError("集成次数必须是正整数")
         if not np.isfinite(self.noise_scale) or self.noise_scale < 0.0:
             raise ValueError("噪声幅值比例必须是有限非负数")
@@ -80,20 +87,25 @@ class EMDResult:
 class EMDImplementation(Protocol):
     """EMD 族专属替换接口；未来 EMD-signal/PyEMD 在 adapter 内适配。"""
 
-    def emd(self, signal: FloatArray, sample_rate_hz: float, parameters: EMDParameters) -> EMDResult:
-        ...
+    def emd(
+        self, signal: FloatArray, sample_rate_hz: float, parameters: EMDParameters
+    ) -> EMDResult: ...
 
     def eemd(
-        self, signal: FloatArray, sample_rate_hz: float,
-        parameters: EnsembleParameters, seed: int,
-    ) -> EMDResult:
-        ...
+        self,
+        signal: FloatArray,
+        sample_rate_hz: float,
+        parameters: EnsembleParameters,
+        seed: int,
+    ) -> EMDResult: ...
 
     def ceemdan(
-        self, signal: FloatArray, sample_rate_hz: float,
-        parameters: EnsembleParameters, seed: int,
-    ) -> EMDResult:
-        ...
+        self,
+        signal: FloatArray,
+        sample_rate_hz: float,
+        parameters: EnsembleParameters,
+        seed: int,
+    ) -> EMDResult: ...
 
 
 def _validate_signal(signal: FloatArray, sample_rate_hz: float) -> FloatArray:
@@ -111,6 +123,7 @@ def _implementation(implementation: EMDImplementation | None) -> EMDImplementati
     if implementation is not None:
         return implementation
     from .python_adapter import PythonEMDImplementation
+
     return PythonEMDImplementation()
 
 
@@ -122,7 +135,9 @@ def decompose_emd(
 ) -> EMDResult:
     """基础 EMD；无足够极值时返回原残差和 ``indeterminate``，不伪造 IMF。"""
     arr = _validate_signal(signal, sample_rate_hz)
-    return _implementation(implementation).emd(arr, sample_rate_hz, parameters or EMDParameters())
+    return _implementation(implementation).emd(
+        arr, sample_rate_hz, parameters or EMDParameters()
+    )
 
 
 def _validate_seed(seed: int) -> None:
@@ -141,7 +156,9 @@ def decompose_eemd(
     """EEMD；相同输入、参数和种子逐数组可复现。"""
     arr = _validate_signal(signal, sample_rate_hz)
     _validate_seed(seed)
-    return _implementation(implementation).eemd(arr, sample_rate_hz, parameters or EnsembleParameters(), seed)
+    return _implementation(implementation).eemd(
+        arr, sample_rate_hz, parameters or EnsembleParameters(), seed
+    )
 
 
 def decompose_ceemdan(
@@ -155,4 +172,6 @@ def decompose_ceemdan(
     """CEEMDAN；逐阶添加白噪声 IMF，并保持 IMF 与残差的完备性。"""
     arr = _validate_signal(signal, sample_rate_hz)
     _validate_seed(seed)
-    return _implementation(implementation).ceemdan(arr, sample_rate_hz, parameters or EnsembleParameters(), seed)
+    return _implementation(implementation).ceemdan(
+        arr, sample_rate_hz, parameters or EnsembleParameters(), seed
+    )

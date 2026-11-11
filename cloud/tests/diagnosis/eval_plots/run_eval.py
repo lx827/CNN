@@ -5,6 +5,7 @@
     cd cloud
     uv run python tests/diagnosis/eval_plots/run_eval.py
 """
+
 import sys, json, time, warnings, os, traceback
 from pathlib import Path
 import numpy as np
@@ -15,7 +16,12 @@ warnings.filterwarnings("ignore")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 
-from app.services.diagnosis.engine import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod
+from app.services.diagnosis.engine import (
+    DiagnosisEngine,
+    BearingMethod,
+    GearMethod,
+    DenoiseMethod,
+)
 from app.services.diagnosis.ensemble import run_research_ensemble
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
 
@@ -61,6 +67,7 @@ def _fault_code(fname):
 
 # ── 模块级 worker 函数（供 joblib 并行使用）──────────────
 
+
 def _worker_bearing(fname, is_healthy, method_str):
     """单轴承方法评估一个文件"""
     sig = load_npy(HUSTBEAR_DIR, fname)
@@ -69,12 +76,16 @@ def _worker_bearing(fname, is_healthy, method_str):
     try:
         engine = DiagnosisEngine(
             bearing_method=BearingMethod(method_str),
-            bearing_params=BEARING_PARAMS, denoise_method=DenoiseMethod.NONE)
+            bearing_params=BEARING_PARAMS,
+            denoise_method=DenoiseMethod.NONE,
+        )
         res = engine.analyze_bearing(sig, FS)  # rot_freq=None: 引擎自估计
         inds = res.get("evaluation", {}).get("indicators", {})
         has_fault = any(
-            v.get("significant") for k, v in inds.items()
-            if isinstance(v, dict) and not k.endswith("_stat"))
+            v.get("significant")
+            for k, v in inds.items()
+            if isinstance(v, dict) and not k.endswith("_stat")
+        )
         return {"correct": has_fault != is_healthy}
     except Exception:
         return None
@@ -86,11 +97,16 @@ def _worker_ensemble_bearing(fname, is_healthy):
     if sig is None:
         return None
     try:
-        res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S)
+        res = run_research_ensemble(
+            sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S
+        )
         hs = res.get("health_score", 100)
         status = res.get("status", "normal")
         pred_healthy = status == "normal" and hs >= 70
-        return {"correct": pred_healthy == is_healthy or (not is_healthy and not pred_healthy)}
+        return {
+            "correct": pred_healthy == is_healthy
+            or (not is_healthy and not pred_healthy)
+        }
     except Exception:
         return None
 
@@ -103,13 +119,17 @@ def _worker_gear(fname, is_healthy, method_str):
     try:
         engine = DiagnosisEngine(
             gear_method=GearMethod(method_str),
-            gear_teeth=GEAR_PARAMS, denoise_method=DenoiseMethod.NONE)
+            gear_teeth=GEAR_PARAMS,
+            denoise_method=DenoiseMethod.NONE,
+        )
         rf = float(fname.split("_")[-1].replace("-c1.npy", ""))
         res = engine.analyze_gear(sig, FS, rot_freq=rf)
         inds = res.get("evaluation", {}).get("indicators", {})
         has_warn = any(
             v.get("warning") or v.get("critical")
-            for v in inds.values() if isinstance(v, dict))
+            for v in inds.values()
+            if isinstance(v, dict)
+        )
         return {"correct": has_warn != is_healthy}
     except Exception:
         return None
@@ -121,11 +141,20 @@ def _worker_ensemble_gear(fname, is_healthy):
     if sig is None:
         return None
     try:
-        res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, gear_teeth=GEAR_PARAMS, max_seconds=MAX_S)
+        res = run_research_ensemble(
+            sig,
+            FS,
+            bearing_params=BEARING_PARAMS,
+            gear_teeth=GEAR_PARAMS,
+            max_seconds=MAX_S,
+        )
         hs = res.get("health_score", 100)
         status = res.get("status", "normal")
         pred_healthy = status == "normal" and hs >= 70
-        return {"correct": pred_healthy == is_healthy or (not is_healthy and not pred_healthy)}
+        return {
+            "correct": pred_healthy == is_healthy
+            or (not is_healthy and not pred_healthy)
+        }
     except Exception:
         return None
 
@@ -138,11 +167,16 @@ def _worker_snr(method_str, snr_db, sig_clean):
     try:
         engine = DiagnosisEngine(
             bearing_method=BearingMethod(method_str),
-            bearing_params=BEARING_PARAMS, denoise_method=DenoiseMethod.NONE)
+            bearing_params=BEARING_PARAMS,
+            denoise_method=DenoiseMethod.NONE,
+        )
         res = engine.analyze_bearing(sig_clean + noise, FS)  # rot_freq=None: 引擎自估计
         inds = res.get("evaluation", {}).get("indicators", {})
-        return any(v.get("significant") for k, v in inds.items()
-                   if isinstance(v, dict) and not k.endswith("_stat"))
+        return any(
+            v.get("significant")
+            for k, v in inds.items()
+            if isinstance(v, dict) and not k.endswith("_stat")
+        )
     except Exception:
         return False
 
@@ -153,8 +187,12 @@ def _worker_ens_snr(snr_db, sig_clean):
     np.random.seed(abs(42 + (snr_db + 10) * 100) % (2**31))
     noise = np.sqrt(sig_power / (10 ** (snr_db / 10))) * np.random.randn(len(sig_clean))
     try:
-        res = run_research_ensemble(sig_clean + noise, FS, bearing_params=BEARING_PARAMS, max_seconds=5.0)
-        return res.get("status", "normal") != "normal" or res.get("health_score", 100) < 70
+        res = run_research_ensemble(
+            sig_clean + noise, FS, bearing_params=BEARING_PARAMS, max_seconds=5.0
+        )
+        return (
+            res.get("status", "normal") != "normal" or res.get("health_score", 100) < 70
+        )
     except Exception:
         return False
 
@@ -185,10 +223,17 @@ def run_expA_bearing():
     results = {"methods": {}}
 
     METHODS = [
-        ("包络分析", "envelope"), ("Kurtogram", "filter_bank_sk"), ("CPW预白化", "cpw"),
-        ("MED增强", "med"), ("MCKD", "mckd"), ("Teager", "teager"),
-        ("谱峭度重加权", "spectral_kurtosis"), ("DWT", "dwt"),
-        ("EMD", "emd_envelope"), ("CEEMDAN", "ceemdan_envelope"), ("VMD", "vmd_envelope"),
+        ("包络分析", "envelope"),
+        ("Kurtogram", "filter_bank_sk"),
+        ("CPW预白化", "cpw"),
+        ("MED增强", "med"),
+        ("MCKD", "mckd"),
+        ("Teager", "teager"),
+        ("谱峭度重加权", "spectral_kurtosis"),
+        ("DWT", "dwt"),
+        ("EMD", "emd_envelope"),
+        ("CEEMDAN", "ceemdan_envelope"),
+        ("VMD", "vmd_envelope"),
     ]
 
     for name_cn, method_val in METHODS:
@@ -200,8 +245,12 @@ def run_expA_bearing():
                 correct += r["correct"]
                 total += 1
         acc = correct / max(total, 1) * 100
-        print(f"  [{name_cn}] {acc:.1f}% ({correct}/{total}) {time.time()-t0:.1f}s")
-        results["methods"][name_cn] = {"accuracy": round(acc, 2), "correct": correct, "total": total}
+        print(f"  [{name_cn}] {acc:.1f}% ({correct}/{total}) {time.time() - t0:.1f}s")
+        results["methods"][name_cn] = {
+            "accuracy": round(acc, 2),
+            "correct": correct,
+            "total": total,
+        }
 
     t0 = time.time()
     correct, total = 0, 0
@@ -211,8 +260,12 @@ def run_expA_bearing():
             correct += r["correct"]
             total += 1
     acc = correct / max(total, 1) * 100
-    print(f"  [Ensemble集成] {acc:.1f}% ({correct}/{total}) {time.time()-t0:.1f}s")
-    results["methods"]["Ensemble集成"] = {"accuracy": round(acc, 2), "correct": correct, "total": total}
+    print(f"  [Ensemble集成] {acc:.1f}% ({correct}/{total}) {time.time() - t0:.1f}s")
+    results["methods"]["Ensemble集成"] = {
+        "accuracy": round(acc, 2),
+        "correct": correct,
+        "total": total,
+    }
 
     save_json(results, "expA_bearing.json")
     return results
@@ -227,9 +280,14 @@ def run_expB_gear():
     print("=" * 60)
 
     files_healthy = sorted(f.name for f in WTGEAR_DIR.glob("He_*-c1.npy"))
-    files_fault = sorted(f.name for f in WTGEAR_DIR.glob("*.npy")
-                         if "-c1.npy" in f.name and not f.name.startswith("He"))
-    files_to_test = [(f, True) for f in files_healthy] + [(f, False) for f in files_fault]
+    files_fault = sorted(
+        f.name
+        for f in WTGEAR_DIR.glob("*.npy")
+        if "-c1.npy" in f.name and not f.name.startswith("He")
+    )
+    files_to_test = [(f, True) for f in files_healthy] + [
+        (f, False) for f in files_fault
+    ]
     print(f"  健康:{len(files_healthy)} 故障:{len(files_fault)}")
 
     results = {"methods": {}}
@@ -237,19 +295,33 @@ def run_expB_gear():
     for name_cn, method_val in [("标准边频分析", "standard"), ("高级综合", "advanced")]:
         t0 = time.time()
         jobs = [delayed(_worker_gear)(f, h, method_val) for f, h in files_to_test]
-        rlist = [r for r in Parallel(n_jobs=N_JOBS, backend="loky")(jobs) if r is not None]
+        rlist = [
+            r for r in Parallel(n_jobs=N_JOBS, backend="loky")(jobs) if r is not None
+        ]
         correct = sum(1 for r in rlist if r["correct"])
         acc = correct / max(len(rlist), 1) * 100
-        print(f"  [{name_cn}] {acc:.1f}% ({correct}/{len(rlist)}) {time.time()-t0:.1f}s")
-        results["methods"][name_cn] = {"accuracy": round(acc, 2), "correct": correct, "total": len(rlist)}
+        print(
+            f"  [{name_cn}] {acc:.1f}% ({correct}/{len(rlist)}) {time.time() - t0:.1f}s"
+        )
+        results["methods"][name_cn] = {
+            "accuracy": round(acc, 2),
+            "correct": correct,
+            "total": len(rlist),
+        }
 
     t0 = time.time()
     jobs = [delayed(_worker_ensemble_gear)(f, h) for f, h in files_to_test]
     rlist = [r for r in Parallel(n_jobs=N_JOBS, backend="loky")(jobs) if r is not None]
     correct = sum(1 for r in rlist if r["correct"])
     acc = correct / max(len(rlist), 1) * 100
-    print(f"  [Ensemble集成] {acc:.1f}% ({correct}/{len(rlist)}) {time.time()-t0:.1f}s")
-    results["methods"]["Ensemble集成"] = {"accuracy": round(acc, 2), "correct": correct, "total": len(rlist)}
+    print(
+        f"  [Ensemble集成] {acc:.1f}% ({correct}/{len(rlist)}) {time.time() - t0:.1f}s"
+    )
+    results["methods"]["Ensemble集成"] = {
+        "accuracy": round(acc, 2),
+        "correct": correct,
+        "total": len(rlist),
+    }
 
     save_json(results, "expB_gear.json")
     return results
@@ -263,7 +335,9 @@ def run_expC_denoise():
     print("实验C: 去噪效果 HUSTbear 外圈故障")
     print("=" * 60)
 
-    or_files = sorted(f for f in HUSTBEAR_DIR.glob("*-X.npy") if _fault_code(f.name) == "O")
+    or_files = sorted(
+        f for f in HUSTBEAR_DIR.glob("*-X.npy") if _fault_code(f.name) == "O"
+    )
     if not or_files:
         print("  未找到外圈故障文件")
         return None
@@ -277,19 +351,25 @@ def run_expC_denoise():
     engine = DiagnosisEngine()
 
     for dname, dlabel in [
-        ("none", "无去噪"), ("wavelet", "小波去噪"), ("vmd", "VMD去噪"),
-        ("savgol", "Savitzky-Golay"), ("wavelet_vmd", "小波+VMD级联"),
+        ("none", "无去噪"),
+        ("wavelet", "小波去噪"),
+        ("vmd", "VMD去噪"),
+        ("savgol", "Savitzky-Golay"),
+        ("wavelet_vmd", "小波+VMD级联"),
     ]:
         engine.denoise_method = DenoiseMethod(dname)
         t0 = time.time()
         try:
             proc = engine.preprocess(sig_noisy)
-            rp = np.var(sig_or - proc[:len(sig_or)])
+            rp = np.var(sig_or - proc[: len(sig_or)])
         except Exception:
             rp = base_power
         dt = time.time() - t0
         dsnr = 10 * np.log10(max(base_power, 1e-12) / max(rp, 1e-12))
-        results["methods"][dlabel] = {"delta_snr_db": round(dsnr, 2), "time_s": round(dt, 2)}
+        results["methods"][dlabel] = {
+            "delta_snr_db": round(dsnr, 2),
+            "time_s": round(dt, 2),
+        }
         print(f"  {dlabel}: DSNR={dsnr:+.1f}dB {dt:.2f}s")
 
     save_json(results, "expC_denoise.json")
@@ -304,7 +384,9 @@ def run_expD_robustness():
     print("实验D: 噪声鲁棒性 HUSTbear 外圈故障 (joblib x%d)" % N_JOBS)
     print("=" * 60)
 
-    or_files = sorted(f for f in HUSTBEAR_DIR.glob("*-X.npy") if _fault_code(f.name) == "O")
+    or_files = sorted(
+        f for f in HUSTBEAR_DIR.glob("*-X.npy") if _fault_code(f.name) == "O"
+    )
     if not or_files:
         print("  未找到外圈故障文件")
         return None
@@ -314,8 +396,10 @@ def run_expD_robustness():
     results = {"snr_levels": snr_levels, "methods": {}}
 
     for name_cn, method_val in [
-        ("包络分析", "envelope"), ("Kurtogram", "filter_bank_sk"),
-        ("MED增强", "med"), ("MCKD", "mckd"),
+        ("包络分析", "envelope"),
+        ("Kurtogram", "filter_bank_sk"),
+        ("MED增强", "med"),
+        ("MCKD", "mckd"),
     ]:
         jobs = [delayed(_worker_snr)(method_val, s, sig_clean) for s in snr_levels]
         raw = Parallel(n_jobs=N_JOBS, backend="loky")(jobs)
@@ -366,7 +450,9 @@ def run_expA2_bearing_multiclass():
         if sig is None:
             continue
         try:
-            res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S)
+            res = run_research_ensemble(
+                sig, FS, bearing_params=BEARING_PARAMS, max_seconds=MAX_S
+            )
             fl = res.get("fault_label", "unknown")
             # 映射 fault_label 到标准类别
             pred = _map_bearing_label(fl)
@@ -402,7 +488,12 @@ def _map_bearing_label(fl):
         return "内圈"
     if fl_lower == "bearing_bsf" or "ball" in fl_lower:
         return "球故障"
-    if "compound" in fl_lower or fl_lower == "bearing_bpfo_bpfi" or fl_lower == "bearing_bpfo_bsf" or fl_lower == "bearing_bpfi_bsf":
+    if (
+        "compound" in fl_lower
+        or fl_lower == "bearing_bpfo_bpfi"
+        or fl_lower == "bearing_bpfo_bsf"
+        or fl_lower == "bearing_bpfi_bsf"
+    ):
         return "复合"
     if "healthy" in fl_lower or "normal" in fl_lower or "unknown" in fl_lower:
         return "健康"
@@ -439,7 +530,12 @@ def _classification_metrics(y_true, y_pred):
         prec = tp / max(tp + fp, 1)
         rec = tp / max(tp + fn, 1)
         f1 = 2 * prec * rec / max(prec + rec, 0.001)
-        per_class[c] = {"precision": round(prec, 3), "recall": round(rec, 3), "f1": round(f1, 3), "tp": tp}
+        per_class[c] = {
+            "precision": round(prec, 3),
+            "recall": round(rec, 3),
+            "f1": round(f1, 3),
+            "tp": tp,
+        }
         macro_f1 += f1
     macro_f1 /= max(len(classes), 1)
     return {
@@ -459,7 +555,10 @@ def run_expB2_gear_multiclass():
     print("=" * 60)
 
     class_map = {"He": "健康", "Br": "断齿", "Mi": "缺齿", "Rc": "裂纹", "We": "磨损"}
-    class_files = {k: sorted(f.name for f in WTGEAR_DIR.glob(f"{k}_*-c1.npy"))[:6] for k in class_map}
+    class_files = {
+        k: sorted(f.name for f in WTGEAR_DIR.glob(f"{k}_*-c1.npy"))[:6]
+        for k in class_map
+    }
     for k, v in class_files.items():
         print(f"  {class_map[k]}: {len(v)}")
 
@@ -471,7 +570,13 @@ def run_expB2_gear_multiclass():
             if sig is None:
                 continue
             try:
-                res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, gear_teeth=GEAR_PARAMS, max_seconds=MAX_S)
+                res = run_research_ensemble(
+                    sig,
+                    FS,
+                    bearing_params=BEARING_PARAMS,
+                    gear_teeth=GEAR_PARAMS,
+                    max_seconds=MAX_S,
+                )
                 fl = res.get("fault_label", "unknown")
                 pred = _map_gear_label(fl)
                 y_true.append(class_map[cat])
@@ -537,7 +642,7 @@ def main():
         except Exception as e:
             print(f"\n  [ERROR] {name}: {e}")
             traceback.print_exc()
-    print(f"\n全部完成 {time.time()-t0:.0f}s")
+    print(f"\n全部完成 {time.time() - t0:.0f}s")
 
 
 if __name__ == "__main__":

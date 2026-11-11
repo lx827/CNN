@@ -2,6 +2,7 @@
 告警接口
 给 Alarm 页面提供分页告警列表
 """
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -15,10 +16,12 @@ router = APIRouter(prefix="/api/alarms", tags=["告警管理"])
 def get_alarms(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, ge=1, le=100),
-    level: Optional[str] = Query(default=None, description="过滤级别: warning/critical"),
+    level: Optional[str] = Query(
+        default=None, description="过滤级别: warning/critical"
+    ),
     resolved: Optional[int] = Query(default=None, description="过滤是否已处理: 0/1"),
     device_id: Optional[str] = Query(default=None, description="过滤设备ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     分页获取告警列表
@@ -33,8 +36,12 @@ def get_alarms(
         query = query.filter(Alarm.device_id == device_id)
 
     total = query.count()
-    items = query.order_by(Alarm.created_at.desc()) \
-        .offset((page - 1) * size).limit(size).all()
+    items = (
+        query.order_by(Alarm.created_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+        .all()
+    )
 
     return {
         "code": 200,
@@ -59,8 +66,8 @@ def get_alarms(
                     "resolved_at": a.resolved_at.isoformat() if a.resolved_at else None,
                 }
                 for a in items
-            ]
-        }
+            ],
+        },
     }
 
 
@@ -70,6 +77,7 @@ def resolve_alarm(alarm_id: int, db: Session = Depends(get_db)):
     处理（关闭）一条告警
     """
     from datetime import datetime, timezone
+
     alarm = db.query(Alarm).filter(Alarm.id == alarm_id).first()
     if not alarm:
         return {"code": 404, "message": "告警不存在"}

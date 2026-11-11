@@ -2,6 +2,7 @@
 应用生命周期管理
 包含 lifespan、后台分析 worker 和线程池配置
 """
+
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -26,20 +27,31 @@ async def analysis_worker():
     """逐设备/批次串行调用唯一事务流程，不另写缓存或推断告警。"""
     from app.models import SensorData
     from app.services.diagnosis_workflow import process_batch
+
     while True:
         try:
             await asyncio.sleep(ANALYZE_INTERVAL_SECONDS)
             db = SessionLocal()
             try:
-                pending = db.query(SensorData.device_id, SensorData.batch_index).filter(
-                    SensorData.is_analyzed == 0,
-                ).distinct().order_by(SensorData.device_id, SensorData.batch_index).all()
+                pending = (
+                    db.query(SensorData.device_id, SensorData.batch_index)
+                    .filter(
+                        SensorData.is_analyzed == 0,
+                    )
+                    .distinct()
+                    .order_by(SensorData.device_id, SensorData.batch_index)
+                    .all()
+                )
                 for device_id, batch_index in pending:
-                    device = db.query(Device).filter(Device.device_id == device_id).first()
+                    device = (
+                        db.query(Device).filter(Device.device_id == device_id).first()
+                    )
                     if device is None or device.is_online == 0:
                         continue
                     try:
-                        await process_batch(db, device, batch_index, semaphore=ANALYSIS_SEM)
+                        await process_batch(
+                            db, device, batch_index, semaphore=ANALYSIS_SEM
+                        )
                     except Exception:
                         db.rollback()
                         logger.exception("批次诊断失败: %s/%s", device_id, batch_index)

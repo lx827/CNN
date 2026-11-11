@@ -1,4 +1,5 @@
 """通用带通 Hilbert 包络时域表示，不附加诊断低通、指标或故障结论。"""
+
 import numpy as np
 from numpy.typing import NDArray
 from scipy.signal import butter, hilbert, sosfiltfilt
@@ -23,7 +24,11 @@ def compute_bandpass_hilbert_envelope(
         raise ValueError("采样率必须是有限正数")
     if band.high_hz >= sample_rate_hz / 2.0:
         raise ValueError("带通上限必须低于 Nyquist 频率")
-    if isinstance(filter_order, bool) or not isinstance(filter_order, int) or filter_order <= 0:
+    if (
+        isinstance(filter_order, bool)
+        or not isinstance(filter_order, int)
+        or filter_order <= 0
+    ):
         raise ValueError("滤波器阶数必须是正整数")
 
     sos = butter(

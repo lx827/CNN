@@ -3,6 +3,7 @@
 
 基于已有评估缓存生成 8 类核心竞赛图表，优化投影展示效果。
 """
+
 import json
 import sys
 from pathlib import Path
@@ -10,12 +11,18 @@ from typing import Any, Dict, List
 
 import numpy as np
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 # 统一学术风格配置
 plt.rcParams["font.family"] = "sans-serif"
-plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "Arial Unicode MS", "DejaVu Sans"]
+plt.rcParams["font.sans-serif"] = [
+    "SimHei",
+    "Microsoft YaHei",
+    "Arial Unicode MS",
+    "DejaVu Sans",
+]
 plt.rcParams["axes.unicode_minus"] = False
 plt.rcParams["font.size"] = 14
 plt.rcParams["axes.titlesize"] = 16
@@ -32,24 +39,39 @@ plt.rcParams["grid.alpha"] = 0.3
 
 # 统一配色方案（色盲友好 + 投影高对比）
 COLORS = {
-    "primary": "#2E5AAC",      # 深蓝
-    "secondary": "#D9534F",    # 红
-    "tertiary": "#5CB85C",     # 绿
-    "quaternary": "#F0AD4E",   # 橙黄
-    "quinary": "#6C4AB6",      # 紫
-    "senary": "#17A2B8",       # 青
-    "healthy": "#5CB85C",      # 健康-绿
-    "fault": "#D9534F",        # 故障-红
-    "neutral": "#777777",      # 灰
+    "primary": "#2E5AAC",  # 深蓝
+    "secondary": "#D9534F",  # 红
+    "tertiary": "#5CB85C",  # 绿
+    "quaternary": "#F0AD4E",  # 橙黄
+    "quinary": "#6C4AB6",  # 紫
+    "senary": "#17A2B8",  # 青
+    "healthy": "#5CB85C",  # 健康-绿
+    "fault": "#D9534F",  # 故障-红
+    "neutral": "#777777",  # 灰
 }
 
-PALETTE = [COLORS["primary"], COLORS["secondary"], COLORS["tertiary"],
-           COLORS["quaternary"], COLORS["quinary"], COLORS["senary"]]
+PALETTE = [
+    COLORS["primary"],
+    COLORS["secondary"],
+    COLORS["tertiary"],
+    COLORS["quaternary"],
+    COLORS["quinary"],
+    COLORS["senary"],
+]
 
 
 def _load_cache(name: str) -> Any:
     """加载缓存 JSON"""
-    path = Path(__file__).resolve().parent.parent.parent.parent.parent / "cloud" / "tests" / "diagnosis" / "output" / "evaluation" / "cache" / f"{name}.json"
+    path = (
+        Path(__file__).resolve().parent.parent.parent.parent.parent
+        / "cloud"
+        / "tests"
+        / "diagnosis"
+        / "output"
+        / "evaluation"
+        / "cache"
+        / f"{name}.json"
+    )
     if not path.exists():
         return None
     with open(path, "r", encoding="utf-8") as f:
@@ -76,7 +98,7 @@ def plot_experiment_a_confusion_matrix(output_dir: Path):
 
     for ax, cache, title in [
         (axes[0], cache_single, "单方法诊断 (包络分析)"),
-        (axes[1], cache_ensemble, "集成诊断 (多算法融合)")
+        (axes[1], cache_ensemble, "集成诊断 (多算法融合)"),
     ]:
         cm = np.array(cache["confusion_matrix"])
         labels = list(cache.get("roc_curves", {}).keys())
@@ -100,8 +122,15 @@ def plot_experiment_a_confusion_matrix(output_dir: Path):
         for i in range(len(labels)):
             for j in range(len(labels)):
                 text_color = "white" if cm_norm[i, j] > 0.5 else "black"
-                ax.text(j, i, f"{cm[i, j]}\n({cm_norm[i, j]:.1%})",
-                        ha="center", va="center", color=text_color, fontsize=11)
+                ax.text(
+                    j,
+                    i,
+                    f"{cm[i, j]}\n({cm_norm[i, j]:.1%})",
+                    ha="center",
+                    va="center",
+                    color=text_color,
+                    fontsize=11,
+                )
 
         plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
@@ -152,10 +181,18 @@ def plot_experiment_b_performance_bar(output_dir: Path):
     x = np.arange(len(methods))
     width = 0.2
 
-    bars1 = ax.bar(x - 1.5*width, accuracy, width, label="Accuracy", color=COLORS["primary"])
-    bars2 = ax.bar(x - 0.5*width, macro_f1, width, label="Macro-F1", color=COLORS["tertiary"])
-    bars3 = ax.bar(x + 0.5*width, fdr, width, label="FDR (检出率)", color=COLORS["quaternary"])
-    bars4 = ax.bar(x + 1.5*width, kappa, width, label="Kappa", color=COLORS["quinary"])
+    bars1 = ax.bar(
+        x - 1.5 * width, accuracy, width, label="Accuracy", color=COLORS["primary"]
+    )
+    bars2 = ax.bar(
+        x - 0.5 * width, macro_f1, width, label="Macro-F1", color=COLORS["tertiary"]
+    )
+    bars3 = ax.bar(
+        x + 0.5 * width, fdr, width, label="FDR (检出率)", color=COLORS["quaternary"]
+    )
+    bars4 = ax.bar(
+        x + 1.5 * width, kappa, width, label="Kappa", color=COLORS["quinary"]
+    )
 
     ax.set_ylabel("百分比 (%)")
     ax.set_title("轴承诊断方法性能对比 (HUSTbear数据集)", fontweight="bold")
@@ -168,9 +205,15 @@ def plot_experiment_b_performance_bar(output_dir: Path):
     for bars in [bars1, bars2, bars3, bars4]:
         for bar in bars:
             height = bar.get_height()
-            ax.annotate(f"{height:.0f}", xy=(bar.get_x() + bar.get_width() / 2, height),
-                        xytext=(0, 3), textcoords="offset points", ha="center", va="bottom",
-                        fontsize=8)
+            ax.annotate(
+                f"{height:.0f}",
+                xy=(bar.get_x() + bar.get_width() / 2, height),
+                xytext=(0, 3),
+                textcoords="offset points",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
 
     plt.tight_layout()
     _ensure_dir(output_dir)
@@ -239,7 +282,15 @@ def plot_experiment_d_robustness(output_dir: Path):
         pairs = sorted(zip(data["snr"], data["bpfo_snr"]))
         snrs, bpfo_snrs = zip(*pairs) if pairs else ([], [])
         color = PALETTE[idx % len(PALETTE)]
-        ax.plot(snrs, bpfo_snrs, marker="o", label=method, color=color, linewidth=2, markersize=8)
+        ax.plot(
+            snrs,
+            bpfo_snrs,
+            marker="o",
+            label=method,
+            color=color,
+            linewidth=2,
+            markersize=8,
+        )
 
     ax.set_xlabel("输入 SNR (dB)")
     ax.set_ylabel("BPFO 谱峰 SNR (dB)")
@@ -277,8 +328,10 @@ def plot_experiment_e_denoise(output_dir: Path):
 
     # 只取有明确噪声等级的
     methods = sorted(set(k[0] for k in method_noise_snr.keys()))
-    noise_levels = sorted(set(k[1] for k in method_noise_snr.keys() if k[1] != "unknown"),
-                          key=lambda x: int(x.replace("dB", "")))
+    noise_levels = sorted(
+        set(k[1] for k in method_noise_snr.keys() if k[1] != "unknown"),
+        key=lambda x: int(x.replace("dB", "")),
+    )
 
     if not noise_levels:
         print("[SKIP] 实验e: 无有效噪声等级")
@@ -294,8 +347,13 @@ def plot_experiment_e_denoise(output_dir: Path):
             vals = method_noise_snr.get((method, nl), [0])
             values.append(np.mean(vals))
         color = PALETTE[idx % len(PALETTE)]
-        ax.bar(x + idx * width - (len(methods)-1)*width/2, values, width,
-               label=method, color=color)
+        ax.bar(
+            x + idx * width - (len(methods) - 1) * width / 2,
+            values,
+            width,
+            label=method,
+            color=color,
+        )
 
     ax.set_xlabel("输入噪声等级")
     ax.set_ylabel("SNR 改善量 (dB)")
@@ -342,8 +400,12 @@ def plot_experiment_f_boxplot(output_dir: Path):
             ax.set_title(f"{title} (无数据)")
             continue
 
-        bp = ax.boxplot([healthy_vals, fault_vals], tick_labels=["健康", "故障"],
-                        patch_artist=True, widths=0.5)
+        bp = ax.boxplot(
+            [healthy_vals, fault_vals],
+            tick_labels=["健康", "故障"],
+            patch_artist=True,
+            widths=0.5,
+        )
         bp["boxes"][0].set_facecolor(COLORS["healthy"])
         bp["boxes"][1].set_facecolor(COLORS["fault"])
         bp["medians"][0].set_color("black")
@@ -351,7 +413,9 @@ def plot_experiment_f_boxplot(output_dir: Path):
         ax.set_title(title, fontweight="bold")
         ax.set_ylabel("指标值")
 
-    plt.suptitle("齿轮诊断指标分布对比 (WTgearbox)", fontsize=16, fontweight="bold", y=1.02)
+    plt.suptitle(
+        "齿轮诊断指标分布对比 (WTgearbox)", fontsize=16, fontweight="bold", y=1.02
+    )
     plt.tight_layout()
     _ensure_dir(output_dir)
     fig.savefig(output_dir / "experiment_f_boxplot.png", bbox_inches="tight")
@@ -371,6 +435,7 @@ def plot_experiment_g_health_degradation(output_dir: Path):
 
     # 按故障类型分组，按转速排序构造退化序列
     from collections import defaultdict
+
     fault_sequences = defaultdict(list)
     for r in cache:
         fault_sequences[r["fault_label"]].append(r)
@@ -385,8 +450,17 @@ def plot_experiment_g_health_degradation(output_dir: Path):
         color = COLORS["healthy"] if label == "healthy" else COLORS["fault"]
         marker = "o" if label == "healthy" else "s"
         linestyle = "--" if label == "healthy" else "-"
-        ax.plot(x_vals, y_vals, marker=marker, linestyle=linestyle, label=label,
-                color=color, linewidth=2, markersize=8, alpha=0.8)
+        ax.plot(
+            x_vals,
+            y_vals,
+            marker=marker,
+            linestyle=linestyle,
+            label=label,
+            color=color,
+            linewidth=2,
+            markersize=8,
+            alpha=0.8,
+        )
 
     ax.axhline(y=85, color="gray", linestyle="--", alpha=0.7, label="预警阈值=85")
     ax.axhline(y=60, color="red", linestyle="--", alpha=0.7, label="报警阈值=60")
@@ -407,7 +481,13 @@ def plot_experiment_g_health_degradation(output_dir: Path):
 # 主入口
 # ═══════════════════════════════════════════════════════════
 def main():
-    output_dir = Path(__file__).resolve().parent.parent.parent.parent.parent / "cloud" / "tests" / "output" / "contest_plots"
+    output_dir = (
+        Path(__file__).resolve().parent.parent.parent.parent.parent
+        / "cloud"
+        / "tests"
+        / "output"
+        / "contest_plots"
+    )
     _ensure_dir(output_dir)
 
     print("=" * 60)

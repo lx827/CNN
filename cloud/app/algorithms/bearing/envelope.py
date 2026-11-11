@@ -1,4 +1,5 @@
 """标准 Hilbert 包络计算，只产生信号表示，不判断故障。"""
+
 from dataclasses import dataclass
 from typing import Optional
 
@@ -44,7 +45,11 @@ def _resolve_band(fs: float, params: EnvelopeParameters) -> FrequencyBand:
         width = params.band_width_hz
         if width is None:
             width = min(2000.0, fs * 0.3)
-        if not np.isfinite(params.band_center_hz) or not np.isfinite(width) or width <= 0:
+        if (
+            not np.isfinite(params.band_center_hz)
+            or not np.isfinite(width)
+            or width <= 0
+        ):
             raise ValueError("带通中心和带宽必须是有限数，且带宽为正数")
         low = params.band_center_hz - width / 2.0
         high = params.band_center_hz + width / 2.0
@@ -70,7 +75,9 @@ def compute_envelope(
         raise ValueError("输入信号不能包含 NaN 或无穷值")
     if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
         raise ValueError("采样率必须为正数")
-    if isinstance(params.filter_order, bool) or not isinstance(params.filter_order, int):
+    if isinstance(params.filter_order, bool) or not isinstance(
+        params.filter_order, int
+    ):
         raise ValueError("滤波器阶数必须是整数")
     if params.filter_order <= 0:
         raise ValueError("滤波器阶数必须为正整数")

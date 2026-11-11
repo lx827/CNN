@@ -8,6 +8,7 @@
 - 输出目录
 - 评估参数
 """
+
 import os
 import sys
 from pathlib import Path
@@ -28,7 +29,7 @@ from data_paths import HUSTBEAR_DIR, CW_DIR, WTGEARBOX_DIR
 # ═══════════════════════════════════════════════════════════
 # 信号参数
 # ═══════════════════════════════════════════════════════════
-SAMPLE_RATE = 8192          # 所有数据集均为 8192 Hz
+SAMPLE_RATE = 8192  # 所有数据集均为 8192 Hz
 MAX_SAMPLES = SAMPLE_RATE * 5  # 截断到 5 秒（服务器限制）
 
 # ═══════════════════════════════════════════════════════════
@@ -52,10 +53,10 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # 各实验子目录
 EXP_DIRS = {
-    "bearing_hustbear":  OUTPUT_DIR / "bearing_hustbear",
-    "bearing_cw":        OUTPUT_DIR / "bearing_cw",
-    "gear_wtgearbox":    OUTPUT_DIR / "gear_wtgearbox",
-    "binary_all":        OUTPUT_DIR / "binary_all",
+    "bearing_hustbear": OUTPUT_DIR / "bearing_hustbear",
+    "bearing_cw": OUTPUT_DIR / "bearing_cw",
+    "gear_wtgearbox": OUTPUT_DIR / "gear_wtgearbox",
+    "binary_all": OUTPUT_DIR / "binary_all",
 }
 for d in EXP_DIRS.values():
     d.mkdir(parents=True, exist_ok=True)
@@ -66,37 +67,37 @@ for d in EXP_DIRS.values():
 # 格式：(显示名, BearingMethod枚举值, 是否仅包络类)
 # 注：SC_SCOH 计算量极大，默认跳过
 BEARING_METHODS = [
-    ("标准包络",       "envelope"),
-    ("Kurtogram",      "filter_bank_sk"),
-    ("CPW预白化",      "cpw"),
-    ("MED增强",        "med"),
-    ("MCKD",           "mckd"),
-    ("Teager",         "teager"),
-    ("谱峭度重加权",   "spectral_kurtosis"),
+    ("标准包络", "envelope"),
+    ("Kurtogram", "filter_bank_sk"),
+    ("CPW预白化", "cpw"),
+    ("MED增强", "med"),
+    ("MCKD", "mckd"),
+    ("Teager", "teager"),
+    ("谱峭度重加权", "spectral_kurtosis"),
     # ("SC-SCoh",     "sc_scoh"),        # 计算量极大，跳过
-    ("小波包",         "wp"),
-    ("DWT",            "dwt"),
-    ("EMD",            "emd_envelope"),
-    ("CEEMDAN",        "ceemdan_envelope"),
-    ("VMD",            "vmd_envelope"),
+    ("小波包", "wp"),
+    ("DWT", "dwt"),
+    ("EMD", "emd_envelope"),
+    ("CEEMDAN", "ceemdan_envelope"),
+    ("VMD", "vmd_envelope"),
 ]
 
 # ═══════════════════════════════════════════════════════════
 # 齿轮诊断方法列表（2 种 + Ensemble）
 # ═══════════════════════════════════════════════════════════
 GEAR_METHODS = [
-    ("标准边频分析",   "standard"),
-    ("高级综合",       "advanced"),
+    ("标准边频分析", "standard"),
+    ("高级综合", "advanced"),
 ]
 
 # ═══════════════════════════════════════════════════════════
 # 去噪方法（4 种基础）
 # ═══════════════════════════════════════════════════════════
 DENOISE_METHODS = [
-    ("无去噪",         "none"),
-    ("小波去噪",       "wavelet"),
-    ("VMD去噪",        "vmd"),
-    ("小波+VMD级联",   "wavelet_vmd"),
+    ("无去噪", "none"),
+    ("小波去噪", "wavelet"),
+    ("VMD去噪", "vmd"),
+    ("小波+VMD级联", "wavelet_vmd"),
 ]
 
 # ═══════════════════════════════════════════════════════════
@@ -114,15 +115,15 @@ WTGEARBOX_LABELS = ["healthy", "break", "missing", "crack", "wear"]
 
 # 中文标签映射
 LABEL_CN = {
-    "healthy":   "健康",
-    "ball":      "球故障",
-    "inner":     "内圈故障",
-    "outer":     "外圈故障",
+    "healthy": "健康",
+    "ball": "球故障",
+    "inner": "内圈故障",
+    "outer": "外圈故障",
     "composite": "复合故障",
-    "break":     "断齿",
-    "missing":   "缺齿",
-    "crack":     "齿根裂纹",
-    "wear":      "磨损",
+    "break": "断齿",
+    "missing": "缺齿",
+    "crack": "齿根裂纹",
+    "wear": "磨损",
 }
 
 # D-S 融合 dominant_fault → 轴承标签
@@ -131,7 +132,7 @@ DS_TO_BEARING = {
     "轴承内圈故障": "inner",
     "轴承滚动体故障": "ball",
     "正常": "healthy",
-    "齿轮磨损": "composite",   # 轴承实验中齿轮异常归为复合
+    "齿轮磨损": "composite",  # 轴承实验中齿轮异常归为复合
     "齿轮裂纹": "composite",
     "齿轮断齿": "composite",
 }
@@ -143,7 +144,7 @@ DS_TO_GEAR = {
     "齿轮裂纹": "crack",
     "齿轮缺齿": "missing",
     "正常": "healthy",
-    "轴承外圈故障": "missing",    # 齿轮实验中轴承异常归为缺齿
+    "轴承外圈故障": "missing",  # 齿轮实验中轴承异常归为缺齿
     "轴承内圈故障": "missing",
     "轴承滚动体故障": "missing",
 }
@@ -201,9 +202,9 @@ INDICATOR_TO_GEAR = {
 # ═══════════════════════════════════════════════════════════
 # 评估参数
 # ═══════════════════════════════════════════════════════════
-HEALTH_THRESHOLD = 85       # 健康度阈值：>=85 为正常，<85 为故障
+HEALTH_THRESHOLD = 85  # 健康度阈值：>=85 为正常，<85 为故障
 ENSEMBLE_PROFILE = "balanced"  # Ensemble 策略 profile
-ENSEMBLE_MAX_SECONDS = 5.0     # Ensemble 最大处理秒数
+ENSEMBLE_MAX_SECONDS = 5.0  # Ensemble 最大处理秒数
 
 # ═══════════════════════════════════════════════════════════
 # 绘图风格
@@ -218,12 +219,12 @@ STYLE = {
     "savefig.bbox": "tight",
     "savefig.format": "svg",
     "colors": {
-        "our_method":   "#E74C3C",   # 红色 — Ensemble/我们的方法
-        "baseline":     "#95A5A6",   # 灰色 — 单一方法
-        "best_baseline":"#3498DB",   # 蓝色 — 最强 baseline
-        "healthy":      "#2ECC71",   # 绿色 — 健康
-        "warning":      "#F39C12",   # 橙色 — 预警
-        "fault":        "#E74C3C",   # 红色 — 故障
-        "diagonal":     "#CCCCCC",   # 浅灰 — 对角线
+        "our_method": "#E74C3C",  # 红色 — Ensemble/我们的方法
+        "baseline": "#95A5A6",  # 灰色 — 单一方法
+        "best_baseline": "#3498DB",  # 蓝色 — 最强 baseline
+        "healthy": "#2ECC71",  # 绿色 — 健康
+        "warning": "#F39C12",  # 橙色 — 预警
+        "fault": "#E74C3C",  # 红色 — 故障
+        "diagonal": "#CCCCCC",  # 浅灰 — 对角线
     },
 }

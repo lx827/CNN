@@ -5,6 +5,7 @@
 1. 测试运行时保存结果到 JSON
 2. 修改绘图代码后，从 JSON 重新生成图表，无需重跑数据
 """
+
 import json
 import numpy as np
 from pathlib import Path
@@ -22,7 +23,9 @@ def _convert_for_json(obj):
     return obj
 
 
-def save_confusion_matrix_results(cm, labels, method_name, accuracy, output_path, highlight=False):
+def save_confusion_matrix_results(
+    cm, labels, method_name, accuracy, output_path, highlight=False
+):
     """保存混淆矩阵数据到 JSON"""
     data = {
         "type": "confusion_matrix",
@@ -38,7 +41,9 @@ def save_confusion_matrix_results(cm, labels, method_name, accuracy, output_path
     print(f"  💾 数据已保存: {output_path}")
 
 
-def save_accuracy_bar_results(method_names, accuracies, title, output_path, highlight_indices=None, ylim=None):
+def save_accuracy_bar_results(
+    method_names, accuracies, title, output_path, highlight_indices=None, ylim=None
+):
     """保存准确率柱状图数据到 JSON"""
     data = {
         "type": "accuracy_bar",

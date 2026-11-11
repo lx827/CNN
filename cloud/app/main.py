@@ -2,6 +2,7 @@
 FastAPI 应用入口
 启动命令：python -m app.main
 """
+
 import logging
 
 from fastapi import FastAPI, Depends, WebSocket, Query, status
@@ -83,4 +84,5 @@ def root():
 if __name__ == "__main__":
     import uvicorn
     from app.core.config import API_HOST, API_PORT
+
     uvicorn.run("app.main:app", host=API_HOST, port=API_PORT, reload=True)

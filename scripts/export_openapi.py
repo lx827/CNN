@@ -8,6 +8,7 @@
 修改任何后端路由后,运行本命令刷新 openapi.json 并随代码一起提交。
 决策(issue #49):不做 CI 校验,采用"手动导出命令"保持新鲜。
 """
+
 import json
 import sys
 from pathlib import Path
@@ -24,7 +25,9 @@ OUT = ROOT / "docs" / "api" / "openapi.json"
 def main():
     spec = app.openapi()
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(spec, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    OUT.write_text(
+        json.dumps(spec, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     print(f"OpenAPI 已导出:{OUT.relative_to(ROOT)}(共 {len(spec['paths'])} 个路径)")
 
 

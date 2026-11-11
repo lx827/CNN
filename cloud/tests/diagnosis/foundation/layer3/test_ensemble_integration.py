@@ -5,17 +5,20 @@ Layer 3 集成诊断 — ensemble.py 正确性验证
 
 输出: layer3/output/ensemble_integration.json
 """
+
 import json
 import sys
 import os
 from pathlib import Path
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 from app.services.diagnosis.ensemble import run_research_ensemble
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
-    NumpyEncoder, bearing_outer_race, sinusoidal,
+    NumpyEncoder,
+    bearing_outer_race,
+    sinusoidal,
 )
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -62,15 +65,19 @@ def test_ensemble_structure():
     has_methods_field = methods_val is None or isinstance(methods_val, list)
 
     passed = has_status and has_hs and has_likelihood and has_methods_field
-    results.append({
-        "test": "ensemble_structure",
-        "status": res.get("status"),
-        "health_score": res.get("health_score"),
-        "fault_likelihood": res.get("fault_likelihood"),
-        "n_methods": len(res.get("method_results", [])),
-        "passed": passed,
-    })
-    print(f"  [{'PASS' if passed else 'FAIL'}] 结构: status={res.get('status')}, hs={res.get('health_score')}, likelihood={res.get('fault_likelihood'):.3f}, methods={len(res.get('method_results', []))}")
+    results.append(
+        {
+            "test": "ensemble_structure",
+            "status": res.get("status"),
+            "health_score": res.get("health_score"),
+            "fault_likelihood": res.get("fault_likelihood"),
+            "n_methods": len(res.get("method_results", [])),
+            "passed": passed,
+        }
+    )
+    print(
+        f"  [{'PASS' if passed else 'FAIL'}] 结构: status={res.get('status')}, hs={res.get('health_score')}, likelihood={res.get('fault_likelihood'):.3f}, methods={len(res.get('method_results', []))}"
+    )
 
     return results
 
@@ -88,10 +95,9 @@ def test_ensemble_discrimination():
     likelihood_diff = fault["fault_likelihood"] - healthy["fault_likelihood"]
 
     # 结构检查：两者都应有有效返回
-    both_valid = (
-        healthy.get("status") in {"normal", "warning", "fault"}
-        and fault.get("status") in {"normal", "warning", "fault"}
-    )
+    both_valid = healthy.get("status") in {"normal", "warning", "fault"} and fault.get(
+        "status"
+    ) in {"normal", "warning", "fault"}
 
     # 区分度检查（记录当前实际表现，若无法区分则标记为已知限制）
     can_separate = (
@@ -100,22 +106,30 @@ def test_ensemble_discrimination():
         and fault["status"] in {"warning", "fault"}
     )
 
-    results.append({
-        "test": "ensemble_discrimination",
-        "healthy_status": healthy["status"],
-        "healthy_hs": healthy["health_score"],
-        "healthy_likelihood": healthy["fault_likelihood"],
-        "fault_status": fault["status"],
-        "fault_hs": fault["health_score"],
-        "fault_likelihood": fault["fault_likelihood"],
-        "hs_diff": round(hs_diff, 3),
-        "likelihood_diff": round(likelihood_diff, 3),
-        "passed": both_valid,  # 结构有效即通过；区分度作为记录项
-        "can_separate": can_separate,
-    })
-    print(f"  [INFO] 健康: {healthy['status']} hs={healthy['health_score']} lik={healthy['fault_likelihood']:.3f}")
-    print(f"  [INFO] 故障: {fault['status']} hs={fault['health_score']} lik={fault['fault_likelihood']:.3f}")
-    print(f"  [{'PASS' if both_valid else 'FAIL'}] 返回结构有效 | 能区分={can_separate}")
+    results.append(
+        {
+            "test": "ensemble_discrimination",
+            "healthy_status": healthy["status"],
+            "healthy_hs": healthy["health_score"],
+            "healthy_likelihood": healthy["fault_likelihood"],
+            "fault_status": fault["status"],
+            "fault_hs": fault["health_score"],
+            "fault_likelihood": fault["fault_likelihood"],
+            "hs_diff": round(hs_diff, 3),
+            "likelihood_diff": round(likelihood_diff, 3),
+            "passed": both_valid,  # 结构有效即通过；区分度作为记录项
+            "can_separate": can_separate,
+        }
+    )
+    print(
+        f"  [INFO] 健康: {healthy['status']} hs={healthy['health_score']} lik={healthy['fault_likelihood']:.3f}"
+    )
+    print(
+        f"  [INFO] 故障: {fault['status']} hs={fault['health_score']} lik={fault['fault_likelihood']:.3f}"
+    )
+    print(
+        f"  [{'PASS' if both_valid else 'FAIL'}] 返回结构有效 | 能区分={can_separate}"
+    )
 
     if not can_separate:
         print("  [NOTE] 当前 ensemble 对合成信号区分度不足，见 LAYER3_ISSUES.md")
@@ -133,19 +147,25 @@ def test_ensemble_profiles():
         try:
             res = run_research_ensemble(sig, FS, profile=profile)
             ok = res.get("status") in {"normal", "warning", "fault"}
-            results.append({
-                "test": f"ensemble_profile_{profile}",
-                "status": res.get("status"),
-                "hs": res.get("health_score"),
-                "passed": ok,
-            })
-            print(f"  [{'PASS' if ok else 'FAIL'}] profile={profile}: status={res.get('status')}, hs={res.get('health_score')}")
+            results.append(
+                {
+                    "test": f"ensemble_profile_{profile}",
+                    "status": res.get("status"),
+                    "hs": res.get("health_score"),
+                    "passed": ok,
+                }
+            )
+            print(
+                f"  [{'PASS' if ok else 'FAIL'}] profile={profile}: status={res.get('status')}, hs={res.get('health_score')}"
+            )
         except Exception as e:
-            results.append({
-                "test": f"ensemble_profile_{profile}",
-                "error": str(e),
-                "passed": False,
-            })
+            results.append(
+                {
+                    "test": f"ensemble_profile_{profile}",
+                    "error": str(e),
+                    "passed": False,
+                }
+            )
             print(f"  [FAIL] profile={profile}: {e}")
 
     return results
@@ -170,11 +190,18 @@ def main():
             if item.get("passed", False):
                 passed += 1
 
-    all_results["summary"] = {"total": total, "passed": passed, "failed": total - passed}
+    all_results["summary"] = {
+        "total": total,
+        "passed": passed,
+        "failed": total - passed,
+    }
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUTPUT_DIR / "ensemble_integration.json"
-    out_path.write_text(json.dumps(all_results, indent=2, cls=NumpyEncoder, ensure_ascii=False), encoding='utf-8')
+    out_path.write_text(
+        json.dumps(all_results, indent=2, cls=NumpyEncoder, ensure_ascii=False),
+        encoding="utf-8",
+    )
     print(f"\n结果已保存: {out_path}")
 
     s = all_results["summary"]

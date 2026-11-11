@@ -2,6 +2,7 @@
 设备配置接口
 包含边端配置、告警阈值、机械参数
 """
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -11,6 +12,7 @@ router = APIRouter()
 
 
 # ========== 边端专用接口（必须放在 /{device_id}/config 之前）==========
+
 
 @router.get("/edge/config")
 def get_edge_config(device_id: str, db: Session = Depends(get_db)):
@@ -31,9 +33,13 @@ def get_edge_config(device_id: str, db: Session = Depends(get_db)):
             "sample_rate": device.sample_rate or 25600,
             "window_seconds": device.window_seconds or 10,
             "channel_count": device.channel_count or 3,
-            "compression_enabled": bool(device.compression_enabled) if device.compression_enabled is not None else True,
-            "downsample_ratio": device.downsample_ratio if device.downsample_ratio is not None else 8,
-        }
+            "compression_enabled": bool(device.compression_enabled)
+            if device.compression_enabled is not None
+            else True,
+            "downsample_ratio": device.downsample_ratio
+            if device.downsample_ratio is not None
+            else 8,
+        },
     }
 
 
@@ -60,7 +66,7 @@ def get_device_config(device_id: str, db: Session = Depends(get_db)):
             "bearing_params": device.bearing_params,
             "compression_enabled": device.compression_enabled,
             "downsample_ratio": device.downsample_ratio,
-        }
+        },
     }
 
 
@@ -82,10 +88,16 @@ def update_device_config(device_id: str, payload: dict, db: Session = Depends(ge
 
     # 更新允许的字段
     allowed_fields = [
-        "upload_interval", "task_poll_interval",
-        "sample_rate", "window_seconds", "channel_count", "channel_names",
-        "gear_teeth", "bearing_params",
-        "compression_enabled", "downsample_ratio",
+        "upload_interval",
+        "task_poll_interval",
+        "sample_rate",
+        "window_seconds",
+        "channel_count",
+        "channel_names",
+        "gear_teeth",
+        "bearing_params",
+        "compression_enabled",
+        "downsample_ratio",
     ]
     updated = {}
     for field in allowed_fields:
@@ -94,20 +106,37 @@ def update_device_config(device_id: str, payload: dict, db: Session = Depends(ge
             # 基础校验
             if field in ("upload_interval", "task_poll_interval") and value < 1:
                 raise HTTPException(status_code=422, detail=f"{field} 必须 >= 1")
-            if field in ("sample_rate", "window_seconds", "channel_count") and value < 1:
+            if (
+                field in ("sample_rate", "window_seconds", "channel_count")
+                and value < 1
+            ):
                 raise HTTPException(status_code=422, detail=f"{field} 必须 >= 1")
             if field == "channel_names" and not isinstance(value, dict):
                 raise HTTPException(status_code=422, detail="channel_names 必须为对象")
-            if field in ("gear_teeth", "bearing_params") and value is not None and not isinstance(value, dict):
-                raise HTTPException(status_code=422, detail=f"{field} 必须为对象或 null")
+            if (
+                field in ("gear_teeth", "bearing_params")
+                and value is not None
+                and not isinstance(value, dict)
+            ):
+                raise HTTPException(
+                    status_code=422, detail=f"{field} 必须为对象或 null"
+                )
             if field == "compression_enabled" and value is not None:
                 if isinstance(value, bool):
                     value = 1 if value else 0
                 elif not isinstance(value, int) or value not in (0, 1):
-                    raise HTTPException(status_code=422, detail="compression_enabled 必须为 0 或 1")
+                    raise HTTPException(
+                        status_code=422, detail="compression_enabled 必须为 0 或 1"
+                    )
                 payload[field] = value
-            if field == "downsample_ratio" and value is not None and (not isinstance(value, int) or value < 1):
-                raise HTTPException(status_code=422, detail="downsample_ratio 必须 >= 1")
+            if (
+                field == "downsample_ratio"
+                and value is not None
+                and (not isinstance(value, int) or value < 1)
+            ):
+                raise HTTPException(
+                    status_code=422, detail="downsample_ratio 必须 >= 1"
+                )
             setattr(device, field, value)
             updated[field] = value
 
@@ -119,7 +148,7 @@ def update_device_config(device_id: str, payload: dict, db: Session = Depends(ge
         "data": {
             "device_id": device.device_id,
             "updated": updated,
-        }
+        },
     }
 
 
@@ -131,13 +160,22 @@ def update_batch_config(payload: dict, db: Session = Depends(get_db)):
     """
     devices = db.query(Device).all()
     if not devices:
-        return {"code": 200, "message": "没有设备需要更新", "data": {"updated_count": 0}}
+        return {
+            "code": 200,
+            "message": "没有设备需要更新",
+            "data": {"updated_count": 0},
+        }
 
     allowed_fields = [
-        "upload_interval", "task_poll_interval",
-        "sample_rate", "window_seconds", "channel_count",
-        "gear_teeth", "bearing_params",
-        "compression_enabled", "downsample_ratio",
+        "upload_interval",
+        "task_poll_interval",
+        "sample_rate",
+        "window_seconds",
+        "channel_count",
+        "gear_teeth",
+        "bearing_params",
+        "compression_enabled",
+        "downsample_ratio",
     ]
 
     updated_count = 0
@@ -149,17 +187,34 @@ def update_batch_config(payload: dict, db: Session = Depends(get_db)):
                 # 复用相同的校验逻辑
                 if field in ("upload_interval", "task_poll_interval") and value < 1:
                     raise HTTPException(status_code=422, detail=f"{field} 必须 >= 1")
-                if field in ("sample_rate", "window_seconds", "channel_count") and value < 1:
+                if (
+                    field in ("sample_rate", "window_seconds", "channel_count")
+                    and value < 1
+                ):
                     raise HTTPException(status_code=422, detail=f"{field} 必须 >= 1")
-                if field in ("gear_teeth", "bearing_params") and value is not None and not isinstance(value, dict):
-                    raise HTTPException(status_code=422, detail=f"{field} 必须为对象或 null")
+                if (
+                    field in ("gear_teeth", "bearing_params")
+                    and value is not None
+                    and not isinstance(value, dict)
+                ):
+                    raise HTTPException(
+                        status_code=422, detail=f"{field} 必须为对象或 null"
+                    )
                 if field == "compression_enabled" and value is not None:
                     if isinstance(value, bool):
                         value = 1 if value else 0
                     elif not isinstance(value, int) or value not in (0, 1):
-                        raise HTTPException(status_code=422, detail="compression_enabled 必须为 0 或 1")
-                if field == "downsample_ratio" and value is not None and (not isinstance(value, int) or value < 1):
-                    raise HTTPException(status_code=422, detail="downsample_ratio 必须 >= 1")
+                        raise HTTPException(
+                            status_code=422, detail="compression_enabled 必须为 0 或 1"
+                        )
+                if (
+                    field == "downsample_ratio"
+                    and value is not None
+                    and (not isinstance(value, int) or value < 1)
+                ):
+                    raise HTTPException(
+                        status_code=422, detail="downsample_ratio 必须 >= 1"
+                    )
                 setattr(device, field, value)
                 has_update = True
         if has_update:
@@ -172,11 +227,12 @@ def update_batch_config(payload: dict, db: Session = Depends(get_db)):
         "data": {
             "updated_count": updated_count,
             "updated_fields": {k: v for k, v in payload.items() if k in allowed_fields},
-        }
+        },
     }
 
 
 # ========== 告警阈值配置接口 ==========
+
 
 @router.get("/{device_id}/alarm-thresholds")
 def get_alarm_thresholds(device_id: str, db: Session = Depends(get_db)):
@@ -185,6 +241,7 @@ def get_alarm_thresholds(device_id: str, db: Session = Depends(get_db)):
     返回用户自定义配置 + 实际生效阈值（含默认值回退）
     """
     from app.core.thresholds import DEVICE_DEFAULT_THRESHOLDS as DEFAULT_THRESHOLDS
+
     device = db.query(Device).filter(Device.device_id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
@@ -198,8 +255,12 @@ def get_alarm_thresholds(device_id: str, db: Session = Depends(get_db)):
         user_metric = user_cfg.get(key, {})
         default_metric = DEFAULT_THRESHOLDS.get(key, {})
         effective[key] = {
-            "warning": user_metric.get("warning") if user_metric.get("warning") is not None else default_metric.get("warning"),
-            "critical": user_metric.get("critical") if user_metric.get("critical") is not None else default_metric.get("critical"),
+            "warning": user_metric.get("warning")
+            if user_metric.get("warning") is not None
+            else default_metric.get("warning"),
+            "critical": user_metric.get("critical")
+            if user_metric.get("critical") is not None
+            else default_metric.get("critical"),
         }
         if key not in user_cfg:
             user_cfg[key] = {"warning": None, "critical": None}
@@ -210,12 +271,14 @@ def get_alarm_thresholds(device_id: str, db: Session = Depends(get_db)):
             "device_id": device.device_id,
             "alarm_thresholds": user_cfg,
             "effective_thresholds": effective,
-        }
+        },
     }
 
 
 @router.put("/{device_id}/alarm-thresholds")
-def update_alarm_thresholds(device_id: str, payload: dict, db: Session = Depends(get_db)):
+def update_alarm_thresholds(
+    device_id: str, payload: dict, db: Session = Depends(get_db)
+):
     """
     更新设备的告警阈值配置
 
@@ -250,8 +313,7 @@ def update_alarm_thresholds(device_id: str, payload: dict, db: Session = Depends
         # 校验：如果都填了，必须 warning < critical
         if warning is not None and critical is not None and warning >= critical:
             raise HTTPException(
-                status_code=422,
-                detail=f"{metric} 的预警阈值必须小于严重阈值"
+                status_code=422, detail=f"{metric} 的预警阈值必须小于严重阈值"
             )
         validated[metric] = {
             "warning": float(warning) if warning is not None else None,
@@ -267,5 +329,5 @@ def update_alarm_thresholds(device_id: str, payload: dict, db: Session = Depends
         "data": {
             "device_id": device.device_id,
             "alarm_thresholds": validated,
-        }
+        },
     }

@@ -10,6 +10,7 @@ D-S 证据融合评价模块
   ds_fusion/comparison_table.md
   ds_fusion/far_reduction.png
 """
+
 import sys
 import time
 from pathlib import Path
@@ -21,12 +22,18 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 
 from app.services.diagnosis import (
-    DiagnosisEngine, BearingMethod, DiagnosisStrategy, DenoiseMethod,
+    DiagnosisEngine,
+    BearingMethod,
+    DiagnosisStrategy,
+    DenoiseMethod,
 )
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
 
 from .config import (
-    OUTPUT_DIR, SAMPLE_RATE, HUSTBEAR_BEARING, BEARING_FREQ_COEFFS,
+    OUTPUT_DIR,
+    SAMPLE_RATE,
+    HUSTBEAR_BEARING,
+    BEARING_FREQ_COEFFS,
 )
 from .datasets import get_hustbear_files, classify_hustbear
 from .utils import load_npy, save_cache, save_figure
@@ -34,10 +41,16 @@ from .utils import load_npy, save_cache, save_figure
 from .classification_metrics_eval import evaluate_classification_performance
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "KaiTi", "Arial Unicode MS"]
+plt.rcParams["font.sans-serif"] = [
+    "Microsoft YaHei",
+    "SimHei",
+    "KaiTi",
+    "Arial Unicode MS",
+]
 plt.rcParams["axes.unicode_minus"] = False
 
 # ────────────────────────────────────────────────────────────
@@ -63,7 +76,7 @@ INDICATOR_TO_LABEL = {
     "bsf_stat": "ball",
     "ftf": "ball",
     "ftf_stat": "ball",
-    "envelope_peak_snr": "outer",    # 统计指标偏外圈
+    "envelope_peak_snr": "outer",  # 统计指标偏外圈
     "envelope_kurtosis": "outer",
     "moderate_kurtosis": "outer",
     "high_freq_ratio": "inner",
@@ -107,6 +120,7 @@ SINGLE_BEARING_METHODS = [
 # 标签推断
 # ────────────────────────────────────────────────────────────
 
+
 def _predict_label_from_bearing_result(result: Dict, health_score: int) -> str:
     """从单方法轴承诊断结果推断分类标签。
 
@@ -129,9 +143,12 @@ def _predict_label_from_bearing_result(result: Dict, health_score: int) -> str:
             continue
         if item.get("significant"):
             if name.endswith("_stat") or name in {
-                "envelope_peak_snr", "envelope_kurtosis",
-                "moderate_kurtosis", "envelope_crest_factor",
-                "high_freq_ratio", "peak_concentration",
+                "envelope_peak_snr",
+                "envelope_kurtosis",
+                "moderate_kurtosis",
+                "envelope_crest_factor",
+                "high_freq_ratio",
+                "peak_concentration",
             }:
                 stat_hits.append(name)
             else:
@@ -189,6 +206,7 @@ def _predict_label_from_ensemble(result: Dict) -> str:
 # 评价流程
 # ────────────────────────────────────────────────────────────
 
+
 def evaluate_ds_fusion():
     """D-S 证据融合评价主入口"""
     print("\n" + "=" * 60)
@@ -215,7 +233,9 @@ def evaluate_ds_fusion():
             method_name = bm.value
             if method_name not in single_method_data:
                 single_method_data[method_name] = {
-                    "y_true": [], "y_pred": [], "scores": [],
+                    "y_true": [],
+                    "y_pred": [],
+                    "scores": [],
                 }
 
             try:
@@ -228,7 +248,9 @@ def evaluate_ds_fusion():
                 )
                 result = engine.analyze_bearing(signal, SAMPLE_RATE, rot_freq=rot_freq)
                 # 获取综合健康度
-                comp = engine.analyze_comprehensive(signal, SAMPLE_RATE, rot_freq=rot_freq)
+                comp = engine.analyze_comprehensive(
+                    signal, SAMPLE_RATE, rot_freq=rot_freq
+                )
                 hs = comp.get("health_score", 100)
                 exec_time = (time.perf_counter() - t0) * 1000
 
@@ -240,8 +262,10 @@ def evaluate_ds_fusion():
                 single_method_data[method_name]["y_pred"].append(pred_label)
                 single_method_data[method_name]["scores"].append(score)
 
-                print(f"    {filepath.name} | {method_name} | true={true_label} "
-                      f"pred={pred_label} hs={hs} ({exec_time:.0f}ms)")
+                print(
+                    f"    {filepath.name} | {method_name} | true={true_label} "
+                    f"pred={pred_label} hs={hs} ({exec_time:.0f}ms)"
+                )
             except Exception as e:
                 print(f"    [ERR] {method_name} on {filepath.name}: {e}")
                 single_method_data[method_name]["y_true"].append(true_label)
@@ -260,8 +284,10 @@ def evaluate_ds_fusion():
         try:
             t0 = time.perf_counter()
             from app.services.diagnosis.ensemble import run_research_ensemble
+
             result = run_research_ensemble(
-                signal, SAMPLE_RATE,
+                signal,
+                SAMPLE_RATE,
                 bearing_params=HUSTBEAR_BEARING,
                 denoise_method="none",
                 rot_freq=rot_freq,
@@ -287,11 +313,13 @@ def evaluate_ds_fusion():
             fusion_data["y_pred"].append(pred_label)
             fusion_data["scores"].append(score)
 
-            print(f"    {filepath.name} | DS-Fusion | true={true_label} "
-                  f"pred={pred_label} hs={hs} "
-                  f"dominant={ds_result.get('dominant_fault', 'N/A')} "
-                  f"prob={ds_result.get('dominant_probability', 0):.3f} "
-                  f"({exec_time:.0f}ms)")
+            print(
+                f"    {filepath.name} | DS-Fusion | true={true_label} "
+                f"pred={pred_label} hs={hs} "
+                f"dominant={ds_result.get('dominant_fault', 'N/A')} "
+                f"prob={ds_result.get('dominant_probability', 0):.3f} "
+                f"({exec_time:.0f}ms)"
+            )
         except Exception as e:
             print(f"    [ERR] DS-Fusion on {filepath.name}: {e}")
             fusion_data["y_true"].append(true_label)
@@ -326,8 +354,10 @@ def evaluate_ds_fusion():
             title_prefix=f"单方法_{method_name}",
         )
         single_metrics[method_name] = metrics
-        print(f"    {method_name}: Acc={metrics['accuracy']:.4f} "
-              f"FAR={metrics['far']:.4f} FIA={metrics['fia']:.4f}")
+        print(
+            f"    {method_name}: Acc={metrics['accuracy']:.4f} "
+            f"FAR={metrics['far']:.4f} FIA={metrics['fia']:.4f}"
+        )
 
     # D-S 融合分类指标
     fusion_metrics = evaluate_classification_performance(
@@ -338,8 +368,10 @@ def evaluate_ds_fusion():
         output_subdir=str(DS_FUSION_DIR),
         title_prefix="DS融合",
     )
-    print(f"    DS-Fusion: Acc={fusion_metrics['accuracy']:.4f} "
-          f"FAR={fusion_metrics['far']:.4f} FIA={fusion_metrics['fia']:.4f}")
+    print(
+        f"    DS-Fusion: Acc={fusion_metrics['accuracy']:.4f} "
+        f"FAR={fusion_metrics['far']:.4f} FIA={fusion_metrics['fia']:.4f}"
+    )
 
     # ── 计算融合增益 ──
     fusion_gain = _compute_fusion_gain(single_metrics, fusion_metrics)
@@ -368,6 +400,7 @@ def evaluate_ds_fusion():
 # ────────────────────────────────────────────────────────────
 # 融合增益计算
 # ────────────────────────────────────────────────────────────
+
 
 def _compute_fusion_gain(
     single_metrics: Dict[str, Dict[str, Any]],
@@ -436,6 +469,7 @@ def _compute_fusion_gain(
 # FAR 降低柱状图
 # ────────────────────────────────────────────────────────────
 
+
 def _plot_far_reduction(
     single_metrics: Dict[str, Dict[str, Any]],
     fusion_metrics: Dict[str, Any],
@@ -457,15 +491,22 @@ def _plot_far_reduction(
 
     # 单方法柱 (蓝色系)
     bars_single = ax.bar(
-        x[:len(methods)], single_fars, width=0.55,
+        x[: len(methods)],
+        single_fars,
+        width=0.55,
         color=["steelblue"] * len(methods),
-        edgecolor="navy", alpha=0.85,
+        edgecolor="navy",
+        alpha=0.85,
         label="单方法 FAR",
     )
     # D-S 融合柱 (绿色)
     bars_fusion = ax.bar(
-        x[len(methods)], fusion_far, width=0.55,
-        color="seagreen", edgecolor="darkgreen", alpha=0.9,
+        x[len(methods)],
+        fusion_far,
+        width=0.55,
+        color="seagreen",
+        edgecolor="darkgreen",
+        alpha=0.9,
         label="D-S 融合 FAR",
     )
 
@@ -478,14 +519,18 @@ def _plot_far_reduction(
                     bar.get_x() + bar.get_width() / 2.0,
                     height + 0.01,
                     f"{height:.3f}",
-                    ha="center", va="bottom", fontsize=9,
+                    ha="center",
+                    va="bottom",
+                    fontsize=9,
                 )
             else:
                 ax.text(
                     bar.get_x() + bar.get_width() / 2.0,
                     0.01,
                     f"{height:.3f}",
-                    ha="center", va="bottom", fontsize=9,
+                    ha="center",
+                    va="bottom",
+                    fontsize=9,
                 )
 
     # 标注最低单方法 FAR 和 融合 FAR 的差异箭头
@@ -494,8 +539,13 @@ def _plot_far_reduction(
         min_far_val = single_fars[min_far_idx]
         fusion_idx = len(methods)
         # 画一条虚线标注最低单方法 FAR
-        ax.axhline(y=min_far_val, color="orange", linestyle="--", alpha=0.6,
-                    label=f"最低单方法 FAR ({methods[min_far_idx]}={min_far_val:.3f})")
+        ax.axhline(
+            y=min_far_val,
+            color="orange",
+            linestyle="--",
+            alpha=0.6,
+            label=f"最低单方法 FAR ({methods[min_far_idx]}={min_far_val:.3f})",
+        )
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=30, ha="right")
@@ -512,6 +562,7 @@ def _plot_far_reduction(
 # ────────────────────────────────────────────────────────────
 # 比较表 Markdown 生成
 # ────────────────────────────────────────────────────────────
+
 
 def _generate_comparison_table(
     single_metrics: Dict[str, Dict[str, Any]],
@@ -548,44 +599,52 @@ def _generate_comparison_table(
             f"| {m['detection_score']} |"
         )
 
-    lines.extend([
-        "",
-        "## 3. D-S 融合分类性能",
-        "",
-        "| 指标 | 值 |",
-        "|------|-----|",
-        f"| Accuracy | {fusion_metrics['accuracy']} |",
-        f"| Balanced Accuracy | {fusion_metrics['balanced_accuracy']} |",
-        f"| Macro-F1 | {fusion_metrics['macro_f1']} |",
-        f"| Weighted-F1 | {fusion_metrics['weighted_f1']} |",
-        f"| Cohen's Kappa | {fusion_metrics['cohen_kappa']} |",
-        f"| MCC | {fusion_metrics['mcc']} |",
-        f"| FAR (虚警率) | {fusion_metrics['far']} |",
-        f"| FIA (故障隔离准确率) | {fusion_metrics['fia']} |",
-        f"| Detection Score | {fusion_metrics['detection_score']} |",
-        f"| Macro-AUC-ROC | {fusion_metrics['macro_auc_roc']} |",
-        f"| Macro-AUC-PR | {fusion_metrics['macro_auc_pr']} |",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 3. D-S 融合分类性能",
+            "",
+            "| 指标 | 值 |",
+            "|------|-----|",
+            f"| Accuracy | {fusion_metrics['accuracy']} |",
+            f"| Balanced Accuracy | {fusion_metrics['balanced_accuracy']} |",
+            f"| Macro-F1 | {fusion_metrics['macro_f1']} |",
+            f"| Weighted-F1 | {fusion_metrics['weighted_f1']} |",
+            f"| Cohen's Kappa | {fusion_metrics['cohen_kappa']} |",
+            f"| MCC | {fusion_metrics['mcc']} |",
+            f"| FAR (虚警率) | {fusion_metrics['far']} |",
+            f"| FIA (故障隔离准确率) | {fusion_metrics['fia']} |",
+            f"| Detection Score | {fusion_metrics['detection_score']} |",
+            f"| Macro-AUC-ROC | {fusion_metrics['macro_auc_roc']} |",
+            f"| Macro-AUC-PR | {fusion_metrics['macro_auc_pr']} |",
+            "",
+        ]
+    )
 
     # ── 融合增益表 ──
-    lines.extend([
-        "## 4. 融合增益 (Fusion Gain)",
-        "",
-        "增益定义:",
-        "",
-        "- **ΔAccuracy** = Acc_fusion − max(Acc_single): 正值表示融合超越最佳单方法",
-        "- **ΔFAR** = FAR_fusion − min(FAR_single): 负值表示融合降低虚警率(改进)",
-        "- **ΔFIA** = FIA_fusion − max(FIA_single): 正值表示融合超越最佳单方法",
-        "",
-        "| 增益指标 | 值 | 基线方法 | 基线值 | 融合值 | 说明 |",
-        "|----------|-----|----------|--------|--------|------|",
-    ])
+    lines.extend(
+        [
+            "## 4. 融合增益 (Fusion Gain)",
+            "",
+            "增益定义:",
+            "",
+            "- **ΔAccuracy** = Acc_fusion − max(Acc_single): 正值表示融合超越最佳单方法",
+            "- **ΔFAR** = FAR_fusion − min(FAR_single): 负值表示融合降低虚警率(改进)",
+            "- **ΔFIA** = FIA_fusion − max(FIA_single): 正值表示融合超越最佳单方法",
+            "",
+            "| 增益指标 | 值 | 基线方法 | 基线值 | 融合值 | 说明 |",
+            "|----------|-----|----------|--------|--------|------|",
+        ]
+    )
 
     # ΔAccuracy
     delta_acc = fusion_gain["delta_accuracy"]
     acc_sign = "+" if delta_acc >= 0 else ""
-    acc_note = "超越最佳单方法" if delta_acc > 0 else ("持平" if delta_acc == 0 else "低于最佳单方法")
+    acc_note = (
+        "超越最佳单方法"
+        if delta_acc > 0
+        else ("持平" if delta_acc == 0 else "低于最佳单方法")
+    )
     lines.append(
         f"| ΔAccuracy | {acc_sign}{delta_acc} | "
         f"{fusion_gain['best_single_acc_method']} | "
@@ -596,7 +655,11 @@ def _generate_comparison_table(
     # ΔFAR
     delta_far = fusion_gain["delta_far"]
     far_sign = "+" if delta_far >= 0 else ""
-    far_note = "虚警率降低(改进)" if delta_far < 0 else ("持平" if delta_far == 0 else "虚警率升高(退化)")
+    far_note = (
+        "虚警率降低(改进)"
+        if delta_far < 0
+        else ("持平" if delta_far == 0 else "虚警率升高(退化)")
+    )
     if fusion_gain.get("far_reduction_pct", 0) != 0:
         far_note += f" ({fusion_gain['far_reduction_pct']:.1f}% 降低)"
     lines.append(
@@ -609,7 +672,11 @@ def _generate_comparison_table(
     # ΔFIA
     delta_fia = fusion_gain["delta_fia"]
     fia_sign = "+" if delta_fia >= 0 else ""
-    fia_note = "超越最佳单方法" if delta_fia > 0 else ("持平" if delta_fia == 0 else "低于最佳单方法")
+    fia_note = (
+        "超越最佳单方法"
+        if delta_fia > 0
+        else ("持平" if delta_fia == 0 else "低于最佳单方法")
+    )
     lines.append(
         f"| ΔFIA | {fia_sign}{delta_fia} | "
         f"{fusion_gain['best_single_fia_method']} | "
@@ -618,13 +685,15 @@ def _generate_comparison_table(
     )
 
     # ── 逐方法对比 ──
-    lines.extend([
-        "",
-        "## 5. 逐方法对比",
-        "",
-        "| 方法 | Accuracy | FAR | FIA | Acc差值 | FAR差值 | FIA差值 |",
-        "|------|----------|-----|-----|---------|---------|---------|",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 5. 逐方法对比",
+            "",
+            "| 方法 | Accuracy | FAR | FIA | Acc差值 | FAR差值 | FIA差值 |",
+            "|------|----------|-----|-----|---------|---------|---------|",
+        ]
+    )
 
     fusion_acc = fusion_metrics["accuracy"]
     fusion_far = fusion_metrics["far"]
@@ -652,24 +721,28 @@ def _generate_comparison_table(
     )
 
     # ── D-S 融合内部统计 ──
-    lines.extend([
-        "",
-        "## 6. D-S 融合内部统计",
-        "",
-        "| 指标 | 值 | 说明 |",
-        "|------|-----|------|",
-        f"| 冲突系数阈值 | 0.8 | K > 0.8 时切换 Murphy 平均法 |",
-        f"| 证据门控 | kurt>5 或 crest>10 | 无时域冲击证据时统计指标降权 |",
-        f"| 弱证据阈值 | confidence 0.2~0.55 | 部分质量给故障，更多给 Θ |",
-        f"| 极弱证据阈值 | confidence < 0.2 | Θ 占主导 |",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 6. D-S 融合内部统计",
+            "",
+            "| 指标 | 值 | 说明 |",
+            "|------|-----|------|",
+            f"| 冲突系数阈值 | 0.8 | K > 0.8 时切换 Murphy 平均法 |",
+            f"| 证据门控 | kurt>5 或 crest>10 | 无时域冲击证据时统计指标降权 |",
+            f"| 弱证据阈值 | confidence 0.2~0.55 | 部分质量给故障，更多给 Θ |",
+            f"| 极弱证据阈值 | confidence < 0.2 | Θ 占主导 |",
+            "",
+        ]
+    )
 
     # ── 结论 ──
-    lines.extend([
-        "## 7. 结论",
-        "",
-    ])
+    lines.extend(
+        [
+            "## 7. 结论",
+            "",
+        ]
+    )
 
     if fusion_gain["delta_accuracy"] > 0:
         lines.append(
@@ -726,21 +799,23 @@ def _generate_comparison_table(
             f"({fusion_gain['best_single_fia']})，下降 {abs(fusion_gain['delta_fia'])}"
         )
 
-    lines.extend([
-        "",
-        "### 核心发现",
-        "",
-        "D-S 证据融合通过弱投票机制整合多源证据，理论上应:",
-        "1. **降低虚警率**: 单方法的误报证据在融合中被低置信度投票稀释",
-        "2. **提高故障隔离准确率**: 多方法一致指向的故障类型获得更高融合质量",
-        "3. **保持检出率**: 只要多数方法检出故障，融合不会遗漏",
-        "",
-        "实际表现取决于:",
-        "- 数据集中各类故障的分布比例",
-        "- 各单方法对不同故障类型的敏感度差异",
-        "- D-S BPA 分配参数（confidence 阈值、质量分配比例）",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "### 核心发现",
+            "",
+            "D-S 证据融合通过弱投票机制整合多源证据，理论上应:",
+            "1. **降低虚警率**: 单方法的误报证据在融合中被低置信度投票稀释",
+            "2. **提高故障隔离准确率**: 多方法一致指向的故障类型获得更高融合质量",
+            "3. **保持检出率**: 只要多数方法检出故障，融合不会遗漏",
+            "",
+            "实际表现取决于:",
+            "- 数据集中各类故障的分布比例",
+            "- 各单方法对不同故障类型的敏感度差异",
+            "- D-S BPA 分配参数（confidence 阈值、质量分配比例）",
+            "",
+        ]
+    )
 
     return "\n".join(lines)
 

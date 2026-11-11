@@ -1,4 +1,5 @@
 """Teager 能量算子（TEO）与显式工程组合的包络 Pipeline。"""
+
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -48,7 +49,13 @@ def _envelope_after_teo(
     nyquist = sample_rate_hz / 2.0
     envelope = np.abs(hilbert(values))
     low_pass_hz = min(parameters.envelope_low_pass_hz, nyquist * (1.0 - 1e-6))
-    low_sos = butter(parameters.filter_order, low_pass_hz, btype="lowpass", fs=sample_rate_hz, output="sos")
+    low_sos = butter(
+        parameters.filter_order,
+        low_pass_hz,
+        btype="lowpass",
+        fs=sample_rate_hz,
+        output="sos",
+    )
     envelope = sosfiltfilt(low_sos, envelope)
     envelope -= np.mean(envelope)
     window = windows.hann(len(envelope), sym=False)
@@ -58,7 +65,8 @@ def _envelope_after_teo(
         amplitude[-1] *= 0.5
     spectrum = Spectrum(
         frequency_hz=rfftfreq(len(envelope), 1.0 / sample_rate_hz),
-        amplitude=amplitude, amplitude_unit="input_signal^2",
+        amplitude=amplitude,
+        amplitude_unit="input_signal^2",
     )
     return EnvelopeRepresentation(
         spectrum=spectrum.truncated(low_pass_hz),
@@ -85,9 +93,16 @@ class TEOEnvelopePipeline:
             raise ValueError("TEO 包络输入必须是一维有限数组且至少 64 点")
         if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
             raise ValueError("采样率必须为有限正数")
-        if not np.isfinite(params.envelope_low_pass_hz) or params.envelope_low_pass_hz <= 0:
+        if (
+            not np.isfinite(params.envelope_low_pass_hz)
+            or params.envelope_low_pass_hz <= 0
+        ):
             raise ValueError("包络低通截止频率必须为有限正数")
-        if isinstance(params.filter_order, bool) or not isinstance(params.filter_order, int) or params.filter_order <= 0:
+        if (
+            isinstance(params.filter_order, bool)
+            or not isinstance(params.filter_order, int)
+            or params.filter_order <= 0
+        ):
             raise ValueError("滤波器阶数必须为正整数")
         x = x - np.mean(x)
         if not np.any(x):
@@ -111,7 +126,9 @@ class TEOEnvelopePipeline:
         raw = teager_energy_operator(filtered)
         # 多分量 TEO 含交叉项；限带只是工程缓解，截负也只用于包络输入。
         envelope_input = np.maximum(raw, 0.0)
-        representation = _envelope_after_teo(envelope_input, sample_rate_hz, band, params)
+        representation = _envelope_after_teo(
+            envelope_input, sample_rate_hz, band, params
+        )
         return TEOEnvelopeResult(
             status="computed",
             method=self.method,

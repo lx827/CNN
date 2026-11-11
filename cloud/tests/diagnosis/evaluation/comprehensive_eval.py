@@ -1,6 +1,7 @@
 """
 综合诊断评价模块
 """
+
 import sys
 import time
 from pathlib import Path
@@ -12,15 +13,21 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 
 from app.services.diagnosis import (
-    DiagnosisEngine, BearingMethod, GearMethod,
-    DiagnosisStrategy, DenoiseMethod
+    DiagnosisEngine,
+    BearingMethod,
+    GearMethod,
+    DiagnosisStrategy,
+    DenoiseMethod,
 )
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
 
 from .config import OUTPUT_DIR, SAMPLE_RATE, HUSTBEAR_BEARING, WTGEARBOX_GEAR
 from .datasets import get_hustbear_files, get_wtgearbox_files
 from .utils import load_npy, save_cache, save_figure
-from .classification_metrics_eval import evaluate_classification_performance, generate_classification_metrics_table
+from .classification_metrics_eval import (
+    evaluate_classification_performance,
+    generate_classification_metrics_table,
+)
 
 import matplotlib.pyplot as plt
 
@@ -37,6 +44,7 @@ def evaluate_comprehensive_diagnosis():
     if hust_files:
         # 综合诊断较慢，每个类别最多取2个样本
         from collections import defaultdict
+
         class_files = defaultdict(list)
         for f, info in hust_files:
             class_files[info["label"]].append((f, info))
@@ -47,7 +55,10 @@ def evaluate_comprehensive_diagnosis():
         for filepath, info in limited:
             signal = load_npy(filepath)
             rot_freq = estimate_rot_freq_spectrum(signal, SAMPLE_RATE)
-            for method_name, profile in [("ensemble_runtime", "runtime"), ("ensemble_balanced", "balanced")]:
+            for method_name, profile in [
+                ("ensemble_runtime", "runtime"),
+                ("ensemble_balanced", "balanced"),
+            ]:
                 try:
                     t0 = time.perf_counter()
                     engine = DiagnosisEngine(
@@ -60,21 +71,24 @@ def evaluate_comprehensive_diagnosis():
                         signal, SAMPLE_RATE, rot_freq=rot_freq, profile=profile
                     )
                     exec_time = (time.perf_counter() - t0) * 1000
-                    all_results.append({
-                        "dataset": "HUSTbear",
-                        "file": filepath.name,
-                        "method": method_name,
-                        "fault_label": info["label"],
-                        "health_score": result.get("health_score", 100),
-                        "status": result.get("status", "normal"),
-                        "exec_time_ms": round(exec_time, 2),
-                    })
+                    all_results.append(
+                        {
+                            "dataset": "HUSTbear",
+                            "file": filepath.name,
+                            "method": method_name,
+                            "fault_label": info["label"],
+                            "health_score": result.get("health_score", 100),
+                            "status": result.get("status", "normal"),
+                            "exec_time_ms": round(exec_time, 2),
+                        }
+                    )
                 except Exception as e:
                     pass
 
     wt_files = get_wtgearbox_files()
     if wt_files:
         from collections import defaultdict
+
         class_files = defaultdict(list)
         for f, info in wt_files:
             class_files[info["label"]].append((f, info))
@@ -102,15 +116,17 @@ def evaluate_comprehensive_diagnosis():
                     signal, SAMPLE_RATE, rot_freq=rot_freq, profile="balanced"
                 )
                 exec_time = (time.perf_counter() - t0) * 1000
-                all_results.append({
-                    "dataset": "WTgearbox",
-                    "file": filepath.name,
-                    "method": "ensemble_gear",
-                    "fault_label": info["label"],
-                    "health_score": result.get("health_score", 100),
-                    "status": result.get("status", "normal"),
-                    "exec_time_ms": round(exec_time, 2),
-                })
+                all_results.append(
+                    {
+                        "dataset": "WTgearbox",
+                        "file": filepath.name,
+                        "method": "ensemble_gear",
+                        "fault_label": info["label"],
+                        "health_score": result.get("health_score", 100),
+                        "status": result.get("status", "normal"),
+                        "exec_time_ms": round(exec_time, 2),
+                    }
+                )
             except Exception:
                 pass
 
@@ -118,9 +134,15 @@ def evaluate_comprehensive_diagnosis():
     _plot_comprehensive_results(all_results)
 
     report = _generate_comprehensive_report(all_results)
-    with open(OUTPUT_DIR / "comprehensive" / "comprehensive_evaluation.md", "w", encoding="utf-8") as f:
+    with open(
+        OUTPUT_DIR / "comprehensive" / "comprehensive_evaluation.md",
+        "w",
+        encoding="utf-8",
+    ) as f:
         f.write(report)
-    print(f"  报告已保存: {OUTPUT_DIR / 'comprehensive' / 'comprehensive_evaluation.md'}")
+    print(
+        f"  报告已保存: {OUTPUT_DIR / 'comprehensive' / 'comprehensive_evaluation.md'}"
+    )
 
     # ═══════ 分类性能评价 ═══════
     _evaluate_comprehensive_classification(all_results)
@@ -167,10 +189,14 @@ def _evaluate_comprehensive_classification(results: List[Dict]):
                 output_subdir=f"comprehensive/{dataset.lower()}",
                 title_prefix=f"综合_{dataset}",
             )
-            cls_table = generate_classification_metrics_table(cls_metrics, title=f"综合诊断 ({dataset})")
+            cls_table = generate_classification_metrics_table(
+                cls_metrics, title=f"综合诊断 ({dataset})"
+            )
             out_dir = OUTPUT_DIR / "comprehensive" / dataset.lower()
             out_dir.mkdir(parents=True, exist_ok=True)
-            with open(out_dir / "classification_metrics.md", "w", encoding="utf-8") as f:
+            with open(
+                out_dir / "classification_metrics.md", "w", encoding="utf-8"
+            ) as f:
                 f.write(cls_table)
             print(f"  {dataset} 分类指标已保存")
         except Exception as e:
@@ -192,7 +218,11 @@ def _plot_comprehensive_results(results: List[Dict]):
         matrix = np.zeros((len(labels), len(methods)))
         for i, lbl in enumerate(labels):
             for j, m in enumerate(methods):
-                items = [r for r in ds_results if r["fault_label"]==lbl and r["method"]==m]
+                items = [
+                    r
+                    for r in ds_results
+                    if r["fault_label"] == lbl and r["method"] == m
+                ]
                 if items:
                     matrix[i, j] = np.mean([r["health_score"] for r in items])
         im = ax.imshow(matrix, cmap="RdYlGn", vmin=0, vmax=100, aspect="auto")
@@ -203,7 +233,15 @@ def _plot_comprehensive_results(results: List[Dict]):
         ax.set_title(f"{ds} 平均健康度热力图")
         for i in range(len(labels)):
             for j in range(len(methods)):
-                ax.text(j, i, f"{matrix[i, j]:.0f}", ha="center", va="center", color="black", fontsize=8)
+                ax.text(
+                    j,
+                    i,
+                    f"{matrix[i, j]:.0f}",
+                    ha="center",
+                    va="center",
+                    color="black",
+                    fontsize=8,
+                )
         plt.colorbar(im, ax=ax)
     save_figure(fig, "health_heatmap.png", "comprehensive")
 
@@ -223,9 +261,17 @@ def _generate_comprehensive_report(results: List[Dict]) -> str:
     lines.append("| 方法 | 检出率 | 误报率 | F1 | 分离度 | 平均时间(ms) |")
     lines.append("|------|--------|--------|-----|--------|-------------|")
     for m in methods:
-        healthy_hs = [r["health_score"] for r in hust if r["method"]==m and r["fault_label"]=="healthy"]
-        fault_hs = [r["health_score"] for r in hust if r["method"]==m and r["fault_label"]!="healthy"]
-        times = [r["exec_time_ms"] for r in hust if r["method"]==m]
+        healthy_hs = [
+            r["health_score"]
+            for r in hust
+            if r["method"] == m and r["fault_label"] == "healthy"
+        ]
+        fault_hs = [
+            r["health_score"]
+            for r in hust
+            if r["method"] == m and r["fault_label"] != "healthy"
+        ]
+        times = [r["exec_time_ms"] for r in hust if r["method"] == m]
         if healthy_hs and fault_hs:
             tp = sum(1 for h in fault_hs if h < 85)
             fn = sum(1 for h in fault_hs if h >= 85)
@@ -237,7 +283,9 @@ def _generate_comprehensive_report(results: List[Dict]) -> str:
             rec = det
             f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0
             sep = np.mean(healthy_hs) - np.mean(fault_hs)
-            lines.append(f"| {m} | {det:.2%} | {fa:.2%} | {f1:.3f} | {sep:.1f} | {np.mean(times):.1f} |")
+            lines.append(
+                f"| {m} | {det:.2%} | {fa:.2%} | {f1:.3f} | {sep:.1f} | {np.mean(times):.1f} |"
+            )
         else:
             lines.append(f"| {m} | N/A | N/A | N/A | N/A | {np.mean(times):.1f} |")
 
@@ -247,9 +295,17 @@ def _generate_comprehensive_report(results: List[Dict]) -> str:
     lines.append("| 方法 | 检出率 | 误报率 | F1 | 分离度 | 平均时间(ms) |")
     lines.append("|------|--------|--------|-----|--------|-------------|")
     for m in methods_wt:
-        healthy_hs = [r["health_score"] for r in wt if r["method"]==m and r["fault_label"]=="healthy"]
-        fault_hs = [r["health_score"] for r in wt if r["method"]==m and r["fault_label"]!="healthy"]
-        times = [r["exec_time_ms"] for r in wt if r["method"]==m]
+        healthy_hs = [
+            r["health_score"]
+            for r in wt
+            if r["method"] == m and r["fault_label"] == "healthy"
+        ]
+        fault_hs = [
+            r["health_score"]
+            for r in wt
+            if r["method"] == m and r["fault_label"] != "healthy"
+        ]
+        times = [r["exec_time_ms"] for r in wt if r["method"] == m]
         if healthy_hs and fault_hs:
             tp = sum(1 for h in fault_hs if h < 85)
             fn = sum(1 for h in fault_hs if h >= 85)
@@ -261,14 +317,21 @@ def _generate_comprehensive_report(results: List[Dict]) -> str:
             rec = det
             f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0
             sep = np.mean(healthy_hs) - np.mean(fault_hs)
-            lines.append(f"| {m} | {det:.2%} | {fa:.2%} | {f1:.3f} | {sep:.1f} | {np.mean(times):.1f} |")
+            lines.append(
+                f"| {m} | {det:.2%} | {fa:.2%} | {f1:.3f} | {sep:.1f} | {np.mean(times):.1f} |"
+            )
         else:
             lines.append(f"| {m} | N/A | N/A | N/A | N/A | N/A |")
 
-    lines.extend(["", "## 3. 结论", "",
-        "- 集成诊断通过多算法弱投票融合，有效降低了单一方法的误报和漏检",
-        "- `balanced` profile 在速度和精度之间取得最佳平衡",
-        "- `exhaustive` profile 检出率略高但执行时间显著增加",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 3. 结论",
+            "",
+            "- 集成诊断通过多算法弱投票融合，有效降低了单一方法的误报和漏检",
+            "- `balanced` profile 在速度和精度之间取得最佳平衡",
+            "- `exhaustive` profile 检出率略高但执行时间显著增加",
+            "",
+        ]
+    )
     return "\n".join(lines)

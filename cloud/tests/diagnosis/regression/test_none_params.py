@@ -9,11 +9,12 @@
     cd cloud
     uv run python tests/diagnosis/regression/test_none_params.py
 """
+
 import sys
 import os
 from types import SimpleNamespace
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 import numpy as np
 from app.services.diagnosis.features import _compute_bearing_fault_freqs
@@ -46,7 +47,9 @@ def test_fixed_axis_pipeline_without_geometry_has_no_mesh_evidence():
     time = np.arange(8192) / 8192
     signal = np.sin(2 * np.pi * 25.0 * time)
     diagnosis = FixedAxisGearPipeline(geometry=None).run(
-        signal, 8192, speed=ScalarSpeed(25.0, "test_truth"),
+        signal,
+        8192,
+        speed=ScalarSpeed(25.0, "test_truth"),
     )
     assert diagnosis.analysis.mesh_order is None
     ser = diagnosis.analysis.sideband_analysis.ser
@@ -62,8 +65,16 @@ def test_orchestration_with_none_teeth_is_unknown():
     """已配置却缺失的齿数不能在统一编排中变成健康诊断。"""
     time = np.arange(8192) / 8192
     signal = np.sin(2 * np.pi * 25.0 * time)
-    device = SimpleNamespace(gear_teeth={"input": None, "output": None}, bearing_params=None)
-    result = analyze_device({"ch1": signal}, sample_rate=8192, device=device, rot_freq=25, denoise_method="none")
+    device = SimpleNamespace(
+        gear_teeth={"input": None, "output": None}, bearing_params=None
+    )
+    result = analyze_device(
+        {"ch1": signal},
+        sample_rate=8192,
+        device=device,
+        rot_freq=25,
+        denoise_method="none",
+    )
     assert result["evaluation_status"] in {"indeterminate", "not_evaluable"}
     assert result["diagnosis_conclusion"] == "unknown"
     assert result["health_score"] is None

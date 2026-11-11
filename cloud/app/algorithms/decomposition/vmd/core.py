@@ -1,4 +1,5 @@
 """VMD 参数、带 Hz 单位的结果和算法族 adapter 契约。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -31,7 +32,8 @@ class VMDParameters:
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 raise ValueError(f"{name} 必须是正整数")
         if self.max_samples is not None and (
-            isinstance(self.max_samples, bool) or not isinstance(self.max_samples, int)
+            isinstance(self.max_samples, bool)
+            or not isinstance(self.max_samples, int)
             or self.max_samples < 16
         ):
             raise ValueError("VMD 分析窗口必须至少为 16 点，或设为 None")
@@ -65,8 +67,9 @@ class VMDResult:
 class VMDImplementation(Protocol):
     """VMD 族专属 seam；Rust/C++ 实现无需模拟 Python tuple 返回。"""
 
-    def vmd(self, signal: FloatArray, sample_rate_hz: float, parameters: VMDParameters) -> VMDResult:
-        ...
+    def vmd(
+        self, signal: FloatArray, sample_rate_hz: float, parameters: VMDParameters
+    ) -> VMDResult: ...
 
 
 def decompose_vmd(
@@ -86,5 +89,6 @@ def decompose_vmd(
     params = parameters or VMDParameters()
     if implementation is None:
         from .python_adapter import PythonVMDImplementation
+
         implementation = PythonVMDImplementation()
     return implementation.vmd(arr, sample_rate_hz, params)
