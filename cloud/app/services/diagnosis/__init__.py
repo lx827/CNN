@@ -10,7 +10,6 @@
     result = engine.analyze(signal, sample_rate, bearing_params, gear_teeth)
 """
 from .engine import DiagnosisEngine, DiagnosisStrategy, BearingMethod, GearMethod, DenoiseMethod
-from .gear.msb import msb_residual_sideband_analysis
 from .features import (
     compute_time_features,
     compute_fft_features,
@@ -32,7 +31,6 @@ from .trend_prediction import (
 __all__ = [
     "DiagnosisEngine",
     "DiagnosisStrategy",
-    "msb_residual_sideband_analysis",
     "compute_time_features",
     "compute_fft_features",
     "run_research_ensemble",
