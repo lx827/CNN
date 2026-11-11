@@ -911,11 +911,23 @@ def workspace_notes(config):
     }
 
 
+def validate_worker(row, case, backend, phase, identity, metadata):
+    """结果文件数量不能替代特定 case/backend/源码与输出的关联证据。"""
+    if (
+        row.get("case") != case
+        or row.get("backend") != backend
+        or row.get("phase") != phase
+        or row.get("identity") != identity
+        or row.get("metadata") != metadata
+    ):
+        raise ValueError(f"Mismatched {phase} worker case/backend/identity/metadata")
+
+
 def report(args):
     identity = verify_identity(args.output)
     config = read_json(args.output / "config.json")
     selected = selected_cases(args)
-    complete, incomplete = [], []
+    complete, incomplete, profiles = [], [], 0
     for case in selected:
         rows = [
             read_json(path)
@@ -935,16 +947,32 @@ def report(args):
             ):
                 raise ValueError("Mixed worker/check identity")
             for row in rows:
-                if row["metadata"] != check["metadata"][row["backend"]]:
-                    raise ValueError(
-                        "Measured output metadata differs from verified result"
-                    )
+                validate_worker(
+                    row,
+                    case,
+                    row["backend"],
+                    "measure",
+                    identity,
+                    check["metadata"][row["backend"]],
+                )
+            for backend in config["backends"]:
+                path = args.output / "profile" / f"{case['id']}__{backend}.json"
+                if not path.exists():
+                    raise ValueError(f"Missing separate profile: {backend}")
+                validate_worker(
+                    read_json(path),
+                    case,
+                    backend,
+                    "profile",
+                    identity,
+                    check["metadata"][backend],
+                )
+                profiles += 1
             complete.append(aggregate(config, case, rows))
         except ValueError as error:
             incomplete.append(
                 {"case": case["id"], "reason": str(error), "workers": len(rows)}
             )
-    profiles = len(list((args.output / "profile").glob("*.json")))
     correctness_rows = [
         read_json(args.output / "check" / f"{case['id']}__both.json")
         for case in selected

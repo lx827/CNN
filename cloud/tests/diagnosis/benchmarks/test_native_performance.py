@@ -3,7 +3,7 @@
 import copy
 import unittest
 
-from .native_performance import CONFIG, aggregate, cases, read_json
+from .native_performance import CONFIG, aggregate, cases, read_json, validate_worker
 
 
 class PerformanceGateTests(unittest.TestCase):
@@ -71,6 +71,33 @@ class PerformanceGateTests(unittest.TestCase):
             if row["backend"] == "native":
                 row["seconds"] = [1.050001] * 5
         self.assertFalse(aggregate(self.config, case, self.rows)["time_pass"])
+
+    def test_profile_count_cannot_substitute_identity_and_case(self):
+        identity, metadata = {"extension": "a"}, {"status": "valid"}
+        row = {
+            "case": self.case,
+            "backend": "native",
+            "phase": "profile",
+            "identity": identity,
+            "metadata": metadata,
+        }
+        validate_worker(row, self.case, "native", "profile", identity, metadata)
+        for field, changed in (
+            ("case", {}),
+            ("backend", "python"),
+            ("phase", "measure"),
+            ("identity", {"extension": "b"}),
+            ("metadata", {"status": "indeterminate"}),
+        ):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                validate_worker(
+                    {**row, field: changed},
+                    self.case,
+                    "native",
+                    "profile",
+                    identity,
+                    metadata,
+                )
 
 
 if __name__ == "__main__":
