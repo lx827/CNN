@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "seed": 20261112,
+  "warmups": 1,
+  "repeats": 5,
+  "logical_cpus": [0, 2],
+  "job_commit_limit_bytes": 2147483648,
+  "native_threads": 1,
+  "decomposition_samples": 4096,
+  "window_seconds": [1, 5],
+  "derived_sample_rate_hz": 8192,
+  "sample_ids": ["ottawa_I-A-1", "hust_I_20Hz", "hust_B_20_1", "wt_B1_20"],
+  "emd": {"max_imfs": 4, "max_sifts": 50, "sd_threshold": 0.2, "mirror_extrema": 3, "interpolation": "pchip", "stopping_rule": "sd"},
+  "ensemble": {"ensemble_size": 8, "noise_scale": 0.2},
+  "vmd": {"modes": 5, "alpha": 2000.0, "tau": 0.0, "tolerance": 1e-7, "max_iterations": 200, "dc": false, "max_samples": null},
+  "med": {"filter_length": 64, "max_iterations": 30, "tolerance": 1e-6, "ridge": 1e-8},
+  "mckd": {"target_fault": "BPFO", "period_samples": 40, "filter_length": 64, "shift_order": 1, "max_iterations": 30, "tolerance": 1e-6, "ridge": 1e-8},
+  "sc": {"cyclic_frequencies_hz": [0, 20, 30, 60, 90, 100, 120, 150, 200], "segment_length": 512, "overlap_ratio": 0.75},
+  "msb": {"segment_length": 1024, "overlap": 0.5, "minimum_segments": 3, "carrier_frequency_hz": [1000, 2000, 3000], "modulation_frequency_hz": [30, 60, 100, 200]}
+}
