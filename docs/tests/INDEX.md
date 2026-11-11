@@ -12,6 +12,21 @@
 >
 > Python 环境统一为 uv workspace(#47):仓库根目录 `uv sync` 一次,所有 Python 测试用 `uv run` 执行;前端测试用 `node --test`(Node ≥18)。
 
+## 本批 #75/#77/#84 业务验收导航（2026-11-11）
+
+| 边界 | 当前入口 | 覆盖 |
+|------|----------|------|
+| 证据/状态核心 | `cloud/tests/diagnosis/algorithms/test_diagnosis_domain.py` | 依赖去重/冲突、混合对象 coverage、规范状态、单次权重、直接重评不执行算法 |
+| 唯一生产流程 | `cloud/tests/test_diagnosis_workflow.py` | SQLite 迁移/幂等、真实 HTTP 缓存/重评/重分析、真实 worker、事务回滚、告警、转频摘要隔离和配置权重 |
+| 既有实际消费者 | `test_analysis_worker_json.py`、`test_read_paths.py`、`test_preprocessing_failures.py`、`test_event_loop.py`（cloud/tests） | 新 Domain 读写、JSON、422、协程与生产缓存 |
+| 复合算法 | `cloud/tests/diagnosis/algorithms/test_composite_pipelines.py` | 13 个已知解/负对照、实际阶段串联和消融 |
+| 复合研究 HTTP | `test_composite_research_api.py`（同算法目录） | 五组合、资源/相位、生产隔离、实际 summary/参数与 heartbeat |
+| 全前端 | `wind-turbine-diagnosis/tests/*.test.cjs` | diagnosis_state、research_summary、composite_research、bearing 与实际页面生命周期 |
+
+后端按精确模块或单文件用 uv 运行，不整体 discover；全前端用 `node --test tests/*.test.cjs`。旧规则、连续评分、推荐、概率校准、通道共识及旧投票 helper 测试随重复实现删除，当前由 domain/workflow 业务契约与真实 HTTP 替代，不恢复旧接口兼容测试。
+
+准确证据：本批 P0 7/5/17 各通过；集中后端首次 79 项存在 3 FAIL+2 ERROR 子项，修复后只定向四失败方法+分解 10 项共 14 通过，另 order 4、PUT HTTP 1、权重/重评 1 通过，没有宣称重新全跑 79。前端最终 52/52 与构建通过。#75 沿用核心 13、早期 HTTP 3/SSR 3/构建，以及最后参数 3/summary HTTP 1/SSR 1；未因文档再跑算法。SQLite 实际迁移/业务有证据，MySQL SQL 具备但无实际服务验证；真实效果/性能归 #78/#79。
+
 ## P0 回归(全部合成信号、无数据集依赖;每次修改 `cloud/app/services/diagnosis/` 或 `cloud/app/algorithms/` 后必跑)
 
 ```bash
@@ -216,7 +231,7 @@ uv run python tests/diagnosis/regression/test_none_params.py && uv run python te
 | 去噪公共错误 | `cloud/tests/test_preprocessing_failures.py` | 真实 HTTP/worker、未知方法、失败不回退、None 告警、422 对象/参数数组 schema；用 `uv run python -m unittest tests.test_preprocessing_failures -v` |
 | 行星 #72 | `../planetary/test_planetary_pipeline.py` | WT 运动学、参考轴、角域 residual、SER、基线与工况 |
 | 行星业务/API | `../planetary/test_planetary_business.py`、`../planetary/test_planetary_api.py` | 无基线不伪健康/告警、按通道完整几何、实际 HTTP 四方法与旧标识拒绝 |
-| 规则 #76 | `../regression/test_rule_pipeline_fallback.py` | 复用 Pipeline、无证据不伪健康、阈值/概率、非法嵌套参数 |
+| 统一业务 #77/#84 | `test_diagnosis_domain.py` 与 `cloud/tests/test_diagnosis_workflow.py` | 取代旧规则/评分/投票协议，实际新状态、缓存、事务与重评 |
 
 不再调用已删除旧函数证明新实现兼容。真实数据分类效果和性能分别归 #78/#79。
 
@@ -257,6 +272,8 @@ uv run python tests/diagnosis/planetary/test_planetary_api.py
 ---
 
 ## 4. 方法级分类评估框架(`cloud/tests/diagnosis/method_eval/`)
+
+历史 method_eval/evaluation/effectiveness 脚本尚未整体迁移至新 Domain 与无概率协议，下列目录作为历史实验导航保留，不承诺当前命令可直接用于新版本效果验收。#78 需按新对象、机械参数、基线和真实数据重建；本批未借这些历史数字宣称检出效果。
 
 | 文件 | 用途 | 数据集 |
 |------|------|--------|
@@ -334,10 +351,9 @@ uv run python tests/diagnosis/evaluation/main.py
 | `features.py`, `engine.py`, `ensemble.py` | P0回归 + algorithms/ |
 | `algorithms/bearing/`、高级轴承业务适配 | P0 + 对应高级轴承专项 + 业务/API；真实效果另跑 method_eval |
 | `algorithms/gear/`、齿轮业务适配 | P0 + 定轴/行星 Pipeline 专项 + 业务/API |
-| `health_score.py` | P0回归 + `test_effectiveness.py` |
+| `domain.py`、`assessment.py`、adapters/融合/存储/流程 | P0 + domain/workflow 实际业务、HTTP/worker/缓存/告警 |
 | `algorithms/order/`, `order_tracking.py` | P0 + `test_order_pipeline.py` + `test_order_integration.py` + foundation order/signal_utils |
 | 分解/选择与去噪消费者 | P0 + decomposition 专项 + 质量反例/业务 |
-| `rule_based.py` | P0 + `test_rule_pipeline_fallback.py` |
 | API 路由 (`data_view/`, `ingest.py` 等) | P0回归 + 手动 API 调用验证 |
 
 ---

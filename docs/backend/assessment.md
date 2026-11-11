@@ -47,6 +47,8 @@
 
 扣分 code 与权重键在 assessment 的精确表中登记。未知请求或未知权重报错，不统一回退 kurtosis。一个依赖组只取最大加权扣分，不按相似算法数量累加。每条 `Deduction` 保存 code、对象、来源 Evidence、原量、权重键、权重与实际加权值供审计。
 
+默认 AssessmentPolicy 读取 `core.config.DIAGNOSIS_WEIGHTS`，配置权重只在本层乘一次。有效键为 kurtosis、crest_factor、rms、peak、bpfo、bpfi、bsf、fm4、ser、car、gear_sideband、scoh_evidence、ds_conflict。旧 sideband/na4_nb4/wp_entropy/worst_channel/avg_channel 及对应 DW_* 已删除，无别名兼容；不能继续声称这些旧配置影响评分。SC 部位命题仍可共存，扣分归 bearing_cyclic→scoh_evidence，不按包络 SNR 另算一套。
+
 冲突扣分原量为冲突系数，只乘 `ds_conflict` 一次（当前默认 8），不先扣 8 分再乘 8。健康分为 `max(0,100−实际加权扣分总和)`，只在形成有效诊断时输出；它不反向决定 normal/warning/fault。总体结论取有效对象的最高严重级别，保留局部未知，避免按分数再重判一次。
 
 建议在同一 assessment 单源产生，明确已评估对象和未覆盖对象。时域 margin 等原始指标的公式来自公共统计模块；设备/通道告警阈值与对象工程阈值是显式策略，不互相覆盖或另算健康度。

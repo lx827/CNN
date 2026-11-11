@@ -528,7 +528,7 @@ GET /api/data/{device_id}/{batch_index}/{channel}/envelope?max_freq={max_freq}&d
 - `evaluation`：业务对象评估使用 `{evaluation_status, indicators}`；算法指标内部的 not_evaluable 带 reason 和未知显著性，不表示未检出或健康。顶层完整 Domain 另有结论、分数与覆盖。
 - 另含 `method/strategy/rot_freq_hz/envelope_low_pass_hz` 和方法元数据；不再返回 `envelope_freq`、`envelope_amp` 或顶层 `fault_indicators`。
 
-当前高级方法标识为 `filter_bank_sk/spectral_kurtosis/cpw/med/mckd/teager/sc_scoh`，不接受旧 `kurtogram` 冒名。`analysis_status/reason` 说明计算/前提状态，与 `evaluation.status` 分开；无稳定梳状先验的 CPW 不生成谱，MCKD 缺显式目标实际执行 MED 并保存 `requested_method/fallback_reason`。SC/SCoh 使用 `evaluation_kind=sc_scoh` 和规范 `evaluation.indicators`，二维 `cyclic_spectrum` 含循环/载波 Hz、SC 幅值（输入单位平方/Hz）、无量纲 SCoh 和循环分辨率；可以没有普通 `spectrum`。TEO 最终包络谱单位为 `input_signal^2`。
+当前高级方法标识为 `filter_bank_sk/spectral_kurtosis/cpw/med/mckd/teager/sc_scoh`，不接受旧 kurtogram 冒名。计算态保留在 analysis，与业务 evaluation_status 分开；无稳定 CPW 先验不生成谱，MCKD 缺目标实际 MED 并保存请求/回退。SC/SCoh 以 evaluation_kind 区分专属指标，cyclic_spectrum 的循环/载波 Hz、SC 输入平方/Hz 与无量纲 SCoh 保留；TEO 包络谱为输入平方单位。
 
 #### 6.3.2 阶次跟踪
 
