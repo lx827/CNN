@@ -1,10 +1,87 @@
 # 诊断性能基准运行与原生接口契约
 
-本页为 #79 的手写运行说明与接口草案。测量结果、JSON/CSV、日志、波形、profile 与数值比较表保存在显式数据根，不提交仓库。数据来源与物理前提见 [datasets](../datasets.md)，通用替换准入规则见 [ADR 0005](../adr/0005-diagnosis-native-benchmark-gate.md)。
+本页记录 #106 的 Python/原生 EMD 族验收契约，并保留 #79 广义诊断基准的运行说明。两套入口独立，不能混用内存或计时口径。测量结果、JSON/CSV、日志、波形、profile 与数值比较表保存在显式数据根，不提交仓库。数据来源与物理前提见 [datasets](../datasets.md)，通用替换准入规则见 [ADR 0005](../adr/0005-diagnosis-native-benchmark-gate.md)。本页不声明尚未完成的双平台收益或目标 ECS 资源验收结果。
 
-## 运行
+## #106 原生 EMD 双平台验收
 
-基准是独立离线入口，不访问数据库，不修改生产实现。Python 依赖仅由 uv 管理；EMD-signal 与 psutil 位于可选 `benchmark` group，不是生产默认依赖。
+入口为 [native_performance.py](../../cloud/tests/diagnosis/benchmarks/native_performance.py)，事前冻结参数与准入规则为 [native_performance_config.json](../../cloud/tests/diagnosis/benchmarks/native_performance_config.json)（冻结提交 `a26fdf3`）。这里只比较项目同公式 Python 与显式原生候选，不引入 PyEMD 参照，不修改生产默认后端。
+
+固定矩阵为五条既有 4096 点向量 × `controlled`/`production` 两档 × EMD/EEMD/CEEMDAN，共 30 项。向量 SHA256、原采样率与旧 campaign 相同；两档分别采用 4/8 个 IMF、50/100 次筛分上限、8/50 次 ensemble，种子为 `20261112`。性能矩阵固定 PCHIP/SD、镜像数 3、SD 阈值 0.2 和噪声尺度 0.2。cubic/Rilling 已由原生候选支持，但其四配置正确性由 `test_native_emd.py` 单独覆盖，不把这 30 项称为四配置性能矩阵。
+
+每个 case 依次执行三个完整计时块：A/B、B/A、A/B，其中 A=Python、B=native。每个后端每块使用全新 worker，预热一次、测量五次；每个后端共 15 个原始样本，按全部 15 次取中位数和线性插值 P95。Windows 和 WSL 必须执行完整 30 项；只有 ECS 模式允许用重复的 `--case` 指定资源验收子集，子集结果不能代表完整矩阵。
+
+| 阶段 | 行为与证据 |
+|---|---|
+| `prepare` | 从显式 `--source-cache` 复制已有向量并核验 dtype、形状、fs 和 SHA256；创建全新的 `--output`，保存配置、数值契约、用例、源码/扩展哈希、依赖、CPU 与真实构建信息 |
+| `check` | 独立 worker 内各后端重复计算，要求同后端数组完全相同；核对跨后端冻结数组预算、模态/残差、迭代、收敛、有效区间、元数据及下游选择/质量状态；数组写入 `check_arrays/` |
+| `measure` | 已选 case 的 check 均须有结果，等价失败项排除并保留失败证据；通过项执行全部三个 AB/BA/AB 块，保存逐次耗时、OS 峰值、准备复制和输入/输出规模 |
+| `profile` | 各后端另启独立 worker，保存前 40 项 cProfile 热点；其耗时和内存不参与成本门槛 |
+| `report` | 核对身份、完整块/样本与已验证元数据，输出 `comparison.json`、CSV 和 Markdown；缺项、失败、噪声或峰值回归均不能形成成本通过结论 |
+
+源码、配置、扩展或环境身份变化必须新建 campaign。重复执行阶段只复用身份一致的已完成 worker，并继续从未启动项；`.started` 已存在而没有结果的中断项禁止覆盖，不能挑快的样本重测。完整比较必须保留全部三块；噪声过大时保留 `inconclusive`，不放宽门槛或删样本。
+
+### Windows 运行
+
+先在仓库根通过显式 Git Bash 的 `vsdev uv sync --frozen --group benchmark` 完成源码构建；构建与测量分开。以下 PowerShell 在 `cloud/` 执行，输出目录每个平台、ISA 和 campaign 独立，使用已安装扩展，避免测量期间同步重建：
+
+```powershell
+$sourceCache='D:/code/CNN/data/real_diagnosis/performance/20261112'
+$campaign='D:/code/CNN/data/real_diagnosis/native_performance/windows-baseline-20261112'
+uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance prepare --mode windows --source-cache $sourceCache --output $campaign
+uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance check --output $campaign
+uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance measure --output $campaign
+uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance profile --output $campaign
+uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance report --output $campaign
+```
+
+### Ubuntu/WSL 与目标 ECS
+
+Linux 构建入口为 [native_benchmark_build.sh](../../scripts/native_benchmark_build.sh)，参数为 `SOURCE ARTIFACTS wsl|ecs`。它在独立 systemd transient service/cgroup 中用 `uv sync --frozen` 从源码构建，固定 GCC/G++、baseline ISA、Ninja 单任务；环境、uv 缓存、CMake build 与日志都在显式 ARTIFACTS 中。运行需要可创建 systemd 系统 transient service 的权限以及 cgroup v2；不能把普通 `taskset` 或未读回的环境变量当作资源限制。
+
+构建与测量采用不同目录和阶段。Linux 的 `check`、`measure`、`profile` 会为每个 worker 自行创建受限 transient service，读回 `memory.max`、`memory.swap.max`、`cpu.max`、有效 CPU 与事件计数。`--mode` 只在 `prepare` 指定并写入 campaign，后续读取该快照。以下命令在独立 Linux 源码归档上运行，不共享 Windows `.venv` 或构建目录；归档需要包含根构建/锁文件、native、Python 算法与基准代码、`emd_reference_contract.py` 及源码身份清单。
+
+```bash
+source_root=/root/cnn106/source
+artifact_root=/root/cnn106/build-wsl
+campaign=/root/cnn106/data/native-performance-wsl
+source_cache=/root/cnn106/data/real_diagnosis/performance/20261112
+bash "$source_root/scripts/native_benchmark_build.sh" "$source_root" "$artifact_root" wsl
+export UV_PROJECT_ENVIRONMENT="$artifact_root/env"
+cd "$source_root/cloud"
+uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance prepare --mode wsl --source-cache "$source_cache" --output "$campaign"
+uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance check --output "$campaign"
+uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance measure --output "$campaign"
+uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance profile --output "$campaign"
+uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance report --output "$campaign"
+```
+
+目标 ECS 使用独立 source、ARTIFACTS 和 campaign，将构建脚本最后参数及 `prepare --mode` 都换为 `ecs`。如只验证指定资源子集，后续四阶段统一附加相同 `--case <case-id>`，例如 `synthetic__short__production__ceemdan`；记录实际选集与未覆盖项。WSL 证据不能代替目标 ECS 整机证据。
+
+| 限制 | Windows | WSL/Linux 本地 | 目标 ECS |
+|---|---|---|---|
+| CPU | 逻辑 CPU 0、2 | 逻辑 CPU 0、2；CPUQuota=200% | 逻辑 CPU 0、1；CPUQuota=200% |
+| 构建 | MSVC/vsdev，独立于计时 | 2 GiB MemoryMax，单任务构建 | 768 MiB MemoryMax，单任务构建 |
+| 每个验收 worker | 2 GiB Job 总提交内存上限 | 2 GiB MemoryMax | 512 MiB MemoryMax |
+| swap | Job 限制不等于物理 RAM 上限 | MemorySwapMax=0 | MemorySwapMax=0 |
+| 启动前余量 | 记录宿主背景活动 | 记录宿主背景活动 | MemAvailable 至少为对应构建/worker 上限加 256 MiB，否则不启动 |
+
+所有数值线程变量在 worker 导入前固定为 1。生产继续保持线程池 `max_workers=2`、`ANALYSIS_SEM=1`；工具不改 `CNN.service`、不部署。ECS 模式以 1 秒间隔记录全机 MemAvailable、swap、CPU 时间及现有 `CNN.service` cgroup 状态，阶段结束另读服务状态。这些是余量观察，不冒称全机真实内存峰。构建日志分别保存 GNU time 与 cgroup 资源证据；GNU time 单进程/子进程高水位不能当作构建进程组聚合峰值。目标权限、构建或整体服务余量证据不可取得时，明确保留未完成验收。
+
+### 冻结的成本、质量和热点口径
+
+计时覆盖完整公开 EMD 族调用，包括 Python 外层多 IMF、RNG、ensemble 聚合及调用内必要转换与输出所有权；排除导入、向量 I/O、预热、指标汇总和 profile。缓存加载后的连续化准备单独记录 `preparation_copy_bytes` 和输入 bytes，输出按数组 `nbytes` 记录。合规连续 float64 在边界借用，单 IMF 内部仍有工作副本；源码推导的线性 scratch 包络与实测数组载荷分开报告，不能声称测得了全部 native malloc 或用它替代 RSS。
+
+每个计时 worker 的 OS RSS 高水位在最后一次调用后、任何指标序列化之前读取：Windows 为 `PeakWorkingSetSize`，Linux 为 `getrusage(RUSAGE_SELF).ru_maxrss`（KiB 转 bytes）。从新 worker 启动开始累计，包含真实导入、输入、预热和输出生命周期；Python 基线不强制导入原生扩展。每后端取三个 worker 峰值的最大值，要求 native 不大于 Python，零容差、不按 MiB 四舍五入。导入后 RSS 与峰值增量仅作诊断；Linux cgroup `memory.peak`（内核支持时）及事件另存，与进程 RSS、Windows Job 提交内存各有边界。独立 check 的质量指标与 profile 不污染计时 worker 峰值；这与下述 #79 旧峰口径不同。
+
+生产档 CEEMDAN 要求 native/Python 中位数比值 ≤0.5；所有 EMD/EEMD 档要求 ≤1.05；受控档 CEEMDAN 时间只报告。每个五样本 worker 的 `1.4826 × MAD / median` 必须 ≤0.05，同后端三个块中位数的 `(max−min)/median` 必须 ≤0.10，任一超出则为 `inconclusive`。15 点 P95 只描述本次样本，不是生产 SLO。
+
+`equivalence_pass` 表示同公式数值与元数据/质量状态一致；`quality_eligible` 与 `diagnosis_evaluable` 另行记录分量质量和可评估性。双方都返回不可用状态仍可能等价，不能因此宣称诊断可用。`local_cost_gate` 仅判断本 campaign 的冻结计算成本；总体采用仍需双平台完整矩阵、质量证据及目标 ECS 源码构建/服务余量，工具保持 `adoption=candidate`，不自动切换默认。等价失败项不得借重构完备性或计时完成豁免。
+
+环境证据保存 CPU、编译器、编译选项、实际 SIMD 与扩展哈希。cProfile 仅看到 C++ binding 的整体调用，不能单独证明其内部各助手的 SIMD 覆盖或融合收益；此类结论应补充独立 native profile/编译证据，原始材料仍留数据根。未测量的候选不写收益，未满足门槛则保留候选和具体原因。
+
+## #79 广义诊断基准运行（旧入口）
+
+旧 `run.py` 是独立离线入口，不访问数据库，不修改生产实现，仍只支持 Windows。它保留 #79 的广义算法比较，与 #106 `native_performance.py` 分开运行和导出。Python 依赖仅由 uv 管理；EMD-signal 与 psutil 位于可选 `benchmark` group，不是生产默认依赖。
 
 在 `cloud/` 中运行，将示例替换为主仓或其他共享原始数据根：
 
@@ -20,7 +97,7 @@ uv run --group benchmark python -m tests.diagnosis.benchmarks.export --input /pa
 
 文件分工：`vectors.json` 保存来源和 float64 字节 SHA256，`vectors/*.npy` 是固定输入，`config.json` 是参数快照，`cases.json` 是矩阵，`cases/*.json` 保存逐次计时、状态、收敛和真实内存峰，`environment.json` 保存环境，`results.json` 汇总，导出目录提供精简 JSON/CSV。源文件 SHA256 来自原采集清单；worker 每次校验缓存向量 SHA256，原始材料验收与算法计时分开。
 
-## 固定矩阵
+## #79 固定矩阵
 
 当前配置选四个公开来源各一条原始采集的单振动轴，以及有已知 30 Hz 真值的合成信号。不拼接不同采集块，不将不同轴当成独立记录，不把 Speed 电压或未知脉冲标定当作 Hz。
 
@@ -38,9 +115,9 @@ uv run --group benchmark python -m tests.diagnosis.benchmarks.export --input /pa
 
 合成配置中的轴承/齿轮参数仅属于人为定义试件，不向真实来源补造物理参数。真实信号 MCKD 的固定 40 点周期只是数值核参数，不是 BPFO 真值。完整 Engine 必须报告实际方法、物理前提、分支、对象状态与覆盖；参数缺失分支不能代表参数齐全分支，运行成功也不能替代诊断有效性。
 
-## 计时、内存与正确性口径
+## #79 计时、内存与正确性口径
 
-当前 harness 要求 Windows，操作系统不满足时明确失败。每项独立进程固定 config 中的两颗逻辑 CPU；Windows Job Object 限制整个 worker 进程组的总提交内存并读回验证。OMP/OpenBLAS/MKL/NumExpr 线程环境在导入数值库前固定。逻辑 CPU 亲和不等于独占物理核心；宿主背景活动要随 campaign 说明。
+本节仅适用于旧 `run.py`：它要求 Windows，操作系统不满足时明确失败。每项独立进程固定 config 中的两颗逻辑 CPU；Windows Job Object 限制整个 worker 进程组的总提交内存并读回验证。OMP/OpenBLAS/MKL/NumExpr 线程环境在导入数值库前固定。逻辑 CPU 亲和不等于独占物理核心；宿主背景活动要随 campaign 说明。
 
 每项预先设一次预热、五次计时。I/O、导入、预热和指标序列化排除在算法耗时外；profile 为明确额外一次的调用，不混入计时样本。中位数和线性插值 P95 从所有原始样本计算；五次仅支持初步尾部观察，不构成生产 P95 SLO 或稳定置信区间。
 
@@ -62,9 +139,9 @@ PCHIP、镜像数量、IMF/筛分上限可对齐，但 PyEMD 多停止测试不�
 
 ## 原生接口与内存所有权草案
 
-这是后续候选的接口契约，尚未实现 ABI。原生函数粒度以当前 campaign 的热点为准，不先假定 Rust/C++ 或某个库更快。先比较重复分解、固定矩阵求解复用、STFT/FFT 调用次数、数组驻留与窗口顺序，原始证据和采纳决定留在数据根详报。
+下表完整分解等接口仍是后续候选草案，不能视为已实现 ABI。当前 EMD 原生计算采用 C++/Eigen 单 IMF 完整筛分核，后续候选粒度继续以实测热点为依据。比较重复分解、固定矩阵求解复用、STFT/FFT 调用次数、数组驻留与窗口顺序，原始证据和采纳决定留在数据根详报。
 
-当前已实现的首个候选是 PCHIP/SD 单 IMF 筛分，经 `NativeEMDImplementation` 显式选择；完整分解 ABI 表仍是后续草案。原生核的包络、单 IMF 和公开 EMD 按既有冻结预算验收，输入准备可能的连续化与原生工作数组需在正式测量中单独核算。[计算库说明](../native_compute.md) 记录实际 Eigen 计算基座、PCHIP 兼容适配与 FP 策略。当前只有正确性与构建验证，没有端到端两倍收益或生产采用结论。
+当前候选支持 PCHIP/cubic × SD/Rilling 四种单 IMF 筛分组合，经 `NativeEMDImplementation` 显式选择；Python 保留多 IMF、归一化、随机数及 EEMD/Torres 2011 CEEMDAN 外层。原生核的包络、单 IMF 和三个公开算法族按既有冻结预算验收，输入准备可能的连续化与原生工作数组需在正式测量中单独核算。[计算库说明](../native_compute.md) 记录 Eigen 计算基座、插值适配、cubic 带状求解及 FP 策略。正确性与构建验证不能替代 #106 的端到端成本或生产采用证据。
 
 EMD 首批实施已按 [ADR 0006](../adr/0006-native-diagnosis-compute-package.md) 收敛为单 IMF 完整筛分核。当前 Python adapter 通过实例核复用外层算法，仍以 Python 为默认；下表完整分解的原生 ABI 是后续候选，不能视为当前已实现接口。比较前冻结的 [数值契约](../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json) 区分局部与完整分解误差预算；手写对照信号和公开入口断言见 [对照资产](../../cloud/tests/diagnosis/algorithms/emd_reference_contract.py) 与 [筛分替换测试](../../cloud/tests/diagnosis/algorithms/test_emd_sift_contract.py)。既有固定 SHA256 输入和参数身份继续复用，不提交生成数组或数值结果。
 
