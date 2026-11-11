@@ -58,7 +58,7 @@
       <el-descriptions :column="2" size="small" border>
         <el-descriptions-item v-for="item in scScohItems" :key="item.key" :label="item.label">
           <span :class="item.critical ? 'text-danger' : item.significant || item.warning ? 'text-warning' : 'text-muted'">
-            SCoh={{ fmtVal(item.value) }}，SNR={{ fmtVal(item.snr) }}
+            SCoh={{ fmtVal(item.value) }}，相干峰背景比={{ fmtVal(item.coherenceRatio) }}
           </span>
           <el-text type="info" size="small" class="val-hint">理论 {{ fmtVal(item.theoryHz) }} Hz</el-text>
           <el-tag v-if="item.critical" type="danger" size="small" style="margin-left: 4px;">严重</el-tag>
@@ -225,8 +225,8 @@ const scScohItems = computed(() => scScohEntries(data.value?.bearing).map(({ key
   key,
   label: indicatorLabelMap[name] || name,
   value: info.scoh_peak ?? null,
-  snr: info.scoh_snr ?? null,
-  theoryHz: info.theory_hz ?? null,
+  coherenceRatio: info.coherence_background_ratio ?? null,
+  theoryHz: info.theory_cyclic_frequency_hz ?? info.theory_hz ?? null,
   significant: info.significant ?? false,
   warning: info.warning ?? false,
   critical: info.critical ?? false,

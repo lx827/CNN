@@ -37,7 +37,7 @@
             style="width: 150px"
           >
             <el-option label="标准包络" value="envelope" />
-            <el-option label="快速峭度图" value="kurtogram" />
+            <el-option label="二叉滤波器组谱峭度" value="filter_bank_sk" />
             <el-option label="CPW+包络" value="cpw" />
             <el-option label="TEO+包络" value="teager" />
             <el-option label="谱峭度包络" value="spectral_kurtosis" />

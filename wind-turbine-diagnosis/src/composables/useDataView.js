@@ -38,7 +38,7 @@ import {
 export const bearingMethodLabel = (key) => {
   const map = {
     envelope: '标准包络分析',
-    kurtogram: '快速峭度图',
+    filter_bank_sk: '二叉滤波器组谱峭度',
     cpw: 'CPW预白化+包络',
     teager: 'TEO能量算子+包络',
     spectral_kurtosis: '自适应谱峭度包络',
@@ -129,7 +129,7 @@ export function useDataView() {
   const envelopeMethodLabel = computed(() => {
     const labels = {
       envelope: '标准包络',
-      kurtogram: '快速峭度图',
+      filter_bank_sk: '二叉滤波器组谱峭度',
       cpw: 'CPW+包络',
       teager: 'TEO+包络',
       spectral_kurtosis: '谱峭度包络',

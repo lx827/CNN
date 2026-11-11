@@ -5,9 +5,24 @@
 
 const asObject = value => value && typeof value === 'object' ? value : {}
 
-export const bearingEvaluationIndicators = result => asObject(result?.evaluation?.indicators)
+export const bearingReasonText = reason => ({
+  missing_stable_comb_frequencies: '请提供稳定梳状基频并确认整段稳定',
+  time_varying_comb_requires_time_frequency_model: '未确认梳状频率稳定；时变梳状干扰需要时频模型',
+  missing_explicit_target_fault: '未选择周期故障目标，本次实际执行 MED',
+  missing_target_frequency_or_period: '缺少目标频率或周期，请配置几何与恒定转频',
+  missing_cyclic_candidates_or_geometry_and_rotation: '缺少可靠的循环频率候选，请配置轴承几何与转频',
+  zero_energy: '信号无有效能量，无法评估',
+  no_impulsive_band_above_threshold: '没有达到工程阈值的冲击频带，无法据此判断健康',
+  numerical_deconvolution_failure: '解卷积数值不可判定',
+  insufficient_signal_length: '信号长度不足以评估本方法',
+  varying_speed_requires_continuous_phase_pipeline: '当前变速工况需要连续相位分析',
+})[reason] || '当前输入不满足方法的评估条件'
 
-export const scScohIndicators = result => asObject(result?.sc_scoh_indicators)
+export const bearingEvaluationIndicators = result => result?.evaluation_kind === 'sc_scoh'
+  ? {} : asObject(result?.evaluation?.indicators)
+
+export const scScohIndicators = result => result?.evaluation_kind === 'sc_scoh'
+  ? asObject(result?.evaluation?.indicators) : {}
 
 const indicatorEntries = (indicators, source) => Object.entries(asObject(indicators)).map(([name, info]) => ({
   key: `${source}:${name}`,
@@ -28,16 +43,17 @@ export const bearingIndicatorEntries = result => [
   ...scScohEntries(result),
 ]
 
-/** 汇总显著指标；SC/SCoh 使用自己的 scoh_snr，不回读旧顶层 fault_indicators。 */
+/** 汇总显著指标；SC/SCoh 使用专属峰背景比，不回读旧顶层字段。 */
 export const significantBearingFaults = result => bearingIndicatorEntries(result)
   .filter(({ info }) => info && typeof info === 'object' && (info.significant || info.critical))
   .map(({ key, name, info, source }) => ({
     key,
     fault_type: name,
-    snr: info.snr ?? info.scoh_snr ?? null,
+    snr: info.snr ?? null,
     score: info.score ?? info.value ?? '?',
-    detected_hz: info.detected_hz ?? null,
-    theory_hz: info.theory_hz ?? null,
+    detected_hz: info.detected_hz ?? info.detected_cyclic_frequency_hz ?? null,
+    theory_hz: info.theory_hz ?? info.theory_cyclic_frequency_hz ?? null,
+    coherence_background_ratio: info.coherence_background_ratio ?? null,
     source,
   }))
 
@@ -45,7 +61,8 @@ export const significantBearingFaults = result => bearingIndicatorEntries(result
 export const bearingFrequencyAnnotations = result => bearingIndicatorEntries(result)
   .map(({ key, name, info, source }) => {
     if (!info || typeof info !== 'object') return null
-    const freq = info.detected_hz ?? info.theory_hz ?? info.frequency_hz
+    const freq = info.detected_hz ?? info.detected_cyclic_frequency_hz
+      ?? info.theory_hz ?? info.theory_cyclic_frequency_hz ?? info.frequency_hz
     if (!Number.isFinite(freq) || freq <= 0) return null
     return {
       key,
@@ -59,5 +76,5 @@ export const bearingFrequencyAnnotations = result => bearingIndicatorEntries(res
 
 export const indicatorDisplayValue = info => {
   if (!info || typeof info !== 'object') return '-'
-  return info.value ?? info.snr ?? info.scoh_peak ?? info.scoh_snr ?? info.detected_hz ?? '-'
+  return info.value ?? info.snr ?? info.scoh_peak ?? info.detected_hz ?? '-'
 }
