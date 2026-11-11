@@ -13,6 +13,7 @@
     "relative_l2": 1e-7
   },
   "scale": "max(max(abs(input)), max(abs(reference)), float64.tiny)",
+  "normalized_l2_bound": "norm(observed-reference) <= relative_l2*norm(reference) + atol_scaled*sqrt(size); observed and reference are divided by scale first.",
   "metadata_equal": [
     "method",
     "status",
