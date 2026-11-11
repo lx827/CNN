@@ -141,10 +141,14 @@
             <el-tag v-for="(a, idx) in row.alerts" :key="idx" :type="a.level === 'critical' ? 'danger' : 'warning'" size="small" style="margin-right:6px;margin-bottom:4px">
               {{ a.indicator }}
             </el-tag>
-            <el-text v-if="row.alerts.length === 0 && !row._error" type="info" size="small">无告警</el-text>
+            <el-text v-if="row.alerts.length === 0 && !row._error" type="info" size="small">{{ row.evaluationStatus === 'not_evaluable' ? '不可评估' : '无告警' }}</el-text>
           </template>
         </el-table-column>
       </el-table>
+    </section>
+
+    <section v-for="(gear, key) in planetaryResults" :key="key" class="panel wide">
+      <PlanetaryResult :result="gear" />
     </section>
 
     <section v-if="result.ensemble || hasAllResults" class="panel wide">
@@ -176,12 +180,14 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import PlanetaryResult from './PlanetaryResult.vue'
 import { fmt, percent } from '../../composables/useResearchDiagnosis'
 
 const indicatorType = (indicator) => indicator?.critical ? 'danger' : indicator?.warning ? 'warning' : 'success'
 const indicatorClass = (indicator) => indicator?.critical ? 'text-danger' : indicator?.warning ? 'text-warning' : ''
 
-defineProps({
+const props = defineProps({
   result: { type: Object, required: true },
   hasAllResults: { type: Object, default: null },
   bearingVoteRows: { type: Array, default: () => [] },
@@ -192,6 +198,7 @@ defineProps({
   allGearRows: { type: Array, default: () => [] },
   allBestIndicatorRows: { type: Array, default: () => [] },
 })
+const planetaryResults = computed(() => Object.fromEntries(Object.entries(props.result.gear_results || {}).filter(([, result]) => result?.is_planetary)))
 </script>
 
 <style scoped>

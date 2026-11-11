@@ -10,7 +10,7 @@
     result = engine.analyze(signal, sample_rate, bearing_params, gear_teeth)
 """
 from .engine import DiagnosisEngine, DiagnosisStrategy, BearingMethod, GearMethod, DenoiseMethod
-from .gear import msb_residual_sideband_analysis
+from .gear.msb import msb_residual_sideband_analysis
 from .preprocessing import (
     wavelet_denoise,
 )

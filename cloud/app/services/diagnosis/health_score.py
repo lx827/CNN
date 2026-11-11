@@ -162,6 +162,8 @@ def _infer_gear_subtype_from_indicators(gear_result: Dict) -> Optional[str]:
 
     返回: "break" | "crack" | "wear" | "missing" | None
     """
+    if gear_result and gear_result.get("is_planetary"):
+        return None  # 行星异常证据不能单独命名断齿、裂纹或磨损。
     indicators = gear_result.get("fault_indicators", {}) if gear_result else {}
     if not indicators:
         return None
