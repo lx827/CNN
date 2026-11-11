@@ -27,6 +27,23 @@
 
 准确证据：本批 P0 7/5/17 各通过；集中后端首次 79 项存在 3 FAIL+2 ERROR 子项，修复后只定向四失败方法+分解 10 项共 14 通过，另 order 4、PUT HTTP 1、权重/重评 1 通过，没有宣称重新全跑 79。前端最终 52/52 与构建通过。#75 沿用核心 13、早期 HTTP 3/SSR 3/构建，以及最后参数 3/summary HTTP 1/SSR 1；未因文档再跑算法。SQLite 实际迁移/业务有证据，MySQL SQL 具备但无实际服务验证；真实效果/性能归 #78/#79。
 
+## 原始真实数据接入（2026-11-11）
+
+独立入口 `cloud/tests/diagnosis/real_data/` 读取提交的轴承/齿轮选样清单及 `DATA_ROOT/raw_sources/` 原始记录。来源与证据边界见 [数据集契约](../datasets.md)。它不兼容旧一维 8192 Hz npy，也不自动迁移历史效果脚本。
+
+集中验证分两步：先 common/reader 合同与原始格式核实，再串行运行一个真实小窗。将数据根替换为自己的目录；独立 worktree 设 `CNN_DATA_ROOT` 共享主仓数据，临时文件随该根目录落盘：
+
+```bash
+cd cloud
+# 先设置 CNN_DATA_ROOT=/path/to/data（PowerShell 使用 $env:CNN_DATA_ROOT）
+uv run python -m unittest tests.diagnosis.real_data.test_common tests.diagnosis.real_data.test_bearing tests.diagnosis.real_data.test_gear -v
+uv run python -m tests.diagnosis.real_data.run --data-root /path/to/data --window-seconds 1
+```
+
+格式测试使用小型临时文件；真实 reader 测试在本地清单缺失时可跳过，因此只看到 unittest 绿灯不表示真实数据验收完成。显式 runner 使用提交清单，缺数据/样本/通道、坏格式均非零退出。正常报告中的 unknown、coverage=none 和 health_score=null 表示物理前提不足，不应改成正常或 100 分。
+
+窗口最大 5 秒，HUST 齿轮在 1.28 秒块边界截断；按实际时长报告。多通道和切窗不增加独立采集数。首批只核实数据接入、信号质量和现有 Pipeline 前提门控，不输出准确率，不等于完成 #78 效果评估或 #79 性能测量。本次没有修改生产算法，因此不因新增离线 reader 重跑 P0。
+
 ## P0 回归(全部合成信号、无数据集依赖;每次修改 `cloud/app/services/diagnosis/` 或 `cloud/app/algorithms/` 后必跑)
 
 ```bash
@@ -127,6 +144,7 @@ cloud/tests/
 └── diagnosis/                          # 诊断测试套件(整体自顶层 tests/diagnosis 迁入)
     ├── __init__.py
     ├── data_paths.py                   # 数据集路径统一入口(parents[3] 定位仓库根)
+    ├── real_data/                     # 原始真实来源reader、便携选样清单、串行小窗CLI
     ├── TEST_ARCHITECTURE.md            # 分层正确性测试架构
     ├── regression/                     # [P0] 回归测试 — 每次修改后必跑
     │   ├── test_none_params.py
