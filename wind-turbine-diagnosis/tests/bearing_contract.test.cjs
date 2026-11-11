@@ -341,7 +341,8 @@ function loadSfcSetup(relativePath, exportName, globals) {
   const compiled = compileScript(descriptor, { id: exportName }).content
     .replace('export default', `globalThis.${exportName} =`)
   const source = stripModules(compiled)
-  const context = { console, computed, ...globals }
+  // 子组件模板由独立契约覆盖；SFC setup 仍需持有真实导入对应的绑定名。
+  const context = { console, computed, PlanetaryResult: {}, ...globals }
   vm.runInNewContext(source, context)
   return (props) => context[exportName].setup(props, { expose: noop })
 }
