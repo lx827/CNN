@@ -61,19 +61,21 @@ manifest 顶层为 `schema_version: 1` 和非空 `samples`。条目至少含 `sa
 
 `sample_id` 标识真实记录，`group_id` 是保守评估分组，例如同速度载荷或拆装系列。报告分别记录真实记录数、分组数和通道数。不同通道和同记录切窗不能作为新的独立采集，也不能随机分到标定集与评估集。原采样率不因窗口缩短而改变；未知辅助信号不降采样为转速。
 
-runner 逐记录、逐通道串行运行，默认 1 秒，可显式请求最多 5 秒。HUST 齿轮受块边界限制可返回更短窗口。轴承调用现有包络 Pipeline，保留统计特征及缺速度/几何的不可判定状态；WT 调用行星 Pipeline 前提门控；HUST 定轴缺小轮参考速度时报告未执行原因。没有新增阈值、估算几何或把标称速度冒充实测转速。
+评估使用原始记录、真实采样率和有上限的窗口，按实际时长报告。轴承几何或连续转速未证实、齿轮参考轴速度或健康基线不足时，保留不可判定状态；不从文件名、标称速度或未知辅助电压代填机械前提。
 
 ## 当前运行入口
 
-从 `cloud/` 执行，将示例路径替换为实际数据根：
+| 位置 | 用途 |
+|------|------|
+| `cloud/tests/diagnosis/real_data/common.py` | 数据根、清单、记录类型与 JSON |
+| `cloud/tests/diagnosis/real_data/bearing.py`、`gear.py` | 四来源原始格式 reader |
+| `cloud/tests/diagnosis/real_data/manifests/` | 提交选样与来源证据 |
+| `cloud/tests/diagnosis/real_data/effectiveness.py` | 记录分组、原始数据与规范诊断效果评估 |
+
+从 `cloud/` 运行 reader 合同：
 
 ```bash
-uv run python -m tests.diagnosis.real_data.run --data-root /path/to/data --window-seconds 1
-uv run python -m tests.diagnosis.real_data.run --data-root /path/to/data --sample-id <清单中的sample_id> --window-seconds 5
+uv run python -m unittest tests.diagnosis.real_data.test_common tests.diagnosis.real_data.test_bearing tests.diagnosis.real_data.test_gear -v
 ```
 
-默认读提交的两套清单；`--manifest` 可重复，用相对数据根或绝对路径显式覆盖。`--channel`、`--start-seconds` 可选振动通道与窗口起点。默认报告为 `DATA_ROOT/real_diagnosis/reports/latest.json`，可用 `--output` 指定。
-
-报告包括来源与标签、真实采样率、实际点数/时长、信号质量、Pipeline 是否执行、`evaluation_status`、`diagnosis_conclusion`、coverage、可空 health_score 及不可判定原因。缺源文件、缺显式样本/通道、坏格式均非零退出；未知诊断是有效报告内容，不等于算法验证通过。小样本核实不输出准确率，不声称完成 #78 跨工况效果评估，也不是 #79 性能基准。
-
-测试分层与集中命令见 [测试索引](tests/INDEX.md)。
+测试分层、真实效果和性能的集中命令见 [测试索引](tests/INDEX.md)。
