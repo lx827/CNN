@@ -4,7 +4,7 @@
  * 职责:设备列表/配置/阈值三级加载,边端采集配置、通道级机械参数、
  *       告警阈值的保存与同步,采集间隔的数值+单位双向解析。
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { mechanicalGearForm, mechanicalGearPayload } from '../utils/planetaryDiagnosis'
 import { ElMessage } from 'element-plus'
 import {
@@ -44,6 +44,15 @@ export function useSettings() {
   const savingMechanical = ref(false)
   const savingThresholds = ref(false)
 
+  // 各通道机械参数表单结构。设置页模板直接访问 gear_teeth/bearing_params 的通道字段,
+  // 必须保证结构在首渲染(loadConfig 返回前)即完整,否则渲染抛错会中止挂载、
+  // onMounted 不再执行而无法自愈(Bug #25)
+  const emptyBearing = () => ({ n: null, d: null, D: null, alpha: null })
+  const channelParams = (count) => ({
+    gear_teeth: Object.fromEntries(Array.from({ length: count }, (_, idx) => [String(idx + 1), mechanicalGearForm({})])),
+    bearing_params: Object.fromEntries(Array.from({ length: count }, (_, idx) => [String(idx + 1), emptyBearing()])),
+  })
+
   const form = ref({
     device_id: 'WTG-001',
     upload_interval: 10,
@@ -51,10 +60,20 @@ export function useSettings() {
     sample_rate: 25600,
     window_seconds: 10,
     channel_count: 3,
-    gear_teeth: {},
-    bearing_params: {},
+    ...channelParams(3),
     compression_enabled: true,
     downsample_ratio: 8,
+  })
+
+  // 通道数在采集配置中可即时调整(1~8);调大时补齐新增通道的结构,避免模板访问缺失通道再触发 #25
+  watch(() => form.value.channel_count, (count) => {
+    const gear = form.value.gear_teeth
+    const bearing = form.value.bearing_params
+    for (let i = 1; i <= count; i++) {
+      const ch = String(i)
+      if (!gear[ch]) gear[ch] = mechanicalGearForm({})
+      if (!bearing[ch]) bearing[ch] = emptyBearing()
+    }
   })
 
   // 当前正在编辑的机械参数通道
