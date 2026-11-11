@@ -71,7 +71,9 @@ def resample_to_phase(
         raise ValueError("每转采样点数必须是整数")
     if samples_per_revolution < 16:
         raise ValueError("每转采样点数至少为 16")
-    point_count = int(np.floor(phase.revolutions[-1] * samples_per_revolution))
+    # 恒速 t=fr*N/fs 的浮点积分可能把整数转数写成 31.99999999999999；
+    # 加入远小于一个角域采样间隔的容差，避免无端丢失最后一个完整周期。
+    point_count = int(np.floor(phase.revolutions[-1] * samples_per_revolution + 1e-9))
     if point_count < 16:
         raise ValueError("有效转数太少，无法进行等角重采样")
     target_revolutions = np.arange(point_count, dtype=np.float64) / samples_per_revolution
@@ -116,3 +118,26 @@ def compute_order_spectrum(
         samples_per_revolution=angle_domain.samples_per_revolution,
         total_revolutions=count / angle_domain.samples_per_revolution,
     )
+
+
+def order_band_amplitude_sum(
+    order_bins: FloatArray,
+    amplitude: FloatArray,
+    center_order: float,
+    half_width_order: float,
+) -> float:
+    """返回阶次窗内单边幅值之和；供仍需带和的行星旧读模型复用。
+
+    该函数不声明能量比，也不执行峰值检测。定轴 SER 使用独立的不重叠
+    局部峰幅值比，不与行星 carrier 间隔共用高层逻辑。
+    """
+    orders = np.asarray(order_bins, dtype=np.float64)
+    values = np.asarray(amplitude, dtype=np.float64)
+    if orders.ndim != 1 or values.ndim != 1 or len(orders) != len(values) or len(orders) == 0:
+        raise ValueError("阶次轴与幅值必须是非空一维等长数组")
+    if not np.all(np.isfinite(orders)) or not np.all(np.isfinite(values)) or np.any(values < 0):
+        raise ValueError("阶次轴与幅值必须有限，幅值不能为负")
+    if not np.isfinite(center_order) or not np.isfinite(half_width_order) or half_width_order < 0:
+        raise ValueError("阶次窗中心必须有限，半带宽必须有限且非负")
+    mask = np.abs(orders - center_order) <= half_width_order
+    return float(np.sum(values[mask])) if np.any(mask) else 0.0

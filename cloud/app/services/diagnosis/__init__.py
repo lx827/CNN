@@ -17,15 +17,7 @@ from .bearing import (
     teager_envelope_analysis,
     spectral_kurtosis_envelope_analysis,
 )
-from .gear import (
-    compute_fm0,
-    compute_fm4,
-    compute_na4,
-    compute_nb4,
-    compute_ser,
-    compute_car,
-    msb_residual_sideband_analysis,
-)
+from .gear import msb_residual_sideband_analysis
 from .preprocessing import (
     wavelet_denoise,
     cepstrum_pre_whitening,
@@ -57,12 +49,6 @@ __all__ = [
     "med_envelope_analysis",
     "teager_envelope_analysis",
     "spectral_kurtosis_envelope_analysis",
-    "compute_fm0",
-    "compute_fm4",
-    "compute_na4",
-    "compute_nb4",
-    "compute_ser",
-    "compute_car",
     "msb_residual_sideband_analysis",
     "wavelet_denoise",
     "cepstrum_pre_whitening",

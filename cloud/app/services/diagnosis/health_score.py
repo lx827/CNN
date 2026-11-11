@@ -9,7 +9,8 @@ D-S 融合闭环：从 fusion_bridge.py 接收 D-S 融合结果，
 将 D-S 主导故障类型纳入 fault_label。
 当 conflict > 0.8 时降低置信度并在建议中提示复核。
 """
-from typing import Dict, Optional, Tuple
+from math import isfinite
+from typing import Dict, Iterable, Optional, Tuple
 
 # 峰值因子单独作为统计证据门控的阈值。
 CREST_EVIDENCE_THRESHOLD = 10.0
@@ -50,6 +51,30 @@ DEDUCTION_WEIGHT_MAP = {
     # D-S 冲突
     "ds_conflict_penalty": "ds_conflict",
 }
+
+
+def _has_diagnosis_evidence(results: Iterable[Dict], time_features: Dict) -> bool:
+    """只有非零能量且至少一个请求结果可评估时，才允许给出健康状态。"""
+    try:
+        rms_value = float(time_features.get("rms", 0.0))
+    except (TypeError, ValueError):
+        return False
+    if not isfinite(rms_value) or rms_value <= 0.0:
+        return False
+    for result in results:
+        if not result or "error" in result:
+            continue
+        if result.get("analysis_status") == "indeterminate":
+            continue
+        if result.get("status") in {"indeterminate", "not_evaluable"}:
+            continue
+        evaluation = result.get("evaluation")
+        if isinstance(evaluation, dict) and evaluation.get("status") in {
+            "indeterminate", "not_evaluable",
+        }:
+            continue
+        return True
+    return False
 
 
 def _compute_health_score(
@@ -142,8 +167,23 @@ def _infer_gear_subtype_from_indicators(gear_result: Dict) -> Optional[str]:
         return None
 
     def get_val(name):
-        v = indicators.get(name, {})
-        return float(v.get("value", 0)) if isinstance(v, dict) else 0.0
+        """不可评估或非有限值不参与子类型推断，绝不按 0 处理。"""
+        item = indicators.get(name, {})
+        if not isinstance(item, dict) or item.get("status") == "not_evaluable":
+            return None
+        value = item.get("value")
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def gt(value, threshold):
+        return value is not None and value > threshold
+
+    def lt(value, threshold):
+        return value is not None and value < threshold
 
     def is_active(name):
         v = indicators.get(name, {})
@@ -160,39 +200,39 @@ def _infer_gear_subtype_from_indicators(gear_result: Dict) -> Optional[str]:
     scores = {"break": 0.0, "crack": 0.0, "wear": 0.0, "missing": 0.0}
 
     # Missing: 全频带包络峭度很高（> 10）且 SER 不极端高
-    if pfek > 10.0 and ser < 12.0:
+    if gt(pfek, 10.0) and lt(ser, 12.0):
         scores["missing"] += 3.0
-    elif pfek > 8.0 and ser < 12.0:
+    elif gt(pfek, 8.0) and lt(ser, 12.0):
         scores["missing"] += 1.5
 
     # Wear: FM4 高（> 3.5 且 warning）且 pfek 不太低（> 3.0）
     # pfek > 3.0 排除 crack/break（它们的 pfek 通常更低）
-    if fm4 > 3.5 and is_active("fm4") and pfek > 3.0:
+    if gt(fm4, 3.5) and is_active("fm4") and gt(pfek, 3.0):
         scores["wear"] += 3.0
-    elif fm4 > 3.2 and is_active("fm4") and pfek > 3.0:
+    elif gt(fm4, 3.2) and is_active("fm4") and gt(pfek, 3.0):
         scores["wear"] += 1.5
 
     # Break: FM0 高 或 SER 极高 或 sideband 多 或 太阳轮故障频率检出
-    if fm0 > 5.0 and is_active("fm0"):
+    if gt(fm0, 5.0) and is_active("fm0"):
         scores["break"] += 2.5
-    if ser > 10.0 and is_active("ser"):
+    if gt(ser, 10.0) and is_active("ser"):
         scores["break"] += 1.5
     if is_active("sideband_count"):
         scores["break"] += 1.0
     # 太阳轮故障频率是断齿的辅助指标（避免过度拉高断齿分数挤占 crack）
-    if sun_fault > 0 and is_active("planetary_sun_fault") and pfek < 5.0:
+    if gt(sun_fault, 0) and is_active("planetary_sun_fault") and lt(pfek, 5.0):
         scores["break"] += 1.0
 
     # Crack: 低 pfek（< 3.0）且 fm4 不太高（< 4.0，避免与 wear 混淆）
-    if pfek < 3.0 and is_active("planetary_fullband_env_kurt"):
-        if fm4 < 4.0:
+    if lt(pfek, 3.0) and is_active("planetary_fullband_env_kurt"):
+        if lt(fm4, 4.0):
             scores["crack"] += 2.5
-        else:
+        elif fm4 is not None:
             # fm4 也高 → 可能是 wear
             scores["wear"] += 1.0
     # 中等 pfek（3.0-5.0）且无其他强特征 → crack
-    elif pfek < 5.0 and is_active("planetary_fullband_env_kurt"):
-        if not (fm4 > 3.5 and is_active("fm4")):
+    elif lt(pfek, 5.0) and is_active("planetary_fullband_env_kurt"):
+        if not (gt(fm4, 3.5) and is_active("fm4")):
             scores["crack"] += 1.5
         else:
             scores["wear"] += 0.5

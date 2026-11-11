@@ -11,6 +11,7 @@ const frontendRoot = path.resolve(__dirname, '..')
 const requireFrontend = createRequire(path.join(frontendRoot, 'package.json'))
 const { parse, compileScript } = requireFrontend('@vue/compiler-sfc')
 const bearingUtilsPromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/bearingDiagnosis.js')).href)
+const diagnosisStatusPromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/diagnosisStatus.js')).href)
 
 const stripModules = source => source
   .replace(/^import[\s\S]*?from ['"][^'"]+['"]\r?\n/gm, '')
@@ -108,10 +109,12 @@ async function loadDataView(overrides = {}) {
 
 async function loadResearch(overrides = {}) {
   const utils = await bearingUtilsPromise
+  const { getDiagnosisStatusView } = await diagnosisStatusPromise
   const source = stripModules(readFileSync(path.join(frontendRoot, 'src/composables/useResearchDiagnosis.js'), 'utf8'))
     .replace('function useResearchDiagnosis()', 'globalThis.useResearchDiagnosis = function useResearchDiagnosis()')
     + '\nglobalThis.evaluationStatusText = evaluationStatusText; globalThis.evaluationStatusType = evaluationStatusType;'
-  const context = composableContext({ ...utils, ...overrides })
+    + '\nglobalThis.statusText = statusText; globalThis.statusType = statusType;'
+  const context = composableContext({ ...utils, getDiagnosisStatusView, ...overrides })
   vm.runInNewContext(source, context)
   return { state: context.useResearchDiagnosis(), context }
 }
@@ -226,6 +229,87 @@ test('研究页全方法/集成派生行区分轴承新契约与齿轮旧契约'
   assert.equal(limitedRows.find(item => item.name === 'BPFO').state, '不可评估')
   assert.equal(limitedRows.find(item => item.name === 'BPFO').type, 'info')
   assert.equal(limitedRows.find(item => item.source === '齿轮').state, '命中')
+})
+
+test('诊断状态 adapter 显式覆盖合法状态并对非法值中性兜底', async () => {
+  const { getDiagnosisStatusView } = await diagnosisStatusPromise
+  const cases = [
+    ['normal', '正常', 'success', 'success'],
+    ['warning', '预警', 'warning', 'warning'],
+    ['fault', '故障', 'danger', 'error'],
+    ['critical', '故障', 'danger', 'error'],
+    ['indeterminate', '不可判定', 'info', 'info'],
+    ['not_evaluable', '不可评估', 'info', 'info'],
+  ]
+  for (const [status, text, tagType, alertType] of cases) {
+    assert.deepEqual(getDiagnosisStatusView(status), { text, tone: tagType, tagType, alertType })
+  }
+  for (const status of [undefined, null, '', 'unexpected_status', 'normal ', 0, {}, '__proto__']) {
+    assert.deepEqual(getDiagnosisStatusView(status), {
+      text: '未知', tone: 'info', tagType: 'info', alertType: 'info',
+    })
+  }
+})
+
+test('Research 实际消费者只使用统一诊断状态 view', async () => {
+  const { context } = await loadResearch()
+  const { getDiagnosisStatusView } = await diagnosisStatusPromise
+  for (const status of [
+    'normal', 'warning', 'fault', 'critical', 'indeterminate', 'not_evaluable',
+    undefined, null, '', 'unexpected_status',
+  ]) {
+    const view = getDiagnosisStatusView(status)
+    assert.equal(context.statusText(status), view.text)
+    assert.equal(context.statusType(status), view.tagType)
+  }
+})
+
+test('DiagnosisDetail 实际消费者只使用统一诊断状态 view', async () => {
+  const utils = await bearingUtilsPromise
+  const { getDiagnosisStatusView } = await diagnosisStatusPromise
+  const setup = loadSfcSetup('src/components/DiagnosisDetail.vue', 'DiagnosisDetailStatus', {
+    ...utils, getDiagnosisStatusView,
+  })
+  for (const status of [
+    'normal', 'warning', 'fault', 'critical', 'indeterminate', 'not_evaluable',
+    undefined, null, '', 'unexpected_status',
+  ]) {
+    const bindings = setup({ orderAnalysis: { engine_result: { status } } })
+    assert.equal(bindings.statusView.value.text, getDiagnosisStatusView(status).text)
+    assert.equal(bindings.statusView.value.tagType, getDiagnosisStatusView(status).tagType)
+  }
+})
+
+test('ComprehensiveSection 实际消费者只使用统一诊断状态 view', async () => {
+  const { getDiagnosisStatusView } = await diagnosisStatusPromise
+  const setup = loadSfcSetup(
+    'src/components/dataview/ComprehensiveSection.vue',
+    'ComprehensiveSectionStatus',
+    {
+      bearingMethodLabel: value => value,
+      bearingEntries: noop,
+      getDiagnosisStatusView,
+      _mergeModels: (props, models) => ({ ...props, ...models }),
+      _useModel: (props, name) => ({ value: props[name] }),
+    },
+  )
+  for (const status of [
+    'normal', 'warning', 'fault', 'critical', 'indeterminate', 'not_evaluable',
+    undefined, null, '', 'unexpected_status',
+  ]) {
+    const bindings = setup({ strategyAnalyzeData: { status }, fullAnalysisData: { status } })
+    const expected = getDiagnosisStatusView(status)
+    assert.deepEqual(plain(bindings.strategyStatusView.value), expected)
+    assert.deepEqual(plain(bindings.fullAnalysisStatusView.value), expected)
+    assert.equal(bindings.strategyStatusView.value.alertType, expected.alertType)
+  }
+  const { statusAlertTitle, statusAlertDescription } = setup({})
+  assert.equal(statusAlertTitle(getDiagnosisStatusView('normal')), '✅ 未检出显著故障特征')
+  assert.equal(statusAlertDescription(getDiagnosisStatusView('normal'), '', '正常说明'), '正常说明')
+  assert.equal(statusAlertDescription(getDiagnosisStatusView('warning'), '', '正常说明'), '')
+  const indeterminate = getDiagnosisStatusView('indeterminate')
+  assert.equal(statusAlertTitle(indeterminate), '诊断不可判定')
+  assert.match(statusAlertDescription(indeterminate, '', '正常说明'), /不能据此判断/)
 })
 
 function loadSfcSetup(relativePath, exportName, globals) {

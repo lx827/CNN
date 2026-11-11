@@ -29,21 +29,38 @@
         </div>
       </div>
       <div v-if="computedGear && gearData" class="gear-info">
+        <el-alert
+          v-if="gearData.tsa_status === 'not_evaluable' || unavailableMetricReason"
+          :title="unavailableMetricReason || gearData.tsa_reason"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 8px;"
+        />
         <el-descriptions :column="4" size="small" border>
           <el-descriptions-item label="SER" v-if="gearData.ser != null">
-            <el-tag :type="gearData.ser > 3 ? 'danger' : gearData.ser > 1.5 ? 'warning' : 'success'" size="small">
+            <el-tag :type="indicatorType('ser')" size="small">
               {{ gearData.ser.toFixed(3) }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="FM0" v-if="gearData.fm0 != null">
-            <el-tag :type="gearData.fm0 > 10 ? 'danger' : gearData.fm0 > 5 ? 'warning' : 'success'" size="small">
+            <el-tag :type="indicatorType('fm0')" size="small">
               {{ gearData.fm0.toFixed(2) }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="CAR" v-if="gearData.car != null">
-            <el-tag :type="gearData.car > 2 ? 'danger' : gearData.car > 1.2 ? 'warning' : 'success'" size="small">
+            <el-tag :type="indicatorType('car')" size="small">
               {{ gearData.car.toFixed(2) }}
             </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="FM4" v-if="gearData.fm4 != null">
+            <el-tag :type="indicatorType('fm4')" size="small">{{ gearData.fm4.toFixed(3) }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="M6A / M8A" v-if="gearData.m6a != null || gearData.m8a != null">
+            {{ formatRaw(gearData.m6a) }} / {{ formatRaw(gearData.m8a) }}（仅原始值）
+          </el-descriptions-item>
+          <el-descriptions-item label="NA4 / NB4" v-if="gearData.na4 != null || gearData.nb4 != null">
+            {{ formatRaw(gearData.na4) }} / {{ formatRaw(gearData.nb4) }}（仅原始值）
           </el-descriptions-item>
           <el-descriptions-item label="转频" v-if="gearData.rot_freq_hz">
             {{ gearData.rot_freq_hz }} Hz / {{ (gearData.rot_freq_hz * 60).toFixed(0) }} RPM
@@ -65,7 +82,7 @@
           </el-table-column>
         </el-table>
         <div v-else style="margin-top: 8px; color: #999; font-size: 13px;">
-          未检测到啮合频率参数，无法计算边频带
+          {{ unavailableMetricReason || '未配置啮合频率参数，无法计算边频带；不可评估不表示健康' }}
         </div>
       </div>
       <div v-else-if="loadingGear" class="placeholder">
@@ -79,7 +96,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   computedGear: { type: Boolean, default: false },
   loadingGear: { type: Boolean, default: false },
   gearData: { type: Object, default: null },
@@ -87,6 +106,30 @@ defineProps({
 })
 
 const gearMethod = defineModel('gearMethod', { type: String, default: 'standard' })
+
+const indicatorType = (name) => {
+  const indicator = props.gearData?.fault_indicators?.[name]
+  if (indicator?.critical) return 'danger'
+  if (indicator?.warning) return 'warning'
+  return 'success'
+}
+
+const formatRaw = (value) => value == null ? '不可评估' : Number(value).toFixed(3)
+
+const unavailableMetricReason = computed(() => {
+  const metrics = props.gearData?.metrics || {}
+  const unavailable = Object.values(metrics).find(metric => metric?.status === 'not_evaluable' && metric.reason !== 'tsa_not_requested')
+  if (!unavailable) return ''
+  const reasons = {
+    missing_fixed_axis_geometry: '未配置定轴输入轮齿数',
+    missing_comparable_residual_history: 'NA4 缺少可比历史 residual 方差，未计算',
+    missing_comparable_envelope_history: 'NB4 缺少可比历史包络方差，未计算',
+    car_requires_accurate_constant_speed: 'CAR 要求准确恒速，当前工况不评估',
+    tsa_requires_accurate_constant_speed_with_continuous_phase: 'TSA 要求准确恒速连续相位，当前仅保留可用频谱指标',
+    requested_mesh_or_sidebands_above_order_coverage: '啮合或边带超出阶次谱覆盖，SER 不可评估',
+  }
+  return reasons[unavailable.reason] || `指标不可评估：${unavailable.reason}`
+})
 
 defineEmits(['compute', 'clear'])
 </script>

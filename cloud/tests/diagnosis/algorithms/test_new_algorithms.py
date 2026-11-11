@@ -120,44 +120,10 @@ sc_cw = bearing_sc_scoh_analysis(cw_i_signal, FS, bearing_params=bearing_params,
 print(f"  CW SCoh最大值: {sc_cw['sc_max_value']}, 主导: {sc_cw['dominant_fault']}")
 print("  ✓ 变速工况 SC/SCoh 完成")
 
-# ── 4. ZOOM-FFT 边频带分析 ──
-print("\n── 4. ZOOM-FFT 边频带分析 ──")
-from app.services.diagnosis.gear.metrics import analyze_sidebands_zoom_fft
-
-# WTgearbox 断齿 + 健康
-br_file = os.path.join(WTG_DIR, "Br_B1_40-c1.npy")
-he_file = os.path.join(WTG_DIR, "He_N1_40-c1.npy")
-br_signal = np.load(br_file)[:max_s]
-he_signal = np.load(he_file)[:max_s]
-
-# 行星齿轮箱参数
-z_sun = 28
-z_ring = 100
-mesh_freq = 40.0 * z_ring * z_sun / (z_sun + z_ring)  # ≈ 875 Hz
-rot_freq = 40.0
-
-print(f"  断齿信号 kurtosis: {float(np.mean(br_signal**4)/(np.var(br_signal)**2)): .2f}")
-print(f"  健康信号 kurtosis: {float(np.mean(he_signal**4)/(np.var(he_signal)**2)): .2f}")
-print(f"  mesh_freq ≈ {mesh_freq:.1f} Hz, rot_freq = {rot_freq} Hz")
-
-# ZOOM-FFT 边频带分析
-zoom_br = analyze_sidebands_zoom_fft(br_signal, FS, mesh_freq, rot_freq, n_sidebands=6)
-zoom_he = analyze_sidebands_zoom_fft(he_signal, FS, mesh_freq, rot_freq, n_sidebands=6)
-
-print(f"  断齿: SER={zoom_br['ser']}, zoom_used={zoom_br['zoom_used']}, "
-      f"resolution={zoom_br['resolution_hz']} Hz")
-print(f"  健康: SER={zoom_he['ser']}, zoom_used={zoom_he['zoom_used']}, "
-      f"resolution={zoom_he['resolution_hz']} Hz")
-
-# SER 区分比
-if zoom_he['ser'] > 0:
-    print(f"  SER 区分比(故障/健康): {zoom_br['ser']/zoom_he['ser']: .2f}")
-
-# 显著边频带数量
-n_significant_br = sum(1 for sb in zoom_br['sidebands'] if sb.get('significant', False))
-n_significant_he = sum(1 for sb in zoom_he['sidebands'] if sb.get('significant', False))
-print(f"  断齿显著边频: {n_significant_br}, 健康显著边频: {n_significant_he}")
-print("  ✓ ZOOM-FFT 边频带分析完成")
+# ── 4. ZOOM-FFT ──
+# 旧脚本把未经验证的 Zoom SER 直接用于故障/健康区分，已删除。
+# Chirp-Z 的独立近频峰与频率轴验证见 test_fixed_axis_gear.py；不接入生产告警。
+print("\n── 4. ZOOM-FFT：独立数学测试已覆盖，本脚本不做生产告警评估 ──")
 
 # ── 5. 联合降噪 ──
 print("\n── 5. 联合降噪 (wavelet+VMD 级联) ──")

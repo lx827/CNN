@@ -1,169 +1,68 @@
 # 文档索引
 
-> **文档用途**：统一组织项目所有文档，方便 AI Agent 和人类用户快速定位。
-> **维护要求**：新增文档时，必须在此索引中添加条目。
+本页只负责入口导航。文档责任边界见 [ADR 0003](adr/0003-module-contract-documentation.md)，Agent 操作约束见 [AGENTS](../AGENTS.md)。
 
----
+## 开始
 
-## 快速导航
+| 目标 | 入口 |
+|------|------|
+| 项目概述与快速开始 | [README](../README.md) |
+| 环境、命令、红线与代码导航 | [AGENTS](../AGENTS.md) |
+| 整体系统结构 | [系统架构](系统架构.md) |
+| 域词汇 | [GLOSSARY](../GLOSSARY.md) |
+| 云端、DC24、脚本说明 | [cloud README](../cloud/README.md)、[dc24 README](../dc24/README.md)、[scripts README](../scripts/README.md) |
 
-### 📘 项目文档
+## 契约文档
 
-| 文档 | 路径 | 用途 |
-|------|------|------|
-| [README](../README.md) | `README.md` | 项目概述、快速开始 |
-| [AGENTS](../AGENTS.md) | `AGENTS.md` | AI Agent 环境配置、开发命令、关键代码路径 |
-| [词汇表](../GLOSSARY.md) | `GLOSSARY.md` | 域词汇表（与 `docs/adr/` 共同构成域文档） |
-| [cloud 服务说明](../cloud/README.md) | `cloud/README.md` | 云端后端架构、模块、配置与运行 |
-| [dc24 工具链说明](../dc24/README.md) | `dc24/README.md` | DC24 工具链结构、`.env` 配置与测试 |
-| [scripts 脚本说明](../scripts/README.md) | `scripts/README.md` | 运维脚本用途与运行方式 |
-| [系统架构](./系统架构.md) | `docs/系统架构.md` | 整体架构、模块职责与目录结构 |
-| [算法原理](./算法原理.md) | `docs/算法原理.md` | 轴承与齿轮诊断的经典理论、公式与参数 |
-| [诊断算法体系全景](./诊断算法体系全景.md) | `docs/诊断算法体系全景.md` | 5 子系统串联：方法公式、投票逻辑、评分机制 |
-| [数据集说明](./datasets.md) | `docs/datasets.md` | 四数据集路径、命名规则与机械参数 |
-| [DC24 采集操作与实现](./DC24_ACQUISITION.md) | `docs/DC24_ACQUISITION.md` | 真实采集页面、边端启动、可选分析、文件与验证边界 |
-| [从传感器到 CSV](./DC24_SIGNAL_TO_CSV.md) | `docs/DC24_SIGNAL_TO_CSV.md` | 面向有基础读者解释完整采集链路 |
-| [DC24 实测协议](./DC24_PROTOCOL.md) | `docs/DC24_PROTOCOL.md` | TCP角色、命令、四通道拆帧及原厂同段对照 |
-| [DC24 工作交接说明](./DC24_HANDOFF_20261107.md) | `docs/DC24_HANDOFF_20261107.md` | 已完成链路、现行协议、双接收方式、实测证据和树莓派兼容边界 |
-| [Rust 边端开发说明](../edge/README.md) | `edge/README.md` | Rust 边端开发稿、可调配置、验证状态与部署限制 |
-| [边端网络核心 FFI 契约](../edge/FFI.md) | `edge/FFI.md` | dc24_edge_core 动态库 C ABI：消息结构、导出函数、队列与线程约定（Python 驱动接入文档） |
-| [部署指南](./部署指南.md) | `docs/部署指南.md` | 本地（Windows/WSL）与阿里云 ECS 部署：uv 链路、`deploy.sh` 一键更新、`CNN.service` 模板、2G 红线 |
-| [边端交叉编译构建](../deploy/edge/README.md) | `deploy/edge/README.md` | Rust 边端 ARM64 交叉编译容器、产物导出与树莓派部署步骤 |
-| [操作手册](./操作手册.md) | `docs/操作手册.md` | 系统日常操作流程 |
-| [服务器命令速查](./服务器命令速查.md) | `docs/服务器命令速查.md` | SSH、服务、日志等常用命令 |
-| [CQU 训练仓库与系统交付边界](./CQU_TRAINING_HANDOFF.md) | `docs/CQU_TRAINING_HANDOFF.md` | 个人wavelet_study训练入口、历史产物保留位置及推理交付约定 |
+| 边界 | 权威入口 | 内容 |
+|------|----------|------|
+| 算法族 | [算法模块索引](algorithms/INDEX.md) | 数学目的、工况、单位、前提、Pipeline、不可判定、复杂度与验证状态 |
+| 外部 API | [后端 API](api/backend_api.md) | REST/WS 请求响应、认证、错误与 OpenAPI |
+| 前后端交互 | [交互映射](api/frontend_backend_interaction.md) | 前端调用点与后端端点的影响关系 |
+| 后端业务 | [后端索引](backend/INDEX.md) | 架构运行时、业务服务、诊断编排、持久化和 DC24 云端服务 |
+| 前端 | [前端索引](frontend/INDEX.md) | 前端模块导航、API 封装与组件/服务说明 |
+| 测试 | [测试索引](tests/INDEX.md) | 测试分层、运行方式、数据依赖和验证边界 |
+| 架构决策 | [ADR 0001](adr/0001-uv-workspace-python-313.md)、[ADR 0002](adr/0002-edge-crossbuild-cloud-systemd.md)、[ADR 0003](adr/0003-module-contract-documentation.md) | uv workspace、边端/云端部署、模块契约文档体系 |
+| Agent 工作流 | [Issue 跟踪](agents/issue-tracker.md)、[Triage 标签](agents/triage-labels.md)、[域文档](agents/domain.md) | Issue、标签、词汇与 ADR 约定 |
 
----
+## 算法理论与数据
 
-### 📄 项目记录与评估
+- [经典算法原理](算法原理.md)：公式推导、物理意义和参考文献。
+- [诊断算法体系全景](诊断算法体系全景.md)：诊断业务组合、评分与集成背景。
+- [小波与模态分解理论](algorithms/wavelet_and_modality_decomposition.md)：保留的理论资料。
+- [数据集说明](datasets.md)：路径、命名、采样率和机械参数。
+- [行星齿轮箱诊断进展](行星齿轮箱诊断进展.md)：阶段性评估与限制。
 
-| 文档 | 路径 | 用途 |
-|------|------|------|
-| [Bug 登记表](./Bug登记表.md) | `docs/Bug登记表.md` | 已发现 Bug 的汇总与修复状态 |
-| [DC24 采集工作记录](./DC24_ACQUISITION_WORKLOG.md) | `docs/DC24_ACQUISITION_WORKLOG.md` | 第一版实现、实机验证、限制和交接 |
-| [Rust 边端工作记录](./RUST_EDGE_WORKLOG.md) | `docs/RUST_EDGE_WORKLOG.md` | 2026-11-07 开发进度、构建阻碍及交接分支归档记录 |
-| [CQU × O9 工作日志（训练库）](https://github.com/lx827/wavelet_study/blob/o9-v1-kk/docs/CQU_O9_WORK_LOG.md) | 个人训练库 `docs/CQU_O9_WORK_LOG.md` | 数据准备、训练、迁移与验证状态的连续记录 |
-| [2026-10-21 架构整顿](./架构整顿记录_20261021.md) | `docs/架构整顿记录_20261021.md` | 摘要读模型、响应性能根因、修复验证与剩余问题 |
-| [2026-05-21 评估报告](./评估报告_20260521.md) | `docs/评估报告_20260521.md` | 算法与系统评估结果 |
-| [2026-10-17 论文与专利评估](./论文与专利评估_20261017.md) | `docs/论文与专利评估_20261017.md` | 论文、专利材料与创新点评估 |
-| [行星齿轮箱诊断进展](./行星齿轮箱诊断进展.md) | `docs/行星齿轮箱诊断进展.md` | 行星齿轮箱诊断的阶段性进展 |
+## 采集、边端与运维
 
-### 📍 现场数据交接
+- [DC24 采集操作与实现](DC24_ACQUISITION.md)
+- [从传感器到 CSV](DC24_SIGNAL_TO_CSV.md)
+- [DC24 实测协议](DC24_PROTOCOL.md)
+- [树莓派直连配置](树莓派直连配置.md)
+- [Rust 边端 README](../edge/README.md) 与 [FFI 契约](../edge/FFI.md)
+- [部署指南](部署指南.md)、[操作手册](操作手册.md)、[服务器命令速查](服务器命令速查.md)
+- [边端交叉编译构建](../deploy/edge/README.md)
+- [CQU 训练仓库与系统交付边界](CQU_TRAINING_HANDOFF.md)
 
-| 文档 | 路径 | 用途 |
-|------|------|------|
-| [现场数据交接记录](./FIELD_DATA_HANDOFF_20261020.md) | `docs/FIELD_DATA_HANDOFF_20261020.md` | 设备、通道、CSV 清单、已知限制与待确认事项 |
-| [现场设备资料汇总](./FIELD_EQUIPMENT_20261023.md) | `docs/FIELD_EQUIPMENT_20261023.md` | 机械参数、通道映射、手册与铭牌转录 |
+## 现场资料与历史记录
 
----
+这些资料保留其日期和验证语境，不作为当前函数签名来源。
 
-### 🔧 后端文档
+- [现场数据交接 2026-10-20](FIELD_DATA_HANDOFF_20261020.md)
+- [现场设备资料 2026-10-23](FIELD_EQUIPMENT_20261023.md)
+- [DC24 工作交接 2026-11-07](DC24_HANDOFF_20261107.md)
+- [DC24 采集工作记录](DC24_ACQUISITION_WORKLOG.md)
+- [Rust 边端工作记录](RUST_EDGE_WORKLOG.md)
+- [架构整顿记录 2026-10-21](架构整顿记录_20261021.md)
+- [评估报告 2026-05-21](评估报告_20260521.md)
+- [论文与专利评估 2026-10-17](论文与专利评估_20261017.md)
+- [Bug 登记表](Bug登记表.md)
+- [CQU × O9 工作日志（外部训练库）](https://github.com/lx827/wavelet_study/blob/o9-v1-kk/docs/CQU_O9_WORK_LOG.md)
 
-| 文档 | 路径 | 用途 |
-|------|------|------|
-| [后端目录索引](./backend/INDEX.md) | `docs/backend/INDEX.md` | **按文件模块结构组织后端代码** |
-| [后端 API 接口](./api/backend_api.md) | `docs/api/backend_api.md` | REST API 和 WebSocket 端点完整文档 |
-| [后端服务层接口](./backend/services.md) | `docs/backend/services.md` | 服务层所有公共函数/类接口文档 |
-| [独立算法库](./backend/app/algorithms/__init__.md) | `docs/backend/app/algorithms/` | 纯数值数据契约、机械运动学、包络分析与对象化 Pipeline |
-| [小波与模态分解算法](algorithms/wavelet_and_modality_decomposition.md) | `docs/algorithms/wavelet_and_modality_decomposition.md` | VMD、EMD、小波等信号分解方法 |
+## 文档检查
 
----
-
-### 🎨 前端文档
-
-| 文档 | 路径 | 用途 |
-|------|------|------|
-| [前端目录索引](./frontend/INDEX.md) | `docs/frontend/INDEX.md` | **按文件模块结构组织前端代码** |
-| [前端 API 封装](./frontend/frontend_api.md) | `docs/frontend/frontend_api.md` | 前端 API 封装和 Vue 组件接口文档 |
-| [前端服务层接口](./frontend/frontend_services.md) | `docs/frontend/frontend_services.md` | Stores、Utils、Components 接口文档 |
-
----
-
-### 🔄 前后端交互文档
-
-| 文档 | 路径 | 用途 |
-|------|------|------|
-| [前后端交互映射](./api/frontend_backend_interaction.md) | `docs/api/frontend_backend_interaction.md` | 前端组件与后端 API 的调用关系映射 |
-
----
-
-### 🧪 测试文档
-
-| 文档 | 路径 | 用途 |
-|------|------|------|
-| [测试套件索引](./tests/INDEX.md) | `docs/tests/INDEX.md` | 回归测试、方法评估、专项测试的完整索引 |
-
----
-
-## 文档使用指南
-
-### 何时查阅哪个文档？
-
-| 场景 | 查阅文档 |
-|------|----------|
-| 了解项目整体架构 | `README.md`, `docs/系统架构.md` |
-| 了解诊断算法数学公式与系统交互 | `docs/算法原理.md`, `docs/诊断算法体系全景.md` |
-| 配置开发环境 | `AGENTS.md` |
-| 修改后端 API 端点 | `docs/api/backend_api.md` → `docs/api/frontend_backend_interaction.md` |
-| 修改后端服务函数 | `docs/backend/services.md` |
-| 定位后端代码位置 | `docs/backend/INDEX.md` |
-| 修改前端 API 调用 | `docs/frontend/frontend_api.md` → `docs/api/frontend_backend_interaction.md` |
-| 修改前端组件/工具 | `docs/frontend/frontend_services.md` |
-| 定位前端代码位置 | `docs/frontend/INDEX.md` |
-| 部署到服务器 | `docs/部署指南.md`, `docs/操作手册.md` |
-| 启动本机环境 | `docs/DC24_ACQUISITION.md`（`start_dc24.bat` 一键入口） |
-| 查找服务器命令 | `docs/服务器命令速查.md` |
-| 处理现场设备数据 | `docs/FIELD_DATA_HANDOFF_20261020.md`, `docs/FIELD_EQUIPMENT_20261023.md` |
-| 运行/编写测试 | `docs/tests/INDEX.md` |
-
-### 修改代码时的文档同步规则
-
-| 代码变更类型 | 需要同步更新的文档 |
-|-------------|-------------------|
-| 新增/修改/删除 API 端点 | `backend_api.md` + `frontend_backend_interaction.md` |
-| 新增/修改/删除服务层函数 | `services.md` |
-| 新增/修改/删除前端 API 封装 | `frontend_api.md` + `frontend_backend_interaction.md` |
-| 新增/修改/删除前端组件 | `frontend_services.md` |
-| 新增/重命名/删除文件 | 对应目录的 `INDEX.md` |
-| 修改函数签名（参数/返回值） | 对应接口文档 |
-| 修改前后端数据格式 | 所有相关文档 |
-
----
-
-## 文档结构总览
-
-```
-docs/
-├── INDEX.md                          # 本文档（文档索引）
-├── 系统架构.md                       # 整体架构与目录结构
-├── 算法原理.md                       # 经典诊断算法理论
-├── 诊断算法体系全景.md               # 5 子系统串联说明
-├── datasets.md                       # 数据集路径、命名与机械参数
-├── 部署指南.md                       # 服务器部署
-├── 操作手册.md                       # 日常操作
-├── 服务器命令速查.md                 # 运维常用命令
-├── Bug登记表.md                      # 缺陷汇总与修复状态
-├── 架构整顿记录_20261021.md          # 架构整顿记录
-├── 评估报告_20260521.md              # 算法与系统评估
-├── 论文与专利评估_20261017.md        # 论文与专利材料
-├── 行星齿轮箱诊断进展.md             # 行星箱阶段性进展
-├── FIELD_DATA_HANDOFF_20261020.md    # 现场数据交接
-├── FIELD_EQUIPMENT_20261023.md       # 现场设备资料
-│
-├── api/                              # API 相关文档
-├── backend/                          # 后端模块镜像文档（每个 .py 对应同名 .md）
-├── frontend/                         # 前端文档
-├── algorithms/                       # 专项算法文档
-├── tests/                            # 测试文档
-├── adr/                              # 架构决策记录（ADR）
-├── agents/                           # Agent 协作约定（issue 跟踪 / triage / 域文档）
-└── internal/                         # 文档检查工具
+```bash
+bash docs/internal/check_markdown_links.sh
 ```
 
-> 说明：`docs/backend/app/` 下的文档与 `cloud/app/` 源码一一对应，文件名保持英文，便于按模块定位。
-
----
-
-*文档生成时间：2026-05-17*
-*最近更新：2026-11-08（T9/#54：补二级 README 与域文档入口，结构总览补 adr/、agents/）*
-*维护者：AI Agent（修改代码或文档结构时请务必同步更新）*
+检查相对链接、算法模块必需结构和已撤销镜像目录的引用。该命令只验证文档结构，不替代算法或 API 测试。
