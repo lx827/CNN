@@ -1,7 +1,38 @@
-"""机械对象的运动学模型。当前提供滚动轴承特征频率。"""
+"""机械对象的运动学模型；长度单位为一致单位，频率单位为 Hz。"""
 from dataclasses import dataclass
 
 import numpy as np
+
+
+@dataclass(frozen=True)
+class FixedAxisGearGeometry:
+    """定轴齿轮副；输入轴是阶次与 TSA 的同步轴。"""
+
+    input_teeth: int
+    output_teeth: int | None = None
+
+    def __post_init__(self) -> None:
+        for name, value, required in (
+            ("输入轮齿数", self.input_teeth, True),
+            ("输出轮齿数", self.output_teeth, False),
+        ):
+            if value is None and not required:
+                continue
+            if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
+                raise ValueError(f"{name}必须是整数")
+            if value < 2:
+                raise ValueError(f"{name}必须不小于 2")
+
+    @property
+    def mesh_order(self) -> float:
+        """相对输入轴转频的啮合阶次，无量纲。"""
+        return float(self.input_teeth)
+
+    def mesh_frequency_hz(self, input_speed_hz: float) -> float:
+        """输入轴转频与返回值均为 Hz。"""
+        if not np.isfinite(input_speed_hz) or input_speed_hz <= 0:
+            raise ValueError("输入轴转频必须是有限正数")
+        return self.mesh_order * float(input_speed_hz)
 
 
 @dataclass(frozen=True)

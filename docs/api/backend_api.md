@@ -1,7 +1,7 @@
 # 后端 API 接口文档
 
 > **文档用途**：完整记录云端 FastAPI 后端的所有 REST API 端点、WebSocket 接口、请求/响应参数及调用约束。
-> **维护要求**：新增、修改或删除任何 API 端点时，必须同步更新本文档和 `AGENTS.md` 中的引用。
+> **维护要求**：新增、修改或删除任何 API 端点时，必须同步更新本文档、`frontend_backend_interaction.md` 与机器可读 `openapi.json`。算法数学语义不在本文复制，统一链接 `docs/algorithms/`。
 
 ---
 
@@ -88,14 +88,7 @@ POST /api/auth/login
 
 **调用方**：`views/Login.vue` → `api/auth.js::login()`
 
-**非路由公共函数**（`auth.py`）：
-
-| 函数 | 签名 | 说明 |
-|------|------|------|
-| `create_access_token` | `create_access_token(data: dict, expires_delta: timedelta = None) -> str` | 生成JWT Token |
-| `verify_token_string` | `verify_token_string(token: str) -> str` | 验证JWT字符串 |
-| `get_current_user` | `get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str` | FastAPI依赖，提取当前用户 |
-| `optional_auth` | `optional_auth(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)) -> str` | 兼容JWT和X-Edge-Key的认证依赖 |
+认证依赖同时兼容 JWT Bearer 与边端 API Key，具体适用端点见下文。令牌生成、校验和认证依赖的函数签名以 `cloud/app/api/auth.py` 源码 docstring 为准，不在 API 文档复制内部函数接口。
 
 ---
 
@@ -283,7 +276,7 @@ GET /api/monitor/latest?device_id={device_id}&prefer_special={prefer_special}&li
 | `prefer_special` | `bool` | `false` | 优先取特殊采集批次 |
 | `limit` | `int` | `3` | 返回通道数 |
 
-**响应**：每条含 `data`（时域）、`fft_freq`、`fft_amp`、`channel_name` 等
+**响应**：每条含 `data`（时域）、`fft_freq`、`fft_amp`、`channel_name` 等。FFT 对最多 `FFT_POINTS` 个采样完整计算后再按 `FFT_MAX_FREQ` 截断显示；采用去均值、周期 Hann 和单边峰值幅值，频率单位 Hz、幅值单位与输入一致，DC/Nyquist 不翻倍。
 
 **内部常量**：
 
@@ -436,6 +429,8 @@ DELETE /api/data/{device_id}/{batch_index}
 
 ### 6.2 频谱分析
 
+三个端点均在业务层先截取最多 5 秒，再去趋势/去噪并复用现有线程池计算。完整数值表示先于展示截断生成；数学定义见 [基础数值表示契约](../algorithms/numeric/INDEX.md)。
+
 #### 6.2.1 FFT 频谱
 
 ```
@@ -447,6 +442,8 @@ GET /api/data/{device_id}/{batch_index}/{channel}/fft?max_freq={max_freq}&detren
 | `max_freq` | `Optional[int]` | `5000` | — | 最大频率 |
 | `detrend` | `bool` | `False` | — | 线性去趋势 |
 | `denoise` | `str` | `"none"` | — | 预处理方法 |
+
+**响应 data**：`{device_id, batch_index, channel, channel_name, sample_rate, is_special, fft_freq, fft_amp}`。`fft_freq` 为 Hz，保留两位小数；`fft_amp` 为去均值、周期 Hann 相干增益补偿后的单边峰值幅值，保留四位小数，单位与输入一致。DC/Nyquist 不翻倍；`max_freq` 只截断显示，传空值时不截断。
 
 #### 6.2.2 STFT 时频谱
 
@@ -462,7 +459,9 @@ GET /api/data/{device_id}/{batch_index}/{channel}/stft?max_freq={max_freq}&npers
 | `detrend` | `bool` | `False` | — | 线性去趋势 |
 | `denoise` | `str` | `"none"` | — | 预处理方法 |
 
-**注意**：该端点为 `async def`，核心计算放入线程池
+**注意**：该端点为 `async def`，核心计算放入线程池。实际窗口随短记录缩小，重叠不超过实际窗口减 1，FFT 长度至少覆盖实际窗口。
+
+**响应 data**：`{device_id, batch_index, channel, channel_name, sample_rate, is_special, time, freq, magnitude}`。`time` 为秒、`freq` 为 Hz；`magnitude` 形状为 `(frequency, time)`，由单边峰值幅值计算 `20*log10(amplitude+1e-10)` dB。两端补零使首帧时间通常为 0；`max_freq` 只截断显示。
 
 #### 6.2.3 统计特征指标
 
@@ -476,6 +475,8 @@ GET /api/data/{device_id}/{batch_index}/{channel}/stats?window_size={window_size
 | `step` | `Optional[int]` | `None` | `ge=1, le=4096` | 滑动步长 |
 | `detrend` | `bool` | `False` | — | 线性去趋势 |
 | `denoise` | `str` | `"none"` | — | 预处理方法 |
+
+**响应 data**：包含 `peak/rms/kurtosis/skewness/margin/shape_factor/impulse_factor/crest_factor`、`windowed_kurtosis`、`window_series` 和 `window_params`，以及设备/批次/通道元数据。总体指标使用 5 秒限制内的完整信号；窗口序列只使用周期 Hann 完整窗口，`window_params` 返回实际窗口和步长。绘图抽点不参与统计。
 
 ---
 
@@ -536,7 +537,9 @@ GET /api/data/{device_id}/{batch_index}/{channel}/cepstrum?max_quefrency={max_qu
 | `detrend` | `bool` | `False` | — | 线性去趋势 |
 | `denoise` | `str` | `"none"` | — | 预处理方法 |
 
-**注意**：该端点为 `async def`
+**注意**：该端点为 `async def`。倒谱算法内部倒频率单位为秒，HTTP 查询与响应使用毫秒。
+
+**响应 data**：`{device_id, batch_index, channel, channel_name, sample_rate, is_special, max_quefrency, quefrency, cepstrum, peaks}`。`quefrency` 为非负倒频率轴（ms），`cepstrum` 为周期 Hann、去均值 log 幅值谱的实 IFFT，不是 log-power 倒谱。`peaks` 含 `{quefrency_ms, freq_hz, amplitude}`；`freq_hz=1/quefrency_s` 表示谱线间隔，显示峰不构成机械故障阈值。
 
 ---
 

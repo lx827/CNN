@@ -78,6 +78,9 @@ cloud/                      # 云端后端(uv workspace 成员)
 │   │   ├── mechanics/      # 机械对象运动学模型与故障频率
 │   │   ├── bearing/        # 包络计算、指标/边带分析与阈值评估
 │   │   ├── order/          # 转速估计、连续相位、等角重采样与阶次谱 Pipeline
+│   │   ├── transforms/     # FFT/STFT、通用 Hilbert 包络与绘图极值抽点
+│   │   ├── statistics/     # 总体、加窗与分段时域统计
+│   │   ├── cepstrum/       # log-amplitude 实倒谱与显示峰分析
 │   │   └── pipelines/      # 按诊断对象组合分析 Pipeline 与评估 Pipeline
 │   ├── services/
 │   │   ├── analyzer.py     # 后台分析入口(多通道综合,lifespan worker 调用)
@@ -121,28 +124,32 @@ wind-turbine-diagnosis/     # Vue3 前端
 └── tests/                  # *.test.cjs(node --test 运行)
 ```
 
-逐文件接口:`docs/backend/app/INDEX.md`;服务层函数:`docs/backend/services.md`。
+后端架构与业务契约:`docs/backend/INDEX.md`;算法族契约:`docs/algorithms/INDEX.md`。
 
 ## 8. 数据与数据库
 
 - 数据集 4 套(8192Hz,`.npy`):HUSTbear、CW(轴承)、WTgearbox(行星箱)、HUSTgearbox(定轴箱)。路径、命名规则、机械参数见 **`docs/datasets.md`** — 配置诊断参数、写测试、边端回放都以它为准,不得用其他数据集参数代填
 - 表:`devices`、`sensor_data`(batch 1~16 循环覆盖,≥101 永久保留)、`diagnosis`、`alarms`、`collection_tasks`
-- 诊断缓存键 `(device, batch, channel, denoise_method)`;重新诊断 `POST /api/data/{device_id}/{batch_index}/reanalyze`、`POST /api/data/{device_id}/reanalyze-all`(逐批串行防 OOM)。字段详情:`docs/backend/app/models.md`
+- 诊断缓存键 `(device, batch, channel, denoise_method)`;重新诊断 `POST /api/data/{device_id}/{batch_index}/reanalyze`、`POST /api/data/{device_id}/reanalyze-all`(逐批串行防 OOM)。持久化语义:`docs/backend/persistence.md`
 
 ## 9. 编码规范
 
 Python UTF-8 + 中文注释;shell 命令路径用 `/`;改文件用编辑工具,不用 sed。
 
-## 10. 文档即契约(代码改动必须同步文档,不一致会导致前后端调用失败)
+## 10. 文档责任边界(契约按稳定语义同步)
 
-| 改动 | 必须同步 |
+| 改动 | 权威文档 |
 |------|---------|
-| API 端点 | `docs/api/backend_api.md` + `docs/api/frontend_backend_interaction.md` |
-| 服务层函数 | `docs/backend/services.md` |
+| HTTP/WS 端点、请求响应或前后端调用关系 | `docs/api/backend_api.md` + `docs/api/frontend_backend_interaction.md` + `docs/api/openapi.json` |
+| 算法数学目的、工况、单位、前提、Pipeline、不可判定或验证状态 | `docs/algorithms/INDEX.md` 所列算法族文档 |
+| 业务服务、持久化、缓存、线程或诊断编排 | `docs/backend/INDEX.md` 对应模块文档 |
 | 前端 API 封装/组件 | `docs/frontend/frontend_api.md` + `frontend_services.md` |
-| 增删改 .py 文件 | `docs/backend/app/` 对应 `.md` + `INDEX.md` |
+| 关键架构取舍 | `docs/adr/` 新增或更新 ADR |
+| 测试分层、运行方式或数据依赖 | `docs/tests/INDEX.md` |
 
-动手前先查对应文档确认契约;文档缺失则改完立即补建。总索引:`docs/INDEX.md`。
+函数签名、参数类型和默认值只以源码 docstring 为准,不在 Markdown 全量复制。源码新增、移动或重命名本身不要求同名 `.md`;只有上述稳定语义或导航归属变化才更新文档。新增算法族按 `docs/algorithms/TEMPLATE.md` 编写,未合并实现明确标为待定稿。历史交接和理论资料保留日期与语境,不冒充当前契约。
+
+总索引:`docs/INDEX.md`;组织决策:`docs/adr/0003-module-contract-documentation.md`。修改文档后运行 `bash docs/internal/check_markdown_links.sh`;文档检查不替代正确性测试。
 
 ## 11. Git 流程
 

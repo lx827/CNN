@@ -40,15 +40,19 @@ run() {
 echo "==> 部署目录: $DEPLOY_ROOT(dry-run=$DRY_RUN)"
 cd "$DEPLOY_ROOT"
 
-# 1) uv 引导:不存在则官方脚本安装
-if command -v uv >/dev/null 2>&1; then
-    echo "==> uv 已就绪: $(command -v uv)"
+# 1) uv 引导:不存在或不可用则官方脚本安装;PATH 无论如何都带上 ~/.local/bin
+#    (非交互 SSH 下 Ubuntu 的 .bashrc 提前返回,拿不到 ~/.local/bin —— 2026-11-11
+#     生产事故诱因之一:uv 引导状态与后续步骤不一致)
+export PATH="$HOME/.local/bin:$PATH"
+if command -v uv >/dev/null 2>&1 && uv --version >/dev/null 2>&1; then
+    echo "==> uv 已就绪: $(command -v uv) ($(uv --version 2>/dev/null || echo 版本未知))"
 else
-    echo "==> 未检测到 uv,使用官方脚本安装"
+    echo "==> 未检测到可用 uv,使用官方脚本安装"
     run curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh
     run sh /tmp/uv-install.sh
     export PATH="$HOME/.local/bin:$PATH"
-    command -v uv >/dev/null 2>&1 || { echo "uv 安装失败;请手动安装后重试(https://docs.astral.sh/uv/)"; exit 1; }
+    command -v uv >/dev/null 2>&1 && uv --version >/dev/null 2>&1 \
+        || { echo "uv 安装失败或不可用;请手动安装后重试(https://docs.astral.sh/uv/)"; exit 1; }
 fi
 
 # 2) 同步代码(保留 main 分支直进的方式;--ff-only 避免意外合并提交)
@@ -58,6 +62,17 @@ run git pull --ff-only
 # 3) 安装依赖:workspace 根 uv sync --frozen,严格按 uv.lock,
 #    Python 3.13 由 uv 托管下载,不依赖系统 Python(ADR-0001)
 run uv sync --frozen
+
+# 3.1) 断言 workspace 解释器确实生成。2026-11-11 生产事故:uv sync 正常返回但
+#      /opt/CNN/.venv 未生成,服务被切到不存在的解释器上进入崩溃循环;此断言让
+#      该类失效在部署期响亮失败,绝不带病重启。
+VENV_PY="$DEPLOY_ROOT/.venv/bin/python"
+if $DRY_RUN; then
+    echo "[dry-run] 断言 $VENV_PY 可执行(当前实际状态: $([ -x "$VENV_PY" ] && echo 存在 || echo 缺失))"
+else
+    [ -x "$VENV_PY" ] || { echo "!! uv sync 返回成功但 $VENV_PY 不存在,中止部署(服务未被动过)"; exit 1; }
+    echo "==> 依赖就绪: $VENV_PY"
+fi
 
 # 4) systemd 服务:首次安装 / 与模板不一致时备份更新 CNN.service
 #    (ExecStart 直指 .venv 解释器,模板见 deploy/cloud/CNN.service)
@@ -81,9 +96,34 @@ else
     install_service
 fi
 
+# 4.1) 断言磁盘上的 unit 确实指向 workspace 解释器。cmp "一致"只说明与模板相等,
+#      不能兜住"模板与现状都被污染/未被替换"的组合;2026-11-11 生产事故中旧单元
+#      残留 venv 时代路径,服务一直跑在 /opt/CNN/cloud/venv 上。不指向 .venv 即强制覆盖。
+if ! $DRY_RUN; then
+    if ! sudo grep -q '\.venv/bin/python' "$SERVICE_DST" 2>/dev/null; then
+        echo "!! ${SERVICE}.service 未指向 workspace 解释器($VENV_PY),备份后强制以模板覆盖"
+        run sudo cp "$SERVICE_DST" "${SERVICE_DST}.bak.$(date +%Y%m%d%H%M%S)"
+        install_service
+    fi
+fi
+
 # 5) 重启后端(2G 红线:重启前后均不引入额外并发,单服务单进程)
 echo "==> 重启后端"
 run sudo systemctl restart "$SERVICE"
+# 5.1) 等待真正进入 active(2G 机器冷启动可达数秒;systemctl restart 返回≠服务已就绪)
+if ! $DRY_RUN; then
+    waited=""
+    for _ in $(seq 1 30); do
+        if sudo systemctl is-active --quiet "$SERVICE"; then waited=1; break; fi
+        sleep 1
+    done
+    if [ -z "$waited" ]; then
+        echo "!! $SERVICE 重启后 30 秒未进入 active,最近日志:"
+        sudo journalctl -u "$SERVICE" -n 15 --no-pager || true
+        exit 1
+    fi
+    echo "==> $SERVICE 已 active"
+fi
 
 # 6) 前端构建(默认执行;传 -s / --skip-frontend 跳过)
 if [ "$SKIP_FRONTEND" = false ]; then

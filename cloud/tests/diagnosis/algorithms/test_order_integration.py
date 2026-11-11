@@ -15,7 +15,7 @@ os.environ["DATABASE_URL"] = "sqlite://"
 from app.api.data_view.order import get_channel_order
 from app.database import Base
 from app.models import Diagnosis, Device, SensorData
-from app.services.diagnosis import DiagnosisEngine
+from app.services.diagnosis import DiagnosisEngine, GearMethod
 from app.services.diagnosis.ensemble import run_research_ensemble
 from tests.diagnosis.algorithms.test_order_pipeline import _triangle_revolutions
 
@@ -28,7 +28,13 @@ def _constant_signal(fs=8192, duration=4.0):
 def _fast_signal(fs=8192, duration=6.0):
     time_s = np.arange(int(fs * duration)) / fs
     revolutions = _triangle_revolutions(time_s)
-    return np.sin(2 * np.pi * revolutions) + 0.5 * np.sin(2 * np.pi * 3.5 * revolutions)
+    return (
+        np.sin(2 * np.pi * revolutions)
+        + 0.5 * np.sin(2 * np.pi * 3.5 * revolutions)
+        + 0.6 * np.sin(2 * np.pi * 18 * revolutions)
+        + 0.3 * np.sin(2 * np.pi * 17 * revolutions)
+        + 0.2 * np.sin(2 * np.pi * 19 * revolutions)
+    )
 
 
 def test_engine_indeterminate_and_fast_downstream_boundaries():
@@ -48,13 +54,27 @@ def test_engine_indeterminate_and_fast_downstream_boundaries():
             signal, 8192, rot_freq=scalar_summary,
             preprocess=False, _cached_order=order_analysis,
         ),
-        lambda: engine.analyze_gear(signal, 8192),
     ):
         try:
             call()
-            raise AssertionError("快速变速不应被标量轴承/齿轮下游静默接受")
+            raise AssertionError("快速变速不应被标量轴承下游静默接受")
         except ValueError as exc:
             assert "快速变速" in str(exc)
+
+    # 定轴新契约：SER 可以消费连续相位补偿谱，但 TSA/CAR 不得使用轨迹中位数。
+    gear_engine = DiagnosisEngine(gear_method=GearMethod.ADVANCED, gear_teeth={"input": 18})
+    gear_order = gear_engine._analyze_order(signal, 8192)
+    assert gear_order.tracking_method == "varying_speed"
+    gear = gear_engine.analyze_gear(signal, 8192, _cached_order=gear_order)
+    assert gear["tracking_method"] == "varying_speed"
+    assert gear["metrics"]["ser"]["status"] == "evaluated"
+    assert gear["mesh_amp"] > 0.3
+    # 17/18/19 阶峰只能在补偿后的角域谱中同时保持窄带幅值。
+    assert gear["sidebands"][0]["amp_low"] > 0.15
+    assert gear["sidebands"][0]["amp_high"] > 0.10
+    assert gear["tsa_status"] == "not_evaluable"
+    assert gear["metrics"]["fm4"]["reason"] == "tsa_requires_accurate_constant_speed_with_continuous_phase"
+    assert gear["metrics"]["car"]["reason"] == "car_requires_accurate_constant_speed"
 
 
 def test_ensemble_fast_speed_never_becomes_bearing_constant_input():

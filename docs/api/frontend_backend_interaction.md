@@ -74,6 +74,8 @@
 >
 > **2026-11-08 阶次契约保持兼容**：`/order` 的 URL、参数和响应字段不变，前端无需改动。`orders` 明确为 FFT bin 阶次轴，`spectrum` 为单边峰值幅值，数值精度提高到六位小数；`tracking_method` 的可选值不变。估计或快速变速脊线不可判定时后端返回 HTTP 400，不再以固定转频生成正常图。没有既有批次诊断时只返回阶次结果，不创建伪健康记录，也不覆盖通道缓存。
 >
+> **2026-11-09 基础数值契约（#76 / PR #81）**：FFT/STFT/统计/倒谱及 Monitor 的响应字段保持兼容，但 FFT 幅值统一为周期 Hann 相干增益补偿的单边峰值幅值，STFT `magnitude` 为对应幅值的 dB 表示，倒谱明确为 log-amplitude 实倒谱。展示截断不先于完整计算；前端不得按旧未归一化 FFT 数值标定固定视觉阈值。数学语义见 `docs/algorithms/numeric/INDEX.md`。
+>
 > **⚠️ 影响前端**：`DataView.vue` 是核心数据查看组件，任何 `/api/data/{id}/{batch}/{ch}/*` 端点的 URL 变更、参数增减或响应结构调整，都需要同步修改 `frontend/src/views/DataView.vue` 和 `frontend/src/api/data.js`。
 
 ---

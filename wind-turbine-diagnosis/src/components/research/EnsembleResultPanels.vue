@@ -111,25 +111,25 @@
         <el-table-column prop="ser" label="SER" width="100">
           <template #default="{ row }">
             <el-tag v-if="row._error" type="danger" size="small">{{ row._errMsg?.substring(0,20) }}</el-tag>
-            <el-tag v-else-if="row.ser != null" :type="row.ser > 3 ? 'danger' : row.ser > 1.5 ? 'warning' : 'success'" size="small">{{ row.ser?.toFixed(3) }}</el-tag>
+            <el-tag v-else-if="row.ser != null" :type="indicatorType(row.indicators?.ser)" size="small">{{ row.ser?.toFixed(3) }}</el-tag>
             <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column prop="car" label="CAR" width="90">
           <template #default="{ row }">
-            <span v-if="!row._error && row.car != null" :class="row.car > 2 ? 'text-danger' : row.car > 1.2 ? 'text-warning' : ''">{{ row.car?.toFixed(2) }}</span>
+            <span v-if="!row._error && row.car != null" :class="indicatorClass(row.indicators?.car)">{{ row.car?.toFixed(2) }}</span>
             <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column prop="fm0" label="FM0" width="90">
           <template #default="{ row }">
-            <span v-if="!row._error && row.fm0 != null" :class="row.fm0 > 10 ? 'text-danger' : row.fm0 > 5 ? 'text-warning' : ''">{{ row.fm0?.toFixed(2) }}</span>
+            <span v-if="!row._error && row.fm0 != null" :class="indicatorClass(row.indicators?.fm0)">{{ row.fm0?.toFixed(2) }}</span>
             <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column prop="fm4" label="FM4" width="90">
           <template #default="{ row }">
-            <span v-if="!row._error && row.fm4 != null" :class="row.fm4 > 10 ? 'text-danger' : row.fm4 > 5 ? 'text-warning' : ''">{{ row.fm4?.toFixed(2) }}</span>
+            <span v-if="!row._error && row.fm4 != null" :class="indicatorClass(row.indicators?.fm4)">{{ row.fm4?.toFixed(2) }}</span>
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -175,6 +175,9 @@
 
 <script setup>
 import { fmt, percent } from '../../composables/useResearchDiagnosis'
+
+const indicatorType = (indicator) => indicator?.critical ? 'danger' : indicator?.warning ? 'warning' : 'success'
+const indicatorClass = (indicator) => indicator?.critical ? 'text-danger' : indicator?.warning ? 'text-warning' : ''
 
 defineProps({
   result: { type: Object, required: true },

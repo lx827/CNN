@@ -2,15 +2,16 @@
 
 > 最后更新: 2026-11-08 | 详见 AGENTS.md §14
 
-## 未修复 (3)
+## 未修复 (4)
 
 | # | 文件 | 描述 |
 |---|------|------|
 | 11d | `ensemble.py`, `health_score.py` | D-S 证据融合未生效（0/30 样本被覆盖）|
 | 13d | `ensemble.py` | **WTG 五分类断齿检出 0%** — gear_abnormal 标签映射缺失 |
 | 25 | `Settings.vue`(现 `components/settings/MechanicalParamsCard.vue`) | **设置页首渲染即崩、整页空白** — `form.gear_teeth` 初始为 {},模板无守卫直接访问 `form.gear_teeth[String(i)].input`;挂载中止致 onMounted 不执行、无法自愈(396cf64 引入)。T5 拆分按视觉零变化要求保留该行为 |
+| 35 | 生产 `cloud/.env` | **ECS 仍用默认 `ADMIN_PASSWORD=admin123` 与默认 JWT `SECRET_KEY`** — 旧 `.env` 缺键;历史 `EDGE_API_KEY` 为 63 字节非 ASCII 值(HTTP header 无法可靠传输,2026-11-11 已轮换为随机 hex 并同步树莓派)。待补强值 |
 
-## 已修复 (35)
+## 已修复 (36)
 
 | # | 文件 | 描述 |
 |---|------|------|
@@ -38,6 +39,7 @@
 | 31 | `algorithms/order/`, `order_tracking.py`, `engine.py`, `data_view/order.py` | **阶次轴语义重载、幅值未按单边峰值归一化、固定 STFT 512 分辨率过粗、MAD 近零误删、失败默认 10Hz/退回恒速** — 转速/相位结构化分型；自适应 STFT 与梯形积分；逐帧谱平均和连续相位分离；不可判定显式失败；独立公式测试与 Engine/API 集成覆盖 |
 | 32 | `algorithms/order/`, `engine.py`, `gear/metrics.py`, `data_view/order.py` | **单帧/slow 失败绕过 fast、长期越界被 clip、首尾 bin 误判越界、边缘帧数/采样点单位混用、零 MAD 保留离群、窄带纯音误拒、快速变速轴承摘要成恒速、FM0 主瓣重复计数、/order 伪造健康并覆盖通道缓存** — 全记录解析反例回归；亚 bin 峰位与外侧能量区分近边界/越界；FM0 改取谐波峰值；只更新明确批次记录并标记 JSON 变更；失败测试脚本非零退出 |
 | 33 | `tests/.../synthetic_signals.py`, `algorithms/order/estimation.py` | **轴承合成器声明 rot_freq 却未生成轴频，BPFO 冲击被误当转频** — 合成器加入可观测弱 1×轴频；保持谐波/次谐波/Welch/自相关仲裁，不按故障阶次比例猜转速；Engine 同时验证 25Hz 转频与约 90Hz BPFO，foundation 失败非零退出 |
+| 34 | `deploy.sh` | **一键部署在 venv 时代旧 ECS 上两处失效(单元未更新/根环境未生成)** — 防御性修复:uv 引导 PATH 无条件生效并验证可执行;`uv sync` 后断言 `.venv/bin/python` 存在,缺失即中止不动服务;unit 强制校验指向 `.venv` 解释器,不符即备份覆盖;重启后等待真正 active(30s)。WSL dry-run 与 ECS 实跑全绿,边端心跳自动恢复 |
 
 **Bug #26 验证（2026-10-24）**：`tests/edge/test_browser_open.py`（已随旧回放链退役）使用真实 Vite、临时端口和浏览器脚本探针，在修复前确认 Vite 额外打开，修复后探针不再触发且启动器只打开一次；复用已有前端同样只打开一次。父进程浏览器环境保持原值，不修改前端代理或 `open:true` 配置，不访问云端、不上传数据。
 

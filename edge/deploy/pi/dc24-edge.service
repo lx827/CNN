@@ -1,0 +1,24 @@
+[Unit]
+Description=DC24 acquisition and cloud upload
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=nbclass
+Group=nbclass
+StateDirectory=dc24-edge
+WorkingDirectory=/var/lib/dc24-edge
+EnvironmentFile=/home/nbclass/edge-cnn/edge.env
+ExecStart=/home/nbclass/edge-cnn/dc24-edge --config /home/nbclass/edge-cnn/config.json
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=200
+MemoryMax=192M
+TasksMax=32
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

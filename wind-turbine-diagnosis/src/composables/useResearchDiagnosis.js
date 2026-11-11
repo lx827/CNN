@@ -9,6 +9,7 @@ import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { getAllDeviceData } from '../api/data'
 import { getMethodInfo, getChannelMethodAnalysis, getChannelResearchAnalysis } from '../api/diagnosis'
+import { getDiagnosisStatusView } from '../utils/diagnosisStatus'
 import {
   bearingIndicatorEntries,
   indicatorDisplayValue,
@@ -31,17 +32,9 @@ export const percent = value => {
   return Number.isFinite(num) ? `${(num * 100).toFixed(1)}%` : '-'
 }
 
-export const statusType = status => {
-  if (status === 'fault' || status === 'critical') return 'danger'
-  if (status === 'warning') return 'warning'
-  return 'success'
-}
+export const statusType = status => getDiagnosisStatusView(status).tagType
 
-export const statusText = status => {
-  if (status === 'fault' || status === 'critical') return '故障'
-  if (status === 'warning') return '预警'
-  return '正常'
-}
+export const statusText = status => getDiagnosisStatusView(status).text
 
 export const evaluationStatusType = status => status === 'evaluated' ? 'success' : 'info'
 
@@ -228,6 +221,7 @@ export function useResearchDiagnosis() {
         fm0: r.fm0 != null ? Number(r.fm0) : null,
         fm4: r.fm4 != null ? Number(r.fm4) : null,
         sideband_count: r.sidebands?.length ?? (r.sideband_count ?? 0),
+        indicators: fi,
         alerts,
       }
     })
