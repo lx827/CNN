@@ -3,8 +3,7 @@
 所有分量必须共享原采样率、长度和时间轴。WP/DWT 只接受重构分量。
 选择失败时 representation=None，调用方不能把零数组当成健康信号。
 """
-from dataclasses import dataclass
-from typing import Sequence
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -26,6 +25,7 @@ class ComponentSelection:
     scores: tuple[dict, ...]
     valid_interval: ValidInterval
     reason: str | None = None
+    quality_status: str = "accepted"
 
 
 def _normalize(values):
@@ -33,8 +33,10 @@ def _normalize(values):
     if not valid:
         return [0.0] * len(values)
     lower, upper = min(valid), max(valid)
+    # 数值等价的指标不把舍入误差放大为0和1，稳定保留原分量顺序。
+    tied = upper - lower <= 64 * np.finfo(float).eps * max(1.0, abs(lower), abs(upper))
     return [0.0 if value is None or not np.isfinite(value) else
-            (0.5 if upper == lower else (value - lower) / (upper - lower)) for value in values]
+            (0.5 if tied else (value - lower) / (upper - lower)) for value in values]
 
 
 def frequency_match(center_hz, target_hz):
@@ -122,9 +124,30 @@ def _selection(components, reference, selected, metrics, scores):
 
 def require_representation(selection):
     """旧 ndarray 兼容边界无法携带失败状态，因此显式抛错供上层方法隔离。"""
-    if selection.representation is None:
+    if selection.representation is None or selection.quality_status != "accepted":
         raise ValueError(selection.reason or "decomposition_not_evaluable")
     return selection.representation
+
+
+def _with_decomposition_quality(selection, decomposition):
+    """只把已选且收敛的 IMF 或整体收敛 VMD 作为诊断/去噪有效表示。
+
+    有限迭代近似保留表示和原始指标供研究，但未验证近似误差界，不能形成
+    诊断结论或作为无状态 ndarray 去噪输出。未选择的 IMF 不影响选择质量。
+    """
+    if decomposition is None:
+        return selection
+    if decomposition.status != "valid":
+        return replace(selection, quality_status="insufficient",
+                       reason=decomposition.reason or "invalid_decomposition")
+    if hasattr(decomposition, "imfs"):
+        converged = all(decomposition.converged[i] for i in selection.selected_indices)
+    else:
+        converged = decomposition.converged
+    if selection.representation is not None and not converged:
+        return replace(selection, status="approximate", quality_status="insufficient",
+                       reason=decomposition.reason or "decomposition_not_converged")
+    return selection
 
 
 @dataclass(frozen=True)
@@ -142,7 +165,8 @@ class SensitiveComponentEnvelopePipeline:
     """
     def analyze(self, components, reference, sample_rate_hz, *, top_n=1,
                 target_frequency_hz=0.0, center_frequencies_hz=None,
-                envelope_low_pass_hz=2000.0, geometry=None, rot_frequency_hz=None):
+                envelope_low_pass_hz=2000.0, geometry=None, rot_frequency_hz=None,
+                decomposition=None):
         from scipy.signal import hilbert, butter, sosfiltfilt
         from app.algorithms.transforms.spectrum import compute_spectrum
         from app.algorithms.core import Spectrum
@@ -153,6 +177,7 @@ class SensitiveComponentEnvelopePipeline:
         selection = select_ranked_components(components, reference, sample_rate_hz,
             top_n=top_n, target_freq=target_frequency_hz,
             center_frequencies_hz=center_frequencies_hz)
+        selection = _with_decomposition_quality(selection, decomposition)
         if selection.representation is None:
             return SensitiveEnvelopeAnalysis(selection, None, None)
         signal = selection.representation
@@ -171,7 +196,7 @@ class SensitiveComponentEnvelopePipeline:
     def evaluate(self, analysis):
         """不重复分解、选择、Hilbert 或 FFT，直接重评已有指标。"""
         from app.algorithms.bearing.evaluation import evaluate_envelope, EnvelopeEvaluation
-        if analysis.envelope_analysis is None:
+        if analysis.envelope_analysis is None or analysis.selection.quality_status != "accepted":
             return EnvelopeEvaluation("indeterminate", {})
         return evaluate_envelope(analysis.envelope_analysis)
 
@@ -199,7 +224,8 @@ def _evaluate_denoising(analysis, correlation_threshold, kurtosis_threshold, kur
                      if metric.kurtosis_pearson is not None and metric.energy > 0 and (
                          (metric.correlation is not None and metric.correlation > correlation_threshold)
                          or getattr(metric, "kurtosis_" + kurtosis_kind) > kurtosis_threshold))
-    return _selection(components, analysis.reference, selected, analysis.metrics, ())
+    return _with_decomposition_quality(
+        _selection(components, analysis.reference, selected, analysis.metrics, ()), result)
 
 
 class EMDDenoisingPipeline:

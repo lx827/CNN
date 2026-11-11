@@ -75,8 +75,9 @@ def compute_component_metrics(
         kurtosis_excess = kurtosis_pearson - 3.0
 
     envelope_entropy = None
+    # 标准包络概率熵：p_i = |Hilbert(x)_i| / sum_j |Hilbert(x)_j|。
+    # 包络不再去均值取绝对值；恒幅载波的均匀概率熵为 log2(N)。
     envelope = np.abs(hilbert(centered))
-    envelope = np.abs(envelope - np.mean(envelope))
     envelope_sum = float(np.sum(envelope))
     if envelope_sum > np.finfo(np.float64).tiny:
         probabilities = envelope[envelope > 0.0] / envelope_sum
