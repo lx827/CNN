@@ -13,17 +13,20 @@
 
 生产环境:IP `8.137.96.104`,systemd 服务 `CNN.service`,部署路径 `/opt/CNN`,一键部署 `bash /opt/CNN/deploy.sh`。前端 `vite.config.js` 代理固定指向 `8.137.96.104:8000`,打包后靠 Nginx 反代 — 保持原样。
 
-## 2. Python 环境(uv workspace —— **uv-only,铁律**)
+## 2. Python 环境(根目录单项目 —— **uv-only,铁律**)
 
-**只允许 uv 命令:`uv sync`、`uv run`、`uv add`、`uv lock`。禁止 `pip`(含 `pip install`/`pip freeze`)、禁止 conda/mamba、禁止手工创建/激活 venv。** 依赖唯一事实源是根 `uv.lock`。
+**只允许 uv 命令:`uv sync`、`uv run`、`uv add`、`uv lock`。禁止 `pip`(含 `pip install`/`pip freeze`)、禁止 conda/mamba、禁止手工创建/激活 venv。** Python 运行依赖锁定在根 `uv.lock`；所有项目配置集中在根 `pyproject.toml`。
 
 ```bash
-uv sync                        # 仓库根:安装全部成员(cloud + dc24)
-uv run <命令>                   # 在成员目录内运行任何 Python(见 §3)
-uv add <包名>                   # 加依赖:在对应成员目录内执行,写入其 pyproject
+uv sync                        # 根目录:构建计算扩展,安装 cloud + dc24 + dev 默认组
+uv run <命令>                   # 保持各模块工作目录,自动向上发现根项目(见 §3)
+uv add --group cloud <包名>     # 应用依赖写入根目录对应组(dc24/dev/benchmark 同理)
 ```
 
-- workspace 定义在根 `pyproject.toml`,成员:`cloud`、`dc24`;Rust 边端 `edge/` 由 cargo 管理,不经 uv
+- `cnn-compute` 是独立可安装计算包，只有其运行依赖进入 wheel；cloud、dc24、dev 和 benchmark 分组管理，benchmark 显式启用
+- Windows 首次构建和源码变更后的重建使用 Git Bash 的 `vsdev uv sync`；本机默认 `bash` 是 WSL，显式选择 Git Bash。原生构建、目标 ISA 与缓存规则见 [计算库构建说明](docs/native_compute.md)
+- 原生构建依赖在根配置固定版本，Eigen 在 CMake 固定来源和 SHA256，通过 target 链接；编译并行度固定为 1
+- Rust 边端 `edge/` 由 cargo 管理,不经 uv
 - Python 版本锁定 `.python-version`(3.13),由 uv 自动下载托管,不依赖系统 Python
 
 ## 3. 开发命令
@@ -68,7 +71,7 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 ## 7. 代码导航
 
 ```
-cloud/                      # 云端后端(uv workspace 成员)
+cloud/                      # 云端后端(根项目 cloud 依赖组)
 ├── app/
 │   ├── api/                # 路由:data_view/(频谱+诊断+重新诊断)、devices/、
 │   │                       # acquisition(DC24 任务/上传)+ acquisition_live(实时示波+WS)、
@@ -98,7 +101,7 @@ cloud/                      # 云端后端(uv workspace 成员)
 │   └── lifespan.py         # 线程池 + 后台分析 worker
 └── tests/                  # 后端测试 + 诊断测试套件(含 P0 回归)
 
-dc24/                       # DC24 现场采集工具链(uv workspace 成员,Windows)
+dc24/                       # DC24 现场采集工具链(根项目 dc24 依赖组,Windows)
 ├── dc24_capture.py         # 协议重组、控制命令、单次采集
 ├── dc24_agent.py           # 心跳、控制轮询与采集入口(读 dc24/.env)
 ├── dc24_live.py            # 连续示波、保存与上传

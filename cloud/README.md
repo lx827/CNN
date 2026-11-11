@@ -21,7 +21,7 @@
 
 | 组件 | 说明 |
 |------|------|
-| Python 3.13 | 运行环境（uv workspace 托管，见仓库根 `pyproject.toml` / `uv.lock`） |
+| Python 3.13 | 运行环境（根 uv 项目托管，见仓库根 `pyproject.toml` / `uv.lock`） |
 | FastAPI | Web 框架 / API 服务 |
 | Uvicorn | ASGI 服务器 |
 | SQLAlchemy 2.0 | ORM 数据库操作 |
@@ -75,7 +75,6 @@ cloud/
 ├── models/                  # 神经网络模型文件存放目录（.gitignore 忽略）
 │   └── README.md            # 模型放置说明
 ├── tests/                   # 后端测试 + 诊断测试套件（含 P0 回归，uv run 执行）
-├── pyproject.toml           # workspace 成员依赖清单（依赖统一由根 uv.lock 锁定）
 ├── turbine.db               # SQLite 数据库（运行时自动生成，不入库）
 ├── .env                     # 配置文件（不入库，可选）
 └── README.md                # 本文档
@@ -85,12 +84,12 @@ cloud/
 
 ## 4. 环境搭建
 
-### 4.1 安装依赖（uv workspace）
+### 4.1 安装依赖（根项目）
 
-后端是仓库根 uv workspace 的成员（依赖统一由根 `uv.lock` 锁定，**uv-only**）：
+后端依赖属于根配置的 cloud 组（运行依赖由根 `uv.lock` 锁定，**uv-only**）：
 
 ```bash
-# 仓库根执行一次，创建根 .venv 并安装全部成员（cloud + dc24）
+# 仓库根执行一次，构建计算扩展并安装默认依赖组；Windows 用 vsdev uv sync
 uv sync
 
 # 之后在 cloud 目录用 uv run 启动
@@ -352,7 +351,7 @@ ExecStart=/opt/CNN/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --por
 
 ## 10. 部署建议
 
-1. **依赖管理**：uv workspace（仓库根 `uv sync`，`uv.lock` 为唯一事实源；禁 pip / 手工 venv，见 AGENTS.md §2）
+1. **依赖管理**：根 uv 项目（仓库根 `uv sync`，Windows 构建用 `vsdev uv sync`；根配置管理依赖组及构建，运行依赖由 `uv.lock` 锁定；禁 pip / 手工 venv，见 AGENTS.md §2）
 2. **反向代理**：生产环境使用 Nginx 反向代理到 Uvicorn，处理 HTTPS 与静态资源
 3. **数据库迁移**：SQLite 适合开发与小型部署；生产环境建议 MySQL + Alembic 正式迁移
 4. **模型部署**：将训练好的 `.onnx` 模型放入 `models/` 目录，开启 `NN_ENABLED=true`

@@ -8,6 +8,7 @@
 |------|------|
 | 项目概述与快速开始 | [README](../README.md) |
 | 环境、命令、红线与代码导航 | [AGENTS](../AGENTS.md) |
+| 计算库源码构建、依赖分组与 ISA 缓存 | [计算库构建说明](native_compute.md) |
 | 整体系统结构 | [系统架构](系统架构.md) |
 | 域词汇 | [GLOSSARY](../GLOSSARY.md) |
 | 云端、DC24、脚本说明 | [cloud README](../cloud/README.md)、[dc24 README](../dc24/README.md)、[scripts README](../scripts/README.md) |
