@@ -2,7 +2,7 @@
 
 Python 环境统一使用 uv workspace。仓库根目录先执行 `uv sync`，以下 Python 命令在 `cloud/` 执行；前端命令在 `wind-turbine-diagnosis/` 执行。按模块或单文件选择测试，脚本式测试可能在导入时计算，不对 `cloud/tests/` 整体 discover。
 
-算法正确性以公式、单位、物理前提、已知解、独立参考和负对照为依据。业务测试验证状态与副作用；真实效果和性能分别测量。文档链接检查不能替代正确性验证。
+算法正确性以公式、单位、物理前提、已知解、独立参考和负对照为依据。业务测试验证状态与副作用；真实数据输出与性能分别核对。文档链接检查不能替代正确性验证。
 
 ## P0 回归
 
@@ -27,8 +27,8 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 | 唯一生产流程 | `cloud/tests/test_diagnosis_workflow.py` | SQLite 迁移、HTTP、缓存、重评、worker、事务回滚、告警与转频隔离 |
 | 标准包络 | `algorithms/test_bearing_envelope_analysis.py`、`test_bearing_envelope_pipeline.py`、`test_bearing_envelope_api.py` | 谱峰唯一归属、幅值、边带、前提门控、Engine 与 HTTP |
 | 高级轴承 | `algorithms/test_bearing_*_advanced.py`、`test_bearing_advanced_business.py`、`test_bearing_advanced_api.py` | 谱峭度、反卷积、CPW/TEO、循环平稳已知解、负对照与专属评估 |
-| 定轴齿轮 | `algorithms/test_fixed_axis_gear.py`、`test_fixed_axis_gear_api.py` | TSA 恒等式、矩与边带手算、基线、重评与 HTTP |
-| 行星齿轮 | `planetary/test_planetary_pipeline.py`、`test_planetary_business.py`、`test_planetary_api.py` | 运动学、参考轴、角域残差、基线与工况、Engine 和 HTTP |
+| 定轴齿轮 | `algorithms/test_fixed_axis_gear.py`、`test_fixed_axis_gear_api.py` | TSA 恒等式、矩与边带手算、健康参考、重评与 HTTP |
+| 行星齿轮 | `planetary/test_planetary_pipeline.py`、`test_planetary_business.py`、`test_planetary_api.py` | 运动学、参考轴、角域残差、健康参考与工况、Engine 和 HTTP |
 | 阶次 | `algorithms/test_order_pipeline.py`、`test_order_integration.py` | 解析积分、快扫频、幅值与谱轴、Engine、HTTP 与持久化 |
 | 分解 | `algorithms/test_decomposition_*.py` | 小波/EMD/VMD 数学参考、频率序、质量门控、反例与实际消费者 |
 | 复合研究 | `algorithms/test_composite_pipelines.py`、`test_composite_research_api.py` | 已知解、阶段串联、消融、五组合 HTTP 与生产隔离 |
@@ -46,17 +46,42 @@ uv run python -m unittest tests.test_diagnosis_workflow tests.test_preprocessing
 
 完整测试职责见 [诊断测试架构](../../cloud/tests/diagnosis/TEST_ARCHITECTURE.md)。算法族前提见 [算法索引](../algorithms/INDEX.md)。
 
-## 原始真实数据
+## 本地真实数据测试
 
 `cloud/tests/diagnosis/real_data/` 使用提交清单和 `DATA_ROOT/raw_sources/`。来源、采样率、分组、机械参数和测速前提见 [数据集契约](../datasets.md)。独立 worktree 可设置 `CNN_DATA_ROOT` 共享数据根。
 
-格式与 reader 合同检查：
+`common.LoadedRecord` 统一表示采集窗口；`bearing.py`、`gear.py` 读取原始格式，`effectiveness.load_record` 按数据身份分派。固定选样、SHA256、标签、分组和条件假设保存在 `real_data/manifests/effectiveness.json`。这些是本地测试代码，不提供 HTTP 接口或数据库接入。
+
+格式、reader 与统计合同检查：
 
 ```bash
-uv run python -m unittest tests.diagnosis.real_data.test_common tests.diagnosis.real_data.test_bearing tests.diagnosis.real_data.test_gear -v
+uv run python -m unittest tests.diagnosis.real_data.test_common tests.diagnosis.real_data.test_bearing tests.diagnosis.real_data.test_gear tests.diagnosis.real_data.test_effectiveness -v
 ```
 
 格式测试使用临时小文件，缺本地真实清单时 reader 测试可跳过。真实验收需运行显式清单入口并检查报告；缺文件、样本、通道或坏格式均须非零退出。窗口最多 5 秒，HUST 齿轮按 1.28 秒块边界截断，按实际时长报告。通道和窗口不能增加独立采集数。
+
+固定本地真实数据测试使用提交清单，逐记录、逐通道串行运行：
+
+```powershell
+$env:CNN_DATA_ROOT='D:/code/CNN/data'
+uv run python -m tests.diagnosis.real_data.effectiveness --data-root $env:CNN_DATA_ROOT
+```
+
+现有产品前提与显式物理参数假设分开统计，健康参考记录不进入输出核对分母，失败和 unknown 保留在分母。本次核对数据接入与规范输出，不设检出效果达标目标。运行方式、输出契约和仅重新渲染本地报告的命令见 [真实数据测试说明](../benchmarks/diagnosis_effectiveness.md)。
+
+## 本地性能基准
+
+在 `cloud/` 安装可选 benchmark 依赖组并执行固定配置：
+
+```powershell
+uv sync --group benchmark
+uv run --group benchmark python -m tests.diagnosis.benchmarks.run --data-root D:/code/CNN/data
+uv run --group benchmark python -m tests.diagnosis.benchmarks.export --input D:/code/CNN/data/real_diagnosis/performance/20261112
+```
+
+配置位于 `cloud/tests/diagnosis/benchmarks/config.json`，测量边界、正确性观察和原生内核契约见 [性能基准说明](../benchmarks/diagnosis_performance.md)。计时排除导入、加载、预热和序列化；受限本地进程的测量不等同于生产整机负载验收。
+
+所有生成的结果、JSON、CSV、日志、图表和自动实验 Markdown 保留在 `DATA_ROOT/real_diagnosis/`。仓库只保存源码、冻结清单/配置和手写运行说明。
 
 ## 后端读写与采集
 

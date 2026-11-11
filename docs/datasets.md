@@ -4,18 +4,18 @@
 
 数据根默认当前 checkout 的 `data/`，显式 `--data-root` 优先于 `CNN_DATA_ROOT`。独立 worktree 可共享主仓数据目录；源码和提交清单不固定机器盘符。大数据、原文说明和生成报告保留在本地数据根，不提交 Git。
 
-## 来源与首批选样
+## 来源与固定选样
 
-| 数据身份 | 原始格式与采样率 | 通道角色 | 首批用途 |
+| 数据身份 | 原始格式与采样率 | 通道角色 | 测试用途 |
 |---|---|---|---|
 | `ottawa_bearing` | MATLAB，200000 Hz，10 秒 | `Channel_1` 振动；`Channel_2` 编码器原波形 | 健康、内圈、外圈及变速模式个例 |
 | `hust_bearing` | 带文本头 `.xls` 实为 TSV，25600 Hz，262144 点 | time、Speed、X/Y/Z | 华中轴承健康/故障、恒速/变速和中等损伤标签 |
 | `hust_gearbox` | 带文本头 TXT，25600 Hz，262144 点 | time、speed、X/Y/Z | 同速度载荷配对下健康、断齿、缺齿 |
 | `wt_planetary` | MATLAB，48000 Hz | 两振动、编码器及实际文件额外未明通道 | 同标称速度下健康和一种太阳轮故障 |
 
-便携选样清单随代码提交：[轴承清单](../cloud/tests/diagnosis/real_data/manifests/bearing.json)、[齿轮清单](../cloud/tests/diagnosis/real_data/manifests/gear.json)。各条目保留数据身份、相对原始路径、SHA256、真实采样率、标签、故障部位、分组和证据。清单只描述已选样本，不声称覆盖完整数据集。
+便携选样清单随代码提交：[轴承清单](../cloud/tests/diagnosis/real_data/manifests/bearing.json)、[齿轮清单](../cloud/tests/diagnosis/real_data/manifests/gear.json)；完整本地实验使用 [冻结效果清单](../cloud/tests/diagnosis/real_data/manifests/effectiveness.json)。各条目保留数据身份、相对原始路径、SHA256、真实采样率、标签、故障部位、分组和证据。清单只描述已选样本，不声称覆盖完整数据集。
 
-本地原始材料位于 `DATA_ROOT/raw_sources/<人类原目录名>/`。详细调查保留在 `raw_sources/_bearing_intake/report.txt`、`raw_sources/GEARBOX_INTAKE_20261111.txt` 和 `DATASET_TEST_SELECTION_20261111.md`，它们是本地调查材料。
+主仓数据根为 `D:/code/CNN/data`，本地原始材料位于 `DATA_ROOT/raw_sources/<人类原目录名>/`。详细调查保留在 `raw_sources/_bearing_intake/report.txt`、`raw_sources/GEARBOX_INTAKE_20261111.txt` 和 `DATASET_TEST_SELECTION_20261111.md`，它们是本地调查材料。
 
 ## 轴承身份与前提
 
@@ -26,8 +26,6 @@
 原始设计为 H 健康、I 内圈、O 外圈；A 升速、B 降速、C 升后降、D 降后升，各三次采集，共 36 条。每条有自己的转速起止/峰谷，不能给全部记录套同一速度曲线。振动和编码器均为 200 kHz；编码器是电平脉冲，每转脉冲数尚未核实，不能将 `Channel_2` 数值直接作为 Hz。
 
 原论文 Table 1 明确 ER16K 节圆直径 38.52 mm、球径 7.94 mm、9 球，BPFI=5.43fr、BPFO=3.57fr。接触角未在所读表格中给出。reader 保留本来源的几何与特征阶次证据；对象诊断仍需满足速度与完整物理前提。
-
-旧 `CW/down8192_CW/*.npy` 是振动加工格式。三个代表原始 MAT 经 `resample_poly(raw,128,3125)` 与同名 8192 Hz 数组达到浮点舍入误差量级对应，尚未逐个验证全部 36 条。旧数组没有编码器通道。新 reader 不依赖旧 CW 目录；目录是否仍存在不改变新入口契约。
 
 ### 华中 HUSTbear
 
@@ -53,24 +51,24 @@ H/B/M 分别为健康/断齿/缺齿。原始 12 次采集由三状态与**四种
 
 已证实太阳轮 28 齿、齿圈 100 齿、行星轮 36 齿、4 行星。fr 明确为**太阳轮转频**，啮合为 `175/8 fr`，太阳轮局部事件为 `25/8 fr`。不能把标称 20–55 Hz 当行星架转频。
 
-reader 核对本地实际 MAT 采样与通道结构，额外列保持未知角色，不命名为新的已知传感器。编码器每转脉冲数、测量标定与振动物理单位仍未证实。行星评估还需可比且经验证的健康基线；少量健康/故障记录不能自动产生通用阈值。
+reader 核对本地实际 MAT 采样与通道结构，额外列保持未知角色，不命名为新的已知传感器。编码器每转脉冲数、测量标定与振动物理单位仍未证实。行星评估还需可比且经验证的健康参考；少量健康/故障记录不能自动产生通用阈值。
 
 ## 清单、分组与窗口
 
-manifest 顶层为 `schema_version: 1` 和非空 `samples`。条目至少含 `sample_id`、`dataset_id`、相对数据根的 `source_path`、`fs_hz`、`label`、`fault_types` 和 `group_id`。来源 SHA256、证据、机械参数、工况及未证实前提随条目保存。reader 参数与返回类型以源码 docstring 为准，不支持旧一维 `.npy` 兼容适配。
+manifest 顶层为 `schema_version: 1` 和非空 `samples`。条目至少含 `sample_id`、`dataset_id`、相对数据根的 `source_path`、`fs_hz`、`label`、`fault_types` 和 `group_id`。来源 SHA256、证据、机械参数、工况及未证实前提随条目保存。reader 参数与返回类型以源码 docstring 为准。
 
 `sample_id` 标识真实记录，`group_id` 是保守评估分组，例如同速度载荷或拆装系列。报告分别记录真实记录数、分组数和通道数。不同通道和同记录切窗不能作为新的独立采集，也不能随机分到标定集与评估集。原采样率不因窗口缩短而改变；未知辅助信号不降采样为转速。
 
-评估使用原始记录、真实采样率和有上限的窗口，按实际时长报告。轴承几何或连续转速未证实、齿轮参考轴速度或健康基线不足时，保留不可判定状态；不从文件名、标称速度或未知辅助电压代填机械前提。
+评估使用原始记录、真实采样率和有上限的窗口，按实际时长报告。轴承几何或连续转速未证实、齿轮参考轴速度或健康参考不足时，保留不可判定状态；不从文件名、标称速度或未知辅助电压代填机械前提。
 
 ## 当前运行入口
 
 | 位置 | 用途 |
 |------|------|
-| `cloud/tests/diagnosis/real_data/common.py` | 数据根、清单、记录类型与 JSON |
+| `cloud/tests/diagnosis/real_data/common.py` | `LoadedRecord` 采集窗口对象、数据根、清单与 JSON |
 | `cloud/tests/diagnosis/real_data/bearing.py`、`gear.py` | 四来源原始格式 reader |
 | `cloud/tests/diagnosis/real_data/manifests/` | 提交选样与来源证据 |
-| `cloud/tests/diagnosis/real_data/effectiveness.py` | 记录分组、原始数据与规范诊断效果评估 |
+| `cloud/tests/diagnosis/real_data/effectiveness.py` | 按数据身份复用 reader、固定本地测试和规范诊断输出核对 |
 
 从 `cloud/` 运行 reader 合同：
 
@@ -78,4 +76,6 @@ manifest 顶层为 `schema_version: 1` 和非空 `samples`。条目至少含 `sa
 uv run python -m unittest tests.diagnosis.real_data.test_common tests.diagnosis.real_data.test_bearing tests.diagnosis.real_data.test_gear -v
 ```
 
-测试分层、真实效果和性能的集中命令见 [测试索引](tests/INDEX.md)。
+真实数据测试输出留在 `DATA_ROOT/real_diagnosis/effectiveness/`，性能输出留在 `DATA_ROOT/real_diagnosis/performance/`。JSON、CSV、日志、图表、自动实验 Markdown 与原始大文件均不提交 Git。
+
+测试分层和集中命令见 [测试索引](tests/INDEX.md)，实验口径见 [真实数据测试说明](benchmarks/diagnosis_effectiveness.md) 与 [性能说明](benchmarks/diagnosis_performance.md)。
