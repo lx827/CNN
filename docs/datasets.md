@@ -1,115 +1,81 @@
-# Datasets — 数据集说明
+# Datasets — 原始离线测试数据
 
-> **文档用途**：统一记录 `data/` 下四个数据集的路径、采样率、文件命名规则与机械参数，供边端回放、测试与诊断参数配置参考。
-> **维护要求**：新增数据集或参数变更时，必须同步更新本文档。
+本页记录原始来源、身份、采样率和诊断前提。独立入口为 `cloud/tests/diagnosis/real_data/`，只读取原始记录和生成离线报告，不注册设备、不访问业务数据库、不修改生产算法。
 
-所有数据集统一放在仓库根目录 `data/` 下。代码通过 `cloud/tests/diagnosis/data_paths.py`（测试，2026-11 分立后新位置）解析路径，换机器、换盘符无需改代码；数据集放在仓库外时用 `CNN_DATA_ROOT` 环境变量指向即可（旧 `edge_client.py` 回放入口已随 2026-11 布局重构退役）。所有文件为 `.npy`（NumPy 一维数组，`dtype=float64`），每文件约 5~10 秒振动信号。
+数据根默认当前 checkout 的 `data/`，显式 `--data-root` 优先于 `CNN_DATA_ROOT`。独立 worktree 可共享主仓数据目录；源码和提交清单不固定机器盘符。大数据、原文说明和生成报告保留在本地数据根，不提交 Git。
 
-## 总览
+## 来源与固定选样
 
-| 数据集 | 路径 | 采样率 | 类型 | 用途 |
-|--------|------|--------|------|------|
-| HUSTbear | `data/HUSTbear/down8192` | 8192 Hz | 轴承 | 恒速 + 变速轴承诊断 |
-| CW | `data/CW/down8192_CW` | 8192 Hz | 轴承 | 变速工况轴承诊断 |
-| WTgearbox | `data/WTgearbox/down8192` | 8192 Hz | 行星齿轮箱 | 齿轮诊断验证 |
-| HUSTgearbox | `data/HUSTgearbox/down8192` | 8192 Hz | 定轴齿轮箱 | 定轴齿轮箱诊断验证 |
+| 数据身份 | 原始格式与采样率 | 通道角色 | 测试用途 |
+|---|---|---|---|
+| `ottawa_bearing` | MATLAB，200000 Hz，10 秒 | `Channel_1` 振动；`Channel_2` 编码器原波形 | 健康、内圈、外圈及变速模式个例 |
+| `hust_bearing` | 带文本头 `.xls` 实为 TSV，25600 Hz，262144 点 | time、Speed、X/Y/Z | 华中轴承健康/故障、恒速/变速和中等损伤标签 |
+| `hust_gearbox` | 带文本头 TXT，25600 Hz，262144 点 | time、speed、X/Y/Z | 同速度载荷配对下健康、断齿、缺齿 |
+| `wt_planetary` | MATLAB，48000 Hz | 两振动、编码器及实际文件额外未明通道 | 同标称速度下健康和一种太阳轮故障 |
 
----
+便携选样清单随代码提交：[轴承清单](../cloud/tests/diagnosis/real_data/manifests/bearing.json)、[齿轮清单](../cloud/tests/diagnosis/real_data/manifests/gear.json)；完整本地实验使用 [冻结效果清单](../cloud/tests/diagnosis/real_data/manifests/effectiveness.json)。各条目保留数据身份、相对原始路径、SHA256、真实采样率、标签、故障部位、分组和证据。清单只描述已选样本，不声称覆盖完整数据集。
 
-## HUSTbear 轴承数据集
+主仓数据根为 `D:/code/CNN/data`，本地原始材料位于 `DATA_ROOT/raw_sources/<人类原目录名>/`。详细调查保留在 `raw_sources/_bearing_intake/report.txt`、`raw_sources/GEARBOX_INTAKE_20261111.txt` 和 `DATASET_TEST_SELECTION_20261111.md`，它们是本地调查材料。
 
-- 文件命名规则：`{负载}_{故障类型}_{转速模式}-{通道}.npy`
-  - 负载：`0.5X` / `1X` / `1.5X` / `2X`（负载比例）
-  - 故障类型：`N`（健康）/ `B`（球故障）/ `IR`（内圈）/ `OR`（外圈）/ `C`（复合）
-  - 转速模式：`CS`（恒定转速）/ `VS`（变速，如 `0_40_0Hz` 表示 0→40→0 Hz 扫频）
-  - 通道：`X` / `Y` / `Z`（三轴加速度计方向）
-- 示例：`0.5X_B_VS_0_40_0Hz-X.npy` = 0.5 倍负载，球故障，变速 0-40-0Hz，X 方向
-- 数据长度：40960~81920 点 @ 8192Hz
+## 轴承身份与前提
 
-**轴承参数（ER-16K）：**
+### Ottawa（历史本地名称 CW）
 
-| Parameter | Value |
-|-----------|-------|
-| Shaft Diameter | 38.52 mm |
-| Ball Diameter | 7.94 mm |
-| Number of Balls | 9 |
-| BPFI | 5.43 fr |
-| BPFO | 3.57 fr |
+来源为 Huan Huang、Natalie Baddour，University of Ottawa，*Bearing vibration data collected under time-varying rotational speed conditions*，Data in Brief 21 (2018)，DOI `10.1016/j.dib.2018.11.019`，数据身份 `v43hmbwxpm.1`。
 
----
+原始设计为 H 健康、I 内圈、O 外圈；A 升速、B 降速、C 升后降、D 降后升，各三次采集，共 36 条。每条有自己的转速起止/峰谷，不能给全部记录套同一速度曲线。振动和编码器均为 200 kHz；编码器是电平脉冲，每转脉冲数尚未核实，不能将 `Channel_2` 数值直接作为 Hz。
 
-## CW 轴承数据集（变速工况）
+原论文 Table 1 明确 ER16K 节圆直径 38.52 mm、球径 7.94 mm、9 球，BPFI=5.43fr、BPFO=3.57fr。接触角未在所读表格中给出。reader 保留本来源的几何与特征阶次证据；对象诊断仍需满足速度与完整物理前提。
 
-> 来源：H. Huang, N. Baddour / Data in Brief 21 (2018) 1745–1749。**与 HUSTbear 同为 8192 Hz，诊断算法必须对两个数据集均成立。**
+### 华中 HUSTbear
 
-- 文件命名规则：`{健康状态}-{转速模式}-{序号}.npy`
-  - 健康状态：`H`（健康）/ `I`（内圈故障）/ `O`（外圈故障）
-  - 转速模式：`A`（升速）/ `B`（降速）/ `C`（升速→降速）/ `D`（降速→升速）
-  - 序号：`1` / `2` / `3`（同工况 3 次重复）
-- 示例：`I-C-2.npy` = 内圈故障，升速→降速，第 2 次采集
+来源为 Chao Zhao、Enrico Zio、Weiming Shen 的 RESS 2024 数据，DOI `10.1016/j.ress.2024.109964`。不要与河内 Hanoi University of Science and Technology 的 HUST practical 混淆；后者为 51.2 kHz、6204–6208 的另一数据集，本入口尚未支持。
 
-**轴承参数（ER16K）：**
+华中原始健康码为 H；I/O/B/C 为内圈/外圈/滚动体/内外圈复合故障。`0.5X` 表示中等损伤，**不是负载比例**；无此前缀的故障为严重损伤。原设计为 9 健康状态与 11 工况，包括十种恒速和 `VS_0_40_0Hz`。每条三轴是同次采集。
 
-| Bearing type | Pitch diameter | Ball diameter | Number of balls | BPFI | BPFO |
-|--------------|----------------|---------------|-----------------|------|------|
-| ER16K | 38.52 mm | 7.94 mm | 9 | 5.43 fr | 3.57 fr |
+源说明确认 ER-16K、球径 7.94 mm、9 球，但将 38.52 mm 标为 **Shaft Diameter**；不能把另一来源的节径解释移植为本来源已证实几何。其独立节径与特征阶次依据尚缺。Speed 列为电信号范围，单位与标定未知；文件名标称转频仅是工况标签。变速示意图 0–2 秒时间轴与 10.24 秒记录如何对应也未核实。以上字段保留未知，禁止补入 Ottawa 参数或生成线性速度真值。
 
-**特点：** 全部为变速工况，转速范围约 9.8~29.0 Hz，无恒速工况；故障类型仅内圈（I）、外圈（O），无球故障和复合故障。
+## 齿轮身份与前提
 
----
+### 华中 HUSTgearbox（定轴）
 
-## WTgearbox 行星齿轮箱数据集
+原机械为 Hub City M2，传动比 1.5:1，小轮 18 齿、大轮 27 齿，节圆分别为 1.125 英寸和 1.6875 英寸。它是定轴结构，不能走行星模型。
 
-- 文件命名规则：`{故障类别}_{故障子类}_{转速}-c{通道}.npy`
-  - 故障类别：`He`（健康，子类 N1/N2）/ `Br`（断齿，B1/B2）/ `Mi`（缺齿，M1/M2）/ `Rc`（齿根裂纹，R1/R2）/ `We`（磨损，W1/W2）
-  - 转速：20/25/30/35/40/45/50/55 Hz（恒速）
-  - 通道：c1/c2
-- 示例：`Rc_R1_40-c1.npy` = 齿根裂纹 R1，40 Hz，c1 通道
-- 数据量：160 个文件（5 类 × 2 子类 × 8 转速 × 2 通道），每文件约 10 秒（81920 点）
+H/B/M 分别为健康/断齿/缺齿。原始 12 次采集由三状态与**四种速度载荷配对**组成：20 Hz/0.113 Nm、25 Hz/0.226 Nm、30 Hz/0.339 Nm、35 Hz/0.452 Nm。不存在四速度乘四载荷的 16 工况设计；拆成三轴不增加独立采集数。
 
-**行星齿轮箱机械参数：**
+本地原文本有 8 个 32768 点块，时间每块归零。跨块连续性未证实，reader 在当前块尾截断，首块最多 1.28 秒，不能将跨块拼接称为连续 5 秒。报告同时保留全记录点数与实际窗口。速度列单位、标定和文件名 Hz 是否参考 18 齿小轮仍待证实；`18fr` 只有在 fr 为该小轮机械转频时成立。振动工程单位与具体受损齿轮也不由照片或列名代填。
 
-| 参数 | 值 |
-|------|-----|
-| 太阳轮齿数 (Sun gear) | 28 |
-| 内齿圈齿数 (Ring gear) | 100 |
-| 行星轮齿数 (Planet gear) | 36 |
-| 行星轮数量 | 4 |
-| 啮合频率 | (175/8) × fr |
-| 太阳轮故障频率 | (25/8) × fr |
-| 采样率 | 8192 Hz |
+### WT 行星齿轮箱
 
-**特点：** 全部恒速工况（20~55 Hz），2 通道，覆盖健康/断齿/缺齿/齿根裂纹/磨损 5 种状态。
+来源为本地 WT-行星齿轮数据集，原说明引用 Liu/Cui/Cheng，Measurement Science and Technology 35 (2024) 012002，§6.2、Table 3。原设计为太阳轮健康、断齿、缺齿、齿根裂纹、磨损，八标称转速 20–55 Hz，各状态/速度拆装后采集两次，共 80 个 MAT；拆成两振动通道不是 160 次独立采集。
 
----
+已证实太阳轮 28 齿、齿圈 100 齿、行星轮 36 齿、4 行星。fr 明确为**太阳轮转频**，啮合为 `175/8 fr`，太阳轮局部事件为 `25/8 fr`。不能把标称 20–55 Hz 当行星架转频。
 
-## HUSTgearbox 定轴齿轮箱数据集
+reader 核对本地实际 MAT 采样与通道结构，额外列保持未知角色，不命名为新的已知传感器。编码器每转脉冲数、测量标定与振动物理单位仍未证实。行星评估还需可比且经验证的健康参考；少量健康/故障记录不能自动产生通用阈值。
 
-> 来源：Chao Zhao, Enrico Zio, Weiming Shen, *Domain Generalization for Cross-Domain Fault Diagnosis*, Reliability Engineering and System Safety (2024)。原始 25.6 kHz 已降采样至 8192 Hz。
+## 清单、分组与窗口
 
-- 文件命名规则：`{健康状态}_{转速}_{负载倍数}-{通道}.npy`
-  - 健康状态：`H`（健康）/ `B`（断齿）/ `M`（缺齿）
-  - 转速：`20` / `25` / `30` / `35`（Hz）
-  - 负载倍数：`1`~`4`（×0.113 Nm）
-  - 通道：`X` / `Y` / `Z`
-- 示例：`B_20_1-X.npy` = 断齿，20 Hz，1 倍负载，X 方向
-- 数据量：36 个文件（3 类 × 4 转速 × 3 通道），每文件约 10.2 秒（约 83558 点）
+manifest 顶层为 `schema_version: 1` 和非空 `samples`。条目至少含 `sample_id`、`dataset_id`、相对数据根的 `source_path`、`fs_hz`、`label`、`fault_types` 和 `group_id`。来源 SHA256、证据、机械参数、工况及未证实前提随条目保存。reader 参数与返回类型以源码 docstring 为准。
 
-**定轴齿轮箱机械参数（Hub City M2）：**
+`sample_id` 标识真实记录，`group_id` 是保守评估分组，例如同速度载荷或拆装系列。报告分别记录真实记录数、分组数和通道数。不同通道和同记录切窗不能作为新的独立采集，也不能随机分到标定集与评估集。原采样率不因窗口缩短而改变；未知辅助信号不降采样为转速。
 
-| 参数 | 值 |
-|------|-----|
-| 传动比 | 1.5:1 |
-| 主动轮（小齿轮）齿数 | 18 |
-| 从动轮（大齿轮）齿数 | 27 |
-| 主动轮节圆直径 | 28.575 mm（1.125 in） |
-| 从动轮节圆直径 | 42.8625 mm（1.6875 in） |
-| 啮合频率 | 18 × fr |
-| 主动轮轴承 | NSK 6202（1 个） |
-| 采样率 | 8192 Hz |
+评估使用原始记录、真实采样率和有上限的窗口，按实际时长报告。轴承几何或连续转速未证实、齿轮参考轴速度或健康参考不足时，保留不可判定状态；不从文件名、标称速度或未知辅助电压代填机械前提。
 
-**特点：** 定轴齿轮箱（非行星），4 种恒速 × 4 级负载，3 通道，仅健康/断齿/缺齿 3 种状态。与 WTgearbox（行星箱）互补，用于验证定轴齿轮箱诊断算法。
+## 当前运行入口
 
----
+| 位置 | 用途 |
+|------|------|
+| `cloud/tests/diagnosis/real_data/common.py` | `LoadedRecord` 采集窗口对象、数据根、清单与 JSON |
+| `cloud/tests/diagnosis/real_data/bearing.py`、`gear.py` | 四来源原始格式 reader |
+| `cloud/tests/diagnosis/real_data/manifests/` | 提交选样与来源证据 |
+| `cloud/tests/diagnosis/real_data/effectiveness.py` | 按数据身份复用 reader、固定本地测试和规范诊断输出核对 |
 
-*维护者：AI Agent（数据集或参数变更时请务必同步更新）*
+从 `cloud/` 运行 reader 合同：
+
+```bash
+uv run python -m unittest tests.diagnosis.real_data.test_common tests.diagnosis.real_data.test_bearing tests.diagnosis.real_data.test_gear -v
+```
+
+真实数据测试输出留在 `DATA_ROOT/real_diagnosis/effectiveness/`，性能输出留在 `DATA_ROOT/real_diagnosis/performance/`。JSON、CSV、日志、图表、自动实验 Markdown 与原始大文件均不提交 Git。
+
+测试分层和集中命令见 [测试索引](tests/INDEX.md)，实验口径见 [真实数据测试说明](benchmarks/diagnosis_effectiveness.md) 与 [性能说明](benchmarks/diagnosis_performance.md)。

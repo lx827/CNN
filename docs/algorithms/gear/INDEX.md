@@ -101,6 +101,6 @@ SER 使用 carrier 间隔，搜索窗互不重叠，不能再被定轴 1 阶 SER
 | `cloud/tests/diagnosis/planetary/test_planetary_pipeline.py` | WT 参数手算、参考轴、SER 重叠、角域 residual、覆盖不足、缺基线和重评 |
 | `cloud/tests/diagnosis/planetary/test_planetary_business.py`、`test_planetary_api.py` | Engine/ensemble/评分门控、当前通道完整几何、真实隔离 HTTP 四方法/gear_advanced 与旧标识拒绝 |
 | `cloud/tests/diagnosis/regression/` | None 参数与工况边界 |
-| `cloud/tests/diagnosis/method_eval/` | 数据集分类效果，依赖真实数据及有效参数 |
+| `cloud/tests/diagnosis/real_data/` | 原始齿轮记录与真实效果评估，依赖有效参数与工况 |
 
 历史端到端数据报告不能外推为当前 Pipeline 的效果。主仓 CW 有 36 个变速 `.npy`，其他数据可用性按实际目录或 `CNN_DATA_ROOT` 分别确认；不能一概写为全部缺失或全部已验证。

@@ -3,10 +3,8 @@
 - 无机械参数时不注入默认轴承/齿轮参数，走统计诊断。
 - 齿轮高级指标使用 TSA/残差信号。
 - 转频估计在噪声下保持稳定。
-- 若本地数据集存在，抽样检查健康/故障可区分性。
 """
 
-import glob
 import os
 import sys
 
@@ -18,11 +16,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app.services.diagnosis import DiagnosisEngine, GearMethod
 from app.services.diagnosis.ensemble import run_research_ensemble
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
-from data_paths import HUSTBEAR_DIR, CW_DIR
 
 
 FS = 8192
-HUST_DIR = str(HUSTBEAR_DIR)
 
 
 def _impulse_signal(fs=FS, seconds=5, rot_freq=25.0):
@@ -83,35 +79,6 @@ def test_noisy_rot_freq_estimation_is_robust():
     )
     estimated = estimate_rot_freq_spectrum(sig, FS, freq_range=(10, 80))
     assert abs(estimated - rot_freq) < 2.0
-
-
-def test_dataset_sample_fault_scores_when_available():
-    healthy_path = os.path.join(HUST_DIR, "H_25hz-X.npy")
-    fault_path = os.path.join(HUST_DIR, "0.5X_B_25Hz-X.npy")
-    if not os.path.exists(healthy_path) or not os.path.exists(fault_path):
-        return
-
-    healthy = np.load(healthy_path)[: FS * 5]
-    fault = np.load(fault_path)[: FS * 5]
-    engine = DiagnosisEngine(strategy="advanced", bearing_params={}, gear_teeth={})
-
-    healthy_result = engine.analyze_comprehensive(healthy, FS)
-    fault_result = engine.analyze_comprehensive(fault, FS)
-
-    assert (
-        fault_result["health_score"] is None and healthy_result["health_score"] is None
-    )
-
-
-def test_cw_dataset_can_be_loaded_when_available():
-    files = glob.glob(os.path.join(CW_DIR, "**", "*.npy"), recursive=True)
-    if not files:
-        return
-    sig = np.load(files[0])[: FS * 3]
-    engine = DiagnosisEngine(strategy="advanced", bearing_params={}, gear_teeth={})
-    result = engine.analyze_comprehensive(sig, FS)
-    assert "health_score" in result
-    assert "time_features" in result
 
 
 def test_zero_signal_comprehensive_is_indeterminate_not_healthy():
@@ -177,8 +144,6 @@ if __name__ == "__main__":
     test_no_params_uses_statistical_fault_indicators()
     test_advanced_gear_uses_tsa_residual()
     test_noisy_rot_freq_estimation_is_robust()
-    test_dataset_sample_fault_scores_when_available()
-    test_cw_dataset_can_be_loaded_when_available()
     test_zero_signal_comprehensive_is_indeterminate_not_healthy()
     test_zero_signal_ensemble_paths_are_indeterminate_not_healthy()
     test_zero_signal_all_methods_paths_are_indeterminate_not_healthy()
