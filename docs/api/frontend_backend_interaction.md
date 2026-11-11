@@ -70,7 +70,7 @@
 | `DataView.vue::exportChannelCSV()` | `window.open()` 直接打开 | `GET /api/data/{id}/{batch}/{ch}/export` | `data_view/export.py::export_channel_csv` | 导出通道数据为 CSV 文件 |
 | `DataView.vue::gotoResearchDiagnosis()` | — | 路由跳转带 query 参数 | — | 跳转到高级诊断页面，携带设备/批次/通道参数 |
 
-> **2026-11-08 包络响应契约变更**：`/envelope` 改为返回 `spectrum {frequency_hz, amplitude, amplitude_unit, scaling}`、实际 `band`、`features` 和 `evaluation {status, indicators}`，不再返回 `envelope_freq`、`envelope_amp` 或顶层 `fault_indicators`。标准包络幅值改为单边幅值，`max_freq` 只截断展示，不改变诊断；`features` 使用 `spectral_power_proxy`，单项不可分辨时为 `not_evaluable`。前端适配由独立任务处理，不能继续按旧字段读取。
+> **2026-11-11 轴承响应**：`/envelope` 返回 `spectrum {frequency_hz,amplitude,amplitude_unit,scaling}`、实际 `band`、`features`、`evaluation {status,indicators}`；DataView 与研究组件均已按规范字段适配。SC/SCoh 由 `evaluation_kind=sc_scoh` 区分并读取同一 `evaluation.indicators`，普通谱可为空；二维谱轴为循环/载波 Hz。TEO 包络谱保持平方单位。未知/不可评估不能渲染正常；不再回读旧顶层或 `sc_scoh_indicators` 字段。展示 `max_freq` 不影响完整诊断。
 >
 > **2026-11-08 阶次契约保持兼容**：`/order` 的 URL、参数和响应字段不变，前端无需改动。`orders` 明确为 FFT bin 阶次轴，`spectrum` 为单边峰值幅值，数值精度提高到六位小数；`tracking_method` 的可选值不变。估计或快速变速脊线不可判定时后端返回 HTTP 400，不再以固定转频生成正常图。没有既有批次诊断时只返回阶次结果，不创建伪健康记录，也不覆盖通道缓存。
 >
@@ -96,6 +96,12 @@
 - **旧数据兼容**：若 `full_analysis` 为空，回退到 `order_analysis.channels` 或 `order_analysis.engine_result` 提取
 
 > **⚠️ 影响前端**：`ResearchDiagnosis.vue` 依赖 `method-info` 返回的方法元数据来动态渲染分析选项，修改方法列表结构需同步前端。
+
+**高级先验传递**：`useResearchDiagnosis` → `api/diagnosis.js` 的 config → method/research-analysis 公共轴承选项依赖 → `advanced_bearing` → 族专属 Pipeline。MCKD 目标/周期与 CPW 频率/稳定性必须由调用方确认；重复梳状频率使用 `paramsSerializer.indexes=null`，不能编码成带方括号的另一参数名。`filter_bank_sk` 使用真实滤波器组名称；实际 MED 回退、未满足前提和分解质量不足均由状态/原因显示。SC 专属评估不与包络评估合票覆盖。
+
+**行星接入（2026-11-11）**：设置页按通道保存完整几何、`reference_axis` 与 `fixed_member`，研究页从 method-info 只显示当前四条基础方法；method-analysis/gear_advanced、Engine、后台与 ensemble 共用行星业务入口。`PlanetaryResult.vue` 配合 `planetaryDiagnosis.js` 展示机械模型、同步轴、原始指标、事件候选与 `diagnosis_conclusion`，各综合/单方法结果区复用该组件。基线不足显示“不可评估”，不从 SER/矩或候选峰推导具体损伤；未校准结果不作为正常票或告警。旧行星散列字段和旧 Level 1–5 展示已退役。
+
+**去噪失败链路（2026-11-11）**：DataView 所有计算/导出与研究入口消费结构化 HTTP 422 `detail {status:not_evaluable,method,reason}`。失败后不绘制替代原信号并标成功，不用旧缓存充当本次成功结果；未知方法也拒绝。后台失败通道传播 `health_score=null/status=indeterminate` 与原因，不走规则回退，健康阈值告警跳过未知。runtime profile 实际执行配置的去噪方法，不能继续把首个 none 当作设备配置。完整集成/领域状态模型仍由 #77/#84 后续收敛。
 
 ---
 
