@@ -123,6 +123,6 @@ MED/MCKD 用卷积矩阵的 SVD 直接求解，不通过正规方程平方条件
 | `test_bearing_cyclostationary_advanced.py`（同目录） | 已知循环频率、非 bin 频移、载波轴、有效带宽、粗分辨率与专属评估 |
 | `test_bearing_advanced_business.py`、`test_bearing_advanced_api.py`（同目录） | Engine/ensemble 方法路由、实际 MED 回退、前提失败、研究/包络 HTTP 与 JSON |
 | `cloud/tests/diagnosis/foundation/layer1/`、`layer2/` | 现有高级轴承与边带方法的合成信号正确性资产 |
-| `cloud/tests/diagnosis/method_eval/` | HUSTbear/CW 方法评估，依赖数据集，不等同于合成向量正确性 |
+| `cloud/tests/diagnosis/real_data/` | 原始轴承记录与真实效果评估；来源、采样率和前提见数据集契约 |
 
 当前方法标识与可传先验见 [API 契约](../../api/backend_api.md)；模态方法单独受 [分解质量门控](../decomposition/INDEX.md) 约束。
