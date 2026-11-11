@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import SensorData, Device
 from . import router, prepare_signal
-from app.services.diagnosis.signal_utils import denoise_signal
+from app.services.diagnosis.signal_utils import denoise_signal, DenoisingError
+from .errors import denoising_http_error
 from datetime import datetime
 import io
 import logging
@@ -34,7 +35,10 @@ def export_channel_csv(
         raise HTTPException(status_code=404, detail="数据不存在")
 
     signal = prepare_signal(record.data, detrend=detrend) if record.data else []
-    signal = denoise_signal(signal, denoise).tolist()
+    try:
+        signal = denoise_signal(signal, denoise).tolist()
+    except DenoisingError as e:
+        raise denoising_http_error(e) from e
     sample_rate = record.sample_rate or 25600
 
     # 生成 CSV

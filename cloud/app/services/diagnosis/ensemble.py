@@ -27,6 +27,7 @@ from .health_score import (
     is_ds_conflict_high,
 )
 from .recommendation import _generate_recommendation
+from .signal_utils import DenoisingError
 
 
 def _as_float(value: Any, default: float = 0.0) -> float:
@@ -39,8 +40,8 @@ def _as_float(value: Any, default: float = 0.0) -> float:
 def _safe_denoise(value: str) -> DenoiseMethod:
     try:
         return DenoiseMethod(value)
-    except ValueError:
-        return DenoiseMethod.NONE
+    except ValueError as exc:
+        raise DenoisingError(str(value), "未知去噪方法") from exc
 
 
 def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
@@ -87,7 +88,7 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
         }
 
     return {
-        "denoise": denoise_methods[:1],
+        "denoise": [configured_denoise],
         "bearing": [
             BearingMethod.ENVELOPE,
             BearingMethod.FILTER_BANK_SK,
