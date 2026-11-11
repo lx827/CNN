@@ -32,8 +32,6 @@ from app.services.diagnosis import (
     DenoiseMethod,
 )
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
-from app.services.diagnosis.bearing_cyclostationary import bearing_sc_scoh_analysis
-from app.services.diagnosis.mckd import mckd_envelope_analysis
 from app.services.diagnosis.wavelet_bearing import (
     wavelet_packet_bearing_analysis,
     dwt_bearing_analysis,
@@ -83,7 +81,7 @@ from .utils import (
 BEARING_METHODS: List[Tuple[str, Optional[BearingMethod], Optional[callable], bool, Optional[int]]] = [
     # --- 通过 DiagnosisEngine 调度的方法 ---
     ("envelope",               BearingMethod.ENVELOPE,               None, False, None),
-    ("kurtogram",              BearingMethod.KURTOGRAM,              None, False, None),
+    ("filter_bank_sk",              BearingMethod.FILTER_BANK_SK,              None, False, None),
     ("cpw",                    BearingMethod.CPW,                    None, False, None),
     ("med",                    BearingMethod.MED,                    None, False, None),
     ("teager",                 BearingMethod.TEAGER,                 None, False, None),

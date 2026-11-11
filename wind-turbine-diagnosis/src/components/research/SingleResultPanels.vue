@@ -3,13 +3,15 @@
     <!-- 轴承方法 -->
     <template v-if="selectedMethodInfo?.category === 'bearing'">
       <section class="panel">
-        <div class="panel-title">包络分析结果</div>
+        <div class="panel-title">方法分析结果</div>
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="评估状态">
             <el-tag :type="evaluationStatusType(result.evaluation?.status)" size="small">
               {{ evaluationStatusText(result.evaluation?.status) }}
             </el-tag>
           </el-descriptions-item>
+          <el-descriptions-item v-if="result.algorithm" label="实际算法">{{ result.algorithm }}</el-descriptions-item>
+          <el-descriptions-item v-if="result.reason || result.fallback_reason" label="适用条件">{{ bearingReasonText(result.reason || result.fallback_reason) }}</el-descriptions-item>
           <el-descriptions-item label="实际频带">
             <template v-if="result.band">
               {{ fmt(result.band.low_hz) }} ~ {{ fmt(result.band.high_hz) }} Hz
@@ -22,7 +24,7 @@
           </el-descriptions-item>
         </el-descriptions>
       </section>
-      <section class="panel">
+      <section v-if="result.evaluation_kind !== 'sc_scoh'" class="panel">
         <div class="panel-title">轴承包络评估指标</div>
         <el-empty v-if="bearingEvaluationItems.length === 0" description="暂无可评估的包络指标" :image-size="60" />
         <el-descriptions v-else :column="2" border size="small">
@@ -43,12 +45,15 @@
         <div class="panel-title">SC/SCoh 专属指标</div>
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item v-for="entry in scScohItems" :key="entry.key" :label="entry.name">
-            <el-tag :type="entry.info.critical ? 'danger' : entry.info.warning || entry.info.significant ? 'warning' : 'success'" size="small">
-              {{ entry.info.critical ? '严重' : entry.info.warning ? '预警' : entry.info.significant ? '显著' : '正常' }}
+            <el-tag :type="entry.info.evaluable === false ? 'info' : entry.info.significant ? 'warning' : 'success'" size="small">
+              {{ entry.info.evaluable === false ? '不可评估' : entry.info.significant ? '显著' : '未显著' }}
             </el-tag>
-            <span style="margin-left:4px">理论={{ fmt(entry.info.theory_hz) }}Hz</span>
+            <span style="margin-left:4px">理论循环频率={{ fmt(entry.info.theory_cyclic_frequency_hz ?? entry.info.theory_hz) }}Hz</span>
+            <span v-if="entry.info.detected_cyclic_frequency_hz != null" style="margin-left:4px">检出={{ fmt(entry.info.detected_cyclic_frequency_hz) }}Hz</span>
+            <span v-if="entry.info.carrier_frequency_hz != null" style="margin-left:4px">载频={{ fmt(entry.info.carrier_frequency_hz) }}Hz</span>
             <span style="margin-left:4px">SCoh={{ fmt(entry.info.scoh_peak) }}</span>
-            <span style="margin-left:4px">SNR={{ fmt(entry.info.scoh_snr) }}</span>
+            <span style="margin-left:4px">相干峰背景比={{ fmt(entry.info.coherence_background_ratio) }}</span>
+            <span style="margin-left:4px">复相关峰背景比={{ fmt(entry.info.sc_background_ratio) }}</span>
           </el-descriptions-item>
         </el-descriptions>
       </section>
@@ -109,7 +114,7 @@
 <script setup>
 import { computed } from 'vue'
 import { fmt, evaluationStatusType, evaluationStatusText } from '../../composables/useResearchDiagnosis'
-import { bearingEvaluationEntries, scScohEntries } from '../../utils/bearingDiagnosis'
+import { bearingEvaluationEntries, scScohEntries, bearingReasonText } from '../../utils/bearingDiagnosis'
 
 const props = defineProps({
   result: { type: Object, required: true },

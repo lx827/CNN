@@ -404,7 +404,7 @@ def test_analyzer_real():
 
     device = MockDevice(
         diagnosis_strategy="advanced",
-        bearing_method="kurtogram",
+        bearing_method="filter_bank_sk",
         gear_method="standard",
         bearing_params={"n": 9, "d": 7.94, "D": 38.52, "alpha": 0},
         gear_teeth=None,
@@ -477,7 +477,7 @@ def test_analyzer_cw():
     """CW 变速: analyze_device 多通道"""
     print("\n--- analyzer CW 变速 ---")
     results = []
-    device = MockDevice(diagnosis_strategy="advanced", bearing_method="kurtogram",
+    device = MockDevice(diagnosis_strategy="advanced", bearing_method="filter_bank_sk",
                         bearing_params={"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}, gear_teeth=None)
     channels = {}
     for ch, fname in [("1", "H-A-1.npy"), ("2", "O-A-1.npy")]:

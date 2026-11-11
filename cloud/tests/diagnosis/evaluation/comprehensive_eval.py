@@ -52,7 +52,7 @@ def evaluate_comprehensive_diagnosis():
                     t0 = time.perf_counter()
                     engine = DiagnosisEngine(
                         strategy=DiagnosisStrategy.EXPERT,
-                        bearing_method=BearingMethod.KURTOGRAM,
+                        bearing_method=BearingMethod.FILTER_BANK_SK,
                         denoise_method=DenoiseMethod.WAVELET,
                         bearing_params=HUSTBEAR_BEARING,
                     )

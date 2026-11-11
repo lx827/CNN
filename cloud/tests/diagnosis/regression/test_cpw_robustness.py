@@ -61,21 +61,26 @@ def test_cpw_with_zero_rot_freq():
 
 
 def test_cpw_empty_comb_freqs():
-    """CPW: 没有 comb_frequencies 时 cepstrum_pre_whitening 应原样返回信号"""
-    from app.services.diagnosis.preprocessing import cepstrum_pre_whitening
+    """CPW: 缺稳定梳状前提必须不可判定，不冒充预白化。"""
+    from app.algorithms.bearing.cepstral import CPWEnvelopePipeline
     sig = np.random.randn(1024)
-    out = cepstrum_pre_whitening(sig, fs=8192, comb_frequencies=[])
-    assert len(out) == len(sig)
-    print("  [PASS] CPW empty comb_frequencies 未崩溃")
+    out = CPWEnvelopePipeline().run(sig, 8192, comb_frequencies=[])
+    assert out.status == "indeterminate" and out.representation is None
+    assert out.reason == "missing_stable_comb_frequencies"
+    print("  [PASS] CPW empty comb_frequencies 明确不可判定")
 
 
 def test_cpw_none_in_comb_freqs():
-    """CPW: comb_frequencies 包含 None 时预处理应跳过"""
-    from app.services.diagnosis.preprocessing import cepstrum_pre_whitening
+    """CPW: 非法梳状输入不能被静默过滤后继续声称已预白化。"""
+    from app.algorithms.bearing.cepstral import CPWEnvelopePipeline
     sig = np.random.randn(1024)
-    out = cepstrum_pre_whitening(sig, fs=8192, comb_frequencies=[None, 25.0, None])
-    assert len(out) == len(sig)
-    print("  [PASS] CPW comb_frequencies with None 未崩溃")
+    try:
+        CPWEnvelopePipeline().run(sig, 8192, comb_frequencies=[None, 25.0, None])
+    except (ValueError, TypeError):
+        pass
+    else:
+        raise AssertionError("非法梳状频率未被拒绝")
+    print("  [PASS] CPW comb_frequencies with None 明确拒绝")
 
 
 def run_all_tests():

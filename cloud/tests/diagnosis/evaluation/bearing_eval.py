@@ -37,7 +37,7 @@ def evaluate_bearing_methods():
 
     bearing_methods = [
         BearingMethod.ENVELOPE,
-        BearingMethod.KURTOGRAM,
+        BearingMethod.FILTER_BANK_SK,
         BearingMethod.CPW,
         BearingMethod.MED,
         BearingMethod.TEAGER,

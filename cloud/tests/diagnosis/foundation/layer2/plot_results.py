@@ -840,7 +840,7 @@ def plot_bearing_family():
         return
 
     # 收集真实数据结果
-    methods = ["envelope", "kurtogram", "med", "teager", "sk", "cpw", "mckd", "sc_scoh"]
+    methods = ["envelope", "filter_bank_sk", "med", "teager", "sk", "cpw", "mckd", "sc_scoh"]
     method_labels = ["Envelope", "Kurtogram", "MED", "Teager", "SK", "CPW", "MCKD", "SC-SCoh"]
     method_snr = {m: [] for m in methods}
     method_pass = {m: [] for m in methods}
