@@ -2,12 +2,6 @@ version = 1
 revision = 3
 requires-python = ">=3.13"
 
-[manifest]
-members = [
-    "cnn-cloud",
-    "cnn-dc24",
-]
-
 [[package]]
 name = "annotated-doc"
 version = "0.0.5"
@@ -260,24 +254,11 @@ wheels = [
 ]
 
 [[package]]
-name = "cnn-cloud"
+name = "cnn-compute"
 version = "0.1.0"
-source = { virtual = "cloud" }
+source = { editable = "." }
 dependencies = [
-    { name = "apscheduler" },
-    { name = "cryptography" },
-    { name = "fastapi" },
-    { name = "msgpack" },
     { name = "numpy" },
-    { name = "pymysql" },
-    { name = "python-dotenv" },
-    { name = "python-jose", extra = ["cryptography"] },
-    { name = "pywavelets" },
-    { name = "requests" },
-    { name = "ruff" },
-    { name = "scipy" },
-    { name = "sqlalchemy" },
-    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.dev-dependencies]
@@ -285,50 +266,58 @@ benchmark = [
     { name = "emd-signal" },
     { name = "psutil" },
 ]
+cloud = [
+    { name = "apscheduler" },
+    { name = "cryptography" },
+    { name = "fastapi" },
+    { name = "msgpack" },
+    { name = "pymysql" },
+    { name = "python-dotenv" },
+    { name = "python-jose", extra = ["cryptography"] },
+    { name = "pywavelets" },
+    { name = "requests" },
+    { name = "scipy" },
+    { name = "sqlalchemy" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+dc24 = [
+    { name = "python-dotenv" },
+    { name = "requests" },
+]
 dev = [
     { name = "httpx" },
+    { name = "ruff" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "apscheduler", specifier = "==3.10.4" },
-    { name = "cryptography", specifier = "==42.0.7" },
-    { name = "fastapi", specifier = "==0.111.0" },
-    { name = "msgpack", specifier = ">=1.0.8" },
-    { name = "numpy", specifier = ">=1.26.4" },
-    { name = "pymysql", specifier = "==1.1.1" },
-    { name = "python-dotenv", specifier = "==1.0.1" },
-    { name = "python-jose", extras = ["cryptography"], specifier = ">=3.3.0" },
-    { name = "pywavelets", specifier = ">=1.6.0" },
-    { name = "requests", specifier = "==2.32.3" },
-    { name = "ruff", specifier = ">=0.17.4" },
-    { name = "scipy", specifier = ">=1.13.1" },
-    { name = "sqlalchemy", specifier = "==2.0.36" },
-    { name = "uvicorn", extras = ["standard"], specifier = "==0.30.0" },
-]
+requires-dist = [{ name = "numpy", specifier = ">=1.26.4" }]
 
 [package.metadata.requires-dev]
 benchmark = [
     { name = "emd-signal", specifier = "==1.9.0" },
     { name = "psutil", specifier = "==7.2.2" },
 ]
-dev = [{ name = "httpx", specifier = ">=0.27" }]
-
-[[package]]
-name = "cnn-dc24"
-version = "0.1.0"
-source = { virtual = "dc24" }
-dependencies = [
-    { name = "numpy" },
-    { name = "python-dotenv" },
-    { name = "requests" },
+cloud = [
+    { name = "apscheduler", specifier = "==3.10.4" },
+    { name = "cryptography", specifier = "==42.0.7" },
+    { name = "fastapi", specifier = "==0.111.0" },
+    { name = "msgpack", specifier = ">=1.0.8" },
+    { name = "pymysql", specifier = "==1.1.1" },
+    { name = "python-dotenv", specifier = "==1.0.1" },
+    { name = "python-jose", extras = ["cryptography"], specifier = ">=3.3.0" },
+    { name = "pywavelets", specifier = ">=1.6.0" },
+    { name = "requests", specifier = "==2.32.3" },
+    { name = "scipy", specifier = ">=1.13.1" },
+    { name = "sqlalchemy", specifier = "==2.0.36" },
+    { name = "uvicorn", extras = ["standard"], specifier = "==0.30.0" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy", specifier = ">=1.26.4" },
+dc24 = [
     { name = "python-dotenv", specifier = "==1.0.1" },
     { name = "requests", specifier = "==2.32.3" },
+]
+dev = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "ruff", specifier = ">=0.17.4" },
 ]
 
 [[package]]

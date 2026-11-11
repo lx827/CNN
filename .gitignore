@@ -3,6 +3,16 @@ node_modules/
 
 # ========== Build output ==========
 dist/
+*.pyd
+*.dll
+*.lib
+*.obj
+*.a
+*.o
+*.whl
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
 
 # 边端交叉编译产物(deploy/edge/build.sh|ps1 导出)
 deploy/edge/out/

@@ -1,4 +1,61 @@
-# UV workspace 根(ADR-0001):单一 UV 托管 Python 3.13,uv.lock 为唯一依赖事实源。
-# Rust 边端 edge/ 不参与 Python workspace。
-[tool.uv.workspace]
-members = ["cloud", "dc24"]
+[build-system]
+requires = [
+    "scikit-build-core==1.1.2",
+    "pybind11==3.1.0",
+    "cmake==4.4.4",
+    "ninja==1.13.2",
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "cnn-compute"
+version = "0.1.0"
+description = "风机齿轮箱诊断的原生数值计算库"
+requires-python = ">=3.13"
+dependencies = ["numpy>=1.26.4"]
+
+[dependency-groups]
+cloud = [
+    "fastapi==0.111.0",
+    "uvicorn[standard]==0.30.0",
+    "sqlalchemy==2.0.36",
+    "pymysql==1.1.1",
+    "cryptography==42.0.7",
+    "scipy>=1.13.1",
+    "PyWavelets>=1.6.0",
+    "requests==2.32.3",
+    "apscheduler==3.10.4",
+    "python-dotenv==1.0.1",
+    "msgpack>=1.0.8",
+    "python-jose[cryptography]>=3.3.0",
+]
+dc24 = ["requests==2.32.3", "python-dotenv==1.0.1"]
+dev = ["httpx>=0.27", "ruff>=0.17.4"]
+benchmark = ["emd-signal==1.9.0", "psutil==7.2.2"]
+
+[tool.uv]
+default-groups = ["cloud", "dc24", "dev"]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "CMakeLists.txt" },
+    { file = "native/**" },
+    { file = "src/cnn_compute/**/*.py" },
+    { env = "CNN_COMPUTE_ARCH" },
+    { env = "CMAKE_ARGS" },
+    { env = "CMAKE_GENERATOR" },
+    { env = "CC" },
+    { env = "CXX" },
+    { env = "CXXFLAGS" },
+    { env = "LDFLAGS" },
+]
+
+[tool.scikit-build]
+minimum-version = "1.1"
+cmake.version = ">=3.28"
+cmake.args = ["-GNinja"]
+build-dir = "build/{wheel_tag}/ninja"
+build.tool-args = ["-j1"]
+wheel.packages = ["src/cnn_compute"]
+wheel.exclude = ["**/__pycache__/**", "**/*.pyc"]
+sdist.include = ["CMakeLists.txt", "native/**", "src/cnn_compute/**"]
+sdist.exclude = ["data/**", "build/**", "dist/**", ".venv/**"]
