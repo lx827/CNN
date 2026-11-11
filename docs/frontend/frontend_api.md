@@ -127,7 +127,9 @@ const data = await getRealtimeVibrationData('WTG-001', true);
 | `deleteSpecialBatches(deviceId)` | `deviceId: string` | 删除结果 | `DELETE /api/data/{deviceId}/special` | `DataView.vue`, `DeviceTable.vue` |
 | `exportChannelCSV(deviceId, batchIndex, channel, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`detrend?: bool`<br>`denoise?: string` | 无（`window.open` 触发下载） | `GET /api/data/{deviceId}/{batchIndex}/{channel}/export` | `DataView.vue` |
 
-> **轴承包络响应契约（2026-11-08）**：上一节 `/envelope` 返回的 `data.spectrum` 为 `{frequency_hz, amplitude, amplitude_unit, scaling}`，图表横纵轴分别读取 `frequency_hz/amplitude`，幅值轴同时展示单位与缩放方式；`data.band` 为实际频带 `{low_hz, high_hz, center_hz, width_hz}`；`data.features` 为包络能量及故障频率能量比；`data.evaluation` 为 `{status, indicators}`。`status=indeterminate` 表示输入不足、不可判定，不能渲染成“正常”。SC/SCoh 的循环频率指标只从 `data.sc_scoh_indicators` 读取，此时可能 `spectrum=null`，页面展示专属指标而不创建空图表。前端不再读取 `envelope_freq`、`envelope_amp` 或轴承顶层 `fault_indicators`；齿轮及行星箱结果仍使用各自的 `fault_indicators`。
+> **轴承响应契约（2026-11-11）**：`data.spectrum` 为 `{frequency_hz, amplitude, amplitude_unit, scaling}`，图表读取实际单位与缩放；TEO 的幅值单位为输入单位平方。`band` 是实际频带，`features` 为指标，`evaluation {status,indicators}` 是独立评估。`indeterminate/not_evaluable` 不渲染为正常。SC/SCoh 通过 `evaluation_kind=sc_scoh` 读取同一规范 `evaluation.indicators`，没有普通谱时不创建空图；专属二维谱读取 `cyclic_spectrum` 的循环/载波 Hz、SC 和 SCoh。前端不回读旧 `sc_scoh_indicators`、`envelope_freq/envelope_amp` 或轴承顶层 `fault_indicators`。齿轮按自己的规范评估与兼容字段展示。
+
+高级方法选项使用 `filter_bank_sk` 的真实名称，不保留旧 `kurtogram`；CPW 需要重复 query 的 `comb_frequencies_hz` 与稳定性声明；MCKD 可传 `target_fault/target_frequency_hz/period_samples`。研究 API 封装通过 config 对象传递这些先验并使用重复 query 序列化，具体签名以源码为准。结果存在 `requested_method/fallback_reason` 时显示实际 MED 回退；`analysis_status/reason` 与评估状态分开显示。
 
 ### 2.6 api/diagnosis.js — 诊断
 

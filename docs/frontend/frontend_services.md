@@ -200,16 +200,18 @@ view.connect();
 
 | 函数 | 签名 | 说明 |
 |------|------|------|
-| `bearingEvaluationIndicators` | `(result: object \| null) -> object` | 读取 `evaluation.indicators`，不回退旧顶层 `fault_indicators` |
-| `scScohIndicators` | `(result: object \| null) -> object` | 读取 SC/SCoh 专属 `sc_scoh_indicators` |
+| `bearingEvaluationIndicators` | `(result: object \| null) -> object` | `evaluation_kind` 非 `sc_scoh` 时读取 `evaluation.indicators`，不回退旧顶层 |
+| `scScohIndicators` | `(result: object \| null) -> object` | `evaluation_kind=sc_scoh` 时读取同一规范 `evaluation.indicators` |
 | `bearingEvaluationEntries` | `(result) -> Array<{key,name,info,source}>` | 包络评估指标条目，`source=evaluation` |
 | `scScohEntries` | `(result) -> Array<{key,name,info,source}>` | SC/SCoh 指标条目，`source=sc_scoh` |
 | `bearingIndicatorEntries` | `(result) -> Array` | 按包络评估、SC/SCoh 顺序合并条目，key 带来源前缀避免冲突 |
-| `significantBearingFaults` | `(result) -> Array` | 汇总 `significant/critical` 指标；真实 `snr` 与一般 `score` 分开，SC/SCoh 的 SNR 取 `scoh_snr`，并保留理论/检出频率与来源 |
+| `significantBearingFaults` | `(result) -> Array` | 汇总 `significant/critical`；真实 `snr`、一般 `score`、循环相干背景比各自保留，不混称 SNR |
 | `bearingFrequencyAnnotations` | `(result) -> Array` | 从 `detected_hz ?? theory_hz ?? frequency_hz` 生成图表标注，区分 `bearing` 与 `bearing_sc_scoh` |
 | `indicatorDisplayValue` | `(info: object) -> number \| string` | 依次选择 `value/snr/scoh_peak/scoh_snr/detected_hz`，空值返回 `-` |
 
 **评估状态**：`evaluation.status=evaluated` 表示已完成评估，`indeterminate` 表示输入不足、不可判定，`not_evaluable` 表示频率覆盖、分辨率等条件不足、不可评估；后两者都不等于正常或故障。研究页通过 `useResearchDiagnosis.js` 导出的 `evaluationStatusType/evaluationStatusText` 统一展示。投票行读取 `strongest_score`，真实峰值/背景比与一般证据分不混称为 SNR。
+
+`bearingReasonText` 将稳定梳状先验、缺 MCKD 目标/周期、数值解卷积失败、零能量、无冲击频带与变速限制显示为可读原因。实际回退 MED 显示请求方法和回退原因；SC 无普通包络谱时不创建伪空谱。TEO 最终包络谱单位为输入单位平方，单位标签读取响应。分解质量不足不得渲染为成功去噪或健康。
 
 ---
 

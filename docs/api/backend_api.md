@@ -495,6 +495,8 @@ GET /api/data/{device_id}/{batch_index}/{channel}/envelope?max_freq={max_freq}&d
 | `method` | `str` | `"envelope"` | 包络方法 |
 | `denoise` | `str` | `"none"` | 去噪方法 |
 
+高级轴承补充参数：`rot_freq_hz` 为可选正值恒转频 Hz；`target_fault` 为 BPFO/BPFI/BSF/FTF，`target_frequency_hz` 或 `period_samples` 给 MCKD 显式周期；`comb_frequencies_hz` 使用重复 query 参数传多个正频率，`comb_is_stable=true` 表示调用方确认整段梳状干扰稳定。完整约束以 OpenAPI 为准。
+
 **注意**：该端点为 `async def`。`max_freq` 只截断展示频谱，不改变完整分析范围或诊断结果。
 
 **响应 data（新契约）**：
@@ -504,6 +506,8 @@ GET /api/data/{device_id}/{batch_index}/{channel}/envelope?max_freq={max_freq}&d
 - `features`：`spectral_power_proxy`（幅值平方和）、`spectral_power_unit`、故障频率及谐波能量比。
 - `evaluation`：`{status, indicators}`；单项 `not_evaluable` 带 `reason`、`significant=None`，不表示未检出或健康。
 - 另含 `method/strategy/rot_freq_hz/envelope_low_pass_hz` 和方法元数据；不再返回 `envelope_freq`、`envelope_amp` 或顶层 `fault_indicators`。
+
+当前高级方法标识为 `filter_bank_sk/spectral_kurtosis/cpw/med/mckd/teager/sc_scoh`，不接受旧 `kurtogram` 冒名。`analysis_status/reason` 说明计算/前提状态，与 `evaluation.status` 分开；无稳定梳状先验的 CPW 不生成谱，MCKD 缺显式目标实际执行 MED 并保存 `requested_method/fallback_reason`。SC/SCoh 使用 `evaluation_kind=sc_scoh` 和规范 `evaluation.indicators`，二维 `cyclic_spectrum` 含循环/载波 Hz、SC 幅值（输入单位平方/Hz）、无量纲 SCoh 和循环分辨率；可以没有普通 `spectrum`。TEO 最终包络谱单位为 `input_signal^2`。
 
 #### 6.3.2 阶次跟踪
 
@@ -591,7 +595,7 @@ GET /api/data/{device_id}/{batch_index}/{channel}/full-analysis?detrend={detrend
 GET /api/data/method-info
 ```
 
-**响应**：15 种分析方法的分类、名称和详细说明
+**响应**：当前源码所开放方法的分类、名称、前提与状态；前端据此动态渲染，不固定方法总数。未迁移的复合研究流程不得显示为已接入融合。
 
 #### 6.5.2 独立运行单个/全部分析方法
 
@@ -643,8 +647,8 @@ GET /api/data/{device_id}/{batch_index}/{channel}/diagnosis?denoise_method={deno
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `health_score` | `int` | 健康度 0-100 |
-| `status` | `str` | normal/warning/critical |
+| `health_score` | `int/null` | 有证据时健康度 0-100；不可判定允许空值 |
+| `status` | `str` | normal/warning/critical；缺可评估证据可为 indeterminate，不能映射正常 |
 | `fault_likelihood` | `float` | 故障似然度 |
 | `fault_label` | `str` | 故障标签 |
 | `rot_freq_hz` | `float` | 估计转频 |
