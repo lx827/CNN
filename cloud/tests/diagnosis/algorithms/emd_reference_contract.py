@@ -37,9 +37,9 @@ def reference_signals():
 
 
 def assert_array_close(testcase, actual, reference, signal, *, stage="decomposition"):
-    """按冻结的输入/参考幅值尺度同时检查逐点误差与相对 L2。
+    """按冻结的输入/参考幅值尺度同时检查逐点误差与混合 L2 界。
 
-    对零参考数组由逐点绝对预算判定；非零数组另外要求相对 L2。
+    L2 同时使用相对项与逐点绝对预算的地板，避免近零残差被纯相对界误拒。
     整个数组必须有限，不允许 NaN 相等掩盖数值失败。
     """
     actual = np.asarray(actual)
@@ -58,12 +58,11 @@ def assert_array_close(testcase, actual, reference, signal, *, stage="decomposit
     np.testing.assert_allclose(
         observed, expected, rtol=budget["rtol"], atol=budget["atol_scaled"]
     )
-    expected_norm = np.linalg.norm(expected)
-    if expected_norm > 0:
-        testcase.assertLessEqual(
-            float(np.linalg.norm(observed - expected) / expected_norm),
-            budget["relative_l2"],
-        )
+    testcase.assertLessEqual(
+        float(np.linalg.norm(observed - expected)),
+        budget["relative_l2"] * float(np.linalg.norm(expected))
+        + budget["atol_scaled"] * np.sqrt(expected.size),
+    )
 
 
 def assert_result_close(testcase, actual, reference, signal):

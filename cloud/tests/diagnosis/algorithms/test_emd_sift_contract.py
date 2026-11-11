@@ -205,6 +205,14 @@ class SiftContractTests(unittest.TestCase):
         rounded = replace(reference, residual=reference.residual + small_change)
         assert_result_close(self, rounded, reference, signal)
 
+    def test_near_zero_residual_uses_absolute_budget_but_rejects_excess_error(self):
+        signal = np.ones(32)
+        reference = np.full(32, 1e-24)
+        absolute_budget = CONTRACT["decomposition"]["atol_scaled"]
+        assert_array_close(self, reference + absolute_budget * 0.25, reference, signal)
+        with self.assertRaises(AssertionError):
+            assert_array_close(self, reference + absolute_budget * 2, reference, signal)
+
 
 if __name__ == "__main__":
     unittest.main()
