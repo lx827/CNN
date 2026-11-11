@@ -2,14 +2,13 @@
 
 > 最后更新: 2026-11-11 | 上批 PR #89 已合 main；本批 #75/#77/#84 在草稿 PR #90，未声明合并或部署生产。历史效果数字保留当时数据与实现语境。
 
-## 未修复 (4)
+## 未修复 (3)
 
 | # | 文件 | 描述 |
 |---|------|------|
 | 11d | 历史 ensemble/评分实验 | 旧 D-S 未生效的 0/30 实验需按 #78 新 Evidence 重建效果；旧实现已删除，不把结构修复等同于真实检出恢复 |
 | 13d | 历史 WTG 五分类实验 | 断齿检出 0% 的旧标签/实验协议已退役，新对象 Pipeline 不直接命名断齿；新分类效果仍归 #78，未宣称已解决 |
 | 25 | `Settings.vue`(现 `components/settings/MechanicalParamsCard.vue`) | **设置页首渲染即崩、整页空白** — `form.gear_teeth` 初始为 {},模板无守卫直接访问 `form.gear_teeth[String(i)].input`;挂载中止致 onMounted 不执行、无法自愈(396cf64 引入)。T5 拆分按视觉零变化要求保留该行为 |
-| 35 | 生产 `cloud/.env` | **ECS 仍用默认 `ADMIN_PASSWORD=admin123` 与默认 JWT `SECRET_KEY`** — 旧 `.env` 缺键;历史 `EDGE_API_KEY` 为 63 字节非 ASCII 值(HTTP header 无法可靠传输,2026-11-11 已轮换为随机 hex 并同步树莓派)。待补强值 |
 
 ## 已修复
 
@@ -40,6 +39,7 @@
 | 32 | `algorithms/order/`, `engine.py`, `gear/metrics.py`, `data_view/order.py` | **单帧/slow 失败绕过 fast、长期越界被 clip、首尾 bin 误判越界、边缘帧数/采样点单位混用、零 MAD 保留离群、窄带纯音误拒、快速变速轴承摘要成恒速、FM0 主瓣重复计数、/order 伪造健康并覆盖通道缓存** — 全记录解析反例回归；亚 bin 峰位与外侧能量区分近边界/越界；FM0 改取谐波峰值；只更新明确批次记录并标记 JSON 变更；失败测试脚本非零退出 |
 | 33 | `tests/.../synthetic_signals.py`, `algorithms/order/estimation.py` | **轴承合成器声明 rot_freq 却未生成轴频，BPFO 冲击被误当转频** — 合成器加入可观测弱 1×轴频；保持谐波/次谐波/Welch/自相关仲裁，不按故障阶次比例猜转速；Engine 同时验证 25Hz 转频与约 90Hz BPFO，foundation 失败非零退出 |
 | 34 | `deploy.sh` | **一键部署在 venv 时代旧 ECS 上两处失效(单元未更新/根环境未生成)** — 防御性修复:uv 引导 PATH 无条件生效并验证可执行;`uv sync` 后断言 `.venv/bin/python` 存在,缺失即中止不动服务;unit 强制校验指向 `.venv` 解释器,不符即备份覆盖;重启后等待真正 active(30s)。WSL dry-run 与 ECS 实跑全绿,边端心跳自动恢复 |
+| 35 | 生产 `cloud/.env` | **旧文件缺少网页密码与 JWT 密钥,服务回退到默认值** — 2026-11-11 在 ECS 补入独立生成的 32 字符随机密码与 96 字符随机 hex 签名密钥,原子替换并收紧权限为 root/0600,保留私密备份后重启。现有 ASCII `EDGE_API_KEY` 保持不变。新登录/新 JWT/边端密钥读取均 200,默认密码/旧 JWT 均 401,Nginx 登录 200;详见下方证据 |
 | 36 | `algorithms/gear/fixed_axis/`、齿轮业务消费者 | **TSA 表示混用、FM0 主瓣重复计数、无历史仍报告趋势、服务层重复重算** — #71 使用对象 Pipeline，明确 regular/residual/differential 与 nonsynchronous，独立评估并保留 NA4/NB4 不可评估；PR #85 已合并 |
 | 37 | `algorithms/bearing/`、`advanced_bearing.py` | **伪 Fast Kurtogram、MCKD 目标/更新混用、CPW 空先验冒名、SC 专属评估被覆盖、TEO 单位失真、秩亏有限解误报成功** — #73 真实命名滤波器组、显式目标与实际 MED 回退、稳定梳状门控、SC 频移专属评估、TEO 平方单位、SVD 数值秩；开发分支已集成 |
 | 38 | `algorithms/decomposition/`、去噪/模态消费者 | **WP 顺序/系数时间轴、DWT 混入未选频带、EMD 镜像/停止、VMD Hz/补零、熵归一化、未收敛仍诊断及吞错原信号** — #74 族专属 adapter、有效区间、原始指标/选择/故障阈值与质量门控；删除旧数学/导出，DenoisingError→HTTP422，后台未知不转规则成功、None 健康阈值不告警 |
@@ -52,6 +52,13 @@
 **本批 #75/#77/#84 证据范围**：核心已知解/负对照与消融、真实隔离 HTTP/SQLite 缓存/worker/事务/告警及前端52项/构建有记录；首次后端79项的失败只做定向修复复验，没有伪称重跑全部。SQLite 旧库迁移幂等实际验证，MySQL SQL 未连接真实服务；真实数据效果、性能与生产部署未验证。当前已实现结构/业务修复不替代 #78/#79。
 
 **2026-11-11 本轮证据范围**：算法专项以公式/手算、已知合成信号、负对照与独立审查为依据；业务/API/前端回归保护门控、状态和消费路径。新 Pipeline 的真实数据分类效果、阈值校准、性能与生产部署尚未由这些测试证明。主仓 CW 有 36 个变速 `.npy`，不应笼统记录为所有数据缺失；数据效果待 #78 按新契约建立。旧 #11d/#13d 的历史效果问题不因删除旧入口自动关闭。
+
+**Bug #35 生产验证（2026-11-11，北京时间 20:43 后）**：
+
+- SSH 核查 `/opt/CNN/cloud/.env` 缺少 `ADMIN_PASSWORD` 与 `SECRET_KEY`,应用解析得到默认值,systemd 进程环境也没有覆盖这两个键。`.env` 未被 Git 跟踪;当前 `deploy.sh` 未写入该文件,此次部署沿用了旧配置。
+- 原文件备份到 `/root/.config/CNN/`（目录 0700、备份 0600）,仅追加两个独立随机值,验证原有所有键值及 `EDGE_API_KEY` 均未改变后原子替换 `.env`（0600）。新网页密码在服务器私密目录与操作者本机受限目录保存,秘密值不入库。
+- 重启 `CNN.service` 后为 active/running。实际 HTTP 验证：新密码登录 200、`admin123` 登录 401;`GET /api/acquisition/agents` 使用新 JWT 为 200,使用重启前签发的旧 JWT 为 401,使用现有边端密钥为 200;经本机 Nginx 入口的新密码登录为 200。
+- 验证时 `dc24-pi` 显示离线,最后心跳为北京时间 17:55:18,早于本次修复;未修改树莓派或声称现场心跳恢复。本次只修正生产配置,未修改认证代码或算法,未重跑算法回归。
 
 **Bug #26 验证（2026-10-24）**：`tests/edge/test_browser_open.py`（已随旧回放链退役）使用真实 Vite、临时端口和浏览器脚本探针，在修复前确认 Vite 额外打开，修复后探针不再触发且启动器只打开一次；复用已有前端同样只打开一次。父进程浏览器环境保持原值，不修改前端代理或 `open:true` 配置，不访问云端、不上传数据。
 
