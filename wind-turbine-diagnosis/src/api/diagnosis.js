@@ -58,6 +58,9 @@ export const getMethodInfo = async () => {
   return res
 }
 
+export const runCompositeResearch = (deviceId, batchIndex, channel, body) =>
+  request.post(`/api/data/${deviceId}/${batchIndex}/${channel}/composite-analysis`, body)
+
 export const getChannelMethodAnalysis = async (deviceId, batchIndex, channel, method, config = {}) => {
   const params = {
     ...advancedBearingParams(config),
