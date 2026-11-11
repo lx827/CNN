@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { getApiBaseURL } from './backend'
+import { formatErrorMessage } from './errorMessage'
 
 const request = axios.create({
   baseURL: getApiBaseURL(),
@@ -27,7 +28,7 @@ request.interceptors.response.use(
     const data = response.data
     // 校验后端业务码：如果返回了 code 字段且不为 200，当作错误处理
     if (data && typeof data.code === 'number' && data.code !== 200) {
-      const msg = data.message || data.detail || '请求失败'
+      const msg = formatErrorMessage(data)
       ElMessage.error(msg)
       return Promise.reject(new Error(msg))
     }
@@ -42,7 +43,7 @@ request.interceptors.response.use(
       localStorage.removeItem('access_token')
       window.location.hash = '#/login'
     } else {
-      ElMessage.error(error.response?.data?.detail || error.message || '请求失败')
+      ElMessage.error(formatErrorMessage(error))
     }
     return Promise.reject(error)
   }

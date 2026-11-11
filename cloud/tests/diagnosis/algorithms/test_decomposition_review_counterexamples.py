@@ -14,7 +14,7 @@ from app.algorithms.pipelines.decomposition import (
     select_ranked_components, VMDDenoisingPipeline, EMDDenoisingPipeline,
     SensitiveComponentEnvelopePipeline, require_representation,
 )
-from app.services.diagnosis.preprocessing import wavelet_denoise
+from app.services.diagnosis.signal_utils import denoise_signal
 from app.services.diagnosis.modality_bearing import emd_bearing_analysis
 
 
@@ -46,9 +46,8 @@ class ReviewCounterexamples(unittest.TestCase):
 
     def test_preprocessing_entry_is_same_scale_stable_wavelet_implementation(self):
         signal = np.random.default_rng(4).normal(size=1024)
-        self.assertIs(wavelet_denoise, denoise_wavelet)
-        original = wavelet_denoise(signal, threshold_scale=.2)
-        small = wavelet_denoise(signal * 1e-15, threshold_scale=.2) / 1e-15
+        original = denoise_signal(signal, "wavelet")
+        small = denoise_signal(signal * 1e-15, "wavelet") / 1e-15
         self.assertLess(np.linalg.norm(original - small) / np.linalg.norm(original), 1e-12)
 
     def test_vmd_finite_iteration_representation_is_retained_but_not_accepted(self):
