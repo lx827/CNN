@@ -33,6 +33,29 @@ def _modulated_noise(alpha: float | None, duration: float = 4.0, seed: int = 4) 
 
 
 class CyclostationaryTests(unittest.TestCase):
+    def test_nonnegative_carrier_axis_even_and_odd_endpoints(self):
+        signal = np.random.default_rng(3).standard_normal(4096)
+        for length in (255, 256):
+            with self.subTest(segment_length=length):
+                result = compute_sc_scoh(signal, FS, [47.3], segment_length=length)
+                np.testing.assert_allclose(
+                    result.carrier_frequencies_hz, np.fft.rfftfreq(length, 1.0 / FS),
+                )
+                self.assertTrue(np.all(np.diff(result.carrier_frequencies_hz) > 0))
+
+    def test_selected_nyquist_carrier_is_positive(self):
+        n = np.arange(8192)
+        alpha = 47.3
+        signal = (-1.0)**n * np.cos(np.pi * alpha * n / FS + 0.31)
+        signal += 0.1 * np.random.default_rng(0).standard_normal(len(n))
+        result = CyclostationaryPipeline().run(
+            signal, FS, candidates={"known": alpha}, segment_length=256,
+        )
+        indicator = result.evaluation.indicators["known"]
+        self.assertTrue(indicator["significant"])
+        self.assertEqual(indicator["carrier_frequency_hz"], FS / 2)
+        self.assertAlmostEqual(indicator["scoh_peak"], 0.9994717751477513)
+
     def test_non_integer_cyclic_frequency_has_complex_sc_peak(self):
         alpha = 47.3
         signal = _modulated_noise(alpha)

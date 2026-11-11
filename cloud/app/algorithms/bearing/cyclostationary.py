@@ -5,7 +5,7 @@ from typing import Optional, Mapping, Sequence
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from numpy.typing import NDArray
-from scipy.fft import fft, fftfreq
+from scipy.fft import fft, rfftfreq
 from scipy.signal import windows
 
 from app.algorithms.mechanics import BearingGeometry
@@ -83,7 +83,8 @@ def compute_sc_scoh(
     local = np.arange(segment_length)[None, :]
     global_time_s = (starts[:, None] + local) / sample_rate_hz
     windowed = segments * window[None, :]
-    carrier = fftfreq(segment_length, 1.0 / sample_rate_hz)[: segment_length // 2 + 1]
+    # 复 FFT 的 k=N/2 点在非负半轴标记为 +Nyquist；奇数长度没有 Nyquist 点。
+    carrier = rfftfreq(segment_length, 1.0 / sample_rate_hz)
     sc = np.empty((len(alpha), len(carrier)), dtype=np.complex128)
     scoh = np.empty((len(alpha), len(carrier)), dtype=np.float64)
 
