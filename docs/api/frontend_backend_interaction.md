@@ -103,6 +103,8 @@
 
 **去噪失败链路（2026-11-11）**：DataView 所有计算/导出与研究入口消费结构化 HTTP 422 `detail {status:not_evaluable,method,reason}`。失败后不绘制替代原信号并标成功，不用旧缓存充当本次成功结果；未知方法也拒绝。后台失败通道传播 `health_score=null/status=indeterminate` 与原因，不走规则回退，健康阈值告警跳过未知。runtime profile 实际执行配置的去噪方法，不能继续把首个 none 当作设备配置。完整集成/领域状态模型仍由 #77/#84 后续收敛。
 
+**复合研究（#75）**：method-info 的 category=composite 五方法在单方法模式下，经 `buildCompositeRequest` → `api/diagnosis.js::runCompositeResearch` → POST `composite-analysis`。工具栏采集显式恒转频和 CVS 对齐 JSON；GET method-analysis 仍可查看无相位时的明确缺前提。`CompositeResult.vue` 显示阶段、近似/失败原因、实际单位、模态中心/ICA 秩/CVS 圈数与 AM/FM/MSB/熵曲线，固定提示研究限定和未知结论；没有生产分数或投票条目。研究运行不写生产缓存；all/ensemble 不隐式纳入这些组合。
+
 ---
 
 ## 5. 实时监测 (Monitor)

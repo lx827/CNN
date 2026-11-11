@@ -31,7 +31,7 @@
 - [经典算法原理](算法原理.md)：公式推导、物理意义和参考文献。
 - [诊断算法体系全景](诊断算法体系全景.md)：诊断业务组合、评分与集成背景。
 - [小波与模态分解理论](algorithms/wavelet_and_modality_decomposition.md)：保留的理论资料。
-- [复合研究流程](algorithms/composite/INDEX.md)：#75 核心阶段、四阶 MSB、相位前提与研究限定；公开接入实施中。
+- [复合研究流程](algorithms/composite/INDEX.md)：#75 核心阶段、四阶 MSB、相位前提、专用研究入口与生产隔离。
 - [数据集说明](datasets.md)：路径、命名、采样率和机械参数。
 - [行星齿轮箱诊断进展](行星齿轮箱诊断进展.md)：阶段性评估与限制。
 

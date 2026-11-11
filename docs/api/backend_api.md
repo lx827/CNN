@@ -648,6 +648,31 @@ GET /api/data/{device_id}/{batch_index}/{channel}/research-analysis?detrend={det
 
 ---
 
+#### 6.5.4 复合流程研究分析
+
+```
+POST /api/data/{device_id}/{batch_index}/{channel}/composite-analysis
+```
+
+请求体含 `method`、可选正值 `rot_freq_hz`、`options` 对象和可选 `alignment` 对象。method 为 `composite_vmd_amfm/composite_msb/composite_cvs_med_msb/composite_vmd_ica/composite_mswpee`；元数据 category=composite、research_only=true、production_eligible=false。POST 使用原始记录并先执行最多 5 秒业务窗口，不隐式增加去噪/去趋势。
+
+`options` 控制算法族资源与数学参数；模态、迭代、滤波长度、段长、小波层数/尺度和分量数均有上限，准确约束以源码和 OpenAPI 为准。`alignment` 用于 CVS，包含逐样本 carrier/planet 连续相位 rad、行星方位/编号、传感器方位与窗口、相对自转 Hz、角域点/转及最少独立重组圈。它必须来自实际对齐记录，不能由振动或齿数伪造零位；具体数学责任见 [复合契约](../algorithms/composite/INDEX.md)。
+
+GET `method-analysis` 同样接受这五个 method，但没有 options/alignment 载荷；额外 `denoise!=none` 或 `detrend=true` 返回 400 防止隐式附加阶段。CVS 无相位时返回明确缺前提结果，不回退原信号。
+
+| 响应/错误 | 语义 |
+|-----------|------|
+| HTTP 200 | 研究计算或合法前提不足结果；后者 analysis.status=indeterminate 并有 reason |
+| HTTP 400 | 畸形几何、非法数学/资源参数、无效 alignment 或不允许的隐式前处理 |
+| HTTP 404 | 指定采样数据不存在 |
+| HTTP 422 | 请求体 method/类型/非正转频等校验失败 |
+
+响应 data 顶层为 `contract_version=1`、内部 `method`、请求 `analysis_method` 与记录身份，另含 `analysis {status,stages,data,metrics,reason}`、`evaluation`、`evaluation_status=not_evaluable`、`diagnosis_conclusion=unknown`、`health_score=null`、空故障概率/指标、research_only/production_eligible 与共同 evidence_family；不输出旧诊断 status。计算状态和阶段状态不等于诊断结论，未标定指标 warning/critical 为 null。
+
+大型原始模态/源数组留在算法内；HTTP 返回中心 Hz、有效区间、选择、ICA 秩/收敛、CVS 圈/覆盖、MED 迭代历史与摘要曲线。AM/FM 图最多 800 点显示抽样；MSB 返回有限网格四阶幅值/相干。空值保留 null，抽点不改变完整分析。
+
+复合结果不进入 runtime 聚合、Device/Diagnosis 生产缓存或告警；研究 all/ensemble 也不写生产诊断缓存。生产重新诊断须用相应生产入口。
+
 ### 6.6 诊断结果操作
 
 #### 6.6.1 查询通道诊断结果
