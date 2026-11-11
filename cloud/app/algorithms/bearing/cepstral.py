@@ -53,7 +53,10 @@ def cepstral_pre_whitening(
     n = len(arr)
     spectrum = np.fft.rfft(arr - np.mean(arr))
     magnitude = np.abs(spectrum)
-    floor = max(float(np.max(magnitude)) * 1e-10, 1e-12)
+    peak = float(np.max(magnitude))
+    if peak == 0.0:
+        raise ValueError("零能量信号无法倒谱预白化")
+    floor = peak * 1e-10
     log_magnitude = np.log(np.maximum(magnitude, floor))
     cepstrum = np.fft.irfft(log_magnitude, n=n)
 

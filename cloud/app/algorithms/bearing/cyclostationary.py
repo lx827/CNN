@@ -21,6 +21,7 @@ class CyclicRepresentation:
     segment_count: int
     sample_rate_hz: float
     duration_s: float
+    input_amplitude_scale: float
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,11 @@ def compute_sc_scoh(
     starts = np.arange(0, len(x) - segment_length + 1, step, dtype=int)
     if len(starts) < 4:
         raise ValueError("SC/SCoh 至少需要四个完整分段")
-    segments = sliding_window_view(x - np.mean(x), segment_length)[starts]
+    centered = x - np.mean(x)
+    input_scale = float(np.max(np.abs(centered)))
+    # 相干性和后续峰背景比都是归一化量；先缩放可让固定正则化彻底退出公式。
+    normalized = centered / input_scale if input_scale > 0.0 else centered
+    segments = sliding_window_view(normalized, segment_length)[starts]
     window = windows.hann(segment_length, sym=False)
     scale = sample_rate_hz * float(np.sum(window**2))
     local = np.arange(segment_length)[None, :]
@@ -90,19 +95,32 @@ def compute_sc_scoh(
         sc[index] = np.mean(cross, axis=0)
         psd_lo = np.mean(np.abs(x_lo) ** 2, axis=0)
         psd_hi = np.mean(np.abs(x_hi) ** 2, axis=0)
-        denominator = psd_lo * psd_hi
-        coherence = np.abs(sc[index]) ** 2 / np.maximum(denominator, 1e-30)
-        scoh[index] = np.clip(coherence, 0.0, 1.0)
+        # 顺序除以 sqrt(PSD)，避免 PSD 乘积及 |SC|^2 同时下溢。
+        coherence_amplitude = np.divide(
+            np.abs(sc[index]),
+            np.sqrt(psd_lo),
+            out=np.zeros(len(carrier), dtype=np.float64),
+            where=psd_lo > 0.0,
+        )
+        coherence_amplitude = np.divide(
+            coherence_amplitude,
+            np.sqrt(psd_hi),
+            out=np.zeros(len(carrier), dtype=np.float64),
+            where=psd_hi > 0.0,
+        )
+        scoh[index] = np.clip(coherence_amplitude**2, 0.0, 1.0)
 
     return CyclicRepresentation(
         cyclic_frequencies_hz=alpha,
         carrier_frequencies_hz=carrier,
-        spectral_correlation=sc,
+        # SC 保留原输入幅值单位，服从 SC(s*x)=s^2*SC(x)。
+        spectral_correlation=sc * input_scale**2,
         spectral_coherence=scoh,
         cyclic_resolution_hz=float(sample_rate_hz / len(x)),
         segment_count=len(starts),
         sample_rate_hz=float(sample_rate_hz),
         duration_s=float(len(x) / sample_rate_hz),
+        input_amplitude_scale=input_scale,
     )
 
 
@@ -120,6 +138,13 @@ def _not_evaluable(target: float, reason: str) -> dict:
         "sc_background_ratio": None,
         "significant": None,
     }
+
+
+def _peak_background_ratio(peak: float, background: float) -> Optional[float]:
+    """零背景不施加绝对下限；峰与背景同时为零时比值没有定义。"""
+    if background == 0.0:
+        return None if peak == 0.0 else float("inf")
+    return peak / background
 
 
 def evaluate_cyclic_candidates(
@@ -157,6 +182,9 @@ def evaluate_cyclic_candidates(
         if target < float(alpha[0]) - tolerance:
             indicators[name] = _not_evaluable(target, "target_not_computed")
             continue
+        if representation.input_amplitude_scale == 0.0:
+            indicators[name] = _not_evaluable(target, "zero_energy")
+            continue
         if tolerance < resolution:
             indicators[name] = _not_evaluable(target, "insufficient_cyclic_frequency_resolution")
             continue
@@ -187,12 +215,15 @@ def evaluate_cyclic_candidates(
         if len(background_indices) == 0:
             indicators[name] = _not_evaluable(target, "insufficient_cyclic_background")
             continue
-        coherence_background = max(float(np.median(scoh[background_indices, carrier_index])), 1e-12)
-        sc_background = max(float(np.median(sc[background_indices, carrier_index])), 1e-12)
+        coherence_background = float(np.median(scoh[background_indices, carrier_index]))
+        sc_background = float(np.median(sc[background_indices, carrier_index]))
         scoh_peak = float(scoh[alpha_index, carrier_index])
         sc_peak = float(sc[alpha_index, carrier_index])
-        coherence_ratio = scoh_peak / coherence_background
-        sc_ratio = sc_peak / sc_background
+        coherence_ratio = _peak_background_ratio(scoh_peak, coherence_background)
+        sc_ratio = _peak_background_ratio(sc_peak, sc_background)
+        if coherence_ratio is None or sc_ratio is None:
+            indicators[name] = _not_evaluable(target, "undefined_zero_peak_and_background")
+            continue
         peaks[name] = (alpha_index, carrier_index)
         indicators[name] = {
             "status": "evaluated",
@@ -251,15 +282,79 @@ class CyclostationaryPipeline:
                 evaluation=CyclicEvaluation(status="indeterminate", indicators={}),
                 reason="missing_cyclic_candidates_or_geometry_and_rotation",
             )
-        n = len(signal)
+        if not np.isfinite(relative_tolerance) or relative_tolerance <= 0:
+            raise ValueError("循环频率相对容差必须为有限正数")
+
+        candidates = {name: float(target) for name, target in candidates.items()}
+        nyquist = sample_rate_hz / 2.0
+        failure_reasons: dict[str, str] = {}
+        for name, target in candidates.items():
+            if not np.isfinite(target) or target <= 0.0:
+                failure_reasons[name] = "invalid_target_frequency"
+            elif target > nyquist:
+                failure_reasons[name] = "target_above_analysis_bandwidth"
+        if len(failure_reasons) == len(candidates):
+            unique_reasons = set(failure_reasons.values())
+            reason = unique_reasons.pop() if len(unique_reasons) == 1 else "no_valid_cyclic_candidates"
+            return CyclostationaryResult(
+                status="indeterminate",
+                method=self.method,
+                representation=None,
+                evaluation=CyclicEvaluation(
+                    status="indeterminate",
+                    indicators={
+                        name: _not_evaluable(target, failure_reasons[name])
+                        for name, target in candidates.items()
+                    },
+                ),
+                reason=reason,
+            )
+
+        x = np.asarray(signal, dtype=np.float64)
+        n = len(x) if x.ndim == 1 else 0
+        step = max(1, int(round(segment_length * (1.0 - overlap_ratio)))) if isinstance(segment_length, int) else 1
+        segment_count = len(np.arange(0, n - segment_length + 1, step)) if n >= segment_length else 0
+        if n < 128 or segment_count < 4:
+            return CyclostationaryResult(
+                status="indeterminate",
+                method=self.method,
+                representation=None,
+                evaluation=CyclicEvaluation(
+                    status="indeterminate",
+                    indicators={
+                        name: _not_evaluable(
+                            target,
+                            failure_reasons.get(name, "insufficient_signal_length"),
+                        )
+                        for name, target in candidates.items()
+                    },
+                ),
+                reason="insufficient_signal_length",
+            )
+        if not np.any(x - np.mean(x)):
+            return CyclostationaryResult(
+                status="indeterminate",
+                method=self.method,
+                representation=None,
+                evaluation=CyclicEvaluation(
+                    status="indeterminate",
+                    indicators={
+                        name: _not_evaluable(target, failure_reasons.get(name, "zero_energy"))
+                        for name, target in candidates.items()
+                    },
+                ),
+                reason="zero_energy",
+            )
+
         duration = n / sample_rate_hz
         grid = set()
-        for target in candidates.values():
-            target = float(target)
+        for name, target in candidates.items():
+            if name in failure_reasons:
+                continue
             tolerance = target * relative_tolerance
             for multiplier in (-3.0, -1.0, 0.0, 1.0, 3.0):
                 value = target + multiplier * tolerance
-                if 0.0 < value <= sample_rate_hz / 2.0:
+                if 0.0 < value <= nyquist:
                     grid.add(round(value, 12))
         representation = compute_sc_scoh(
             signal,

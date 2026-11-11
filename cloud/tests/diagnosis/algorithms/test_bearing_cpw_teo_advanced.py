@@ -60,6 +60,19 @@ class CPWTests(unittest.TestCase):
         self.assertEqual(result.metadata["comb_frequencies_hz"], (100.0,))
         self.assertIsNotNone(result.representation)
 
+    def test_cpw_reconstruction_obeys_amplitude_scaling(self):
+        reference = cepstral_pre_whitening(self.signal, self.fs, [100.0])
+        for scale in (1e-8, 1e8):
+            with self.subTest(scale=scale):
+                scaled = cepstral_pre_whitening(self.signal * scale, self.fs, [100.0])
+                expected = reference * scale
+                np.testing.assert_allclose(
+                    scaled,
+                    expected,
+                    rtol=1e-7,
+                    atol=float(np.max(np.abs(expected))) * 1e-7,
+                )
+
 
 class TEOTests(unittest.TestCase):
     def test_raw_teo_keeps_negative_values_and_cross_terms(self):
@@ -88,6 +101,14 @@ class TEOTests(unittest.TestCase):
         self.assertEqual(result.metadata["multi_component_policy"], "bandpass_before_teo_cross_terms_remain_engineering_approximation")
         self.assertNotIn("variable_speed", result.metadata)
         self.assertIsNotNone(result.representation)
+
+    def test_zero_energy_is_not_evaluable(self):
+        result = TEOEnvelopePipeline().run(np.zeros(4096), 2048.0)
+        self.assertEqual(result.status, "indeterminate")
+        self.assertEqual(result.reason, "zero_energy")
+        self.assertIsNone(result.representation)
+        self.assertIsNone(result.raw_teo)
+        self.assertIsNone(result.envelope_input)
 
 
 if __name__ == "__main__":

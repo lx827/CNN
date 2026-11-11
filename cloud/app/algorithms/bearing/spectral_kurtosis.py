@@ -72,10 +72,13 @@ def complex_spectral_kurtosis(values: NDArray[np.complex128]) -> float:
         raise ValueError("谱峭度输入必须是一维且至少两个复样本")
     if not np.all(np.isfinite(z)):
         raise ValueError("谱峭度输入不能包含 NaN 或无穷值")
-    power = np.abs(z) ** 2
-    mean_power = float(np.mean(power))
-    if mean_power <= np.finfo(np.float64).tiny:
+    scale = float(np.max(np.abs(z)))
+    if scale == 0.0:
         raise ValueError("零能量频带无法估计谱峭度")
+    power = np.abs(z / scale) ** 2
+    mean_power = float(np.mean(power))
+    if mean_power == 0.0 or not np.isfinite(mean_power):
+        raise ValueError("频带数值退化，无法估计谱峭度")
     return float(np.mean(power**2) / mean_power**2 - 2.0)
 
 
@@ -102,8 +105,10 @@ def _band_statistics(z: np.ndarray, level: int, band: FrequencyBand) -> BandKurt
     core = z[edge:-edge] if len(z) > 2 * edge + 16 else z
     sk = complex_spectral_kurtosis(core)
     magnitude = np.abs(core)
-    median = max(float(np.median(magnitude)), 1e-12)
-    impulsiveness = float(np.max(magnitude)) / median
+    peak = float(np.max(magnitude))
+    # 工程幅值比只使用随当前频带尺度变化的下限，避免零中位数除法。
+    median = max(float(np.median(magnitude)), peak * np.finfo(np.float64).eps)
+    impulsiveness = peak / median
     signal_to_background = float(np.percentile(magnitude, 95.0)) / median
     # 明确是工程重加权分数，不把 Pearson 峭度减 3 冒充谱峭度。
     score = max(0.0, sk) * float(np.log1p(impulsiveness) * np.log1p(signal_to_background))
@@ -147,7 +152,7 @@ def compute_filter_bank_kurtogram(
                 output="sos",
             )
             filtered = sosfiltfilt(sos, arr)
-            if float(np.mean(filtered**2)) <= 1e-24:
+            if not np.any(filtered):
                 continue
             candidates.append(_band_statistics(hilbert(filtered), level, band))
     if not candidates:

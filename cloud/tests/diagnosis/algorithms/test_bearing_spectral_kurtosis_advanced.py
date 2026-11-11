@@ -51,6 +51,17 @@ class ComplexSpectralKurtosisTests(unittest.TestCase):
         z = np.exp(1j * np.arange(32) * 0.37)
         self.assertAlmostEqual(complex_spectral_kurtosis(z), -1.0, places=12)
 
+    def test_complex_sk_is_invariant_to_nonzero_amplitude_scaling(self):
+        rng = np.random.default_rng(912)
+        z = rng.standard_normal(4096) + 1j * rng.standard_normal(4096)
+        z[::97] += 8.0 + 2.0j
+        reference = complex_spectral_kurtosis(z)
+        for scale in (1e-150, 1e-12, 1e12, 1e150):
+            with self.subTest(scale=scale):
+                self.assertAlmostEqual(complex_spectral_kurtosis(z * scale), reference, places=11)
+        with self.assertRaisesRegex(ValueError, "零能量"):
+            complex_spectral_kurtosis(np.zeros(128, dtype=np.complex128))
+
 
 class FilterBankKurtogramTests(unittest.TestCase):
     def test_known_resonance_band_is_selected_by_real_filter_bank(self):
@@ -106,6 +117,26 @@ class FilterBankKurtogramTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "computed", result.reason)
         self.assertGreater(result.best_band.center_hz, 500.0)
+
+    def test_filter_bank_statistics_are_invariant_at_nonzero_tiny_scale(self):
+        parameters = FilterBankKurtogramParameters(max_level=3, min_frequency_hz=100.0)
+        signal = _resonant_impulses(seed=29)
+        reference = FilterBankKurtogramPipeline().run(signal, FS, parameters)
+        scaled = FilterBankKurtogramPipeline().run(signal * 1e-12, FS, parameters)
+        self.assertEqual(scaled.status, reference.status)
+        self.assertEqual(scaled.best_band, reference.best_band)
+        np.testing.assert_allclose(
+            [item.spectral_kurtosis for item in scaled.bands],
+            [item.spectral_kurtosis for item in reference.bands],
+            rtol=1e-8,
+            atol=1e-10,
+        )
+        np.testing.assert_allclose(
+            [item.impulsiveness for item in scaled.bands],
+            [item.impulsiveness for item in reference.bands],
+            rtol=1e-8,
+            atol=1e-10,
+        )
 
 
 if __name__ == "__main__":

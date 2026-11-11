@@ -87,6 +87,15 @@ class TEOEnvelopePipeline:
         if isinstance(params.filter_order, bool) or not isinstance(params.filter_order, int) or params.filter_order <= 0:
             raise ValueError("滤波器阶数必须为正整数")
         x = x - np.mean(x)
+        if not np.any(x):
+            return TEOEnvelopeResult(
+                status="indeterminate",
+                method=self.method,
+                representation=None,
+                raw_teo=None,
+                envelope_input=None,
+                reason="zero_energy",
+            )
         band = _resolve_band(sample_rate_hz, params)
         sos = butter(
             params.filter_order,

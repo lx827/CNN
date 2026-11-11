@@ -123,6 +123,110 @@ class CyclostationaryTests(unittest.TestCase):
         self.assertEqual(result.evaluation.indicators["known_fault"]["status"], "evaluated")
         self.assertNotIn("BPFO_est", result.evaluation.indicators)
 
+    def test_normalized_metrics_and_significance_are_amplitude_scale_invariant(self):
+        frequencies = [31.0, 39.0, 47.3, 55.0, 63.0, 71.0]
+        signal = _modulated_noise(47.3, seed=731)
+        reference = compute_sc_scoh(signal, FS, frequencies, segment_length=256)
+        reference_indicator = evaluate_cyclic_candidates(reference, {"BPFO": 47.3}).indicators["BPFO"]
+
+        for scale in (1e-6, 1e-8, 1e8):
+            with self.subTest(scale=scale):
+                scaled = compute_sc_scoh(signal * scale, FS, frequencies, segment_length=256)
+                indicator = evaluate_cyclic_candidates(scaled, {"BPFO": 47.3}).indicators["BPFO"]
+                np.testing.assert_allclose(
+                    scaled.spectral_coherence,
+                    reference.spectral_coherence,
+                    rtol=1e-8,
+                    atol=1e-12,
+                )
+                # SC 是二阶幅值量；独立数学缩放律为 SC(s*x)=s^2*SC(x)。
+                np.testing.assert_allclose(
+                    scaled.spectral_correlation,
+                    reference.spectral_correlation * scale**2,
+                    rtol=1e-8,
+                    atol=0.0,
+                )
+                self.assertAlmostEqual(
+                    indicator["coherence_background_ratio"],
+                    reference_indicator["coherence_background_ratio"],
+                    places=8,
+                )
+                self.assertAlmostEqual(
+                    indicator["sc_background_ratio"],
+                    reference_indicator["sc_background_ratio"],
+                    places=8,
+                )
+                self.assertEqual(indicator["significant"], reference_indicator["significant"])
+
+    def test_zero_energy_is_not_a_valid_negative_control(self):
+        frequencies = [31.0, 39.0, 47.3, 55.0, 63.0, 71.0]
+        representation = compute_sc_scoh(np.zeros(8192), FS, frequencies, segment_length=256)
+        evaluation = evaluate_cyclic_candidates(representation, {"BPFO": 47.3})
+        self.assertEqual(evaluation.status, "indeterminate")
+        self.assertEqual(evaluation.indicators["BPFO"]["status"], "not_evaluable")
+        self.assertEqual(evaluation.indicators["BPFO"]["reason"], "zero_energy")
+        self.assertIsNone(evaluation.indicators["BPFO"]["significant"])
+
+        result = CyclostationaryPipeline().run(
+            np.zeros(8192), FS, candidates={"BPFO": 47.3}, segment_length=256
+        )
+        self.assertEqual(result.status, "indeterminate")
+        self.assertEqual(result.reason, "zero_energy")
+        self.assertIsNone(result.representation)
+
+    def test_all_invalid_or_above_bandwidth_candidates_return_not_evaluable(self):
+        signal = _modulated_noise(47.3, duration=2.0)
+        for target in (np.nan, np.inf, 0.0, -47.3):
+            with self.subTest(target=target):
+                result = CyclostationaryPipeline().run(
+                    signal, FS, candidates={"BPFO": target}, segment_length=256
+                )
+                self.assertEqual(result.status, "indeterminate")
+                self.assertEqual(result.reason, "invalid_target_frequency")
+                self.assertEqual(result.evaluation.indicators["BPFO"]["reason"], "invalid_target_frequency")
+                self.assertIsNone(result.representation)
+
+        result = CyclostationaryPipeline().run(
+            signal, FS, candidates={"BPFO": 9000.0}, segment_length=256
+        )
+        self.assertEqual(result.status, "indeterminate")
+        self.assertEqual(result.reason, "target_above_analysis_bandwidth")
+        self.assertEqual(result.evaluation.indicators["BPFO"]["reason"], "target_above_analysis_bandwidth")
+        self.assertIsNone(result.representation)
+
+    def test_mixed_candidates_duplicates_empty_and_short_signal_keep_explicit_semantics(self):
+        signal = _modulated_noise(47.3, duration=2.0)
+        mixed = CyclostationaryPipeline().run(
+            signal,
+            FS,
+            candidates={"BPFO": np.nan, "BPFI": 47.3, "BSF": 9000.0},
+            segment_length=256,
+        )
+        self.assertEqual(mixed.status, "computed", mixed.reason)
+        self.assertEqual(mixed.evaluation.indicators["BPFO"]["reason"], "invalid_target_frequency")
+        self.assertEqual(mixed.evaluation.indicators["BPFI"]["status"], "evaluated")
+        self.assertEqual(mixed.evaluation.indicators["BSF"]["reason"], "target_above_analysis_bandwidth")
+
+        duplicated = CyclostationaryPipeline().run(
+            signal, FS, candidates={"BPFO": 47.3, "BPFI": 47.3}, segment_length=256
+        )
+        self.assertEqual(duplicated.evaluation.status, "indeterminate")
+        self.assertTrue(all(
+            item["reason"] == "shared_cyclic_target"
+            for item in duplicated.evaluation.indicators.values()
+        ))
+
+        empty = CyclostationaryPipeline().run(signal, FS, candidates={}, segment_length=256)
+        self.assertEqual(empty.status, "indeterminate")
+        self.assertEqual(empty.reason, "missing_cyclic_candidates_or_geometry_and_rotation")
+
+        short = CyclostationaryPipeline().run(
+            signal[:64], FS, candidates={"BPFO": 47.3}, segment_length=256
+        )
+        self.assertEqual(short.status, "indeterminate")
+        self.assertEqual(short.reason, "insufficient_signal_length")
+        self.assertIsNone(short.representation)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

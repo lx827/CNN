@@ -53,7 +53,11 @@ class DeconvolutionEnvelopeResult:
     metadata: dict = field(default_factory=dict)
 
 
-def _input_and_filter_length(signal, filter_length: int) -> tuple[np.ndarray, int]:
+class _ZeroEnergyError(ValueError):
+    """去均值后严格为零的输入或输出。"""
+
+
+def _input_and_filter_length(signal, filter_length: int) -> tuple[np.ndarray, int, float]:
     arr = np.asarray(signal, dtype=np.float64)
     if arr.ndim != 1 or len(arr) < 64:
         raise ValueError("解卷积输入必须是一维且至少 64 点")
@@ -64,9 +68,10 @@ def _input_and_filter_length(signal, filter_length: int) -> tuple[np.ndarray, in
     if filter_length >= len(arr) // 2:
         raise ValueError("FIR 滤波器长度必须小于输入长度的一半")
     arr = arr - np.mean(arr)
-    if float(np.mean(arr**2)) <= 1e-24:
-        raise ValueError("零能量信号无法解卷积")
-    return arr, filter_length
+    input_scale = float(np.max(np.abs(arr)))
+    if input_scale == 0.0:
+        raise _ZeroEnergyError("零能量信号无法解卷积")
+    return arr, filter_length, input_scale
 
 
 def normalized_kurtosis(values: NDArray[np.float64]) -> float:
@@ -74,10 +79,14 @@ def normalized_kurtosis(values: NDArray[np.float64]) -> float:
     y = np.asarray(values, dtype=np.float64)
     if y.ndim != 1 or len(y) < 2 or not np.all(np.isfinite(y)):
         raise ValueError("峭度输入必须是一维有限数组")
-    power = float(np.mean(y**2))
-    if power <= 1e-24:
-        raise ValueError("零能量输出无法计算峭度")
-    return float(np.mean(y**4) / power**2)
+    scale = float(np.max(np.abs(y)))
+    if scale == 0.0:
+        raise _ZeroEnergyError("零能量输出无法计算峭度")
+    normalized = y / scale
+    power = float(np.mean(normalized**2))
+    if power == 0.0 or not np.isfinite(power):
+        raise ValueError("输出数值退化，无法计算峭度")
+    return float(np.mean(normalized**4) / power**2)
 
 
 def correlated_kurtosis(values: NDArray[np.float64], period: int, shift_order: int = 1) -> float:
@@ -92,10 +101,17 @@ def correlated_kurtosis(values: NDArray[np.float64], period: int, shift_order: i
     start = period * shift_order
     if len(y) <= start:
         raise ValueError("信号长度不足以覆盖指定周期和移位阶数")
-    energy = float(np.sum(y**2))
-    if energy <= 1e-24:
-        raise ValueError("零能量输出无法计算相关峭度")
-    shifted = [y[start - m * period: len(y) - m * period] for m in range(shift_order + 1)]
+    scale = float(np.max(np.abs(y)))
+    if scale == 0.0:
+        raise _ZeroEnergyError("零能量输出无法计算相关峭度")
+    normalized = y / scale
+    energy = float(np.sum(normalized**2))
+    if energy == 0.0 or not np.isfinite(energy):
+        raise ValueError("输出数值退化，无法计算相关峭度")
+    shifted = [
+        normalized[start - m * period: len(y) - m * period]
+        for m in range(shift_order + 1)
+    ]
     beta = np.prod(np.vstack(shifted), axis=0)
     return float(np.sum(beta**2) / energy ** (shift_order + 1))
 
@@ -113,11 +129,17 @@ def _mckd_filter_update(
     valid = len(y) - start
     if valid <= 0:
         raise ValueError("卷积矩阵行数不足以覆盖 MCKD 延迟项")
+    input_scale = float(np.max(np.abs(X)))
+    if input_scale == 0.0 or not np.isfinite(input_scale):
+        raise np.linalg.LinAlgError("MCKD 输入矩阵数值退化，无法更新")
+    # 正规方程和 ridge 都作用于归一化输入；数学解与输入幅值尺度无关。
+    X = X / input_scale
+    y = y / input_scale
     shifted = [y[start - m * period: len(y) - m * period] for m in range(shift_order + 1)]
     beta = np.prod(np.vstack(shifted), axis=0)
     beta_energy = float(np.sum(beta**2))
-    if beta_energy <= 1e-30:
-        raise np.linalg.LinAlgError("MCKD 周期乘积为零，无法更新")
+    if beta_energy == 0.0 or not np.isfinite(beta_energy):
+        raise np.linalg.LinAlgError("MCKD 周期乘积为零或数值退化，无法更新")
 
     rhs = np.zeros(X.shape[1], dtype=np.float64)
     for m in range(shift_order + 1):
@@ -155,8 +177,8 @@ def minimum_entropy_deconvolution(
     """Wiggins MED / Endo-Randall 迭代，目标仅为全局归一化峭度。"""
     params = parameters or MEDParameters()
     _validate_iterations(params.max_iterations, params.tolerance, params.ridge)
-    x, length = _input_and_filter_length(signal, params.filter_length)
-    X = sliding_window_view(x, length)
+    x, length, input_scale = _input_and_filter_length(signal, params.filter_length)
+    X = sliding_window_view(x / input_scale, length)
     f = np.zeros(length)
     f[length // 2] = 1.0
     best_f = f.copy()
@@ -177,16 +199,16 @@ def minimum_entropy_deconvolution(
             break
         energy = float(np.sum(y**2))
         fourth = float(np.sum(y**4))
-        if fourth <= 1e-30:
-            break
+        if fourth == 0.0 or not np.isfinite(fourth):
+            raise np.linalg.LinAlgError("MED 四阶矩为零或数值退化，无法更新")
         rhs = (energy / fourth) * (X.T @ (y**3))
         try:
             updated = np.linalg.solve(X.T @ X + params.ridge * np.eye(length), rhs)
-        except np.linalg.LinAlgError:
-            break
+        except np.linalg.LinAlgError as exc:
+            raise np.linalg.LinAlgError("MED 正规方程数值退化，无法更新") from exc
         norm = float(np.linalg.norm(updated))
-        if not np.isfinite(norm) or norm <= 1e-15:
-            break
+        if not np.isfinite(norm) or norm == 0.0:
+            raise np.linalg.LinAlgError("MED 滤波器更新为零或非有限值")
         f = updated / norm
     return DeconvolutionResult(_same_length_output(x, best_f), best_f, tuple(history), iterations, converged)
 
@@ -201,8 +223,8 @@ def maximum_correlated_kurtosis_deconvolution(
         raise ValueError("MCKD 故障周期必须是正整数采样点")
     if isinstance(params.shift_order, bool) or not isinstance(params.shift_order, int) or params.shift_order < 1:
         raise ValueError("MCKD 移位阶数必须是正整数")
-    x, length = _input_and_filter_length(signal, params.filter_length)
-    X = sliding_window_view(x, length)
+    x, length, input_scale = _input_and_filter_length(signal, params.filter_length)
+    X = sliding_window_view(x / input_scale, length)
     if len(X) <= period_samples * params.shift_order + 1:
         raise ValueError("输入长度不足以覆盖 MCKD 故障周期和移位阶数")
     f = np.zeros(length)
@@ -225,11 +247,11 @@ def maximum_correlated_kurtosis_deconvolution(
             break
         try:
             updated = _mckd_filter_update(X, f, period_samples, params.shift_order, params.ridge)
-        except np.linalg.LinAlgError:
-            break
+        except np.linalg.LinAlgError as exc:
+            raise np.linalg.LinAlgError("MCKD 正规方程数值退化，无法更新") from exc
         norm = float(np.linalg.norm(updated))
-        if not np.isfinite(norm) or norm <= 1e-15:
-            break
+        if not np.isfinite(norm) or norm == 0.0:
+            raise np.linalg.LinAlgError("MCKD 滤波器更新为零或非有限值")
         f = updated / norm
     return DeconvolutionResult(_same_length_output(x, best_f), best_f, tuple(history), iterations, converged)
 
@@ -239,7 +261,19 @@ class MEDEnvelopePipeline:
 
     def run(self, signal, sample_rate_hz: float, parameters: Optional[MEDParameters] = None) -> DeconvolutionEnvelopeResult:
         params = parameters or MEDParameters()
-        result = minimum_entropy_deconvolution(signal, params)
+        try:
+            result = minimum_entropy_deconvolution(signal, params)
+        except _ZeroEnergyError:
+            return DeconvolutionEnvelopeResult(
+                status="indeterminate", method=self.method, representation=None, reason="zero_energy"
+            )
+        except np.linalg.LinAlgError:
+            return DeconvolutionEnvelopeResult(
+                status="indeterminate",
+                method=self.method,
+                representation=None,
+                reason="numerical_deconvolution_failure",
+            )
         representation = compute_envelope(result.signal, sample_rate_hz)
         return DeconvolutionEnvelopeResult(
             status="computed",
@@ -282,7 +316,19 @@ class MCKDEnvelopePipeline:
             raise ValueError("MCKD 目标故障频率必须为有限正数")
         if period is None:
             period = int(round(sample_rate_hz / target_frequency))
-        result = maximum_correlated_kurtosis_deconvolution(signal, period, parameters)
+        try:
+            result = maximum_correlated_kurtosis_deconvolution(signal, period, parameters)
+        except _ZeroEnergyError:
+            return DeconvolutionEnvelopeResult(
+                status="indeterminate", method=self.method, representation=None, reason="zero_energy"
+            )
+        except np.linalg.LinAlgError:
+            return DeconvolutionEnvelopeResult(
+                status="indeterminate",
+                method=self.method,
+                representation=None,
+                reason="numerical_deconvolution_failure",
+            )
         representation = compute_envelope(result.signal, sample_rate_hz)
         return DeconvolutionEnvelopeResult(
             status="computed",

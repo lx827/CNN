@@ -2,6 +2,7 @@
 import os
 import sys
 import unittest
+from unittest import mock
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
@@ -15,6 +16,8 @@ from app.algorithms.bearing.deconvolution import (
     MEDEnvelopePipeline,
     _mckd_filter_update,
     correlated_kurtosis,
+    maximum_correlated_kurtosis_deconvolution,
+    minimum_entropy_deconvolution,
     normalized_kurtosis,
 )
 from app.algorithms.mechanics import BearingGeometry
@@ -67,6 +70,20 @@ class DeconvolutionObjectiveTests(unittest.TestCase):
             (np.sum(y**2) / (2.0 * np.sum(beta**2))) * wrong_rhs,
         )
         self.assertGreater(float(np.linalg.norm(actual - wrong)), 1e-3)
+
+    def test_normalized_objectives_obey_amplitude_scale_invariance(self):
+        periodic = np.zeros(81)
+        periodic[[10, 20, 30, 40, 50, 60]] = [1.0, -0.8, 1.1, 0.9, -1.0, 0.7]
+        reference_kurtosis = normalized_kurtosis(periodic)
+        reference_ck = correlated_kurtosis(periodic, period=10, shift_order=1)
+        for scale in (1e-150, 1e-8, 1e8, 1e150):
+            with self.subTest(scale=scale):
+                self.assertAlmostEqual(normalized_kurtosis(periodic * scale), reference_kurtosis, places=11)
+                self.assertAlmostEqual(
+                    correlated_kurtosis(periodic * scale, period=10, shift_order=1),
+                    reference_ck,
+                    places=11,
+                )
 
 
 class DeconvolutionPipelineTests(unittest.TestCase):
@@ -129,6 +146,71 @@ class DeconvolutionPipelineTests(unittest.TestCase):
         self.assertEqual(result.metadata["objective"], "normalized_kurtosis")
         self.assertNotIn("period_samples", result.metadata)
         self.assertIsNotNone(result.representation)
+
+    def test_filter_normalization_iteration_and_objective_histories_are_scale_invariant(self):
+        cases = (
+            (
+                minimum_entropy_deconvolution,
+                MEDParameters(filter_length=16, max_iterations=3),
+                None,
+            ),
+            (
+                maximum_correlated_kurtosis_deconvolution,
+                MCKDParameters(target_fault="BPFO", filter_length=16, max_iterations=3),
+                26,
+            ),
+        )
+        for function, parameters, period in cases:
+            reference = function(self.signal, parameters) if period is None else function(
+                self.signal, period, parameters
+            )
+            for scale in (1e-8, 1e8):
+                with self.subTest(function=function.__name__, scale=scale):
+                    scaled = function(self.signal * scale, parameters) if period is None else function(
+                        self.signal * scale, period, parameters
+                    )
+                    self.assertEqual(scaled.iterations, reference.iterations)
+                    self.assertEqual(scaled.converged, reference.converged)
+                    np.testing.assert_allclose(
+                        scaled.objective_history, reference.objective_history, rtol=1e-8, atol=1e-12
+                    )
+                    np.testing.assert_allclose(
+                        scaled.filter_coefficients, reference.filter_coefficients, rtol=2e-3, atol=2e-3
+                    )
+                    expected_signal = reference.signal * scale
+                    np.testing.assert_allclose(
+                        scaled.signal,
+                        expected_signal,
+                        rtol=2e-3,
+                        atol=max(float(np.max(np.abs(expected_signal))) * 2e-3, np.finfo(float).tiny),
+                    )
+
+    def test_zero_energy_and_numerically_undefined_updates_are_not_computed(self):
+        for pipeline, parameters in (
+            (MEDEnvelopePipeline(), MEDParameters(filter_length=16, max_iterations=3)),
+            (
+                MCKDEnvelopePipeline(),
+                MCKDParameters(target_fault="BPFO", target_frequency_hz=80.0, filter_length=16, max_iterations=3),
+            ),
+        ):
+            with self.subTest(pipeline=pipeline.method):
+                zero = pipeline.run(np.zeros(4096), self.fs, parameters)
+                self.assertEqual(zero.status, "indeterminate")
+                self.assertEqual(zero.reason, "zero_energy")
+                self.assertIsNone(zero.representation)
+
+        with mock.patch(
+            "app.algorithms.bearing.deconvolution._mckd_filter_update",
+            side_effect=np.linalg.LinAlgError("singular normal equation"),
+        ):
+            undefined = MCKDEnvelopePipeline().run(
+                self.signal,
+                self.fs,
+                MCKDParameters(target_fault="BPFO", target_frequency_hz=80.0, filter_length=16, max_iterations=3),
+            )
+        self.assertEqual(undefined.status, "indeterminate")
+        self.assertEqual(undefined.reason, "numerical_deconvolution_failure")
+        self.assertIsNone(undefined.representation)
 
 
 if __name__ == "__main__":
