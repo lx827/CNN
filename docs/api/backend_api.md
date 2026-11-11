@@ -32,7 +32,7 @@
 
 2026-10-21：经过 DataView 公共转换器的算法结果，NumPy 类型递归转为 JSON 原生类型，NaN/Infinity 使用 `null` 表示缺失值，避免严格 JSON 编码失败。
 
-所有 REST API 统一返回：
+成功的 REST API 使用以下业务响应；HTTP 错误使用 FastAPI 的 `detail`，不能按成功体解读：
 
 ```json
 {
@@ -44,6 +44,8 @@
 
 - `code=200` 表示成功，非 200 时前端会 `ElMessage.error` 提示
 - `code=401` 表示登录过期，前端会清除 token 并跳转登录页
+
+**诊断去噪错误（2026-11-11）**：DataView 时域、CSV 导出、FFT/STFT/stats/cepstrum/order、包络、gear/analyze/full-analysis/method-analysis/research-analysis 的去噪失败返回 HTTP **422**，响应 `detail` 为对象，含 `status=not_evaluable`、实际去噪 `method` 与失败 `reason`。无合法分量、选中分量质量不足和未知去噪方法都明确拒绝，不返回原信号假装成功。该 422 不表示设备故障；结果对象内的算法前提状态与 HTTP 去噪执行错误须分开处理。其他端点既有认证/数据不存在/非法分析方法错误仍服从各自 HTTP 语义。
 
 ### 认证方式
 

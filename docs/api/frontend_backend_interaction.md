@@ -101,6 +101,8 @@
 
 **行星接入（2026-11-11）**：设置页按通道保存完整几何、`reference_axis` 与 `fixed_member`，研究页从 method-info 只显示当前四条基础方法；method-analysis/gear_advanced、Engine、后台与 ensemble 共用行星业务入口。`PlanetaryResult.vue` 配合 `planetaryDiagnosis.js` 展示机械模型、同步轴、原始指标、事件候选与 `diagnosis_conclusion`，各综合/单方法结果区复用该组件。基线不足显示“不可评估”，不从 SER/矩或候选峰推导具体损伤；未校准结果不作为正常票或告警。旧行星散列字段和旧 Level 1–5 展示已退役。
 
+**去噪失败链路（2026-11-11）**：DataView 所有计算/导出与研究入口消费结构化 HTTP 422 `detail {status:not_evaluable,method,reason}`。失败后不绘制替代原信号并标成功，不用旧缓存充当本次成功结果；未知方法也拒绝。后台失败通道传播 `health_score=null/status=indeterminate` 与原因，不走规则回退，健康阈值告警跳过未知。runtime profile 实际执行配置的去噪方法，不能继续把首个 none 当作设备配置。完整集成/领域状态模型仍由 #77/#84 后续收敛。
+
 ---
 
 ## 5. 实时监测 (Monitor)

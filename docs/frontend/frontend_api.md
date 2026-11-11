@@ -133,6 +133,8 @@ const data = await getRealtimeVibrationData('WTG-001', true);
 
 行星结果以 `is_planetary` 与 `method=planetary_gear` 进入专属组件。读取 `mechanical_model/sideband_analysis/metrics/planetary_methods/tsa/evaluation`；计算状态、`evaluation_status` 和 `diagnosis_conclusion` 分开。缺可比基线的 HTTP 200 不是健康，原始值可继续展示。公开方法只从 method-info 读取四个基础路径，旧复合标识不保留兼容调用。设置保存每通道 `sun/ring/planet/planet_count/reference_axis/fixed_member`，转频单位为所选轴 Hz；不从另一通道借参数。
 
+DataView 计算、CSV 与研究分析去噪失败会得到 HTTP 422 `detail {status:not_evaluable,method,reason}`；前端显示失败原因，不读取为成功 data、不将原信号当作去噪输出。健康分 `null` 与 `indeterminate` 显示未知；完整错误结构见 [后端 API](../api/backend_api.md)。
+
 ### 2.6 api/diagnosis.js — 诊断
 
 **文件路径**：`src/api/diagnosis.js`
@@ -699,7 +701,7 @@ import {
 | `rotFreq` | `number \| null` | `null` | 估计转频（Hz） |
 | `rotRpm` | `number \| null` | `null` | 估计转速（RPM） |
 
-**数据读取约定**：轴承评估行与特征频率分别读取 `bearing.evaluation.indicators` 的 `value/score/snr/significant` 和 `theory_hz/detected_hz`；只有真实峰值/背景比显示为 SNR，其他强度显示为 score。SC/SCoh 独立读取 `bearing.sc_scoh_indicators` 的 `theory_hz/scoh_peak/scoh_snr/significant/warning/critical`。齿轮仍读取 `gear.fault_indicators`，两套契约不得互相替换。
+**数据读取约定**：轴承统一读取 `bearing.evaluation.indicators`，由 `evaluation_kind` 区分包络与 SC/SCoh；频率读取相应的 `theory_hz/detected_hz` 或循环频率字段。真实 `snr`、一般 score 与 `coherence_background_ratio` 各自保留。定轴 `fault_indicators` 是规范评估兼容视图；行星交专属组件显示机械模型、原始指标与基线状态。
 
 **Emits**
 
@@ -804,7 +806,7 @@ import {
 | `useDashboard.js` | `Dashboard.vue` | `devices/selectedDevice` 等状态、`loadData()`(推送+轮询共享串行刷新)、`selectDevice()`、图表 ref(`gaugeChart/pieChart`)、状态映射工具 | `getStatusType/getStatusText/getHealthColor`(Dashboard 专属口径:critical 计故障、85/60 分档,勿与 utils/status.js 混用) |
 | `useMonitor.js` | `Monitor.vue` | `channels/params/sensors/collectDevices`、`requestCollect()`、`startPolling(taskId)`、`refreshLatestData()`(推送合并串行)、`onMonitorDeviceChange()`、图表 ref | — |
 | `useSettings.js` | `Settings.vue` | `form/channelNames/thresholds/thresholdEnabled`、三级加载、`onSaveEdgeConfig/onSaveMechanical/onSaveThresholds/onSyncMechanical`、`intervalValue/intervalUnit` 与 `computedSeconds` | `unitOptions`(采集间隔单位)、`thresholdItems`(阈值指标定义) |
-| `useResearchDiagnosis.js` | `ResearchDiagnosis.vue` | 三级选择器、`runAnalysis()`(single/all/ensemble)、`gotoDataView()`、投票行/D-S 融合行/全方法摘要行等派生 computed；轴承行读取 `evaluation/sc_scoh_indicators`，齿轮行保留 `fault_indicators` | `runModeOptions`、`fmt/percent/statusType/statusText`、`evaluationStatusType/evaluationStatusText` |
+| `useResearchDiagnosis.js` | `ResearchDiagnosis.vue` | 三级选择、运行与结果派生；轴承按 `evaluation_kind` 读规范评估，行星交专属组件，未校准不当作正常票 | `runModeOptions`、`fmt/percent/statusType/statusText`、`evaluationStatusType/evaluationStatusText` |
 | `useDataView.js` | `DataView.vue` | 设备批次表格数据与选择、时域自动加载、FFT/STFT/结构化包络谱/阶次/倒谱/统计/齿轮 `computeX/clearX`、轴承与齿轮特征频率标注、综合/策略诊断、删除/重新诊断/导出、路由联动 | `bearingMethodLabel`、`statsGroups`、`statsDisplay`(预留) |
 
 **配套子组件目录**：`src/components/dashboard/`(SummaryCards、DeviceCardList)、`src/components/monitor/`(SensorStatusCard、RunParamsCard、CollectionProgress)、`src/components/settings/`(EdgeConfigCard、MechanicalParamsCard、ThresholdsCard、ConfigNotesCard)、`src/components/research/`(ResearchToolbar、SingleResultPanels、EnsembleResultPanels)、`src/components/dataview/`(StatsSection、FftEnvelopeSection、GearSection、ComprehensiveSection、OrderSection、CepstrumSection、StftSection、DiagnosisDetailSection)。

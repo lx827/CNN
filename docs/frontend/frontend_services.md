@@ -207,7 +207,7 @@ view.connect();
 | `bearingIndicatorEntries` | `(result) -> Array` | 按包络评估、SC/SCoh 顺序合并条目，key 带来源前缀避免冲突 |
 | `significantBearingFaults` | `(result) -> Array` | 汇总 `significant/critical`；真实 `snr`、一般 `score`、循环相干背景比各自保留，不混称 SNR |
 | `bearingFrequencyAnnotations` | `(result) -> Array` | 从 `detected_hz ?? theory_hz ?? frequency_hz` 生成图表标注，区分 `bearing` 与 `bearing_sc_scoh` |
-| `indicatorDisplayValue` | `(info: object) -> number \| string` | 依次选择 `value/snr/scoh_peak/scoh_snr/detected_hz`，空值返回 `-` |
+| `indicatorDisplayValue` | `(info: object) -> number \| string` | 依次选择 `value/snr/scoh_peak/detected_hz`，空值返回 `-` |
 
 **评估状态**：`evaluation.status=evaluated` 表示已完成评估，`indeterminate` 表示输入不足、不可判定，`not_evaluable` 表示频率覆盖、分辨率等条件不足、不可评估；后两者都不等于正常或故障。研究页通过 `useResearchDiagnosis.js` 导出的 `evaluationStatusType/evaluationStatusText` 统一展示。投票行读取 `strongest_score`，真实峰值/背景比与一般证据分不混称为 SNR。
 
@@ -252,7 +252,7 @@ view.connect();
 
 **用途**：诊断结果明细展示（健康度、故障概率、阶次分析、轴承包络评估、SC/SCoh 专属指标）
 
-**数据读取**：轴承指标与特征频率来自 `bearing.evaluation.indicators`（`theory_hz/detected_hz`）；SC/SCoh 独立来自 `bearing.sc_scoh_indicators`（`scoh_peak/scoh_snr`）；齿轮指标继续来自 `gear.fault_indicators`。`bearing.evaluation.status` 为 `indeterminate` 或 `not_evaluable` 时均显示输入不足、不可判定，不按正常处理。
+**数据读取**：轴承指标统一来自 `bearing.evaluation.indicators`；SC/SCoh 通过 `evaluation_kind` 分组并保存循环频率与相干背景比。定轴可读规范评估兼容视图，行星复用 `PlanetaryResult`。`indeterminate/not_evaluable`、空健康分与质量不足均保留未知，不按正常处理。
 
 ---
 
