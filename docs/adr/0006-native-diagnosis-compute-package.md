@@ -1,17 +1,17 @@
 # ADR 0006：诊断计算库的技术路线与源码构建
 
-- 状态：根配置与 PCHIP/SD 原生筛分候选已实现；完整配置、集成分解与目标性能/资源验收尚未完成
+- 状态：根配置、四种筛分组合及 EMD 族原生候选已实现；目标性能/资源验收尚未完成
 - 日期：2026-11-12
 
 ## 已确认的决策
 
 诊断计算库首个原生候选采用 C++、Eigen 与 pybind11，优先复用第三方数值基座；插值库与线性代数后端分别按语义适配及实际成本选型。首版覆盖 Windows x64、Ubuntu x64 与项目当前 Python 3.13；ARM64 留待后续验证。现有 Rust 边端继续属于设备通信与采集职责。
 
-首版移植保留当前 Python 算法语义，包括极值精化、镜像规则、PCHIP/cubic、SD/Rilling、CEEMDAN 公式及收敛状态，仅接受事先约定的浮点误差。性能移植与算法改进分别验收；具体误差预算尚未确定。
+首版移植保留当前 Python 算法语义，包括极值精化、镜像规则、PCHIP/cubic、SD/Rilling、CEEMDAN 公式及收敛状态，仅接受事先约定的浮点误差。性能移植与算法改进分别验收；数值误差及元数据比较使用原生比较前确定的 [冻结预算](../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json)。
 
 根目录保留一个 pyproject.toml，集中项目元数据、构建配置和 Python 依赖配置。计算库的运行依赖进入 project.dependencies；cloud、dc24、开发测试和 benchmark 依赖分别进入 dependency groups，配置日常默认安装组，benchmark 继续显式选择。生成的计算库 wheel 仅携带计算包与其运行依赖，不把整个应用及其服务依赖纳入库的分发边界。现有 cloud/dc24 源码位置及启动工作目录保留。该布局已替换原多成员 workspace 配置，[ADR 0001](0001-uv-workspace-python-313.md) 保留原决策语境并指向本决策。
 
-开发机和生产服务器均通过 uv sync 从项目源码按需构建诊断计算扩展，并由构建后端完成编译与安装；NumPy、SciPy 等第三方 Python 依赖允许安装官方 wheel。Eigen 及选定的 C++ 插值基座参与扩展构建。编译缓存与重建规则仍需落实，不承诺每次同步都无条件重新编译。
+开发机和生产服务器均通过 uv sync 从项目源码按需构建诊断计算扩展，并由构建后端完成编译与安装；NumPy、SciPy 等第三方 Python 依赖允许安装官方 wheel。Eigen 及所需的插值/带状求解窄适配参与扩展构建。源码、配置及目标 ISA 的缓存键与重建行为已落实，工具链切换需独立构建目录，见 [构建说明](../native_compute.md)。
 
 首批 C++ 下沉范围为极值检测与精化、镜像延拓、包络插值及单个 IMF 的完整筛分循环；每次筛分调用跨越一次 Python/C++ 边界，不把内部每个数组操作拆成公共 Python 接口。多 IMF 提取、归一化、EEMD/CEEMDAN 集成调度、NumPy 随机数生成和聚合继续位于 Python，保持噪声生成顺序及当前公式。原生筛分返回筛分结果、迭代次数和收敛情况，并明确区分极值不足。
 
@@ -21,7 +21,7 @@
 
 本决策延续 [ADR 0005](0005-diagnosis-native-benchmark-gate.md) 的固定向量、正确性、状态、所有权和目标资源准入要求。采用源码构建后，目标环境的编译工具链、构建峰值内存及并发限制也需要验证；现有生产分析线程与内存上限继续有效。
 
-当前 Python 实现的 cubic 使用 SciPy 默认 not-a-knot 边界，PCHIP 与 cubic 均允许外推。候选需覆盖非等距精化节点、端点、小节点数退化和平台极值规则；不能仅凭插值方法同名宣称兼容。数学行为以 [Python adapter](../../cloud/app/algorithms/decomposition/emd/python_adapter.py) 为对照，原生函数签名待实现时由源码 docstring 维护。
+当前 Python 实现的 cubic 使用 SciPy 默认 not-a-knot 边界，PCHIP 与 cubic 均允许外推。候选覆盖非等距精化节点、端点、小节点数退化和平台极值规则；不能仅凭插值方法同名宣称兼容。数学行为以 [Python adapter](../../cloud/app/algorithms/decomposition/emd/python_adapter.py) 为对照，原生函数签名由 [包源码 docstring](../../src/cnn_compute/__init__.py) 维护。
 
 ## 向量化与数值一致性
 
@@ -43,8 +43,8 @@ Eigen 的指令集路径由目标架构、编译参数和表达式支持共同�
 
 2026-11-12 只读查看用户提供的 LiuNN/cpp_accelerate 原型。参考其纯 C++ 核心/绑定分层、连续输入借用、输出所有权与 SIMD 尾段处理思路；该原型的 EMD 公式、筛分判据、插值覆盖及构建方式与本项目需求不同，不作为正确性或速度基线。
 
-后续实施需落实插值库候选及语义适配、浮点预算、固定版本的构建依赖、CMake 安装规则、源码及构建配置变更后的重建触发，以及默认依赖分组的启动兼容性。这些属于已确认设计下的工程验证，不表示选定第三方库后即可跳过同向量验收。
+插值/带状求解适配、冻结浮点预算、固定构建依赖、CMake 安装规则、重建触发及默认依赖分组启动兼容性已有实现与验证。cubic 曾比较 Eigen 稀疏 LU，固定集成反例表明其舍入次序差异需通过 DGTSV 单右端项窄适配收口；数组与求值继续使用 Eigen SIMD，求解缓冲区明确线性增长，取舍与归属见 [计算库说明](../native_compute.md)。后续仍须完成同向量性能目标与目标服务资源验收。
 
 命令执行显式区分 Windows 与 WSL：本机默认 bash 指向 WSL；Windows Git Bash 使用确认过的可执行文件路径。Windows/MSVC 操作遵守根 AGENTS 的 vsdev 约定；WSL 构建使用 Linux 工具链及其对应环境。文档检查记录实际使用的 shell，避免将 Windows 检查结果记作 Linux 编译验收。
 
-根配置、CMake 源码构建与 PCHIP/SD 原生筛分候选已实现，使用说明见 [计算库构建说明](../native_compute.md)。默认生产分解仍为 Python。完整配置、集成分解与两倍目标验收由后续工单完成，双平台构建/正确性检查不等于目标 ECS 资源验收或生产采用。
+根配置、CMake 源码构建与四种筛分组合的 EMD/EEMD/CEEMDAN 原生候选已实现，使用说明见 [计算库构建说明](../native_compute.md)。默认生产分解仍为 Python。两倍目标与目标服务资源由性能工单独立验收，双平台构建/正确性检查不等于目标 ECS 资源验收或生产采用。

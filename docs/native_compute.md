@@ -1,6 +1,6 @@
 # 诊断计算库构建与安装
 
-根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。当前提供构建信息和 PCHIP/SD 单 IMF 原生筛分候选；生产分解默认仍为 Python。技术路线见 [ADR 0006](adr/0006-native-diagnosis-compute-package.md)。
+根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。当前提供构建信息和 PCHIP/cubic、SD/Rilling 四种组合的单 IMF 原生筛分候选，EMD/EEMD/CEEMDAN 外层保持 Python；生产分解默认仍为 Python。技术路线见 [ADR 0006](adr/0006-native-diagnosis-compute-package.md)。
 
 ## 一次同步
 
@@ -32,13 +32,19 @@ wheel 仅包含 `cnn_compute`、其原生扩展及库的分发元数据；应用
 
 ## 原生筛分候选
 
-EMD 候选通过 `NativeEMDImplementation` 显式传入现有公开分解入口；该 adapter 复用 Python 外层，仅将一次完整 IMF 筛分交给原生核。当前支持 PCHIP/SD，其余配置明确报不支持，后续工单再扩展。包级筛分入口的签名与所有权见源码 docstring；合规 float64 连续输入只读借用，非连续视图最多显式连续化一次，输出由 capsule 持有独立缓冲区。计算期间释放 GIL，不新增线程池。
+候选通过 `NativeEMDImplementation` 显式传入现有 EMD/EEMD/CEEMDAN 公开分解入口；该 adapter 复用 Python 外层，仅将一次完整 IMF 筛分交给原生核。默认及可选的插值/停止组合均走同一筛分循环，NumPy 噪声生成、种子顺序及 Torres 2011 集成公式保持原样。包级通用筛分入口及已有 PCHIP/SD 兼容入口的签名和所有权见源码 docstring；合规 float64 连续输入只读借用，非连续视图最多显式连续化一次，输出由 capsule 持有独立缓冲区。计算期间释放 GIL，不新增线程池。
 
 极值差分掩码、抛物线精化、PCHIP 斜率与系数、分段多项式求值、信号更新及平方和使用 Eigen 数组表达式，索引压缩、镜像排序与区间查找保留专用流程。工作区按记录和节点数线性增长，输入只在单次筛分开始时复制为工作数组，不在每轮重复制输入或重做边界校验；数值产生非有限包络时明确抛错。
 
 PCHIP 适配保留 SciPy 的端点规则、非等距节点、小节点退化、外推与常数项到三次项的累加次序；使用 MSVC `/fp:strict` 或 GCC/Clang `-ffp-contract=off` 抑制乘加收缩，实际规则也写入构建信息。此约定保留 SIMD，避免极平残差因改写求值次序而改变后续极值拓扑；跨后端仍按冻结误差预算验收，不承诺跨平台逐位相同。
 
 候选筛选曾比较 Boost.Math 1.89 的 PCHIP：端点需覆写、原始求值不支持外推、内点加权调和均值的舍入次序也不同。受控对照显示，普通 Horner 以及该斜率次序的末位差异可放大到固定双频反例的后续模态；分别恢复 SciPy 求值及斜率次序后恢复预算内对照。需要覆写全部相关行为时，该库没有实际复用价值，因此最终以 Eigen 为计算基座，PCHIP 仅保留必要的语义适配。[SciPy BSD 归属](../native/LICENSE.scipy) 随源码与 wheel 许可证目录分发，没有额外链接无用依赖。
+
+cubic 使用 not-a-knot 一阶导数三对角系统；两个节点为线性，三个节点使用固定 3×3 抛物线系统，其余节点使用带相邻部分主元的单右端项消元。两种插值共用 SciPy 兼容的分段系数与向量化求值，并允许首尾多项式外推。Rilling 的包络对称比使用 Eigen 数组计算；零幅值/零均值比值为 0，零幅值但非零均值为无穷，阈值与超标比例保留当前比较规则。
+
+初始 cubic 候选使用 Eigen 自然排序稀疏 LU。它通过局部、合成及多数固定向量检查，但 HUSTbear 的 cubic/Rilling CEEMDAN 在第 4 模态出现 10 个点超过已冻结预算，迭代数相同。仅将大节点系统改为 Reference-LAPACK 3.12.1 DGTSV 的单右端项消元次序后，同一反馈四个模态差异归零；预算、右端项、插值与 Rilling 不变。该窄适配避免稀疏 LU 的倒数乘法及分离三角解所引入的不同舍入次序，并非要求全部浮点运算逐位相同。
+
+带状适配持有下对角、主对角、上对角和右端项共 `4N-2` 个 double，下对角缓冲区复用为换行后产生的第二上对角，不进行通用稀疏填充或构造 N×N 稠密矩阵；相关节点和系数数组同样线性增长。递推求解保持标量依赖链，数组构造和多项式求值继续使用 Eigen SIMD。CMake 将适配源码链接进既有计算核心，没有新增 Fortran/BLAS 运行时；[LAPACK 归属](../native/LICENSE.lapack) 随源码和 wheel 分发。
 
 ## 指令集与缓存
 
