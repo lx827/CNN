@@ -15,6 +15,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.services.diagnosis import DiagnosisEngine, GearMethod
+from app.services.diagnosis.ensemble import run_research_ensemble
+from app.services.diagnosis.health_score import _has_diagnosis_evidence
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
 from data_paths import HUSTBEAR_DIR, CW_DIR
 
@@ -107,10 +109,69 @@ def test_cw_dataset_can_be_loaded_when_available():
     assert "time_features" in result
 
 
+def test_zero_signal_comprehensive_is_indeterminate_not_healthy():
+    engine = DiagnosisEngine(gear_teeth={"input": 18})
+    result = engine.analyze_comprehensive(np.zeros(FS), FS, rot_freq=20.0, skip_bearing=True)
+    assert result["gear"]["analysis_status"] == "indeterminate"
+    assert result["gear"]["order_peak_concentration"] is None
+    assert result["gear"]["fault_indicators"]["order_kurtosis"]["status"] == "not_evaluable"
+    assert result["health_score"] is None
+    assert result["status"] == "indeterminate"
+
+
+def test_zero_signal_ensemble_paths_are_indeterminate_not_healthy():
+    signal = np.zeros(2048)
+    bearing_params = {"n": 9, "d": 7.94, "D": 39.04}
+    gear_teeth = {"input": 18}
+    for name, kwargs in (
+        ("bearing_and_gear", {"bearing_params": bearing_params, "gear_teeth": gear_teeth}),
+        ("no_mechanical_params", {}),
+    ):
+        result = run_research_ensemble(
+            signal, 2048, rot_freq=16, profile="runtime", **kwargs,
+        )
+        assert result["health_score"] is None, name
+        assert result["status"] == "indeterminate", name
+
+
+def test_zero_signal_all_methods_paths_are_indeterminate_not_healthy():
+    signal = np.zeros(2048)
+    bearing_params = {"n": 9, "d": 7.94, "D": 39.04}
+    gear_teeth = {"input": 18}
+    for name, engine, skip_bearing in (
+        ("gear_only", DiagnosisEngine(gear_teeth=gear_teeth), True),
+        (
+            "bearing_and_gear",
+            DiagnosisEngine(bearing_params=bearing_params, gear_teeth=gear_teeth),
+            False,
+        ),
+    ):
+        result = engine.analyze_all_methods(
+            signal, 2048, rot_freq=16, skip_bearing=skip_bearing,
+        )
+        assert result["health_score"] is None, name
+        assert result["status"] == "indeterminate", name
+
+
+def test_indeterminate_path_does_not_erase_other_valid_evidence():
+    valid_bearing = {"evaluation": {"status": "evaluated"}}
+    indeterminate_gear = {
+        "analysis_status": "indeterminate",
+        "evaluation": {"status": "indeterminate"},
+    }
+    assert _has_diagnosis_evidence((valid_bearing, indeterminate_gear), {"rms": 1.0})
+    assert not _has_diagnosis_evidence((indeterminate_gear,), {"rms": 1.0})
+    assert not _has_diagnosis_evidence((valid_bearing,), {"rms": 0.0})
+
+
 if __name__ == "__main__":
     test_no_params_uses_statistical_fault_indicators()
     test_advanced_gear_uses_tsa_residual()
     test_noisy_rot_freq_estimation_is_robust()
     test_dataset_sample_fault_scores_when_available()
     test_cw_dataset_can_be_loaded_when_available()
+    test_zero_signal_comprehensive_is_indeterminate_not_healthy()
+    test_zero_signal_ensemble_paths_are_indeterminate_not_healthy()
+    test_zero_signal_all_methods_paths_are_indeterminate_not_healthy()
+    test_indeterminate_path_does_not_erase_other_valid_evidence()
     print("test_engine_regressions: OK")

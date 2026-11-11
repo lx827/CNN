@@ -18,10 +18,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 
 from app.services.diagnosis import DiagnosisEngine, GearMethod, DiagnosisStrategy, DenoiseMethod
-from app.services.diagnosis.gear.metrics import (
-    compute_tsa_residual_order,
-    analyze_sidebands_zoom_fft,
+from app.algorithms.gear.fixed_axis import (
+    ZoomParameters,
+    compute_synchronous_average,
+    compute_zoom_spectrum,
 )
+from app.algorithms.order import ScalarSpeed, resample_constant_speed
 
 # 行星解调方法
 from app.services.diagnosis.gear.planetary_demod import (
@@ -105,13 +107,16 @@ def evaluate_gear_methods():
         m6a_val = gear_result.get("m6a", 0.0)
         m8a_val = gear_result.get("m8a", 0.0)
 
-        # TSA 残差峭度作为补充指标（analyze_gear 不返回，需单独计算）
-        tsa_result = compute_tsa_residual_order(signal, SAMPLE_RATE, rot_freq)
+        # 行星旧评估使用非同步残差；共享算术 TSA，不再使用移动平均伪差分。
         tsa_kurt = 0.0
-        if tsa_result.get("valid"):
-            diff = tsa_result.get("differential", np.array([]))
-            if len(diff) > 0:
-                tsa_kurt = compute_excess_kurtosis(diff)
+        try:
+            angle_domain, _ = resample_constant_speed(
+                signal, SAMPLE_RATE, ScalarSpeed(rot_freq, "evaluation"), 1024,
+            )
+            residual = compute_synchronous_average(angle_domain).nonsynchronous_signal
+            tsa_kurt = compute_excess_kurtosis(residual)
+        except ValueError:
+            pass
 
         # ═══════ 行星解调方法 ═══════
         # 1. 窄带包络阶次分析
@@ -170,14 +175,15 @@ def evaluate_gear_methods():
         except Exception as e:
             msb_residual_result = {"valid": False, "reason": str(e)}
 
-        # ═══════ ZOOM-FFT 边频带 ═══════
+        # ═══════ Chirp-Z 网格（只评估频率表示，不生成告警/SER） ═══════
         zoom_fft_result = {}
         try:
-            zoom_fft_result = analyze_sidebands_zoom_fft(
-                signal, SAMPLE_RATE, mesh_freq, rot_freq
+            zoom_fft_result = compute_zoom_spectrum(
+                signal, SAMPLE_RATE,
+                ZoomParameters(mesh_freq, max(8.0, 12 * rot_freq), output_points=257),
             )
         except Exception as e:
-            zoom_fft_result = {"sidebands": [], "ser": 0.0, "error": str(e)}
+            zoom_fft_result = {"error": str(e)}
 
         # ═══════ 小波包能量熵 ═══════
         wp_entropy_result = {}
@@ -211,11 +217,8 @@ def evaluate_gear_methods():
         msb_residual_planet_snr = msb_residual_result.get("planet_fault_msb_snr", 0.0)
         msb_residual_ratio = msb_residual_result.get("residual_sideband_ratio", 0.0)
 
-        zoom_ser = zoom_fft_result.get("ser", 0.0)
-        zoom_n_sidebands = len(zoom_fft_result.get("sidebands", []))
-        zoom_significant_count = sum(
-            1 for sb in zoom_fft_result.get("sidebands", []) if sb.get("significant", False)
-        )
+        zoom_resolution = getattr(zoom_fft_result, "rayleigh_resolution_hz", None)
+        zoom_frequency_step = getattr(zoom_fft_result, "frequency_step_hz", None)
 
         wp_energy_entropy = wp_entropy_result.get("energy_entropy", 0.0)
         wp_normalized_entropy = wp_entropy_result.get("normalized_entropy", 0.0)
@@ -228,12 +231,12 @@ def evaluate_gear_methods():
             "rot_freq": rot_freq,
             "mesh_freq": round(mesh_freq, 2),
             # 生产路径指标
-            "ser": round(ser_val, 4),
-            "fm0": round(fm0_val, 4),
-            "fm4": round(fm4_val, 4),
-            "car": round(car_val, 4),
-            "m6a": round(m6a_val, 4),
-            "m8a": round(m8a_val, 4),
+            "ser": ser_val,
+            "fm0": fm0_val,
+            "fm4": fm4_val,
+            "car": car_val,
+            "m6a": m6a_val,
+            "m8a": m8a_val,
             "tsa_kurt": round(tsa_kurt, 4),
             "health_score": hs,
             "status": status,
@@ -254,10 +257,9 @@ def evaluate_gear_methods():
             "msb_residual_sun_snr": round(msb_residual_sun_snr, 4),
             "msb_residual_planet_snr": round(msb_residual_planet_snr, 4),
             "msb_residual_ratio": round(msb_residual_ratio, 4),
-            # ZOOM-FFT
-            "zoom_ser": round(zoom_ser, 4),
-            "zoom_n_sidebands": zoom_n_sidebands,
-            "zoom_significant_count": zoom_significant_count,
+            # Chirp-Z（不评估故障）
+            "zoom_rayleigh_resolution_hz": zoom_resolution,
+            "zoom_frequency_step_hz": zoom_frequency_step,
             # 小波包能量熵
             "wp_energy_entropy": round(wp_energy_entropy, 4),
             "wp_normalized_entropy": round(wp_normalized_entropy, 4),
@@ -410,7 +412,7 @@ def _plot_gear_results(results: List[Dict]):
         ("msb_residual_ratio", "MSB残余比"),
         ("wp_energy_entropy", "WP能量熵"),
         ("wp_normalized_entropy", "WP归一化熵"),
-        ("zoom_ser", "ZOOM-FFT SER"),
+        ("zoom_rayleigh_resolution_hz", "Chirp-Z Rayleigh 分辨率"),
     ]
 
     n_metrics = len(planetary_plot_metrics)
@@ -540,8 +542,8 @@ def _generate_gear_report(results: List[Dict]) -> str:
     auxiliary_metrics = [
         ("msb_residual_sun_snr", "MSB残余Sun_SNR"),
         ("msb_residual_ratio", "MSB残余比"),
-        ("zoom_ser", "ZOOM-FFT_SER"),
-        ("zoom_significant_count", "ZOOM边频显著数"),
+        ("zoom_rayleigh_resolution_hz", "Chirp-Z_Rayleigh分辨率"),
+        ("zoom_frequency_step_hz", "Chirp-Z网格步长"),
         ("wp_energy_entropy", "WP能量熵"),
         ("wp_normalized_entropy", "WP归一化熵"),
         ("wp_mesh_concentration", "WP啮合集中度"),

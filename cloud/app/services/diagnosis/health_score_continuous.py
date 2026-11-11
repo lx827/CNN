@@ -430,11 +430,25 @@ def compute_continuous_deductions(
     # NB4: 归一化差值信号包络峭度（更敏感的局部故障趋势指标）
     # NA4 > 3.0 → warning, NA4 > 5.0 → critical（渐进性磨损/裂纹）
     # NB4 > 3.0 → warning, NB4 > 5.0 → critical
-    na4_val = _sf(gear_result.get("na4"), 0.0)
-    nb4_val = _sf(gear_result.get("nb4"), 0.0)
+    def _optional_finite(value):
+        if value is None:
+            return None
+        try:
+            number = float(value)
+            return number if math.isfinite(number) else None
+        except (TypeError, ValueError):
+            return None
 
-    if has_gear or (gear_result and any(k in gear_result for k in ["na4", "nb4"])):
-        na4_max = max(na4_val, nb4_val)
+    trend_values = [
+        value for value in (
+            _optional_finite(gear_result.get("na4")),
+            _optional_finite(gear_result.get("nb4")),
+        )
+        if value is not None
+    ]
+
+    if trend_values and (has_gear or any(k in gear_result for k in ["na4", "nb4"])):
+        na4_max = max(trend_values)
         if na4_max > 2.0:
             # NA4/NB4 门控：需要齿轮参数或统计证据
             # 渐进性磨损时 kurt 可能不高（行星箱 kurt=8~10），

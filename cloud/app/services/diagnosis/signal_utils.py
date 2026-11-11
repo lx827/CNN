@@ -452,176 +452,38 @@ def zoom_fft_analysis(
     bandwidth: float,
     zoom_factor: int = 16,
 ) -> Dict:
+    """旧字典接口的 Chirp-Z 适配器；数学实现位于 algorithms/gear/fixed_axis。
+
+    resolution_hz 始终是 fs/N 的记录长度分辨率；frequency_step_hz 才是
+    CZT 网格间隔。zoom_factor 仅控制网格密度，不宣称超分辨率。
     """
-    ZOOM-FFT 细化谱分析（复调制法）
+    from app.algorithms.gear.fixed_axis import ZoomParameters, compute_zoom_spectrum
 
-    对指定频带进行高分辨率频谱分析，频率分辨率提升 zoom_factor 倍。
-    使用复调制移频 + 低通滤波 + FFT 的经典 ZOOM-FFT 方法实现。
-
-    原理：
-    1. 复调制（频移）：将信号乘以 exp(-j*2π*f_c*t)，把中心频率 f_c 移到零频
-    2. 低通滤波：截取移频后信号中 [-bandwidth/2, +bandwidth/2] 范围的频带
-    3. 降采样（抽取）：滤波后信号有效带宽仅 bandwidth，可按 M = fs/bandwidth 倍降采样
-    4. FFT：对降采样后的短序列做 FFT，得到细化频谱
-    5. 频率轴映射：FFT 结果的零频对应原始信号的 center_freq，分辨率提升 M 倍
-
-    物理意义：
-    - 标准 FFT 的频率分辨率 Δf = fs/N，受采样率和数据长度制约
-    - ZOOM-FFT 在不增加数据长度的情况下，将指定窄带内的分辨率提升 zoom_factor 倍
-    - 适用于齿轮箱啮合频率边频带精细分析、轴承故障特征频率精确定位等场景
-
-    典型应用：
-    - 齿轮啮合频率附近边频带的精细分辨（区分转频间隔的边频带）
-    - 轴承故障特征频率的精确确认（避免频率分辨率不足导致的误判）
-    - 变速工况下的瞬时频率精确估计
-
-    Args:
-        signal: 振动信号（一维 numpy 数组）
-        fs: 采样率 Hz
-        center_freq: 细化中心频率 Hz（频带中心位置）
-        bandwidth: 细化带宽 Hz（频带宽度）
-        zoom_factor: 细化倍数（频率分辨率提升倍数，默认 16）
-
-    Returns:
-        {
-            "zoom_freq_axis": np.ndarray,  # 细化频谱频率轴 Hz（围绕 center_freq）
-            "zoom_spectrum": np.ndarray,    # 细化频谱幅值
-            "resolution_hz": float,         # 细化后频率分辨率 Hz
-            "original_resolution_hz": float, # 原始频率分辨率 Hz
-            "zoom_factor": int,             # 实际细化倍数
-            "center_freq": float,           # 细化中心频率 Hz
-            "bandwidth": float,             # 细化带宽 Hz
-            "n_zoom_points": int,           # 细化谱点数
-            "valid": bool,
-        }
-    """
-    arr = np.array(signal, dtype=np.float64)
-    N = len(arr)
-
-    # --- 异常输入安全处理 ---
-    if N < 64 or fs <= 0 or center_freq <= 0 or bandwidth <= 0:
+    try:
+        result = compute_zoom_spectrum(
+            signal, fs,
+            ZoomParameters(center_freq, bandwidth, max(16, int(zoom_factor) * 64 + 1)),
+        )
+    except (TypeError, ValueError) as exc:
         return {
-            "valid": False,
-            "reason": "invalid_input",
-            "zoom_freq_axis": np.array([]),
-            "zoom_spectrum": np.array([]),
-            "resolution_hz": 0.0,
-            "original_resolution_hz": 0.0,
-            "zoom_factor": zoom_factor,
-            "center_freq": center_freq,
-            "bandwidth": bandwidth,
-            "n_zoom_points": 0,
+            "valid": False, "reason": str(exc),
+            "zoom_freq_axis": np.array([]), "zoom_spectrum": np.array([]),
+            "resolution_hz": 0.0, "original_resolution_hz": 0.0,
+            "zoom_factor": 1, "center_freq": center_freq,
+            "bandwidth": bandwidth, "n_zoom_points": 0,
         }
-
-    # 确保 bandwidth 不超过奈奎斯特频率
-    half_bw = bandwidth / 2.0
-    if center_freq - half_bw < 0:
-        # 低端超出 0 Hz，调整中心频率
-        center_freq = half_bw
-    if center_freq + half_bw > fs / 2.0:
-        # 高端超出奈奎斯特，调整带宽
-        half_bw = min(half_bw, fs / 2.0 - center_freq)
-        bandwidth = 2.0 * half_bw
-
-    # --- 原始频率分辨率 ---
-    original_resolution = fs / N
-
-    # --- 复调制（频移） ---
-    # 将 center_freq 移到零频：乘以 exp(-j*2π*f_c*t)
-    t = np.arange(N, dtype=np.float64) / fs
-    shift_exp = np.exp(-2.0j * np.pi * center_freq * t)
-    shifted_signal = arr * shift_exp
-
-    # --- 低通滤波 ---
-    # 截取移频后信号中 [-bandwidth/2, +bandwidth/2] 范围的频带
-    # 低通截止频率 = bandwidth/2
-    f_cut = half_bw
-    nyq = fs / 2.0
-    if f_cut >= nyq:
-        # 不需要滤波（带宽覆盖全频谱）
-        filtered = shifted_signal
-        decimation_factor = 1
-    else:
-        # Butterworth 低通滤波，阶数=6 以保证足够的带外衰减
-        try:
-            filtered = lowpass_filter_complex(shifted_signal, fs, f_cut, order=6)
-        except Exception:
-            # 滤波失败时，直接使用移频信号（降采样时可能有混叠风险）
-            filtered = shifted_signal
-
-        # --- 降采样（抽取） ---
-        # 滤波后信号有效带宽仅 bandwidth，可按 M 倍降采样
-        # M = fs / bandwidth 的整数部分，同时限制不超过 zoom_factor
-        decimation_factor = max(1, min(zoom_factor, int(fs / bandwidth)))
-
-    if decimation_factor > 1:
-        # 抽取：每隔 M 个点取一个样本
-        # 先确保抽取后长度为偶数（便于 FFT）
-        n_decimated = N // decimation_factor
-        if n_decimated < 16:
-            decimation_factor = 1
-            n_decimated = N
-        else:
-            decimated = filtered[:n_decimated * decimation_factor]
-            decimated = decimated[::decimation_factor]
-    else:
-        decimated = filtered
-        n_decimated = len(decimated)
-
-    # --- FFT 细化谱 ---
-    # 对降采样后的短序列做 FFT
-    zoom_spectrum_complex = np.fft.fft(decimated, n=n_decimated)
-    zoom_spectrum = np.abs(zoom_spectrum_complex) / n_decimated
-
-    # --- 频率轴映射 ---
-    # FFT 结果的零频对应原始信号的 center_freq
-    # 频率范围：center_freq - bandwidth/2 到 center_freq + bandwidth/2
-    zoom_df = fs / (decimation_factor * n_decimated)
-    zoom_freq_axis = center_freq + np.arange(n_decimated) * zoom_df
-    # 只取正频率范围（center_freq ± bandwidth/2）
-    # 由于复调制后的 FFT 频率轴从 center_freq 开始向正方向延伸，
-    # 需要重排 FFT 输出使其对应 center_freq ± bandwidth/2
-    # 标准 FFT 输出：[0, Δf, 2Δf, ..., (N-1)Δf]
-    # 映射到原始频率：[f_c, f_c+Δf, ..., f_c+(N-1)Δf]
-    # 但我们需要 [-BW/2, ..., f_c, ..., +BW/2] 的对称范围
-
-    # 重排 FFT 输出：将零频（对应 f_c）放在中心
-    # 取 FFT 结果中对应 [-BW/2, +BW/2] 范围的部分
-    f_min = center_freq - half_bw
-    f_max = center_freq + half_bw
-
-    # 使用 np.fft.fftshift 将零频移到中心
-    zoom_spectrum_shifted = np.fft.fftshift(zoom_spectrum)
-    zoom_freq_shifted = np.fft.fftshift(
-        np.arange(n_decimated, dtype=np.float64) * zoom_df
-    )
-    # 映射到原始频率：零频位置对应 center_freq
-    zoom_freq_axis = zoom_freq_shifted + center_freq
-
-    # 只保留在目标频带内的部分
-    mask = (zoom_freq_axis >= f_min) & (zoom_freq_axis <= f_max)
-    zoom_freq_final = zoom_freq_axis[mask]
-    zoom_spectrum_final = zoom_spectrum_shifted[mask]
-
-    if len(zoom_spectrum_final) == 0:
-        # 频带内无数据点，返回全范围
-        zoom_freq_final = zoom_freq_axis
-        zoom_spectrum_final = zoom_spectrum_shifted
-
-    # --- 细化后频率分辨率 ---
-    actual_zoom = decimation_factor
-    resolution_hz = zoom_df if len(zoom_freq_final) > 1 else 0.0
-
     return {
         "valid": True,
-        "zoom_freq_axis": zoom_freq_final,
-        "zoom_spectrum": zoom_spectrum_final,
-        "resolution_hz": round(float(resolution_hz), 4),
-        "original_resolution_hz": round(float(original_resolution), 4),
-        "zoom_factor": actual_zoom,
-        "center_freq": round(float(center_freq), 2),
-        "bandwidth": round(float(bandwidth), 2),
-        "n_zoom_points": len(zoom_spectrum_final),
+        "zoom_freq_axis": result.spectrum.frequency_hz,
+        "zoom_spectrum": result.spectrum.amplitude,
+        "resolution_hz": result.rayleigh_resolution_hz,
+        "original_resolution_hz": result.rayleigh_resolution_hz,
+        "frequency_step_hz": result.frequency_step_hz,
+        "resolution_contract": result.resolution_contract,
+        "zoom_factor": 1,
+        "center_freq": center_freq,
+        "bandwidth": bandwidth,
+        "n_zoom_points": len(result.spectrum.amplitude),
     }
 
 

@@ -558,26 +558,12 @@ def test_analyzer_hustgearbox():
 # ═══════════════════════════════════════════════════════════
 
 def test_gear_init_functions():
-    """compute_er / _evaluate_gear_faults"""
+    """行星旧读模型评估入口。"""
     print("\n--- gear/__init__ 聚合函数 ---")
     results = []
-    from app.services.diagnosis.gear import compute_er, _evaluate_gear_faults
+    from app.services.diagnosis.gear import _evaluate_gear_faults
 
-    # compute_er: 需要 differential_signal + tsa_signal
-    sig = load_npy(WTGEARBOX_DIR, "Br_B1_20-c1.npy")
-    if sig is not None:
-        try:
-            # 构造 TSA 信号和差分信号
-            from app.services.diagnosis.signal_utils import compute_fft_spectrum
-            tsa = sig[:len(sig)//2].copy()
-            diff_sig = np.diff(tsa, prepend=tsa[0])
-            er = compute_er(diff_sig, tsa, mesh_freq=21.875*20, fs=FS)
-            er_ok = er >= 0
-            results.append({"test": "compute_er", "er_value": round(float(er), 4), "passed": er_ok})
-            print(f"  [{'PASS' if er_ok else 'FAIL'}] compute_er: ER={er:.4f}")
-        except Exception as e:
-            results.append({"test": "compute_er", "passed": False, "error": str(e)[:100]})
-            print(f"  [FAIL] compute_er: {str(e)[:80]}")
+    # 已删除错误 ER 简化实现；定轴指标由独立算法测试覆盖。
 
     # _evaluate_gear_faults: 需要 gear_result dict
     gear_result = {

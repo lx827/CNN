@@ -81,13 +81,13 @@ def test_engine_analyze_gear():
     # 高级方法
     engine_adv = DiagnosisEngine(gear_teeth={"input": 18}, gear_method=GearMethod.ADVANCED)
     res_adv = engine_adv.analyze_gear(sig, FS, rot_freq=25.0)
-    has_tsa = "tsa_kurtosis" in res_adv.get("fault_indicators", {})
+    has_tsa = res_adv.get("tsa_status") == "evaluated" and res_adv.get("fm4") is not None
     results.append({
         "test": "engine_gear_dispatch_advanced",
         "has_tsa": has_tsa,
-        "passed": has_tsa or has_indicators,
+        "passed": has_tsa,
     })
-    print(f"  [{'PASS' if has_tsa or has_indicators else 'FAIL'}] 齿轮分发(advanced): has_tsa={has_tsa}")
+    print(f"  [{'PASS' if has_tsa else 'FAIL'}] 齿轮分发(advanced): has_tsa={has_tsa}")
 
     return results
 

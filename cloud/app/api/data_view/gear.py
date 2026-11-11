@@ -119,6 +119,15 @@ async def get_channel_gear(
                 "car": result.get("car"),
                 "m6a": result.get("m6a"),
                 "m8a": result.get("m8a"),
+                "na4": result.get("na4"),
+                "nb4": result.get("nb4"),
+                "metrics": result.get("metrics", {}),
+                "analysis_status": result.get("analysis_status", "indeterminate"),
+                "evaluation": result.get("evaluation", {}),
+                "tracking_method": result.get("tracking_method"),
+                "tsa_status": result.get("tsa_status"),
+                "tsa_reason": result.get("tsa_reason"),
+                "tsa_revolutions": result.get("tsa_revolutions"),
                 "fault_indicators": result.get("fault_indicators", {}),
             }
         })

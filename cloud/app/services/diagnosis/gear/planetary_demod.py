@@ -19,7 +19,57 @@ from ..signal_utils import (
     prepare_signal,
 )
 from ..order_tracking import _compute_order_spectrum, _compute_order_spectrum_multi_frame
-from ..gear.metrics import _order_band_amplitude
+from app.algorithms.order import (
+    AngleDomainSignal,
+    ScalarSpeed,
+    compute_order_spectrum,
+    order_band_amplitude_sum,
+    resample_constant_speed,
+)
+from app.algorithms.gear.fixed_axis import compute_synchronous_average
+
+
+# 行星旧读模型仍使用“带内幅值和”，与定轴 SER 的局部峰幅值比不是同一指标。
+_order_band_amplitude = order_band_amplitude_sum
+
+
+def analyze_planetary_sidebands_order(
+    order_axis,
+    spectrum,
+    mesh_order: float,
+    n_sidebands: int = 6,
+    spacing: float = 0.21875,
+) -> Dict:
+    """行星 carrier 间隔边带旧读模型，不复用定轴 SER 高层逻辑。"""
+    order_axis = np.asarray(order_axis)
+    spectrum = np.asarray(spectrum)
+    mesh_amp = _order_band_amplitude(order_axis, spectrum, mesh_order, 0.5)
+    if mesh_amp < 1e-12:
+        return {"sidebands": [], "ser": 0.0, "mesh_amp": 0.0}
+    sidebands = []
+    total_sb = 0.0
+    for index in range(1, n_sidebands + 1):
+        low = mesh_order - index * spacing
+        high = mesh_order + index * spacing
+        amp_low = _order_band_amplitude(order_axis, spectrum, low, 0.3)
+        amp_high = _order_band_amplitude(order_axis, spectrum, high, 0.3)
+        total_sb += amp_low + amp_high
+        sidebands.append({
+            "order": index,
+            "spacing": spacing,
+            "order_low": round(low, 4),
+            "order_high": round(high, 4),
+            "amp_low": round(amp_low, 6),
+            "amp_high": round(amp_high, 6),
+            "significant": max(amp_low, amp_high) > mesh_amp * 0.05,
+            "asymmetry": round(abs(amp_low - amp_high) / (amp_low + amp_high + 1e-12), 4),
+        })
+    return {
+        "sidebands": sidebands,
+        "ser": round(total_sb / mesh_amp, 4),
+        "mesh_amp": round(mesh_amp, 6),
+        "ratio_semantics": "planetary_band_amplitude_sum_ratio",
+    }
 
 
 def _local_background(oa, os, center, half_bw=0.5, side_bw=1.5):
@@ -523,8 +573,6 @@ def planetary_tsa_envelope_analysis(
         rot_freq: 估计转频 Hz
         gear_teeth: 齿轮参数
     """
-    from ..gear.metrics import compute_tsa_residual_order
-
     z_sun = int(gear_teeth.get("sun") or 0)
     z_ring = int(gear_teeth.get("ring") or 0)
     planet_count = int(gear_teeth.get("planet_count") or 0)
@@ -542,22 +590,30 @@ def planetary_tsa_envelope_analysis(
     if len(arr) > max_samples:
         arr = arr[:max_samples]
 
-    # TSA + 残差
-    tsa_result = compute_tsa_residual_order(arr, fs, rot_freq, samples_per_rev=1024)
-    if not tsa_result.get("valid"):
+    # TSA 原语与定轴共用；行星这里使用非同步残差，不套用定轴 regular。
+    try:
+        angle_domain, _ = resample_constant_speed(
+            arr, fs, ScalarSpeed(float(rot_freq), "caller_supplied"), samples_per_revolution=1024,
+        )
+        synchronous = compute_synchronous_average(angle_domain, min_revolutions=4)
+    except ValueError:
         return {"method": "planetary_tsa_envelope", "error": "tsa_invalid"}
+    residual = synchronous.nonsynchronous_signal
 
-    residual = tsa_result["residual"]
-
-    # 残差包络 → 阶次谱
+    # 残差包络已经位于角域：fs=samples_per_revolution（点/转），直接复用阶次原语。
     envelope = np.abs(scipy_hilbert(residual))
     envelope = envelope - np.mean(envelope)
-
     try:
-        env_oa, env_os = _compute_order_spectrum(
-            envelope, fs, rot_freq, samples_per_rev=1024
+        env_spectrum = compute_order_spectrum(
+            AngleDomainSignal(
+                angle_revolutions=synchronous.angle_domain.angle_revolutions,
+                samples=envelope,
+                samples_per_revolution=synchronous.angle_domain.samples_per_revolution,
+            ),
+            max_order=50,
         )
-    except Exception:
+        env_oa, env_os = env_spectrum.order_bins, env_spectrum.amplitude
+    except ValueError:
         return {"method": "planetary_tsa_envelope", "error": "order_spectrum_failed"}
 
     env_oa_arr = np.asarray(env_oa)
@@ -593,7 +649,7 @@ def planetary_tsa_envelope_analysis(
         "carrier_order": carrier_order,
         "sun_fault_order": sun_fault_order,
         "planet_fault_order": planet_fault_order,
-        "tsa_revolutions": tsa_result.get("revolutions", 0),
+        "tsa_revolutions": synchronous.revolutions,
         "residual_kurtosis": round(residual_kurtosis, 4),
         "sun_fault_snr": round(sun_fault_snr, 4),
         "planet_fault_snr": round(planet_fault_snr, 4),

@@ -7,13 +7,11 @@ import numpy as np
 from enum import Enum
 from typing import Dict, List, Optional, Any, Mapping
 
-from .signal_utils import (
-    prepare_signal, linear_detrend,
-    compute_fft_spectrum,
-    highpass_filter,
-)
+from .signal_utils import prepare_signal, linear_detrend
 from app.algorithms.core import Spectrum
-from app.algorithms.mechanics import BearingGeometry
+from app.algorithms.mechanics import BearingGeometry, FixedAxisGearGeometry
+from app.algorithms.pipelines.gear.fixed_axis import FixedAxisGearPipeline
+from app.algorithms.gear.fixed_axis import compute_car as compute_car_metric, compute_real_cepstrum
 from app.algorithms.bearing.analysis import analyze_envelope_spectrum
 from app.algorithms.bearing.evaluation import evaluate_envelope
 from app.algorithms.pipelines.bearing import BearingEnvelopePipeline
@@ -23,6 +21,7 @@ from app.algorithms.order import (
     LocalSpeedEstimates,
     OrderAnalysis,
     OrderParameters,
+    OrderSpectrum,
     ScalarSpeed,
     SpeedSearchRange,
     SpeedTrajectory,
@@ -36,19 +35,9 @@ from .bearing import (
     spectral_kurtosis_envelope_analysis,
 )
 from .bearing_cyclostationary import bearing_sc_scoh_analysis
-from .gear import (
-    compute_fm0_order,
-    compute_tsa_residual_order,
-    compute_car,
-    compute_fm4,
-    compute_m6a,
-    compute_m8a,
-    compute_ser_order,
-    analyze_sidebands_order,
-    analyze_sidebands_zoom_fft,
-    _evaluate_gear_faults,
-)
+from .gear import _evaluate_gear_faults
 from .gear.planetary_demod import (
+    analyze_planetary_sidebands_order,
     planetary_envelope_order_analysis,
     planetary_fullband_envelope_order_analysis,
     planetary_vmd_demod_analysis,
@@ -58,11 +47,8 @@ from .gear.planetary_demod import (
 )
 from .preprocessing import wavelet_denoise
 from .vmd_denoise import vmd_denoise
-from .features import (
-    compute_time_features,
-    compute_fft_features,
-)
-from .health_score import _compute_health_score
+from .features import compute_time_features
+from .health_score import _compute_health_score, _has_diagnosis_evidence
 from .recommendation import (
     _generate_recommendation,
     _generate_recommendation_all,
@@ -436,6 +422,116 @@ class DiagnosisEngine:
             },
         }
 
+    def _analyze_fixed_axis_gear(
+        self,
+        arr: np.ndarray,
+        fs: float,
+        order: OrderAnalysis,
+        z_in: int,
+    ) -> Dict[str, Any]:
+        """定轴业务适配；数学与阈值均委托独立 Pipeline。"""
+        geometry = FixedAxisGearGeometry(input_teeth=z_in) if z_in > 0 else None
+        pipeline = FixedAxisGearPipeline(geometry=geometry)
+        diagnosis = pipeline.run(
+            arr,
+            fs,
+            order_analysis=order,
+            include_tsa=self.gear_method == GearMethod.ADVANCED,
+            history=None,  # 数据库尚无历史方差契约，NA4/NB4 明确不可判定。
+        )
+        analysis = diagnosis.analysis
+        evaluation = diagnosis.evaluation
+        metrics = {
+            "fm0": analysis.fm0,
+            "fm4": analysis.fm4,
+            "m6a": analysis.m6a,
+            "m8a": analysis.m8a,
+            "na4": analysis.na4,
+            "nb4": analysis.nb4,
+            "car": analysis.car,
+            "ser": analysis.sideband_analysis.ser,
+        }
+        metric_payload = {
+            name: {
+                "status": metric.status,
+                "value": metric.value,
+                "unit": metric.unit,
+                "reason": metric.reason,
+                "details": metric.details,
+            }
+            for name, metric in metrics.items()
+        }
+
+        def scalar(metric):
+            return round(float(metric.value), 6) if metric.status == "evaluated" else None
+
+        rot_frequency = analysis.rot_frequency_hz
+        mesh_order = analysis.mesh_order
+        mesh_frequency = (
+            mesh_order * rot_frequency
+            if mesh_order is not None and rot_frequency is not None else None
+        )
+        sidebands = [
+            {
+                "order": item.order,
+                "spacing": 1.0,
+                "order_low": item.lower_order,
+                "order_high": item.upper_order,
+                "amp_low": item.lower_amplitude,
+                "amp_high": item.upper_amplitude,
+                "asymmetry": item.asymmetry,
+                "significant": item.order in evaluation.significant_sideband_orders,
+            }
+            for item in analysis.sideband_analysis.sidebands
+        ]
+        result = {
+            "method": self.gear_method.value,
+            "strategy": self.strategy.value,
+            "rot_freq_hz": round(rot_frequency, 6) if rot_frequency is not None else None,
+            "rot_freq_estimated_hz": round(rot_frequency, 6) if rot_frequency is not None else None,
+            "rot_freq_std": analysis.rot_frequency_std_hz,
+            "tracking_method": order.tracking_method,
+            "mesh_freq_hz": round(mesh_frequency, 6) if mesh_frequency is not None else None,
+            "mesh_order": mesh_order,
+            "planet_count": 0,
+            "is_planetary": False,
+            "ser": scalar(analysis.sideband_analysis.ser),
+            "sidebands": sidebands,
+            "mesh_amp": analysis.sideband_analysis.mesh_amplitude,
+            "fm0": scalar(analysis.fm0),
+            "fm4": scalar(analysis.fm4),
+            "m6a": scalar(analysis.m6a),
+            "m8a": scalar(analysis.m8a),
+            "na4": scalar(analysis.na4),
+            "nb4": scalar(analysis.nb4),
+            "car": scalar(analysis.car),
+            "metrics": metric_payload,
+            "analysis_status": evaluation.status,
+            "evaluation": {
+                "status": evaluation.status,
+                "indicators": evaluation.indicators,
+            },
+            "fault_indicators": evaluation.indicators,
+            "order_peak_concentration": analysis.order_statistics.peak_concentration,
+            "order_kurtosis": analysis.order_statistics.kurtosis,
+            "tsa_status": analysis.tsa_status,
+            "tsa_reason": analysis.tsa_reason,
+            "tsa_revolutions": analysis.tsa.synchronous.revolutions if analysis.tsa else None,
+            "residual_rms": (
+                float(np.sqrt(np.mean(analysis.tsa.residual_signal**2)))
+                if analysis.tsa else None
+            ),
+        }
+        # 与本次基础指标无关的小波包结果仅保留原始读数，不混入定轴阈值评估。
+        try:
+            from .wavelet_packet import compute_wavelet_packet_energy_entropy
+            result["wavelet_packet_entropy"] = compute_wavelet_packet_energy_entropy(
+                arr, fs, level=3, gear_mesh_freq=mesh_frequency,
+            )
+        except Exception:
+            result["wavelet_packet_entropy"] = {"energy_entropy": 0.0, "normalized_entropy": 0.0}
+        return result
+
     def analyze_gear(
         self,
         signal: np.ndarray,
@@ -474,21 +570,33 @@ class DiagnosisEngine:
                 arr, fs, rot_freq=rot_freq, estimation_signal=raw_for_speed,
             )
         else:
-            # 旧数组缓存只允许由恒速/缓变标量调用方提供，不能表达快速变速补偿。
+            # 旧数组缓存没有连续相位，只能用于频谱指标，不能据此生成 TSA。
             if rot_freq is None or not np.isfinite(rot_freq) or rot_freq <= 0:
                 raise ValueError("旧阶次数组缓存必须同时提供有效标量转频")
-            analysis = None
-            order_axis = _cached_oa
-            order_spectrum = _cached_os
+            order_axis = np.asarray(_cached_oa, dtype=np.float64)
+            order_amplitude = np.asarray(_cached_os, dtype=np.float64)
+            if len(order_axis) < 2:
+                raise ValueError("旧阶次数组缓存为空或缺少分辨率")
+            resolution = float(order_axis[1] - order_axis[0])
+            spectrum = OrderSpectrum(
+                order_bins=order_axis,
+                amplitude=order_amplitude,
+                order_resolution=resolution,
+                samples_per_revolution=1024,
+                total_revolutions=1.0 / resolution,
+            )
+            analysis = OrderAnalysis(
+                status="valid",
+                tracking_method="single_frame",
+                speed=ScalarSpeed(float(rot_freq), "legacy_scalar_cache"),
+                spectrum=spectrum,
+            )
 
-        if analysis is not None:
-            if analysis.status != "valid" or analysis.spectrum is None:
-                raise ValueError(analysis.reason or "转频与阶次谱不可判定")
-            if analysis.tracking_method == "varying_speed":
-                raise ValueError("快速变速阶次谱已由 /order 支持；齿轮/TSA/行星解调仍要求恒速或缓变标量转频")
-            order_axis = analysis.spectrum.order_bins
-            order_spectrum = analysis.spectrum.amplitude
-            rot_freq_used, rot_std = self._order_speed_summary(analysis)
+        if analysis.status != "valid" or analysis.spectrum is None:
+            raise ValueError(analysis.reason or "转频与阶次谱不可判定")
+        order_axis = analysis.spectrum.order_bins
+        order_spectrum = analysis.spectrum.amplitude
+        rot_freq_used, rot_std = self._order_speed_summary(analysis)
         if rot_freq_used is None:
             raise ValueError("齿轮诊断需要有效标量转频")
 
@@ -506,7 +614,14 @@ class DiagnosisEngine:
         if planet_count >= 3 and z_sun <= 0 and z_in > 0:
             z_sun = z_in
 
-        # 啮合阶次计算（相对于输入轴转频）
+        if planet_count < 3:
+            return self._analyze_fixed_axis_gear(arr, fs, analysis, z_in)
+
+        # 行星解调仍要求标量恒速/缓变输入，不能把快速变速轨迹摘要成恒速。
+        if analysis.tracking_method == "varying_speed":
+            raise ValueError("快速变速行星解调尚未迁移连续相位接口，请先使用 /order")
+
+        # 啮合阶次计算（相对于太阳轮输入转频，ring 固定架构）
         # 定轴齿轮箱: mesh_order = z_in（啮合频率 = 转频 × 齿数）
         # 行星齿轮箱(ring固定, sun输入): mesh_order = Z_ring×Z_sun/(Z_sun+Z_ring)
         #   例: 100×28/(28+100) = 21.875 ≈ 175/8
@@ -551,7 +666,7 @@ class DiagnosisEngine:
             sb_spacing = 1.0
             if planet_count >= 3 and z_sun > 0 and z_ring > 0:
                 sb_spacing = round(z_sun / (z_sun + z_ring), 4)
-            sb_result = analyze_sidebands_order(order_axis, order_spectrum, mesh_order, n_sidebands=6, spacing=sb_spacing)
+            sb_result = analyze_planetary_sidebands_order(order_axis, order_spectrum, mesh_order, n_sidebands=6, spacing=sb_spacing)
             result["sidebands"] = sb_result["sidebands"]
             result["ser"] = sb_result["ser"]
             result["mesh_amp"] = sb_result["mesh_amp"]
@@ -572,38 +687,21 @@ class DiagnosisEngine:
             kurt = float(np.mean(ospec_norm ** 4) / (np.mean(ospec_norm ** 2) ** 2 + 1e-12) - 2)
             result["order_kurtosis"] = round(kurt, 2)
 
-        # CAR 不需要齿轮参数，始终计算
+        # CAR 与 CPW 无关；这里仍服务于行星旧读模型，阈值由行星评估独占。
         try:
-            result["car"] = round(compute_car(arr, fs, rot_freq), 4)
+            car_result = compute_car_metric(compute_real_cepstrum(arr, fs), rot_freq)
+            result["car"] = round(car_result.value, 4) if car_result.status == "evaluated" else None
         except Exception:
-            result["car"] = 0.0
+            result["car"] = None
 
-        # 高级齿轮指标（也基于阶次谱，需要齿轮参数）
-        if self.gear_method == GearMethod.ADVANCED and mesh_order and mesh_order > 0:
-            tsa = compute_tsa_residual_order(arr, fs, rot_freq, samples_per_rev=1024)
-            if tsa.get("valid"):
-                result["tsa_revolutions"] = int(tsa.get("revolutions", 0))
-                result["residual_rms"] = round(float(np.sqrt(np.mean(np.asarray(tsa["residual"]) ** 2))), 6)
-                result["fm0"] = round(compute_fm0_order(tsa["tsa_signal"], order_axis, order_spectrum, mesh_order), 4)
-                diff_signal = tsa["differential"]
-            else:
-                result["tsa_revolutions"] = 0
-                result["fm0"] = round(compute_fm0_order(arr, order_axis, order_spectrum, mesh_order), 4)
-                # TSA 无法形成时才退化为高通近似。
-                # mesh_freq 可能为 None/0（rot_freq=0 时），需守卫
-                hp_cutoff = (mesh_freq or 0) * 0.5
-                if hp_cutoff > 0:
-                    diff_signal = highpass_filter(arr, fs, hp_cutoff)
-                else:
-                    # 无有效截止频率时，差分信号 = 原信号去均值
-                    diff_signal = arr - np.mean(arr)
-
-            result["fm4"] = round(compute_fm4(diff_signal), 4)
-            result["m6a"] = round(compute_m6a(diff_signal), 4)
-            result["m8a"] = round(compute_m8a(diff_signal), 4)
-
-            # 边频带能量比 SER（基于阶次谱）
-            result["ser"] = round(compute_ser_order(order_axis, order_spectrum, mesh_order), 4)
+        # 行星高级 TSA/FM 指标尚未迁移到其非整数啮合阶次表示，明确不评估；
+        # 不得套用定轴 regular/differential 或用高通信号冒充 FM4。
+        if self.gear_method == GearMethod.ADVANCED:
+            result["fm0"] = None
+            result["fm4"] = None
+            result["m6a"] = None
+            result["m8a"] = None
+            result["tsa_revolutions"] = None
 
         # 故障指示器
         indicators = _evaluate_gear_faults(result)
@@ -753,6 +851,11 @@ class DiagnosisEngine:
             self.gear_teeth,
             time_features, bearing_result, gear_result
         )
+        if not _has_diagnosis_evidence((bearing_result, gear_result), time_features):
+            # 零能量或全部请求路径不可评估时，不允许零值特征合成健康 100 分；
+            # 非零信号中任一域的有效证据仍保留综合评分。
+            health_score = None
+            status = "indeterminate"
 
         return {
             "health_score": health_score, "status": status,
@@ -889,6 +992,12 @@ class DiagnosisEngine:
                     elif status == "warning":
                         status = "critical"
                         health_score = min(health_score, 59)
+
+        if not _has_diagnosis_evidence(
+            (*bearing_results.values(), *gear_results.values()), time_features,
+        ):
+            health_score = None
+            status = "indeterminate"
 
         # 生成各方法检出结论汇总
         summary = _summarize_all_methods(bearing_results, gear_results)

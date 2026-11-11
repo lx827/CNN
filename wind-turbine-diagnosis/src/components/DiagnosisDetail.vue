@@ -8,7 +8,7 @@
           <span :class="scoreClass(data.health_score)">{{ data.health_score }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-tag :type="statusTagType(data.status)" size="small" effect="dark">{{ statusText(data.status) }}</el-tag>
+          <el-tag :type="statusView.tagType" size="small" effect="dark">{{ statusView.text }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="故障概率">
           {{ data.fault_likelihood != null ? (data.fault_likelihood * 100).toFixed(1) + '%' : '-' }}
@@ -111,6 +111,7 @@ import {
   bearingEvaluationIndicators,
   scScohEntries,
 } from '../utils/bearingDiagnosis'
+import { getDiagnosisStatusView } from '../utils/diagnosisStatus'
 
 const props = defineProps({
   orderAnalysis: { type: Object, default: null },
@@ -129,6 +130,8 @@ const data = computed(() => {
   return props.orderAnalysis
 })
 
+const statusView = computed(() => getDiagnosisStatusView(data.value?.status))
+
 const displayRotFreq = computed(() => {
   if (props.rotFreq != null) return props.rotFreq
   return data.value?.rot_freq_hz ?? null
@@ -139,12 +142,6 @@ function scoreClass(hs) {
   if (hs >= 85) return 'score-good'
   if (hs >= 60) return 'score-warning'
   return 'score-danger'
-}
-function statusTagType(s) {
-  return s === 'normal' ? 'success' : s === 'warning' ? 'warning' : 'danger'
-}
-function statusText(s) {
-  return s === 'normal' ? '正常' : s === 'warning' ? '预警' : '故障'
 }
 function faultLabelText(label) {
   if (!label || label === 'unknown') return '未检出异常'
