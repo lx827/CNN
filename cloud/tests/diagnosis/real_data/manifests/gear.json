@@ -1,0 +1,488 @@
+{
+  "schema_version": 1,
+  "purpose": "Minimal raw gearbox loader acceptance set; no production algorithm or processed-subset replacement.",
+  "source_root_id": "original_gearbox_intake_20261111",
+  "evidence_note": "Source PDFs and intake notes live below data_root/raw_sources. Channel semantics follow source documentation; numeric file layout, scalars, first samples, byte sizes and hashes were checked locally on 2026-11-11.",
+  "limitations": [
+    "HUST nominal speed/torque have four paired conditions, not a factorial design; only the 20 Hz/0.113 Nm pair is included.",
+    "HUST 8 acquisition blocks have block-local timestamps resetting every 32768 rows; continuity across blocks is unknown. Reader never joins blocks.",
+    "WT batch suffix 1 identifies the first documented collection/reinstallation series; it does not prove one unchanged physical installation across different sun gears.",
+    "Signal units and electrical speed/encoder calibration are unknown. No raw auxiliary channel is directly a rotation frequency.",
+    "The five original acquisitions support reader/diagnostic smoke tests, not independent generalization or class-performance claims."
+  ],
+  "samples": [
+    {
+      "sample_id": "hust_H_20_1",
+      "dataset_id": "hust_gearbox",
+      "source_path": "raw_sources/华中科技大学齿轮箱数据集/Raw data (原始数据)/H_20_1.txt",
+      "source": {
+        "root_id": "original_gearbox_intake_20261111",
+        "relative_path": "华中科技大学齿轮箱数据集/Raw data (原始数据)/H_20_1.txt",
+        "acquisition_id": "H_20_1",
+        "copy_verified_sha256": false,
+        "note": "Previously copied representative; local hash recorded."
+      },
+      "sha256": "3f8b572af54dc9356b49c5fae1c6950d4a6d28a91cafe1118c926d4111410cb0",
+      "source_bytes": 15212597,
+      "fs_hz": 25600,
+      "label": "healthy",
+      "fault_types": [],
+      "group_id": "hust_condition_20_1",
+      "pair_id": "hust_20Hz_0.113Nm",
+      "speed": {
+        "nominal_hz": 20,
+        "reference_axis": "unknown",
+        "calibration": "unknown",
+        "reason": "Source does not directly establish whether nominal Hz equals 18-tooth pinion mechanical speed; raw Speed is uncalibrated.",
+        "evidence": [
+          "raw_sources/华中科技大学齿轮箱数据集/Description file (描述材料)/Readme for HUSTgearbox dataset.pdf pp.3-4"
+        ]
+      },
+      "load": {
+        "torque_nm": 0.113,
+        "condition_index": 1,
+        "independent_of_speed": false
+      },
+      "mechanics": {
+        "type": "fixed_axis",
+        "pinion_teeth": 18,
+        "gear_teeth": 27,
+        "ratio": 1.5,
+        "fault_target": "unknown",
+        "evidence": [
+          "raw_sources/华中科技大学齿轮箱数据集/Description file (描述材料)/Readme for HUSTgearbox dataset.pdf pp.2-3"
+        ]
+      },
+      "channels": {
+        "vibration": [
+          "X",
+          "Y",
+          "Z"
+        ],
+        "auxiliary": [
+          "time",
+          "speed"
+        ],
+        "source_columns": [
+          "time",
+          "speed",
+          "X",
+          "Y",
+          "Z"
+        ],
+        "vibration_units": "unknown",
+        "speed_units": "unknown",
+        "time_units": "block-local seconds",
+        "evidence": [
+          "raw_sources/华中科技大学齿轮箱数据集/Description file (描述材料)/Readme for HUSTgearbox dataset.pdf Fig.5 p.4"
+        ]
+      },
+      "verification": {
+        "checked_on": "2026-11-11",
+        "format": "tab-delimited text",
+        "source_shape": [
+          262144,
+          5
+        ],
+        "first_row": [
+          0,
+          0.05989949,
+          -0.00639657,
+          0.02202816,
+          0.02535086
+        ],
+        "header_blocks": 8,
+        "block_samples": 32768,
+        "block_seconds": 1.28,
+        "block_continuity": "unknown",
+        "fs_evidence": "Description 25.6 kHz; local timestamp step 0.00003906/0.00003907 s matches rounding at 8 decimals.",
+        "full_duration_seconds": "unknown physical continuity; 10.24 seconds of samples in eight blocks",
+        "transforms": []
+      },
+      "evidence": [
+        "raw_sources/GEARBOX_INTAKE_20261111.txt",
+        "raw_sources/华中科技大学齿轮箱数据集/Description file (描述材料)/Readme for HUSTgearbox dataset.pdf"
+      ]
+    },
+    {
+      "sample_id": "hust_B_20_1",
+      "dataset_id": "hust_gearbox",
+      "source_path": "raw_sources/华中科技大学齿轮箱数据集/Raw data (原始数据)/B_20_1.txt",
+      "source": {
+        "root_id": "original_gearbox_intake_20261111",
+        "relative_path": "华中科技大学齿轮箱数据集/Raw data (原始数据)/B_20_1.txt",
+        "acquisition_id": "B_20_1",
+        "copy_verified_sha256": true,
+        "note": "Copied source and target hashes matched on 2026-11-11."
+      },
+      "sha256": "d0c5c5a9ea45e3cd3654b69327cbb2b69f3357999699f87ca4c68a8a8b7f3f5f",
+      "source_bytes": 15203111,
+      "fs_hz": 25600,
+      "label": "broken_tooth",
+      "fault_types": [
+        "broken_tooth"
+      ],
+      "group_id": "hust_condition_20_1",
+      "pair_id": "hust_20Hz_0.113Nm",
+      "speed": {
+        "nominal_hz": 20,
+        "reference_axis": "unknown",
+        "calibration": "unknown",
+        "reason": "Source does not directly establish whether nominal Hz equals 18-tooth pinion mechanical speed; raw Speed is uncalibrated.",
+        "evidence": [
+          "raw_sources/华中科技大学齿轮箱数据集/Description file (描述材料)/Readme for HUSTgearbox dataset.pdf pp.3-4"
+        ]
+      },
+      "load": {
+        "torque_nm": 0.113,
+        "condition_index": 1,
+        "independent_of_speed": false
+      },
+      "mechanics": {
+        "type": "fixed_axis",
+        "pinion_teeth": 18,
+        "gear_teeth": 27,
+        "ratio": 1.5,
+        "fault_target": "unknown",
+        "evidence": [
+          "raw_sources/华中科技大学齿轮箱数据集/Description file (描述材料)/Readme for HUSTgearbox dataset.pdf pp.2-3"
+        ]
+      },
+      "channels": {
+        "vibration": [
+          "X",
+          "Y",
+          "Z"
+        ],
+        "auxiliary": [
+          "time",
+          "speed"
+        ],
+        "source_columns": [
+          "time",
+          "speed",
+          "X",
+          "Y",
+          "Z"
+        ],
+        "vibration_units": "unknown",
+        "speed_units": "unknown",
+        "time_units": "block-local seconds",
+        "evidence": [
+          "raw_sources/华中科技大学齿轮箱数据集/Description file (描述材料)/Readme for HUSTgearbox dataset.pdf Fig.5 p.4"
+        ]
+      },
+      "verification": {
+        "checked_on": "2026-11-11",
+        "format": "tab-delimited text",
+        "source_shape": [
+          262144,
+          5
+        ],
+        "first_row": [
+          0,
+          0.06604574,
+          -0.02056051,
+          -0.02925615,
+          -0.01662244
+        ],
+        "header_blocks": 8,
+        "block_samples": 32768,
+        "block_seconds": 1.28,
+        "block_continuity": "unknown",
+        "fs_evidence": "Description 25.6 kHz; local timestamp step 0.00003906/0.00003907 s matches rounding at 8 decimals.",
+        "full_duration_seconds": "unknown physical continuity; 10.24 seconds of samples in eight blocks",
+        "transforms": []
+      },
+      "evidence": [
+        "raw_sources/GEARBOX_INTAKE_20261111.txt",
+        "raw_sources/华中科技大学齿轮箱数据集/Description file (描述材料)/Readme for HUSTgearbox dataset.pdf"
+      ]
+    },
+    {
+      "sample_id": "hust_M_20_1",
+      "dataset_id": "hust_gearbox",
+      "source_path": "raw_sources/华中科技大学齿轮箱数据集/Raw data (原始数据)/M_20_1.txt",
+      "source": {
+        "root_id": "original_gearbox_intake_20261111",
+        "relative_path": "华中科技大学齿轮箱数据集/Raw data (原始数据)/M_20_1.txt",
+        "acquisition_id": "M_20_1",
+        "copy_verified_sha256": true,
+        "note": "Copied source and target hashes matched on 2026-11-11."
+      },
+      "sha256": "cf4e0465086c4c8a0345e0b37470d26167b3ec9b7a0f9d8358e23bef0135e2ff",
+      "source_bytes": 15155240,
+      "fs_hz": 25600,
+      "label": "missing_tooth",
+      "fault_types": [
+        "missing_tooth"
+      ],
+      "group_id": "hust_condition_20_1",
+      "pair_id": "hust_20Hz_0.113Nm",
+      "speed": {
+        "nominal_hz": 20,
+        "reference_axis": "unknown",
+        "calibration": "unknown",
+        "reason": "Source does not directly establish whether nominal Hz equals 18-tooth pinion mechanical speed; raw Speed is uncalibrated.",
+        "evidence": [
+          "raw_sources/华中科技大学齿轮箱数据集/Description file (描述材料)/Readme for HUSTgearbox dataset.pdf pp.3-4"
+        ]
+      },
+      "load": {
+        "torque_nm": 0.113,
+        "condition_index": 1,
+        "independent_of_speed": false
+      },
+      "mechanics": {
+        "type": "fixed_axis",
+        "pinion_teeth": 18,
+        "gear_teeth": 27,
+        "ratio": 1.5,
+        "fault_target": "unknown",
+        "evidence": [
+          "raw_sources/华中科技大学齿轮箱数据集/Description file (描述材料)/Readme for HUSTgearbox dataset.pdf pp.2-3"
+        ]
+      },
+      "channels": {
+        "vibration": [
+          "X",
+          "Y",
+          "Z"
+        ],
+        "auxiliary": [
+          "time",
+          "speed"
+        ],
+        "source_columns": [
+          "time",
+          "speed",
+          "X",
+          "Y",
+          "Z"
+        ],
+        "vibration_units": "unknown",
+        "speed_units": "unknown",
+        "time_units": "block-local seconds",
+        "evidence": [
+          "raw_sources/华中科技大学齿轮箱数据集/Description file (描述材料)/Readme for HUSTgearbox dataset.pdf Fig.5 p.4"
+        ]
+      },
+      "verification": {
+        "checked_on": "2026-11-11",
+        "format": "tab-delimited text",
+        "source_shape": [
+          262144,
+          5
+        ],
+        "first_row": [
+          0,
+          5.02124929,
+          0.01766097,
+          0.07149765,
+          -0.02067524
+        ],
+        "header_blocks": 8,
+        "block_samples": 32768,
+        "block_seconds": 1.28,
+        "block_continuity": "unknown",
+        "fs_evidence": "Description 25.6 kHz; local timestamp step 0.00003906/0.00003907 s matches rounding at 8 decimals.",
+        "full_duration_seconds": "unknown physical continuity; 10.24 seconds of samples in eight blocks",
+        "transforms": []
+      },
+      "evidence": [
+        "raw_sources/GEARBOX_INTAKE_20261111.txt",
+        "raw_sources/华中科技大学齿轮箱数据集/Description file (描述材料)/Readme for HUSTgearbox dataset.pdf"
+      ]
+    },
+    {
+      "sample_id": "wt_N1_20",
+      "dataset_id": "wt_planetary",
+      "source_path": "raw_sources/WT-行星齿轮数据集/healthy/1/N1_20.MAT",
+      "source": {
+        "root_id": "original_gearbox_intake_20261111",
+        "relative_path": "WT-行星齿轮数据集/healthy/1/N1_20.MAT",
+        "acquisition_id": "N1_20",
+        "copy_verified_sha256": true,
+        "note": "Copied source and target hashes matched on 2026-11-11."
+      },
+      "sha256": "927b6fe62b3958fb3d60347141a20c46eb388228d441a8a602aaf3576e497cde",
+      "source_bytes": 488636912,
+      "fs_hz": 48000,
+      "label": "healthy",
+      "fault_types": [],
+      "group_id": "wt_collection_series_1",
+      "pair_id": "wt_series1_20Hz",
+      "installation_batch": 1,
+      "speed": {
+        "nominal_hz": 20,
+        "reference_axis": "sun",
+        "calibration": "unknown",
+        "reason": "Paper defines fr as sun rotation frequency; nominal operating condition only, not measured from encoder. Input-shaft encoder pulse count and electrical calibration remain unknown.",
+        "evidence": [
+          "raw_sources/WT-行星齿轮数据集/Liu_2024_Meas._Sci._Technol._35_012002.pdf section 6.2/Table 3, PDF pp.18-19"
+        ]
+      },
+      "load": {
+        "torque_nm": "unknown"
+      },
+      "mechanics": {
+        "type": "planetary",
+        "sun_teeth": 28,
+        "ring_teeth": 100,
+        "planet_teeth": 36,
+        "n_planets": 4,
+        "reference_axis": "sun",
+        "fault_target": "sun",
+        "evidence": [
+          "raw_sources/WT-行星齿轮数据集/Liu_2024_Meas._Sci._Technol._35_012002.pdf Table 3"
+        ]
+      },
+      "channels": {
+        "vibration": [
+          "X",
+          "Y"
+        ],
+        "auxiliary": [
+          "encoder",
+          "raw_channel_4"
+        ],
+        "source_columns": [
+          "X",
+          "Y",
+          "encoder",
+          "unknown"
+        ],
+        "vibration_units": "unknown",
+        "encoder_units": "unknown electrical",
+        "channel_4_meaning": "unknown",
+        "channel_4_units": "unknown",
+        "evidence": [
+          "raw_sources/WT-行星齿轮数据集/Liu_2024_Meas._Sci._Technol._35_012002.pdf section 6.2 first three Data channels; local Data has four columns"
+        ]
+      },
+      "verification": {
+        "checked_on": "2026-11-11",
+        "format": "MATLAB Level 5 uncompressed real double (column-major)",
+        "source_shape": [
+          15269888,
+          4
+        ],
+        "first_row": [
+          24.339492045342922,
+          7.007852844893932,
+          9994.756519787014,
+          0.2598724588751793
+        ],
+        "mat_scalars": {
+          "DataCount": 15269888,
+          "ChannelCount": 4,
+          "SampleRate": 48000,
+          "Interval": 0.000020833333333333333
+        },
+        "duration_seconds": 318.12266666666665,
+        "fs_evidence": "Local SampleRate=48000 and Interval=1/48000 agree with source paper.",
+        "transforms": []
+      },
+      "evidence": [
+        "raw_sources/GEARBOX_INTAKE_20261111.txt",
+        "raw_sources/WT-行星齿轮数据集/Liu_2024_Meas._Sci._Technol._35_012002.pdf"
+      ]
+    },
+    {
+      "sample_id": "wt_B1_20",
+      "dataset_id": "wt_planetary",
+      "source_path": "raw_sources/WT-行星齿轮数据集/broken/1/B1_20.MAT",
+      "source": {
+        "root_id": "original_gearbox_intake_20261111",
+        "relative_path": "WT-行星齿轮数据集/broken/1/B1_20.MAT",
+        "acquisition_id": "B1_20",
+        "copy_verified_sha256": true,
+        "note": "Copied source and target hashes matched on 2026-11-11."
+      },
+      "sha256": "7bacc66e52409672a5ecd9a3735c99ed21714d290076aea96530f6cdeda1e218",
+      "source_bytes": 471335408,
+      "fs_hz": 48000,
+      "label": "broken_tooth",
+      "fault_types": [
+        "broken_tooth"
+      ],
+      "group_id": "wt_collection_series_1",
+      "pair_id": "wt_series1_20Hz",
+      "installation_batch": 1,
+      "speed": {
+        "nominal_hz": 20,
+        "reference_axis": "sun",
+        "calibration": "unknown",
+        "reason": "Paper defines fr as sun rotation frequency; nominal operating condition only, not measured from encoder. Input-shaft encoder pulse count and electrical calibration remain unknown.",
+        "evidence": [
+          "raw_sources/WT-行星齿轮数据集/Liu_2024_Meas._Sci._Technol._35_012002.pdf section 6.2/Table 3, PDF pp.18-19"
+        ]
+      },
+      "load": {
+        "torque_nm": "unknown"
+      },
+      "mechanics": {
+        "type": "planetary",
+        "sun_teeth": 28,
+        "ring_teeth": 100,
+        "planet_teeth": 36,
+        "n_planets": 4,
+        "reference_axis": "sun",
+        "fault_target": "sun",
+        "evidence": [
+          "raw_sources/WT-行星齿轮数据集/Liu_2024_Meas._Sci._Technol._35_012002.pdf Table 3"
+        ]
+      },
+      "channels": {
+        "vibration": [
+          "X",
+          "Y"
+        ],
+        "auxiliary": [
+          "encoder",
+          "raw_channel_4"
+        ],
+        "source_columns": [
+          "X",
+          "Y",
+          "encoder",
+          "unknown"
+        ],
+        "vibration_units": "unknown",
+        "encoder_units": "unknown electrical",
+        "channel_4_meaning": "unknown",
+        "channel_4_units": "unknown",
+        "evidence": [
+          "raw_sources/WT-行星齿轮数据集/Liu_2024_Meas._Sci._Technol._35_012002.pdf section 6.2 first three Data channels; local Data has four columns"
+        ]
+      },
+      "verification": {
+        "checked_on": "2026-11-11",
+        "format": "MATLAB Level 5 uncompressed real double (column-major)",
+        "source_shape": [
+          14729216,
+          4
+        ],
+        "first_row": [
+          -2.515979327261448,
+          -2.1474214866757393,
+          -1833.55274078995,
+          0.5650482699275017
+        ],
+        "mat_scalars": {
+          "DataCount": 14729216,
+          "ChannelCount": 4,
+          "SampleRate": 48000,
+          "Interval": 0.000020833333333333333
+        },
+        "duration_seconds": 306.8586666666667,
+        "fs_evidence": "Local SampleRate=48000 and Interval=1/48000 agree with source paper.",
+        "transforms": []
+      },
+      "evidence": [
+        "raw_sources/GEARBOX_INTAKE_20261111.txt",
+        "raw_sources/WT-行星齿轮数据集/Liu_2024_Meas._Sci._Technol._35_012002.pdf"
+      ]
+    }
+  ]
+}

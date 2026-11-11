@@ -1,0 +1,608 @@
+{
+  "schema_version": 1,
+  "samples": [
+    {
+      "sample_id": "ottawa_H-A-1",
+      "dataset_id": "ottawa_bearing",
+      "source_path": "raw_sources/04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/00.实验数据/H-A-1.mat",
+      "original_source_path": "04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/00.实验数据/H-A-1.mat",
+      "sha256": "a113089dac7969eaf3e2adc563aa724a523f5d7ef4b3dd957bdf111ac1d84257",
+      "bytes": 11909642,
+      "acquisition_id": "H-A-1",
+      "group_id": "ottawa:H-A-1",
+      "label": "healthy",
+      "original_label": "H",
+      "fault_types": [],
+      "severity": "unspecified",
+      "fs_hz": 200000.0,
+      "expected_samples": 2000000,
+      "expected_duration_seconds": 10.0,
+      "channel_roles": {
+        "Channel_1": "vibration",
+        "Channel_2": "encoder_raw"
+      },
+      "metadata": {
+        "dataset_reference": "Huang/Baddour 2018; DOI 10.1016/j.dib.2018.11.019; Mendeley v43hmbwxpm.1",
+        "fs_evidence": "Bearing vibration data collected under time-varying rotational speed conditions.pdf, physical p4 section 2.2.1",
+        "label_evidence": "same paper p4 Table 2; H healthy, I inner race, O outer race",
+        "speed_mode": "acceleration",
+        "repeat_index": 1,
+        "speed_unit": "unknown",
+        "speed_calibration_status": "encoder_pulses_per_revolution_unknown",
+        "vibration_unit": "unknown",
+        "bearing_model": "ER16K",
+        "bearing_geometry": {
+          "pitch_diameter_mm": 38.52,
+          "ball_diameter_mm": 7.94,
+          "ball_count": 9,
+          "evidence": "same paper p4 Table 1",
+          "contact_angle_status": "unconfirmed"
+        },
+        "diagnostic_orders": {
+          "bpfi": 5.43,
+          "bpfo": 3.57,
+          "evidence": "same paper p4 Table 1"
+        }
+      },
+      "source_copy_sha256_verified": true,
+      "original_source_root_label": "大创数据集"
+    },
+    {
+      "sample_id": "ottawa_I-A-1",
+      "dataset_id": "ottawa_bearing",
+      "source_path": "raw_sources/04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/00.实验数据/I-A-1.mat",
+      "original_source_path": "04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/00.实验数据/I-A-1.mat",
+      "sha256": "496a14c3caf62d28169ff2567e9aaf5c7913c03c648ad73651b410cd09316ea7",
+      "bytes": 15517304,
+      "acquisition_id": "I-A-1",
+      "group_id": "ottawa:I-A-1",
+      "label": "inner_race",
+      "original_label": "I",
+      "fault_types": [
+        "inner_race"
+      ],
+      "severity": "unspecified",
+      "fs_hz": 200000.0,
+      "expected_samples": 2000000,
+      "expected_duration_seconds": 10.0,
+      "channel_roles": {
+        "Channel_1": "vibration",
+        "Channel_2": "encoder_raw"
+      },
+      "metadata": {
+        "dataset_reference": "Huang/Baddour 2018; DOI 10.1016/j.dib.2018.11.019; Mendeley v43hmbwxpm.1",
+        "fs_evidence": "Bearing vibration data collected under time-varying rotational speed conditions.pdf, physical p4 section 2.2.1",
+        "label_evidence": "same paper p4 Table 2; H healthy, I inner race, O outer race",
+        "speed_mode": "acceleration",
+        "repeat_index": 1,
+        "speed_unit": "unknown",
+        "speed_calibration_status": "encoder_pulses_per_revolution_unknown",
+        "vibration_unit": "unknown",
+        "bearing_model": "ER16K",
+        "bearing_geometry": {
+          "pitch_diameter_mm": 38.52,
+          "ball_diameter_mm": 7.94,
+          "ball_count": 9,
+          "evidence": "same paper p4 Table 1",
+          "contact_angle_status": "unconfirmed"
+        },
+        "diagnostic_orders": {
+          "bpfi": 5.43,
+          "bpfo": 3.57,
+          "evidence": "same paper p4 Table 1"
+        }
+      },
+      "source_copy_sha256_verified": true,
+      "original_source_root_label": "大创数据集"
+    },
+    {
+      "sample_id": "ottawa_O-A-1",
+      "dataset_id": "ottawa_bearing",
+      "source_path": "raw_sources/04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/00.实验数据/O-A-1.mat",
+      "original_source_path": "04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/00.实验数据/O-A-1.mat",
+      "sha256": "f07716f39f8fb93ea73465e40dc415b0252eefcf5797591b079139ce66ff1040",
+      "bytes": 12484063,
+      "acquisition_id": "O-A-1",
+      "group_id": "ottawa:O-A-1",
+      "label": "outer_race",
+      "original_label": "O",
+      "fault_types": [
+        "outer_race"
+      ],
+      "severity": "unspecified",
+      "fs_hz": 200000.0,
+      "expected_samples": 2000000,
+      "expected_duration_seconds": 10.0,
+      "channel_roles": {
+        "Channel_1": "vibration",
+        "Channel_2": "encoder_raw"
+      },
+      "metadata": {
+        "dataset_reference": "Huang/Baddour 2018; DOI 10.1016/j.dib.2018.11.019; Mendeley v43hmbwxpm.1",
+        "fs_evidence": "Bearing vibration data collected under time-varying rotational speed conditions.pdf, physical p4 section 2.2.1",
+        "label_evidence": "same paper p4 Table 2; H healthy, I inner race, O outer race",
+        "speed_mode": "acceleration",
+        "repeat_index": 1,
+        "speed_unit": "unknown",
+        "speed_calibration_status": "encoder_pulses_per_revolution_unknown",
+        "vibration_unit": "unknown",
+        "bearing_model": "ER16K",
+        "bearing_geometry": {
+          "pitch_diameter_mm": 38.52,
+          "ball_diameter_mm": 7.94,
+          "ball_count": 9,
+          "evidence": "same paper p4 Table 1",
+          "contact_angle_status": "unconfirmed"
+        },
+        "diagnostic_orders": {
+          "bpfi": 5.43,
+          "bpfo": 3.57,
+          "evidence": "same paper p4 Table 1"
+        }
+      },
+      "source_copy_sha256_verified": true,
+      "original_source_root_label": "大创数据集"
+    },
+    {
+      "sample_id": "ottawa_I-C-1",
+      "dataset_id": "ottawa_bearing",
+      "source_path": "raw_sources/04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/00.实验数据/I-C-1.mat",
+      "original_source_path": "04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/00.实验数据/I-C-1.mat",
+      "sha256": "c053ce37a9378e891c9d8818e3e1220dc38c778275a87fd72379b7c6720d82d1",
+      "bytes": 16037573,
+      "acquisition_id": "I-C-1",
+      "group_id": "ottawa:I-C-1",
+      "label": "inner_race",
+      "original_label": "I",
+      "fault_types": [
+        "inner_race"
+      ],
+      "severity": "unspecified",
+      "fs_hz": 200000.0,
+      "expected_samples": 2000000,
+      "expected_duration_seconds": 10.0,
+      "channel_roles": {
+        "Channel_1": "vibration",
+        "Channel_2": "encoder_raw"
+      },
+      "metadata": {
+        "dataset_reference": "Huang/Baddour 2018; DOI 10.1016/j.dib.2018.11.019; Mendeley v43hmbwxpm.1",
+        "fs_evidence": "Bearing vibration data collected under time-varying rotational speed conditions.pdf, physical p4 section 2.2.1",
+        "label_evidence": "same paper p4 Table 2; H healthy, I inner race, O outer race",
+        "speed_mode": "acceleration_then_deceleration",
+        "repeat_index": 1,
+        "speed_unit": "unknown",
+        "speed_calibration_status": "encoder_pulses_per_revolution_unknown",
+        "vibration_unit": "unknown",
+        "bearing_model": "ER16K",
+        "bearing_geometry": {
+          "pitch_diameter_mm": 38.52,
+          "ball_diameter_mm": 7.94,
+          "ball_count": 9,
+          "evidence": "same paper p4 Table 1",
+          "contact_angle_status": "unconfirmed"
+        },
+        "diagnostic_orders": {
+          "bpfi": 5.43,
+          "bpfo": 3.57,
+          "evidence": "same paper p4 Table 1"
+        }
+      },
+      "source_copy_sha256_verified": true,
+      "original_source_root_label": "大创数据集"
+    },
+    {
+      "sample_id": "ottawa_O-D-1",
+      "dataset_id": "ottawa_bearing",
+      "source_path": "raw_sources/04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/00.实验数据/O-D-1.mat",
+      "original_source_path": "04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/00.实验数据/O-D-1.mat",
+      "sha256": "e20e4bfccf548d9f22e65443fb27b9695233d7328d28cbaa02d236b86f1a4fc1",
+      "bytes": 12591498,
+      "acquisition_id": "O-D-1",
+      "group_id": "ottawa:O-D-1",
+      "label": "outer_race",
+      "original_label": "O",
+      "fault_types": [
+        "outer_race"
+      ],
+      "severity": "unspecified",
+      "fs_hz": 200000.0,
+      "expected_samples": 2000000,
+      "expected_duration_seconds": 10.0,
+      "channel_roles": {
+        "Channel_1": "vibration",
+        "Channel_2": "encoder_raw"
+      },
+      "metadata": {
+        "dataset_reference": "Huang/Baddour 2018; DOI 10.1016/j.dib.2018.11.019; Mendeley v43hmbwxpm.1",
+        "fs_evidence": "Bearing vibration data collected under time-varying rotational speed conditions.pdf, physical p4 section 2.2.1",
+        "label_evidence": "same paper p4 Table 2; H healthy, I inner race, O outer race",
+        "speed_mode": "deceleration_then_acceleration",
+        "repeat_index": 1,
+        "speed_unit": "unknown",
+        "speed_calibration_status": "encoder_pulses_per_revolution_unknown",
+        "vibration_unit": "unknown",
+        "bearing_model": "ER16K",
+        "bearing_geometry": {
+          "pitch_diameter_mm": 38.52,
+          "ball_diameter_mm": 7.94,
+          "ball_count": 9,
+          "evidence": "same paper p4 Table 1",
+          "contact_angle_status": "unconfirmed"
+        },
+        "diagnostic_orders": {
+          "bpfi": 5.43,
+          "bpfo": 3.57,
+          "evidence": "same paper p4 Table 1"
+        }
+      },
+      "source_copy_sha256_verified": true,
+      "original_source_root_label": "大创数据集"
+    },
+    {
+      "sample_id": "hust_H_20Hz",
+      "dataset_id": "hust_bearing",
+      "source_path": "raw_sources/HUSTbear/representative_excel/raw data/H_20Hz.xls",
+      "original_source_path": "HUSTbear/raw data-20260418T080655Z-3-001.zip",
+      "archive_path": "raw_sources/HUSTbear/raw data-20260418T080655Z-3-001.zip",
+      "archive_member": "raw data/H_20Hz.xls",
+      "archive_sha256": "e230cf21dc848d21a393d7b9b30fd5d56fd49eecbc6ef63cdecde1ee5cdda707",
+      "sha256": "8d6088da2cbfa51b10cd9c39f6e1533fb91fa85b86d0ee828c41721181f69ae0",
+      "bytes": 12738273,
+      "archive_member_sha256_verified": true,
+      "acquisition_id": "H_20Hz",
+      "group_id": "hust:H_20Hz",
+      "label": "healthy",
+      "original_label": "H",
+      "fault_types": [],
+      "severity": "none",
+      "fs_hz": 25600.0,
+      "expected_samples": 262144,
+      "expected_duration_seconds": 10.24,
+      "channel_roles": {
+        "time": "time_seconds",
+        "Speed": "speed_raw",
+        "X": "vibration",
+        "Y": "vibration",
+        "Z": "vibration"
+      },
+      "metadata": {
+        "dataset_reference": "Zhao/Zio/Shen 2024; DOI 10.1016/j.ress.2024.109964; Huazhong University of Science and Technology",
+        "fs_evidence": "Readme for HUSTbearing dataset.pdf p4 section 2.5; time column supports 25600Hz",
+        "label_evidence": "same README p2 Table 1 and p5-6 naming; 0.5X means medium damage, unprefixed fault severe",
+        "condition": "20Hz",
+        "speed_mode": "constant",
+        "nominal_rotation_hz": 20.0,
+        "load_status": "not_specified",
+        "speed_unit": "unknown",
+        "speed_calibration_status": "raw_electrical_signal_not_calibrated_hz",
+        "variable_speed_time_axis_status": "not_applicable",
+        "vibration_unit": "unknown",
+        "bearing_model": "ER-16K",
+        "bearing_geometry": {
+          "ball_diameter_mm": 7.94,
+          "ball_count": 9,
+          "reported_shaft_diameter_mm": 38.52,
+          "pitch_diameter_status": "unconfirmed_readme_calls_38.52_shaft_diameter",
+          "evidence": "same README p2 Table 1"
+        }
+      },
+      "original_source_root_label": "大创数据集"
+    },
+    {
+      "sample_id": "hust_I_20Hz",
+      "dataset_id": "hust_bearing",
+      "source_path": "raw_sources/HUSTbear/representative_excel/raw data/I_20Hz.xls",
+      "original_source_path": "HUSTbear/raw data-20260418T080655Z-3-001.zip",
+      "archive_path": "raw_sources/HUSTbear/raw data-20260418T080655Z-3-001.zip",
+      "archive_member": "raw data/I_20Hz.xls",
+      "archive_sha256": "e230cf21dc848d21a393d7b9b30fd5d56fd49eecbc6ef63cdecde1ee5cdda707",
+      "sha256": "966056ea4a92bef4460794a2c245e3730312eb30064d1da4190b2a0676c56f88",
+      "bytes": 12614360,
+      "archive_member_sha256_verified": true,
+      "acquisition_id": "I_20Hz",
+      "group_id": "hust:I_20Hz",
+      "label": "inner_race",
+      "original_label": "I",
+      "fault_types": [
+        "inner_race"
+      ],
+      "severity": "severe",
+      "fs_hz": 25600.0,
+      "expected_samples": 262144,
+      "expected_duration_seconds": 10.24,
+      "channel_roles": {
+        "time": "time_seconds",
+        "Speed": "speed_raw",
+        "X": "vibration",
+        "Y": "vibration",
+        "Z": "vibration"
+      },
+      "metadata": {
+        "dataset_reference": "Zhao/Zio/Shen 2024; DOI 10.1016/j.ress.2024.109964; Huazhong University of Science and Technology",
+        "fs_evidence": "Readme for HUSTbearing dataset.pdf p4 section 2.5; time column supports 25600Hz",
+        "label_evidence": "same README p2 Table 1 and p5-6 naming; 0.5X means medium damage, unprefixed fault severe",
+        "condition": "20Hz",
+        "speed_mode": "constant",
+        "nominal_rotation_hz": 20.0,
+        "load_status": "not_specified",
+        "speed_unit": "unknown",
+        "speed_calibration_status": "raw_electrical_signal_not_calibrated_hz",
+        "variable_speed_time_axis_status": "not_applicable",
+        "vibration_unit": "unknown",
+        "bearing_model": "ER-16K",
+        "bearing_geometry": {
+          "ball_diameter_mm": 7.94,
+          "ball_count": 9,
+          "reported_shaft_diameter_mm": 38.52,
+          "pitch_diameter_status": "unconfirmed_readme_calls_38.52_shaft_diameter",
+          "evidence": "same README p2 Table 1"
+        }
+      },
+      "original_source_root_label": "大创数据集"
+    },
+    {
+      "sample_id": "hust_O_20Hz",
+      "dataset_id": "hust_bearing",
+      "source_path": "raw_sources/HUSTbear/representative_excel/raw data/O_20Hz.xls",
+      "original_source_path": "HUSTbear/raw data-20260418T080655Z-3-001.zip",
+      "archive_path": "raw_sources/HUSTbear/raw data-20260418T080655Z-3-001.zip",
+      "archive_member": "raw data/O_20Hz.xls",
+      "archive_sha256": "e230cf21dc848d21a393d7b9b30fd5d56fd49eecbc6ef63cdecde1ee5cdda707",
+      "sha256": "13d800436339dfac29eb6cee6602ba45c829a879fae87d6f23203687bb8d61bd",
+      "bytes": 12671953,
+      "archive_member_sha256_verified": true,
+      "acquisition_id": "O_20Hz",
+      "group_id": "hust:O_20Hz",
+      "label": "outer_race",
+      "original_label": "O",
+      "fault_types": [
+        "outer_race"
+      ],
+      "severity": "severe",
+      "fs_hz": 25600.0,
+      "expected_samples": 262144,
+      "expected_duration_seconds": 10.24,
+      "channel_roles": {
+        "time": "time_seconds",
+        "Speed": "speed_raw",
+        "X": "vibration",
+        "Y": "vibration",
+        "Z": "vibration"
+      },
+      "metadata": {
+        "dataset_reference": "Zhao/Zio/Shen 2024; DOI 10.1016/j.ress.2024.109964; Huazhong University of Science and Technology",
+        "fs_evidence": "Readme for HUSTbearing dataset.pdf p4 section 2.5; time column supports 25600Hz",
+        "label_evidence": "same README p2 Table 1 and p5-6 naming; 0.5X means medium damage, unprefixed fault severe",
+        "condition": "20Hz",
+        "speed_mode": "constant",
+        "nominal_rotation_hz": 20.0,
+        "load_status": "not_specified",
+        "speed_unit": "unknown",
+        "speed_calibration_status": "raw_electrical_signal_not_calibrated_hz",
+        "variable_speed_time_axis_status": "not_applicable",
+        "vibration_unit": "unknown",
+        "bearing_model": "ER-16K",
+        "bearing_geometry": {
+          "ball_diameter_mm": 7.94,
+          "ball_count": 9,
+          "reported_shaft_diameter_mm": 38.52,
+          "pitch_diameter_status": "unconfirmed_readme_calls_38.52_shaft_diameter",
+          "evidence": "same README p2 Table 1"
+        }
+      },
+      "original_source_root_label": "大创数据集"
+    },
+    {
+      "sample_id": "hust_B_20Hz",
+      "dataset_id": "hust_bearing",
+      "source_path": "raw_sources/HUSTbear/representative_excel/raw data/B_20Hz.xls",
+      "original_source_path": "HUSTbear/raw data-20260418T080655Z-3-001.zip",
+      "archive_path": "raw_sources/HUSTbear/raw data-20260418T080655Z-3-001.zip",
+      "archive_member": "raw data/B_20Hz.xls",
+      "archive_sha256": "e230cf21dc848d21a393d7b9b30fd5d56fd49eecbc6ef63cdecde1ee5cdda707",
+      "sha256": "7682c0af30b1ad904126954083aa319ebefd83b17b40560851b436abd583d88c",
+      "bytes": 12702566,
+      "archive_member_sha256_verified": true,
+      "acquisition_id": "B_20Hz",
+      "group_id": "hust:B_20Hz",
+      "label": "ball",
+      "original_label": "B",
+      "fault_types": [
+        "ball"
+      ],
+      "severity": "severe",
+      "fs_hz": 25600.0,
+      "expected_samples": 262144,
+      "expected_duration_seconds": 10.24,
+      "channel_roles": {
+        "time": "time_seconds",
+        "Speed": "speed_raw",
+        "X": "vibration",
+        "Y": "vibration",
+        "Z": "vibration"
+      },
+      "metadata": {
+        "dataset_reference": "Zhao/Zio/Shen 2024; DOI 10.1016/j.ress.2024.109964; Huazhong University of Science and Technology",
+        "fs_evidence": "Readme for HUSTbearing dataset.pdf p4 section 2.5; time column supports 25600Hz",
+        "label_evidence": "same README p2 Table 1 and p5-6 naming; 0.5X means medium damage, unprefixed fault severe",
+        "condition": "20Hz",
+        "speed_mode": "constant",
+        "nominal_rotation_hz": 20.0,
+        "load_status": "not_specified",
+        "speed_unit": "unknown",
+        "speed_calibration_status": "raw_electrical_signal_not_calibrated_hz",
+        "variable_speed_time_axis_status": "not_applicable",
+        "vibration_unit": "unknown",
+        "bearing_model": "ER-16K",
+        "bearing_geometry": {
+          "ball_diameter_mm": 7.94,
+          "ball_count": 9,
+          "reported_shaft_diameter_mm": 38.52,
+          "pitch_diameter_status": "unconfirmed_readme_calls_38.52_shaft_diameter",
+          "evidence": "same README p2 Table 1"
+        }
+      },
+      "original_source_root_label": "大创数据集"
+    },
+    {
+      "sample_id": "hust_H_VS_0_40_0Hz",
+      "dataset_id": "hust_bearing",
+      "source_path": "raw_sources/HUSTbear/representative_excel/raw data/H_VS_0_40_0Hz.xls",
+      "original_source_path": "HUSTbear/raw data-20260418T080655Z-3-001.zip",
+      "archive_path": "raw_sources/HUSTbear/raw data-20260418T080655Z-3-001.zip",
+      "archive_member": "raw data/H_VS_0_40_0Hz.xls",
+      "archive_sha256": "e230cf21dc848d21a393d7b9b30fd5d56fd49eecbc6ef63cdecde1ee5cdda707",
+      "sha256": "8d2e12a30a065c4fb9f7a5a30a8981fb23fd5fcfc899efb4086ad2622e9a8ab3",
+      "bytes": 12581965,
+      "archive_member_sha256_verified": true,
+      "acquisition_id": "H_VS_0_40_0Hz",
+      "group_id": "hust:H_VS_0_40_0Hz",
+      "label": "healthy",
+      "original_label": "H",
+      "fault_types": [],
+      "severity": "none",
+      "fs_hz": 25600.0,
+      "expected_samples": 262144,
+      "expected_duration_seconds": 10.24,
+      "channel_roles": {
+        "time": "time_seconds",
+        "Speed": "speed_raw",
+        "X": "vibration",
+        "Y": "vibration",
+        "Z": "vibration"
+      },
+      "metadata": {
+        "dataset_reference": "Zhao/Zio/Shen 2024; DOI 10.1016/j.ress.2024.109964; Huazhong University of Science and Technology",
+        "fs_evidence": "Readme for HUSTbearing dataset.pdf p4 section 2.5; time column supports 25600Hz",
+        "label_evidence": "same README p2 Table 1 and p5-6 naming; 0.5X means medium damage, unprefixed fault severe",
+        "condition": "VS_0_40_0Hz",
+        "speed_mode": "variable",
+        "nominal_rotation_hz": null,
+        "load_status": "not_specified",
+        "speed_unit": "unknown",
+        "speed_calibration_status": "raw_electrical_signal_not_calibrated_hz",
+        "variable_speed_time_axis_status": "unconfirmed",
+        "vibration_unit": "unknown",
+        "bearing_model": "ER-16K",
+        "bearing_geometry": {
+          "ball_diameter_mm": 7.94,
+          "ball_count": 9,
+          "reported_shaft_diameter_mm": 38.52,
+          "pitch_diameter_status": "unconfirmed_readme_calls_38.52_shaft_diameter",
+          "evidence": "same README p2 Table 1"
+        }
+      },
+      "original_source_root_label": "大创数据集"
+    },
+    {
+      "sample_id": "hust_I_VS_0_40_0Hz",
+      "dataset_id": "hust_bearing",
+      "source_path": "raw_sources/HUSTbear/representative_excel/raw data/I_VS_0_40_0Hz.xls",
+      "original_source_path": "HUSTbear/raw data-20260418T080655Z-3-001.zip",
+      "archive_path": "raw_sources/HUSTbear/raw data-20260418T080655Z-3-001.zip",
+      "archive_member": "raw data/I_VS_0_40_0Hz.xls",
+      "archive_sha256": "e230cf21dc848d21a393d7b9b30fd5d56fd49eecbc6ef63cdecde1ee5cdda707",
+      "sha256": "b525d19dc62ada190b00ed6c1da3ac2dff2ea566b1ab20ae3c736e323ee2bca1",
+      "bytes": 12551008,
+      "archive_member_sha256_verified": true,
+      "acquisition_id": "I_VS_0_40_0Hz",
+      "group_id": "hust:I_VS_0_40_0Hz",
+      "label": "inner_race",
+      "original_label": "I",
+      "fault_types": [
+        "inner_race"
+      ],
+      "severity": "severe",
+      "fs_hz": 25600.0,
+      "expected_samples": 262144,
+      "expected_duration_seconds": 10.24,
+      "channel_roles": {
+        "time": "time_seconds",
+        "Speed": "speed_raw",
+        "X": "vibration",
+        "Y": "vibration",
+        "Z": "vibration"
+      },
+      "metadata": {
+        "dataset_reference": "Zhao/Zio/Shen 2024; DOI 10.1016/j.ress.2024.109964; Huazhong University of Science and Technology",
+        "fs_evidence": "Readme for HUSTbearing dataset.pdf p4 section 2.5; time column supports 25600Hz",
+        "label_evidence": "same README p2 Table 1 and p5-6 naming; 0.5X means medium damage, unprefixed fault severe",
+        "condition": "VS_0_40_0Hz",
+        "speed_mode": "variable",
+        "nominal_rotation_hz": null,
+        "load_status": "not_specified",
+        "speed_unit": "unknown",
+        "speed_calibration_status": "raw_electrical_signal_not_calibrated_hz",
+        "variable_speed_time_axis_status": "unconfirmed",
+        "vibration_unit": "unknown",
+        "bearing_model": "ER-16K",
+        "bearing_geometry": {
+          "ball_diameter_mm": 7.94,
+          "ball_count": 9,
+          "reported_shaft_diameter_mm": 38.52,
+          "pitch_diameter_status": "unconfirmed_readme_calls_38.52_shaft_diameter",
+          "evidence": "same README p2 Table 1"
+        }
+      },
+      "original_source_root_label": "大创数据集"
+    }
+  ],
+  "selection": "5 Ottawa acquisitions plus 6 Huazhong HUSTbear acquisitions; no Hanoi practical intake",
+  "legacy_cw_name_audit": {
+    "source_mat_count": 36,
+    "legacy_npy_count": 36,
+    "bijective_stem_names": true,
+    "numeric_correspondence_scope": "Only H-A-1/I-C-1/O-D-1 was previously checked; no further numeric comparison in this intake",
+    "retained_pdf_paths": [
+      "raw_sources/04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/02.参考论文/A method for tachometer-free and resampling-free bearing fault diagnostics under time-varying speed conditions.pdf",
+      "raw_sources/04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/02.参考论文/archivetempBearing vibration data collected under time-varying rotational speed conditions.pdf",
+      "raw_sources/04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/02.参考论文/Bearing fault diagnosis under unknown time-varying rotational speed conditions via multiple time-frequency curve extraction.pdf",
+      "raw_sources/04.加拿大渥太华大学数据集/加拿大渥太华大学数据集/02.参考论文/Bearing vibration data collected under time-varying rotational speed conditions.pdf"
+    ],
+    "audited_stem_names": [
+      "H-A-1",
+      "H-A-2",
+      "H-A-3",
+      "H-B-1",
+      "H-B-2",
+      "H-B-3",
+      "H-C-1",
+      "H-C-2",
+      "H-C-3",
+      "H-D-1",
+      "H-D-2",
+      "H-D-3",
+      "I-A-1",
+      "I-A-2",
+      "I-A-3",
+      "I-B-1",
+      "I-B-2",
+      "I-B-3",
+      "I-C-1",
+      "I-C-2",
+      "I-C-3",
+      "I-D-1",
+      "I-D-2",
+      "I-D-3",
+      "O-A-1",
+      "O-A-2",
+      "O-A-3",
+      "O-B-1",
+      "O-B-2",
+      "O-B-3",
+      "O-C-1",
+      "O-C-2",
+      "O-C-3",
+      "O-D-1",
+      "O-D-2",
+      "O-D-3"
+    ],
+    "retained_legacy_pdf": {
+      "path": "raw_sources/04.加拿大渥太华大学数据集/legacy_CW_reference/1-s2.0-S2352340918314124-main.pdf",
+      "sha256": "c9219606e97385fb184f95879f3464b4cea4320b61c7e59fbef8364ca14377d3",
+      "bytes": 274979,
+      "copy_sha256_verified": true
+    }
+  }
+}
