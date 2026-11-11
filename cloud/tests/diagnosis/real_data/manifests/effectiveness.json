@@ -3172,6 +3172,7 @@
         3
       ]
     },
+    "conditional_bearing_geometry": {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0.0},
     "bearing_assumption": "ER16K n9/d7.94/D38.52/alpha0 conditional only; HUST pitch diameter unverified; Ottawa angle unverified. Scalar estimates are inferred, not independent speed ground truth.",
     "noise": "No injected noise in main evaluation; actual acquisition noise level unknown."
   }
