@@ -125,6 +125,25 @@ class DiagnosisBusinessTests(unittest.TestCase):
                 save_diagnosis(db, DiagnosisKey("BUSINESS", 2, 1, "none"), snapshot())
             self.assertEqual(db.query(Diagnosis).count(), 0)
 
+    def test_rotation_update_accepts_object_and_only_touches_exact_summary(self):
+        with self.sessions() as db:
+            save_batch(db, "BUSINESS", 1, "none", batch_snapshot())
+            db.commit()
+            previous = db.query(Diagnosis).filter_by(channel=0).one()
+            stamp = previous.analyzed_at
+            score = previous.health_score
+        response = self.client.put("/api/data/BUSINESS/1/diagnosis", json={"rot_freq": 23.5})
+        self.assertEqual(response.status_code, 200, response.text)
+        with self.sessions() as db:
+            row = db.query(Diagnosis).filter_by(channel=0).one()
+            self.assertEqual(row.rot_freq, 23.5)
+            self.assertEqual(row.health_score, score)
+            self.assertEqual(row.analyzed_at, stamp)
+            self.assertTrue(all(item.rot_freq is None for item in db.query(Diagnosis).filter(Diagnosis.channel > 0)))
+        self.assertEqual(self.client.put("/api/data/BUSINESS/2/diagnosis", json={"rot_freq": 23.5}).status_code, 404)
+        self.assertEqual(self.client.put("/api/data/BUSINESS/1/diagnosis", json={"rot_freq": 0}).status_code, 422)
+        self.assertEqual(self.client.put("/api/data/BUSINESS/1/diagnosis", json=23.5).status_code, 422)
+
     def test_alarms_use_conclusion_once_and_unknown_has_no_health_alarm(self):
         with self.sessions() as db:
             payload = batch_snapshot()
@@ -182,6 +201,15 @@ class DiagnosisBusinessTests(unittest.TestCase):
         self.assertNotIn("status", snapshot_schema["properties"])
         self.assertTrue(any(item.get("type") == "null" for item in snapshot_schema["properties"]["health_score"]["anyOf"]))
         self.assertEqual(set(schema["components"]["schemas"]["EvaluationStatus"]["enum"]), {"evaluated", "not_evaluable", "indeterminate"})
+
+    def test_configured_weight_is_applied_once_without_changing_conclusion(self):
+        from app.core.config import DIAGNOSIS_WEIGHTS
+        from app.services.diagnosis.assessment import reassess_diagnosis
+        with patch.dict(DIAGNOSIS_WEIGHTS, {"ser": 2.}):
+            payload = snapshot()
+            self.assertEqual(payload["health_score"], 76.)
+            self.assertEqual(payload["diagnosis_conclusion"], "warning")
+            self.assertEqual(reassess_diagnosis(payload).health_score, 76.)
 
 
 class MigrationTests(unittest.TestCase):

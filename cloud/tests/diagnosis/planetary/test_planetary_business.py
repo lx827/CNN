@@ -90,6 +90,10 @@ class PlanetaryBusinessTests(unittest.TestCase):
             self.assertIn(result["evaluation_status"], {"not_evaluable", "indeterminate"})
             self.assertEqual(result["diagnosis_conclusion"], "unknown")
             self.assertIsNone(result["health_score"])
+            for evaluation in result["evaluations"]:
+                self.assertEqual(evaluation["diagnosis_conclusion"], "unknown")
+                self.assertTrue(all(item["reason"] and item["confidence"] is None and not item["penalties"]
+                                    for item in evaluation["evidence"]))
 
 
 if __name__ == "__main__":
