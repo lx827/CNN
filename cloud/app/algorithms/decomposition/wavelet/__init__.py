@@ -9,6 +9,7 @@ from .core import (
     decompose_wavelet_packet,
     reconstruct_dwt,
     reconstruct_wavelet_packet,
+    denoise_wavelet,
 )
 from .pywavelets_adapter import PyWaveletsImplementation
 
@@ -17,4 +18,5 @@ __all__ = [
     "WaveletPacketDecomposition", "WaveletPacketNode", "PyWaveletsImplementation",
     "decompose_dwt", "decompose_wavelet_packet", "reconstruct_dwt",
     "reconstruct_wavelet_packet",
+    "denoise_wavelet",
 ]

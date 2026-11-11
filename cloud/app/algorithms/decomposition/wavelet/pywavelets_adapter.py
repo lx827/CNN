@@ -27,6 +27,32 @@ def _original_axis(reconstructed: FloatArray, input_length: int) -> FloatArray:
 class PyWaveletsImplementation:
     """无状态 PyWavelets 实现，可被同契约的 Rust/C++ 实现替换。"""
 
+    def denoise(self, signal, wavelet, level, threshold_mode, threshold_scale):
+        from scipy.special import expit
+        wavelet_object = pywt.Wavelet(wavelet)
+        maximum = pywt.dwt_max_level(len(signal), wavelet_object.dec_len)
+        chosen = maximum if level is None else level
+        if chosen < 1 or chosen > maximum:
+            raise ValueError(f"DWT 层数必须位于 [1, {maximum}]")
+        amplitude = float(np.max(np.abs(signal)))
+        normalized = signal / amplitude if amplitude else signal
+        coefficients = pywt.wavedec(normalized, wavelet_object, mode="symmetric", level=chosen)
+        finest = coefficients[-1]
+        sigma = np.median(np.abs(finest - np.median(finest))) / .6744897501960817
+        threshold = threshold_scale * sigma * np.sqrt(2 * np.log(len(signal)))
+        output = [coefficients[0]]
+        for detail in coefficients[1:]:
+            absolute = np.abs(detail)
+            if threshold_mode == "soft":
+                updated = np.sign(detail) * np.maximum(absolute - threshold, 0)
+            elif threshold_mode == "hard":
+                updated = detail * (absolute > threshold)
+            else:
+                updated = np.sign(detail) * np.maximum(
+                    absolute - threshold * expit(-2 * (absolute - threshold)), 0)
+            output.append(updated)
+        return _original_axis(pywt.waverec(output, wavelet_object, mode="symmetric"), len(signal)) * amplitude
+
     def dwt(
         self, signal: FloatArray, sample_rate_hz: float,
         wavelet: str, level: int, mode: str,

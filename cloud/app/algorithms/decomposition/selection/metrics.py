@@ -47,7 +47,9 @@ def compute_component_metrics(
     原采样率重构，而不是长度不同的抽取系数。相关系数取 Pearson 绝对值。
     """
     arr = _validate(component, sample_rate_hz)
-    centered = arr - np.mean(arr)
+    scale = float(np.max(np.abs(arr)))
+    normalized = arr / scale if scale else arr
+    centered = normalized - np.mean(normalized)
     variance = float(np.var(centered))
     energy = float(np.sum(arr * arr))
     correlation = None
@@ -56,9 +58,11 @@ def compute_component_metrics(
         ref = _validate(reference, sample_rate_hz)
         if len(ref) != len(arr):
             raise ValueError("分量与参考信号必须等长并共享时间轴，禁止截断对齐")
-        ref_centered = ref - np.mean(ref)
+        ref_scale = float(np.max(np.abs(ref)))
+        normalized_ref = ref / ref_scale if ref_scale else ref
+        ref_centered = normalized_ref - np.mean(normalized_ref)
         denominator = float(np.std(centered) * np.std(ref_centered))
-        if denominator > np.finfo(np.float64).eps:
+        if denominator > 0:
             correlation = abs(float(np.mean(centered * ref_centered) / denominator))
         reference_energy = float(np.sum(ref * ref))
         if reference_energy > np.finfo(np.float64).tiny:
@@ -66,7 +70,7 @@ def compute_component_metrics(
 
     kurtosis_pearson = None
     kurtosis_excess = None
-    if variance > np.finfo(np.float64).eps:
+    if variance > 0:
         kurtosis_pearson = float(np.mean(centered**4) / variance**2)
         kurtosis_excess = kurtosis_pearson - 3.0
 

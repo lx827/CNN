@@ -38,7 +38,8 @@ class PythonVMDImplementation:
         )
         valid = ValidInterval(0, valid_length)
         segment = signal[:valid_length]
-        if float(np.std(segment)) <= np.finfo(np.float64).eps:
+        scale = float(np.max(np.abs(segment)))
+        if scale == 0 or float(np.std(segment / scale)) == 0:
             return VMDResult(
                 status="indeterminate", input_length=input_length, sample_rate_hz=sample_rate_hz,
                 modes=np.empty((0, valid_length), dtype=np.float64),
@@ -48,9 +49,11 @@ class PythonVMDImplementation:
                 iterations=0, converged=False, reason="zero_variance",
             )
 
+        normalized = segment / scale
+        # 归一化后执行 ADMM，使固定收敛容差不依赖振动幅值单位。
         # 奇数输入左右各镜像 floor(N/2) 点；原区间始终精确取 N 点。
         left = valid_length // 2
-        mirrored = np.concatenate((segment[:left][::-1], segment, segment[-left:][::-1]))
+        mirrored = np.concatenate((normalized[:left][::-1], normalized, normalized[-left:][::-1]))
         length = len(mirrored)
         frequencies = np.fft.fftshift(np.fft.fftfreq(length))
         spectrum_plus = np.fft.fftshift(np.fft.fft(mirrored))
@@ -98,7 +101,7 @@ class PythonVMDImplementation:
                 converged = True
                 break
 
-        modes = _real_modes(previous)[:, left:left + valid_length]
+        modes = _real_modes(previous)[:, left:left + valid_length] * scale
         centers_hz = centers * sample_rate_hz
         history_hz = history[:iterations] * sample_rate_hz
         order = np.argsort(centers_hz)

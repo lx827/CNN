@@ -14,7 +14,7 @@ from typing import Tuple, Optional, Literal, Dict
 import pywt
 
 from .signal_utils import prepare_signal, bandpass_filter, lowpass_filter, _estimate_noise_mad
-from .vmd_denoise import vmd_denoise, vmd_select_impact_mode
+from .vmd_denoise import vmd_denoise
 
 
 def wavelet_denoise(

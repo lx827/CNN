@@ -93,7 +93,7 @@ def _mirror_extrema(
     return padded[0], padded[1], padded[2], padded[3]
 
 
-def _envelope_mean(signal: FloatArray, parameters: EMDParameters) -> FloatArray | None:
+def _envelopes(signal: FloatArray, parameters: EMDParameters) -> tuple[FloatArray, FloatArray] | None:
     maxima_indices, minima_indices = _extrema(signal)
     if len(maxima_indices) < 2 or len(minima_indices) < 2:
         return None
@@ -108,7 +108,22 @@ def _envelope_mean(signal: FloatArray, parameters: EMDParameters) -> FloatArray 
     lower = interpolator(min_locs, min_vals, extrapolate=True)(coordinates)
     if not np.all(np.isfinite(upper)) or not np.all(np.isfinite(lower)):
         raise RuntimeError("EMD 包络插值产生非有限值")
-    return (upper + lower) / 2.0
+    return upper, lower
+
+
+def _envelope_mean(signal: FloatArray, parameters: EMDParameters) -> FloatArray | None:
+    envelopes = _envelopes(signal, parameters)
+    return None if envelopes is None else (envelopes[0] + envelopes[1]) / 2.0
+
+
+def rilling_stop(upper: FloatArray, lower: FloatArray, thresholds: tuple[float, float, float]) -> bool:
+    """Rilling 包络对称性判据；零包络幅值且非零均值的点不满足判据。"""
+    sd1, sd2, fraction = thresholds
+    mean = np.abs((upper + lower) / 2.0)
+    amplitude = np.abs(upper - lower) / 2.0
+    ratio = np.divide(mean, amplitude, out=np.full_like(mean, np.inf), where=amplitude > 0)
+    ratio[(mean == 0) & (amplitude == 0)] = 0
+    return bool(np.mean(ratio > sd1) <= fraction and np.all(ratio <= sd2))
 
 
 def _sift(signal: FloatArray, parameters: EMDParameters) -> tuple[FloatArray, int, bool] | None:
@@ -116,9 +131,11 @@ def _sift(signal: FloatArray, parameters: EMDParameters) -> tuple[FloatArray, in
         return None
     current = signal.copy()
     for iteration in range(1, parameters.max_sifts + 1):
-        mean = _envelope_mean(current, parameters)
-        if mean is None:
+        envelopes = _envelopes(current, parameters)
+        if envelopes is None:
             return current, iteration - 1, True
+        upper, lower = envelopes
+        mean = (upper + lower) / 2.0
         updated = current - mean
         denominator = float(np.sum(current * current))
         if denominator <= np.finfo(np.float64).tiny:
@@ -126,7 +143,10 @@ def _sift(signal: FloatArray, parameters: EMDParameters) -> tuple[FloatArray, in
         sd = float(np.sum((updated - current) ** 2) / denominator)
         # SD 描述上一轮与本轮之差；满足准则后必须接受 updated，而非丢弃本轮。
         current = updated
-        if sd < parameters.sd_threshold:
+        stop = sd < parameters.sd_threshold if parameters.stopping_rule == "sd" else rilling_stop(
+            upper, lower, parameters.rilling_thresholds,
+        )
+        if stop:
             return current, iteration, True
     return current, parameters.max_sifts, False
 
@@ -140,18 +160,19 @@ def _indeterminate(method: str, signal: FloatArray, fs: float, reason: str, seed
 
 
 def _emd(signal: FloatArray, fs: float, parameters: EMDParameters, method: str = "emd") -> EMDResult:
-    if float(np.std(signal)) <= np.finfo(np.float64).eps:
+    amplitude = float(np.max(np.abs(signal)))
+    if amplitude == 0 or float(np.std(signal / amplitude)) == 0:
         return _indeterminate(method, signal, fs, "zero_variance")
     imfs = []
     iterations = []
     converged = []
-    residual = signal.copy()
+    residual = signal / amplitude
     for _ in range(parameters.max_imfs):
         sifted = _sift(residual, parameters)
         if sifted is None:
             break
         imf, count, did_converge = sifted
-        if float(np.std(imf)) <= np.finfo(np.float64).eps:
+        if float(np.std(imf)) <= np.finfo(np.float64).eps * float(np.std(signal / amplitude)):
             break
         imfs.append(imf)
         iterations.append(count)
@@ -164,7 +185,7 @@ def _emd(signal: FloatArray, fs: float, parameters: EMDParameters, method: str =
         return _indeterminate(method, signal, fs, "insufficient_extrema")
     return EMDResult(
         method=method, status="valid", input_length=len(signal), sample_rate_hz=fs,
-        imfs=tuple(imfs), residual=residual, valid_interval=ValidInterval(0, len(signal)),
+        imfs=tuple(imf * amplitude for imf in imfs), residual=residual * amplitude, valid_interval=ValidInterval(0, len(signal)),
         sift_iterations=tuple(iterations), converged=tuple(converged),
         reason=None if all(converged) else "maximum_sifts_reached",
     )
@@ -181,7 +202,7 @@ class PythonEMDImplementation:
         parameters: EnsembleParameters, seed: int,
     ) -> EMDResult:
         scale = float(np.std(signal))
-        if scale <= np.finfo(np.float64).eps:
+        if scale == 0.0:
             return _indeterminate("eemd", signal, sample_rate_hz, "zero_variance", seed)
         if parameters.noise_scale == 0.0:
             result = _emd(signal, sample_rate_hz, parameters.emd, method="eemd")
@@ -219,7 +240,7 @@ class PythonEMDImplementation:
         parameters: EnsembleParameters, seed: int,
     ) -> EMDResult:
         scale = float(np.std(signal))
-        if scale <= np.finfo(np.float64).eps:
+        if scale == 0.0:
             return _indeterminate("ceemdan", signal, sample_rate_hz, "zero_variance", seed)
         if parameters.noise_scale == 0.0:
             result = _emd(signal, sample_rate_hz, parameters.emd, method="ceemdan")
@@ -227,8 +248,10 @@ class PythonEMDImplementation:
         normalized = signal / scale
         rng = np.random.default_rng(seed)
         noise_modes = []
+        white_noises = []
         for _ in range(parameters.ensemble_size):
             noise = rng.normal(0.0, 1.0, len(signal))
+            white_noises.append(noise)
             result = _emd(noise, sample_rate_hz, parameters.emd)
             noise_modes.append(result.imfs)
 
@@ -238,33 +261,35 @@ class PythonEMDImplementation:
         converged = []
         single_mode_parameters = replace(parameters.emd, max_imfs=1)
         for order in range(parameters.emd.max_imfs):
-            local_means = []
+            first_imfs = []
             member_iterations = []
             member_converged = []
-            source = normalized if order == 0 else residual
             amplitude = 1.0 if order == 0 else float(np.std(residual))
-            for modes in noise_modes:
-                if order >= len(modes) or np.std(modes[order]) <= np.finfo(np.float64).eps:
-                    continue
-                noise = parameters.noise_scale * amplitude * modes[order] / np.std(modes[order])
-                trial = source + noise
+            for white_noise, modes in zip(white_noises, noise_modes):
+                # Torres 2011: 第一次对原白噪声取 E1；之后取 E_k(白噪声)。
+                # 不把局部均值平均的 improved-CEEMDAN 变体冒称为该公式。
+                if order == 0:
+                    noise = white_noise
+                elif order - 1 < len(modes) and np.std(modes[order - 1]) > 0:
+                    noise = modes[order - 1] / np.std(modes[order - 1])
+                else:
+                    noise = np.zeros(len(signal))
+                trial = residual + parameters.noise_scale * amplitude * noise
                 result = _emd(trial, sample_rate_hz, single_mode_parameters)
                 if not result.imfs:
                     continue
-                local_means.append(trial - result.imfs[0])
+                first_imfs.append(result.imfs[0])
                 member_iterations.append(result.sift_iterations[0])
                 member_converged.append(result.converged[0])
-            if not local_means:
+            if not first_imfs:
                 break
-            local_mean = np.mean(local_means, axis=0)
-            imf = residual - local_mean
+            imf = np.mean(first_imfs, axis=0)
             if np.std(imf) <= np.finfo(np.float64).eps:
-                residual = local_mean
                 break
             imfs.append(imf)
             iterations.append(max(member_iterations))
             converged.append(all(member_converged))
-            residual = local_mean
+            residual = residual - imf
             maxima, minima = _extrema(residual)
             if len(maxima) < 2 or len(minima) < 2:
                 break

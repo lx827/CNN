@@ -22,6 +22,8 @@ class EMDParameters:
     sd_threshold: float = 0.2
     mirror_extrema: int = 3
     interpolation: str = "pchip"
+    stopping_rule: str = "sd"
+    rilling_thresholds: tuple[float, float, float] = (0.05, 0.5, 0.05)
 
     def __post_init__(self) -> None:
         for name in ("max_imfs", "max_sifts", "mirror_extrema"):
@@ -32,6 +34,11 @@ class EMDParameters:
             raise ValueError("SD 阈值必须是有限正数")
         if self.interpolation not in ("pchip", "cubic"):
             raise ValueError("包络插值只支持 pchip 或 cubic")
+        if self.stopping_rule not in ("sd", "rilling"):
+            raise ValueError("停止准则只支持 sd 或 rilling")
+        sd1, sd2, fraction = self.rilling_thresholds
+        if not (0 < sd1 <= sd2 and 0 <= fraction <= 1) or not np.all(np.isfinite(self.rilling_thresholds)):
+            raise ValueError("Rilling 阈值必须满足 0 < sd1 <= sd2, 0 <= fraction <= 1")
 
 
 @dataclass(frozen=True)

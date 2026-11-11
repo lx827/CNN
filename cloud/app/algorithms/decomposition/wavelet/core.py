@@ -104,6 +104,10 @@ class WaveletImplementation(Protocol):
     ) -> WaveletPacketDecomposition:
         ...
 
+    def denoise(self, signal: FloatArray, wavelet: str, level: int | None,
+                threshold_mode: str, threshold_scale: float) -> FloatArray:
+        ...
+
 
 def _validate_signal(signal: FloatArray, sample_rate_hz: float) -> FloatArray:
     arr = np.asarray(signal, dtype=np.float64)
@@ -193,3 +197,21 @@ def reconstruct_wavelet_packet(
         (by_path[path].reconstructed for path in paths),
         start=np.zeros(decomposition.input_length, dtype=np.float64),
     )
+
+
+def denoise_wavelet(signal: FloatArray, wavelet: str = "db8", level: int | None = None,
+                    threshold_mode: str = "soft", threshold_scale: float = 1.0,
+                    implementation: WaveletImplementation | None = None) -> FloatArray:
+    """DWT 细节系数阈值处理；MAD 无绝对幅值下限，保持输入量纲和长度。
+
+    level=None 取当前输入和小波允许的最大无边界效应层数。
+    improved 是明确工程收缩函数，不声称具有普适降噪最优性。
+    """
+    arr = _validate_signal(signal, 1.0)
+    if threshold_mode not in ("soft", "hard", "improved"):
+        raise ValueError("未知小波阈值模式")
+    if not np.isfinite(threshold_scale) or threshold_scale < 0:
+        raise ValueError("阈值倍率必须为有限非负数")
+    if level is not None:
+        _validate_parameters(wavelet, level, "symmetric")
+    return _implementation(implementation).denoise(arr, wavelet, level, threshold_mode, threshold_scale)
