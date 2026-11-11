@@ -11,6 +11,7 @@
     # 从所有数据重新生成
     uv run python tests/diagnosis/method_eval/replot.py --all
 """
+
 import sys
 import json
 import numpy as np
@@ -22,7 +23,11 @@ sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 sys.path.insert(0, str(PROJECT_ROOT / "cloud" / "tests" / "diagnosis"))
 
 from method_eval.config import EXP_DIRS
-from method_eval.visualizer import apply_style, plot_confusion_matrix, plot_method_comparison_bar
+from method_eval.visualizer import (
+    apply_style,
+    plot_confusion_matrix,
+    plot_method_comparison_bar,
+)
 
 
 def load_json(path: Path) -> Dict[str, Any]:
@@ -72,7 +77,10 @@ def replot_from_dir(data_dir: Path):
                 accuracy = float(data.get("accuracy", 0))
 
                 plot_confusion_matrix(
-                    cm, labels, method_name, accuracy,
+                    cm,
+                    labels,
+                    method_name,
+                    accuracy,
                     str(data_dir / output_name),
                     highlight=data.get("highlight", False),
                 )

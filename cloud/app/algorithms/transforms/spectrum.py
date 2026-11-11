@@ -1,4 +1,5 @@
 """带明确窗函数、单位和单边刻度的实信号 FFT。"""
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -24,15 +25,24 @@ class FourierSpectrum:
     power_scaling: str = "single_sided_mean_square"
 
     def __post_init__(self) -> None:
-        if self.frequency_hz.ndim != 1 or self.amplitude.ndim != 1 or self.power.ndim != 1:
+        if (
+            self.frequency_hz.ndim != 1
+            or self.amplitude.ndim != 1
+            or self.power.ndim != 1
+        ):
             raise ValueError("频谱频率轴、幅值和功率必须是一维数组")
         if not (len(self.frequency_hz) == len(self.amplitude) == len(self.power)):
             raise ValueError("频谱频率轴、幅值和功率长度必须一致")
         if len(self.frequency_hz) == 0:
             raise ValueError("频谱不能为空")
-        if not all(np.all(np.isfinite(values)) for values in (
-            self.frequency_hz, self.amplitude, self.power,
-        )):
+        if not all(
+            np.all(np.isfinite(values))
+            for values in (
+                self.frequency_hz,
+                self.amplitude,
+                self.power,
+            )
+        ):
             raise ValueError("频谱不能包含 NaN 或无穷值")
         if np.any(self.amplitude < 0) or np.any(self.power < 0):
             raise ValueError("频谱幅值和功率不能为负数")
@@ -91,7 +101,8 @@ def compute_spectrum(
     if len(centered) % 2 == 0:
         power[-1] = amplitude[-1] ** 2
     frequency = np.asarray(
-        rfftfreq(len(centered), 1.0 / sample_rate_hz), dtype=np.float64,
+        rfftfreq(len(centered), 1.0 / sample_rate_hz),
+        dtype=np.float64,
     )
     return FourierSpectrum(
         frequency_hz=frequency,

@@ -6,6 +6,7 @@
 - 默认使用 SQLite（零配置，文件存储，适合开发调试）
 - 生产环境可切换为 MySQL（需自行安装并修改下方配置）
 """
+
 import os
 from dotenv import load_dotenv
 
@@ -45,7 +46,9 @@ CORS_ORIGINS = [
 # ========== 分析服务配置 ==========
 ANALYZE_INTERVAL_SECONDS = 30  # 每 30 秒执行一次分析
 SENSOR_SAMPLE_RATE = int(os.getenv("SENSOR_SAMPLE_RATE", "25600"))  # 采样率 Hz
-SENSOR_WINDOW_SECONDS = int(os.getenv("SENSOR_WINDOW_SECONDS", "10"))  # 每次上传时长（秒）
+SENSOR_WINDOW_SECONDS = int(
+    os.getenv("SENSOR_WINDOW_SECONDS", "10")
+)  # 每次上传时长（秒）
 # 后台自动诊断默认去噪方法：wavelet(推荐) / none / vmd
 ANALYZE_DENOISE_METHOD = os.getenv("ANALYZE_DENOISE_METHOD", "wavelet")
 

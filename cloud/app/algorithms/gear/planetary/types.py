@@ -1,4 +1,5 @@
 """行星分析与评估的数据契约。"""
+
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -19,7 +20,13 @@ class PlanetaryParameters:
     regular_sidebands: int = 1
 
     def __post_init__(self) -> None:
-        for key, minimum in (("samples_per_revolution", 16), ("n_sidebands", 1), ("min_tsa_revolutions", 2), ("mesh_harmonics", 1), ("regular_sidebands", 0)):
+        for key, minimum in (
+            ("samples_per_revolution", 16),
+            ("n_sidebands", 1),
+            ("min_tsa_revolutions", 2),
+            ("mesh_harmonics", 1),
+            ("regular_sidebands", 0),
+        ):
             value = getattr(self, key)
             if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
                 raise ValueError(f"非法 {key}")
@@ -79,40 +86,52 @@ class PlanetaryAnalysis:
 @dataclass(frozen=True)
 class PlanetaryThreshold:
     """调用方已验证的健康基线界限；键是具体方法/指标，不接受跨方法投票。"""
+
     metric_key: str
     warning: float
     critical: float
     direction: str = "above"
 
     def __post_init__(self) -> None:
-        if self.direction not in {"above", "below"} or not all(np.isfinite(v) for v in (self.warning, self.critical)):
+        if self.direction not in {"above", "below"} or not all(
+            np.isfinite(v) for v in (self.warning, self.critical)
+        ):
             raise ValueError("非法基线阈值")
-        if (self.direction == "above" and self.warning >= self.critical) or (self.direction == "below" and self.warning <= self.critical):
+        if (self.direction == "above" and self.warning >= self.critical) or (
+            self.direction == "below" and self.warning <= self.critical
+        ):
             raise ValueError("warning/critical 顺序与方向不一致")
 
 
 @dataclass(frozen=True)
 class PlanetaryBaseline:
     """相同几何、速度、方法参数与记录长度下的显式可比基线。"""
+
     representation_key: tuple
     thresholds: tuple[PlanetaryThreshold, ...]
     source: str
 
     def __post_init__(self) -> None:
-        if not self.source or len({v.metric_key for v in self.thresholds}) != len(self.thresholds):
+        if not self.source or len({v.metric_key for v in self.thresholds}) != len(
+            self.thresholds
+        ):
             raise ValueError("基线必须有来源，且指标键不能重复")
 
 
 @dataclass(frozen=True)
 class PlanetaryMomentHistory:
     """NA4/NB4 的健康方差历史；表示键同时约束几何、速度、周期数与单位。"""
+
     representation_key: tuple
     residual_variances: tuple[float, ...] = ()
     envelope_variances: tuple[float, ...] = ()
     source: str = ""
 
     def __post_init__(self) -> None:
-        if not self.source or not all(np.isfinite(v) and v > 0 for v in self.residual_variances + self.envelope_variances):
+        if not self.source or not all(
+            np.isfinite(v) and v > 0
+            for v in self.residual_variances + self.envelope_variances
+        ):
             raise ValueError("历史必须有来源和有限正方差")
 
 

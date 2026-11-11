@@ -11,6 +11,7 @@ FFT 频谱计算：
   - 优先返回最新的特殊数据（如果有），否则返回最新的普通数据
   - 返回通道名称（从设备配置获取）
 """
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -38,7 +39,7 @@ def get_latest_monitor(
     device_id: str = Query(default="WTG-001"),
     prefer_special: bool = Query(default=False, description="优先返回特殊数据"),
     limit: int = Query(default=3, description="返回最近几条记录"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     获取最新一批传感器数据（每个通道一条）
@@ -53,40 +54,63 @@ def get_latest_monitor(
     # 构建查询：先查特殊数据，再查普通数据
     if prefer_special:
         # 先尝试找最新的特殊数据
-        latest_special = db.query(func.max(SensorData.batch_index)).filter(
-            SensorData.device_id == device_id,
-            SensorData.is_special == 1
-        ).scalar()
+        latest_special = (
+            db.query(func.max(SensorData.batch_index))
+            .filter(SensorData.device_id == device_id, SensorData.is_special == 1)
+            .scalar()
+        )
 
         if latest_special:
             latest_batch = latest_special
         else:
             # 没有特殊数据，回退到普通数据
-            latest_batch = db.query(func.max(SensorData.batch_index)).filter(
-                SensorData.device_id == device_id,
-                SensorData.is_special == 0
-            ).scalar()
+            latest_batch = (
+                db.query(func.max(SensorData.batch_index))
+                .filter(SensorData.device_id == device_id, SensorData.is_special == 0)
+                .scalar()
+            )
     else:
         # 默认找最新的（不分类型，取 batch_index 最大的）
-        latest_batch = db.query(func.max(SensorData.batch_index)).filter(
-            SensorData.device_id == device_id
-        ).scalar()
+        latest_batch = (
+            db.query(func.max(SensorData.batch_index))
+            .filter(SensorData.device_id == device_id)
+            .scalar()
+        )
 
     # 同批次一次读取小摘要，保留真实通道身份，不物化任何完整分析 JSON。
-    cached_rows = db.query(
-        Diagnosis.channel, Diagnosis.evaluation_status, Diagnosis.diagnosis_conclusion,
-        Diagnosis.health_score, Diagnosis.coverage, Diagnosis.rot_freq,
-    ).filter(Diagnosis.device_id == device_id, Diagnosis.batch_index == latest_batch,
-             Diagnosis.denoise_method == "none").order_by(Diagnosis.analyzed_at.desc(), Diagnosis.id.desc()).all() if latest_batch else []
+    cached_rows = (
+        db.query(
+            Diagnosis.channel,
+            Diagnosis.evaluation_status,
+            Diagnosis.diagnosis_conclusion,
+            Diagnosis.health_score,
+            Diagnosis.coverage,
+            Diagnosis.rot_freq,
+        )
+        .filter(
+            Diagnosis.device_id == device_id,
+            Diagnosis.batch_index == latest_batch,
+            Diagnosis.denoise_method == "none",
+        )
+        .order_by(Diagnosis.analyzed_at.desc(), Diagnosis.id.desc())
+        .all()
+        if latest_batch
+        else []
+    )
     cached = {}
     for row in cached_rows:
         cached.setdefault(row.channel, row)
     results = []
     if latest_batch:
-        records = db.query(SensorData).filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == latest_batch
-        ).order_by(SensorData.channel.asc()).all()
+        records = (
+            db.query(SensorData)
+            .filter(
+                SensorData.device_id == device_id,
+                SensorData.batch_index == latest_batch,
+            )
+            .order_by(SensorData.channel.asc())
+            .all()
+        )
 
         for record in records:
             sample_rate = record.sample_rate or 25600
@@ -103,21 +127,25 @@ def get_latest_monitor(
                 fft_freq = []
                 fft_amp = []
 
-            results.append({
-                "device_id": record.device_id,
-                "channel": channel_num,
-                "channel_name": _get_channel_name(device, channel_num),
-                "batch_index": record.batch_index,
-                "data": record.data[:TIME_DOMAIN_POINTS],
-                "sample_rate": sample_rate,
-                "is_analyzed": record.is_analyzed,
-                "is_special": bool(record.is_special),
-                "timestamp": record.created_at.isoformat() if record.created_at else None,
-                "fft_freq": fft_freq,
-                "fft_amp": fft_amp,
-                **summary_state(cached.get(channel_num)),
-                "is_offline": device is not None and device.is_online == 0,
-            })
+            results.append(
+                {
+                    "device_id": record.device_id,
+                    "channel": channel_num,
+                    "channel_name": _get_channel_name(device, channel_num),
+                    "batch_index": record.batch_index,
+                    "data": record.data[:TIME_DOMAIN_POINTS],
+                    "sample_rate": sample_rate,
+                    "is_analyzed": record.is_analyzed,
+                    "is_special": bool(record.is_special),
+                    "timestamp": record.created_at.isoformat()
+                    if record.created_at
+                    else None,
+                    "fft_freq": fft_freq,
+                    "fft_amp": fft_amp,
+                    **summary_state(cached.get(channel_num)),
+                    "is_offline": device is not None and device.is_online == 0,
+                }
+            )
 
     # 查询最新诊断结果，获取估计转频
     # 这里只需要转频，避免加载完整诊断 JSON。
@@ -138,43 +166,54 @@ def get_monitor_history(
     channel: int = Query(default=1),
     batches: int = Query(default=16, description="最近多少批次"),
     include_special: bool = Query(default=True, description="是否包含特殊数据"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     获取某通道最近 N 个批次的历史数据
     """
     query = db.query(SensorData.batch_index).filter(
-        SensorData.device_id == device_id,
-        SensorData.channel == channel
+        SensorData.device_id == device_id, SensorData.channel == channel
     )
 
     if not include_special:
         query = query.filter(SensorData.is_special == 0)
 
-    batch_records = query.distinct().order_by(SensorData.batch_index.desc()).limit(batches).all()
+    batch_records = (
+        query.distinct().order_by(SensorData.batch_index.desc()).limit(batches).all()
+    )
 
     batch_indices = [r[0] for r in batch_records]
 
     # 批量读取，查询数不随历史批次数增长。
-    records = db.query(SensorData).filter(
-        SensorData.device_id == device_id,
-        SensorData.channel == channel,
-        SensorData.batch_index.in_(batch_indices),
-    ).all() if batch_indices else []
+    records = (
+        db.query(SensorData)
+        .filter(
+            SensorData.device_id == device_id,
+            SensorData.channel == channel,
+            SensorData.batch_index.in_(batch_indices),
+        )
+        .all()
+        if batch_indices
+        else []
+    )
     record_map = {record.batch_index: record for record in records}
 
     items = []
     for bi in batch_indices:
         record = record_map.get(bi)
         if record:
-            items.append({
-                "batch_index": record.batch_index,
-                "sample_rate": record.sample_rate,
-                "is_analyzed": record.is_analyzed,
-                "is_special": bool(record.is_special),
-                "data": record.data[:TIME_DOMAIN_POINTS],
-                "created_at": record.created_at.isoformat() if record.created_at else None,
-            })
+            items.append(
+                {
+                    "batch_index": record.batch_index,
+                    "sample_rate": record.sample_rate,
+                    "is_analyzed": record.is_analyzed,
+                    "is_special": bool(record.is_special),
+                    "data": record.data[:TIME_DOMAIN_POINTS],
+                    "created_at": record.created_at.isoformat()
+                    if record.created_at
+                    else None,
+                }
+            )
 
     return {
         "code": 200,
@@ -182,5 +221,5 @@ def get_monitor_history(
             "device_id": device_id,
             "channel": channel,
             "items": items,
-        }
+        },
     }

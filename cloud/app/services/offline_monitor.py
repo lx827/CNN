@@ -17,6 +17,7 @@
   - 需要标记设备上线时，直接设置 device.is_online = 1
   - 需要判断设备是否离线时，直接读取 device.is_online
 """
+
 import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
@@ -55,7 +56,9 @@ def _get_offline_threshold(device: Device, now: datetime) -> datetime:
     return now - timedelta(seconds=base_seconds)
 
 
-def _is_device_offline(device: Optional[Device], now: Optional[datetime] = None) -> bool:
+def _is_device_offline(
+    device: Optional[Device], now: Optional[datetime] = None
+) -> bool:
     """
     判断设备是否离线（仅供本模块内部使用）。
 
@@ -102,7 +105,9 @@ async def offline_monitor_worker():
 
                 online_count = sum(1 for d in devices if d.is_online)
                 offline_count = len(devices) - online_count
-                logger.info(f"[离线监测] 扫描完成: {online_count} 在线, {offline_count} 离线")
+                logger.info(
+                    f"[离线监测] 扫描完成: {online_count} 在线, {offline_count} 离线"
+                )
 
                 for device in devices:
                     was_online = bool(device.is_online)
@@ -112,17 +117,23 @@ async def offline_monitor_worker():
                     if was_online and is_now_offline:
                         # 设备刚离线：更新数据库
                         device.is_online = 0
-                        logger.info(f"[离线监测] {device.device_id} 已离线，last_seen={device.last_seen_at}")
+                        logger.info(
+                            f"[离线监测] {device.device_id} 已离线，last_seen={device.last_seen_at}"
+                        )
 
                         # WebSocket 广播离线通知
                         try:
-                            await manager.broadcast({
-                                "type": "device_offline",
-                                "data": {
-                                    "device_id": device.device_id,
-                                    "last_seen_at": device.last_seen_at.isoformat() if device.last_seen_at else None,
+                            await manager.broadcast(
+                                {
+                                    "type": "device_offline",
+                                    "data": {
+                                        "device_id": device.device_id,
+                                        "last_seen_at": device.last_seen_at.isoformat()
+                                        if device.last_seen_at
+                                        else None,
+                                    },
                                 }
-                            })
+                            )
                         except Exception:
                             pass
 
@@ -133,12 +144,14 @@ async def offline_monitor_worker():
 
                         # WebSocket 广播上线通知
                         try:
-                            await manager.broadcast({
-                                "type": "device_online",
-                                "data": {
-                                    "device_id": device.device_id,
+                            await manager.broadcast(
+                                {
+                                    "type": "device_online",
+                                    "data": {
+                                        "device_id": device.device_id,
+                                    },
                                 }
-                            })
+                            )
                         except Exception:
                             pass
 

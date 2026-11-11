@@ -10,6 +10,7 @@ WTgearbox 行星齿轮箱数据集，恒速工况 20~55 Hz。
 运行方式：
     cd cloud && uv run python tests/diagnosis/method_eval/test_gear_wtgearbox.py
 """
+
 import sys
 import time
 import warnings
@@ -32,10 +33,15 @@ sys.path.insert(0, str(PROJECT_ROOT / "cloud" / "tests" / "diagnosis"))
 # 导入配置
 # ═══════════════════════════════════════════════════════════
 from method_eval.config import (
-    WTGEARBOX_DIR, SAMPLE_RATE, MAX_SAMPLES,
+    WTGEARBOX_DIR,
+    SAMPLE_RATE,
+    MAX_SAMPLES,
     GEAR_PARAMS,
-    WTGEARBOX_LABELS, LABEL_CN,
-    HEALTH_THRESHOLD, ENSEMBLE_PROFILE, ENSEMBLE_MAX_SECONDS,
+    WTGEARBOX_LABELS,
+    LABEL_CN,
+    HEALTH_THRESHOLD,
+    ENSEMBLE_PROFILE,
+    ENSEMBLE_MAX_SECONDS,
     EXP_DIRS,
 )
 from method_eval.label_mapper import (
@@ -43,7 +49,10 @@ from method_eval.label_mapper import (
     infer_binary_label,
 )
 from method_eval.visualizer import apply_style
-from method_eval.plot_generator import save_confusion_matrix_results, save_accuracy_bar_results
+from method_eval.plot_generator import (
+    save_confusion_matrix_results,
+    save_accuracy_bar_results,
+)
 from method_eval.visualizer import plot_confusion_matrix, plot_method_comparison_bar
 
 apply_style()
@@ -52,7 +61,10 @@ apply_style()
 # 导入诊断引擎
 # ═══════════════════════════════════════════════════════════
 from app.services.diagnosis.engine import (
-    DiagnosisEngine, GearMethod, DiagnosisStrategy, DenoiseMethod,
+    DiagnosisEngine,
+    GearMethod,
+    DiagnosisStrategy,
+    DenoiseMethod,
 )
 from app.services.diagnosis.ensemble import run_research_ensemble
 
@@ -71,6 +83,7 @@ from evaluation.classification_metrics_eval import (
 # ═══════════════════════════════════════════════════════════
 OUTPUT_DIR = EXP_DIRS["gear_wtgearbox"]
 
+
 # 从文件名提取转速频率
 def _extract_rot_freq(filename: str) -> float:
     name = filename.replace(".npy", "")
@@ -85,6 +98,7 @@ def _extract_rot_freq(filename: str) -> float:
 # ═══════════════════════════════════════════════════════════
 # 数据加载
 # ═══════════════════════════════════════════════════════════
+
 
 def get_wtgearbox_files() -> List[Tuple[Path, Dict]]:
     if not WTGEARBOX_DIR.exists():
@@ -103,6 +117,7 @@ def get_wtgearbox_files() -> List[Tuple[Path, Dict]]:
 # ═══════════════════════════════════════════════════════════
 # 单一方法 — 二分类
 # ═══════════════════════════════════════════════════════════
+
 
 def run_single_method_binary(
     method_name: str,
@@ -161,12 +176,18 @@ def run_single_method_binary(
     avg_time = np.mean(exec_times)
     print(f"    Acc={acc:.2%}  耗时={avg_time:.0f}ms")
 
-    return {"y_true": y_true, "y_pred": y_pred, "exec_times": exec_times, "accuracy": acc}
+    return {
+        "y_true": y_true,
+        "y_pred": y_pred,
+        "exec_times": exec_times,
+        "accuracy": acc,
+    }
 
 
 # ═══════════════════════════════════════════════════════════
 # Ensemble — 五类 + 二分类
 # ═══════════════════════════════════════════════════════════
+
 
 def run_ensemble_all(
     files: List[Tuple[Path, Dict]],
@@ -187,7 +208,8 @@ def run_ensemble_all(
 
             t0 = time.perf_counter()
             result = run_research_ensemble(
-                signal, SAMPLE_RATE,
+                signal,
+                SAMPLE_RATE,
                 bearing_params=None,
                 gear_teeth=GEAR_PARAMS,
                 denoise_method="none",
@@ -228,16 +250,21 @@ def run_ensemble_all(
     print(f"    五类Acc={acc_5:.2%}  二分类Acc={acc_2:.2%}  耗时={avg_time:.0f}ms")
 
     return {
-        "y_true_5": y_true_5, "y_pred_5": y_pred_5,
-        "y_true_2": y_true_2, "y_pred_2": y_pred_2,
-        "health_scores": health_scores, "exec_times": exec_times,
-        "accuracy_5": acc_5, "accuracy_2": acc_2,
+        "y_true_5": y_true_5,
+        "y_pred_5": y_pred_5,
+        "y_true_2": y_true_2,
+        "y_pred_2": y_pred_2,
+        "health_scores": health_scores,
+        "exec_times": exec_times,
+        "accuracy_5": acc_5,
+        "accuracy_2": acc_2,
     }
 
 
 # ═══════════════════════════════════════════════════════════
 # 主流程
 # ═══════════════════════════════════════════════════════════
+
 
 def test_gear_wtgearbox() -> Dict[str, Any]:
     print("\n" + "=" * 70)
@@ -249,7 +276,8 @@ def test_gear_wtgearbox() -> Dict[str, Any]:
     # ── 1. 加载数据 ──
     files = get_wtgearbox_files()
     if not files:
-        print("[ABORT] 无可用数据"); return {}
+        print("[ABORT] 无可用数据")
+        return {}
 
     n_total = len(files)
     n_healthy = sum(1 for _, i in files if i["label"] == "healthy")
@@ -282,17 +310,27 @@ def test_gear_wtgearbox() -> Dict[str, Any]:
         title_prefix="WTgearbox_Ensemble_5类",
     )
     cm_5 = np.array(metrics_5["confusion_matrix"])
-    plot_confusion_matrix(cm_5, WTGEARBOX_LABELS, "Ensemble (齿轮5类)",
-                          ensemble_result["accuracy_5"],
-                          str(OUTPUT_DIR / "confusion_ensemble_5class.svg"), True)
+    plot_confusion_matrix(
+        cm_5,
+        WTGEARBOX_LABELS,
+        "Ensemble (齿轮5类)",
+        ensemble_result["accuracy_5"],
+        str(OUTPUT_DIR / "confusion_ensemble_5class.svg"),
+        True,
+    )
 
     # 保存数据到 JSON（用于独立绘图）
     save_confusion_matrix_results(
-        cm_5, WTGEARBOX_LABELS, "Ensemble (齿轮5类)",
+        cm_5,
+        WTGEARBOX_LABELS,
+        "Ensemble (齿轮5类)",
         ensemble_result["accuracy_5"],
-        OUTPUT_DIR / "results_ensemble_confusion.json", True,
+        OUTPUT_DIR / "results_ensemble_confusion.json",
+        True,
     )
-    table_5 = generate_classification_metrics_table(metrics_5, "WTgearbox Ensemble 五类")
+    table_5 = generate_classification_metrics_table(
+        metrics_5, "WTgearbox Ensemble 五类"
+    )
     with open(OUTPUT_DIR / "ensemble_5class_metrics.md", "w", encoding="utf-8") as f:
         f.write(table_5)
 
@@ -302,35 +340,58 @@ def test_gear_wtgearbox() -> Dict[str, Any]:
     print("  ── 生成二分类对比报告 ──")
 
     method_names = list(binary_results.keys()) + ["Ensemble"]
-    acc_list = [binary_results[m]["accuracy"] for m in binary_results] + [ensemble_result["accuracy_2"]]
+    acc_list = [binary_results[m]["accuracy"] for m in binary_results] + [
+        ensemble_result["accuracy_2"]
+    ]
 
     plot_method_comparison_bar(
-        method_names=method_names, metrics={"accuracy": acc_list},
-        metric_label="accuracy", title="WTgearbox 齿轮 健康 vs 故障二分类",
+        method_names=method_names,
+        metrics={"accuracy": acc_list},
+        metric_label="accuracy",
+        title="WTgearbox 齿轮 健康 vs 故障二分类",
         output_path=str(OUTPUT_DIR / "binary_accuracy_comparison.svg"),
-        highlight_indices=[len(method_names) - 1], ylim=(0.5, 1.05),
+        highlight_indices=[len(method_names) - 1],
+        ylim=(0.5, 1.05),
     )
 
     # 保存数据到 JSON（用于独立绘图）
     save_accuracy_bar_results(
-        method_names, acc_list, "WTgearbox 齿轮 健康 vs 故障二分类",
+        method_names,
+        acc_list,
+        "WTgearbox 齿轮 健康 vs 故障二分类",
         OUTPUT_DIR / "results_accuracy_bar.json",
-        highlight_indices=[len(method_names) - 1], ylim=(0.5, 1.05),
+        highlight_indices=[len(method_names) - 1],
+        ylim=(0.5, 1.05),
     )
 
     # Markdown
     lines = [
-        "# WTgearbox 齿轮评估", "",
-        f"> 样本: {n_total} 个 (健康={n_healthy}, 故障={n_fault})", "",
+        "# WTgearbox 齿轮评估",
+        "",
+        f"> 样本: {n_total} 个 (健康={n_healthy}, 故障={n_fault})",
+        "",
         "| 方法 | 二分类 Accuracy | 平均耗时(ms) |",
         "|------|----------------|-------------|",
     ]
     for name in binary_results:
         avg_t = np.mean(binary_results[name]["exec_times"])
-        lines.append(f"| {name} | {binary_results[name]['accuracy']:.2%} | {avg_t:.0f} |")
+        lines.append(
+            f"| {name} | {binary_results[name]['accuracy']:.2%} | {avg_t:.0f} |"
+        )
     avg_t_e = np.mean(ensemble_result["exec_times"])
-    lines.append(f"| **Ensemble** | **{ensemble_result['accuracy_2']:.2%}** | **{avg_t_e:.0f}** |")
-    lines.extend(["", "## Ensemble 五类分类", "", f"> 五类准确率: {ensemble_result['accuracy_5']:.2%}", "", table_5])
+    lines.append(
+        f"| **Ensemble** | **{ensemble_result['accuracy_2']:.2%}** | **{avg_t_e:.0f}** |"
+    )
+    lines.extend(
+        [
+            "",
+            "## Ensemble 五类分类",
+            "",
+            f"> 五类准确率: {ensemble_result['accuracy_5']:.2%}",
+            "",
+            table_5,
+        ]
+    )
 
     with open(OUTPUT_DIR / "report.md", "w", encoding="utf-8") as f:
         f.write("\n".join(lines))

@@ -1,4 +1,5 @@
 """DWT/WP 公共契约与实现无关的分解、分量重构入口。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -80,7 +81,10 @@ class WaveletPacketDecomposition:
 
     def node_for_frequency(self, frequency_hz: float) -> WaveletPacketNode:
         """返回理想通带包含该频率的节点；Nyquist 归入最后一个节点。"""
-        if not np.isfinite(frequency_hz) or not 0.0 <= frequency_hz <= self.sample_rate_hz / 2.0:
+        if (
+            not np.isfinite(frequency_hz)
+            or not 0.0 <= frequency_hz <= self.sample_rate_hz / 2.0
+        ):
             raise ValueError("目标频率必须位于 [0, Nyquist]")
         index = min(
             int(frequency_hz / (self.sample_rate_hz / 2.0) * len(self.nodes)),
@@ -93,20 +97,31 @@ class WaveletImplementation(Protocol):
     """小波族专属 adapter seam；实现各自返回完整公共结果，不继承通用基类。"""
 
     def dwt(
-        self, signal: FloatArray, sample_rate_hz: float,
-        wavelet: str, level: int, mode: str,
-    ) -> DWTDecomposition:
-        ...
+        self,
+        signal: FloatArray,
+        sample_rate_hz: float,
+        wavelet: str,
+        level: int,
+        mode: str,
+    ) -> DWTDecomposition: ...
 
     def wavelet_packet(
-        self, signal: FloatArray, sample_rate_hz: float,
-        wavelet: str, level: int, mode: str,
-    ) -> WaveletPacketDecomposition:
-        ...
+        self,
+        signal: FloatArray,
+        sample_rate_hz: float,
+        wavelet: str,
+        level: int,
+        mode: str,
+    ) -> WaveletPacketDecomposition: ...
 
-    def denoise(self, signal: FloatArray, wavelet: str, level: int | None,
-                threshold_mode: str, threshold_scale: float) -> FloatArray:
-        ...
+    def denoise(
+        self,
+        signal: FloatArray,
+        wavelet: str,
+        level: int | None,
+        threshold_mode: str,
+        threshold_scale: float,
+    ) -> FloatArray: ...
 
 
 def _validate_signal(signal: FloatArray, sample_rate_hz: float) -> FloatArray:
@@ -129,10 +144,13 @@ def _validate_parameters(wavelet: str, level: int, mode: str) -> None:
         raise ValueError("边界模式不能为空")
 
 
-def _implementation(implementation: WaveletImplementation | None) -> WaveletImplementation:
+def _implementation(
+    implementation: WaveletImplementation | None,
+) -> WaveletImplementation:
     if implementation is not None:
         return implementation
     from .pywavelets_adapter import PyWaveletsImplementation
+
     return PyWaveletsImplementation()
 
 
@@ -147,7 +165,9 @@ def decompose_dwt(
     """执行多层 DWT；每个频带同时给出抽取系数和原时间轴重构。"""
     arr = _validate_signal(signal, sample_rate_hz)
     _validate_parameters(wavelet, level, mode)
-    return _implementation(implementation).dwt(arr, sample_rate_hz, wavelet, level, mode)
+    return _implementation(implementation).dwt(
+        arr, sample_rate_hz, wavelet, level, mode
+    )
 
 
 def reconstruct_dwt(
@@ -182,7 +202,9 @@ def decompose_wavelet_packet(
     """执行完全 WP 分解；freq->natural 为 Gray 码，natural->freq 使用逆 Gray。"""
     arr = _validate_signal(signal, sample_rate_hz)
     _validate_parameters(wavelet, level, mode)
-    return _implementation(implementation).wavelet_packet(arr, sample_rate_hz, wavelet, level, mode)
+    return _implementation(implementation).wavelet_packet(
+        arr, sample_rate_hz, wavelet, level, mode
+    )
 
 
 def reconstruct_wavelet_packet(
@@ -199,9 +221,14 @@ def reconstruct_wavelet_packet(
     )
 
 
-def denoise_wavelet(signal: FloatArray, wavelet: str = "db8", level: int | None = None,
-                    threshold_mode: str = "soft", threshold_scale: float = 1.0,
-                    implementation: WaveletImplementation | None = None) -> FloatArray:
+def denoise_wavelet(
+    signal: FloatArray,
+    wavelet: str = "db8",
+    level: int | None = None,
+    threshold_mode: str = "soft",
+    threshold_scale: float = 1.0,
+    implementation: WaveletImplementation | None = None,
+) -> FloatArray:
     """DWT 细节系数阈值处理；MAD 无绝对幅值下限，保持输入量纲和长度。
 
     level=None 取当前输入和小波允许的最大无边界效应层数。
@@ -214,4 +241,6 @@ def denoise_wavelet(signal: FloatArray, wavelet: str = "db8", level: int | None 
         raise ValueError("阈值倍率必须为有限非负数")
     if level is not None:
         _validate_parameters(wavelet, level, "symmetric")
-    return _implementation(implementation).denoise(arr, wavelet, level, threshold_mode, threshold_scale)
+    return _implementation(implementation).denoise(
+        arr, wavelet, level, threshold_mode, threshold_scale
+    )

@@ -1,6 +1,7 @@
 """
 轴承诊断算法评价模块
 """
+
 import sys
 import time
 from pathlib import Path
@@ -11,13 +12,34 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 
-from app.services.diagnosis import DiagnosisEngine, BearingMethod, DiagnosisStrategy, DenoiseMethod
+from app.services.diagnosis import (
+    DiagnosisEngine,
+    BearingMethod,
+    DiagnosisStrategy,
+    DenoiseMethod,
+)
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
 
-from .config import OUTPUT_DIR, SAMPLE_RATE, HUSTBEAR_BEARING, CW_BEARING, BEARING_FREQ_COEFFS
+from .config import (
+    OUTPUT_DIR,
+    SAMPLE_RATE,
+    HUSTBEAR_BEARING,
+    CW_BEARING,
+    BEARING_FREQ_COEFFS,
+)
 from .datasets import get_hustbear_files, get_cw_files
-from .utils import load_npy, estimate_fault_freq_snr, count_harmonics, compute_peak_clarity, save_cache, save_figure
-from .classification_metrics_eval import evaluate_classification_performance, generate_classification_metrics_table
+from .utils import (
+    load_npy,
+    estimate_fault_freq_snr,
+    count_harmonics,
+    compute_peak_clarity,
+    save_cache,
+    save_figure,
+)
+from .classification_metrics_eval import (
+    evaluate_classification_performance,
+    generate_classification_metrics_table,
+)
 
 import matplotlib.pyplot as plt
 
@@ -68,34 +90,44 @@ def evaluate_bearing_methods():
                 env_freq = result["spectrum"]["frequency_hz"]
                 env_amp = result["spectrum"]["amplitude"]
 
-                bpfo_snr = estimate_fault_freq_snr(env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BPFO"])
-                bpfi_snr = estimate_fault_freq_snr(env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BPFI"])
-                bsf_snr = estimate_fault_freq_snr(env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BSF"])
+                bpfo_snr = estimate_fault_freq_snr(
+                    env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BPFO"]
+                )
+                bpfi_snr = estimate_fault_freq_snr(
+                    env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BPFI"]
+                )
+                bsf_snr = estimate_fault_freq_snr(
+                    env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BSF"]
+                )
 
                 hs = 100
                 status = "normal"
                 try:
-                    comp = engine.analyze_comprehensive(signal, SAMPLE_RATE, rot_freq=rot_freq)
+                    comp = engine.analyze_comprehensive(
+                        signal, SAMPLE_RATE, rot_freq=rot_freq
+                    )
                     hs = comp.get("health_score", 100)
                     status = comp.get("status", "normal")
                 except Exception:
                     pass
 
-                all_results.append({
-                    "dataset": "HUSTbear",
-                    "file": filepath.name,
-                    "method": bm.value,
-                    "fault_label": info["label"],
-                    "rot_freq": round(rot_freq, 2),
-                    "bpfo_snr": round(bpfo_snr, 2),
-                    "bpfi_snr": round(bpfi_snr, 2),
-                    "bsf_snr": round(bsf_snr, 2),
-                    "peak_clarity": round(compute_peak_clarity(env_amp), 2),
-                    "harmonic_count": count_harmonics(env_freq, env_amp, rot_freq),
-                    "health_score": hs,
-                    "status": status,
-                    "exec_time_ms": round(exec_time, 2),
-                })
+                all_results.append(
+                    {
+                        "dataset": "HUSTbear",
+                        "file": filepath.name,
+                        "method": bm.value,
+                        "fault_label": info["label"],
+                        "rot_freq": round(rot_freq, 2),
+                        "bpfo_snr": round(bpfo_snr, 2),
+                        "bpfi_snr": round(bpfi_snr, 2),
+                        "bsf_snr": round(bsf_snr, 2),
+                        "peak_clarity": round(compute_peak_clarity(env_amp), 2),
+                        "harmonic_count": count_harmonics(env_freq, env_amp, rot_freq),
+                        "health_score": hs,
+                        "status": status,
+                        "exec_time_ms": round(exec_time, 2),
+                    }
+                )
             except Exception as e:
                 print(f"    [ERR] {bm.value} on {filepath.name}: {e}")
 
@@ -113,7 +145,9 @@ def evaluate_bearing_methods():
                         denoise_method=DenoiseMethod.NONE,
                         bearing_params=CW_BEARING,
                     )
-                    result = engine.analyze_bearing(signal, SAMPLE_RATE, rot_freq=rot_freq)
+                    result = engine.analyze_bearing(
+                        signal, SAMPLE_RATE, rot_freq=rot_freq
+                    )
                     exec_time = (time.perf_counter() - t0) * 1000
                     env_freq = result["spectrum"]["frequency_hz"]
                     env_amp = result["spectrum"]["amplitude"]
@@ -122,27 +156,57 @@ def evaluate_bearing_methods():
                     hs = 100
                     status = "normal"
                     try:
-                        comp = engine.analyze_comprehensive(signal, SAMPLE_RATE, rot_freq=rot_freq)
+                        comp = engine.analyze_comprehensive(
+                            signal, SAMPLE_RATE, rot_freq=rot_freq
+                        )
                         hs = comp.get("health_score", 100)
                         status = comp.get("status", "normal")
                     except Exception:
                         pass
 
-                    all_results.append({
-                        "dataset": "CW",
-                        "file": filepath.name,
-                        "method": bm.value,
-                        "fault_label": info["label"],
-                        "rot_freq": round(rot_freq, 2),
-                        "bpfo_snr": round(estimate_fault_freq_snr(env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BPFO"]), 2),
-                        "bpfi_snr": round(estimate_fault_freq_snr(env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BPFI"]), 2),
-                        "bsf_snr": round(estimate_fault_freq_snr(env_freq, env_amp, rot_freq, BEARING_FREQ_COEFFS["BSF"]), 2),
-                        "peak_clarity": round(compute_peak_clarity(env_amp), 2),
-                        "harmonic_count": count_harmonics(env_freq, env_amp, rot_freq),
-                        "health_score": hs,
-                        "status": status,
-                        "exec_time_ms": round(exec_time, 2),
-                    })
+                    all_results.append(
+                        {
+                            "dataset": "CW",
+                            "file": filepath.name,
+                            "method": bm.value,
+                            "fault_label": info["label"],
+                            "rot_freq": round(rot_freq, 2),
+                            "bpfo_snr": round(
+                                estimate_fault_freq_snr(
+                                    env_freq,
+                                    env_amp,
+                                    rot_freq,
+                                    BEARING_FREQ_COEFFS["BPFO"],
+                                ),
+                                2,
+                            ),
+                            "bpfi_snr": round(
+                                estimate_fault_freq_snr(
+                                    env_freq,
+                                    env_amp,
+                                    rot_freq,
+                                    BEARING_FREQ_COEFFS["BPFI"],
+                                ),
+                                2,
+                            ),
+                            "bsf_snr": round(
+                                estimate_fault_freq_snr(
+                                    env_freq,
+                                    env_amp,
+                                    rot_freq,
+                                    BEARING_FREQ_COEFFS["BSF"],
+                                ),
+                                2,
+                            ),
+                            "peak_clarity": round(compute_peak_clarity(env_amp), 2),
+                            "harmonic_count": count_harmonics(
+                                env_freq, env_amp, rot_freq
+                            ),
+                            "health_score": hs,
+                            "status": status,
+                            "exec_time_ms": round(exec_time, 2),
+                        }
+                    )
                 except Exception:
                     pass
 
@@ -150,7 +214,9 @@ def evaluate_bearing_methods():
     _plot_bearing_results(all_results)
 
     report = _generate_bearing_report(all_results)
-    with open(OUTPUT_DIR / "bearing" / "bearing_evaluation.md", "w", encoding="utf-8") as f:
+    with open(
+        OUTPUT_DIR / "bearing" / "bearing_evaluation.md", "w", encoding="utf-8"
+    ) as f:
         f.write(report)
     print(f"  报告已保存: {OUTPUT_DIR / 'bearing' / 'bearing_evaluation.md'}")
 
@@ -199,10 +265,14 @@ def _evaluate_bearing_classification(results: List[Dict]):
                 output_subdir=f"bearing/{dataset.lower()}",
                 title_prefix=f"轴承_{dataset}",
             )
-            cls_table = generate_classification_metrics_table(cls_metrics, title=f"轴承诊断 ({dataset})")
+            cls_table = generate_classification_metrics_table(
+                cls_metrics, title=f"轴承诊断 ({dataset})"
+            )
             out_dir = OUTPUT_DIR / "bearing" / dataset.lower()
             out_dir.mkdir(parents=True, exist_ok=True)
-            with open(out_dir / "classification_metrics.md", "w", encoding="utf-8") as f:
+            with open(
+                out_dir / "classification_metrics.md", "w", encoding="utf-8"
+            ) as f:
                 f.write(cls_table)
             print(f"  {dataset} 分类指标已保存")
         except Exception as e:
@@ -227,16 +297,20 @@ def _plot_bearing_results(results: List[Dict]):
         for i, fault in enumerate(labels):
             rates = []
             for m in methods:
-                items = [r for r in ds_results if r["method"]==m and r["fault_label"]==fault]
+                items = [
+                    r
+                    for r in ds_results
+                    if r["method"] == m and r["fault_label"] == fault
+                ]
                 if items:
                     detected = sum(1 for r in items if r["health_score"] < 85)
                     rates.append(detected / len(items) if len(items) > 0 else 0)
                 else:
                     rates.append(0)
-            ax.bar(x + i*width, rates, width, label=fault)
+            ax.bar(x + i * width, rates, width, label=fault)
         ax.set_ylabel("检出率")
         ax.set_title(f"{ds} 故障检出率")
-        ax.set_xticks(x + 1.5*width)
+        ax.set_xticks(x + 1.5 * width)
         ax.set_xticklabels(methods, rotation=30, ha="right")
         ax.legend()
         ax.set_ylim(0, 1.1)
@@ -248,8 +322,16 @@ def _plot_bearing_results(results: List[Dict]):
     bpfo_means = []
     bpfi_means = []
     for m in methods:
-        bpfo_vals = [r["bpfo_snr"] for r in results if r["method"]==m and r["fault_label"]!="healthy"]
-        bpfi_vals = [r["bpfi_snr"] for r in results if r["method"]==m and r["fault_label"]!="healthy"]
+        bpfo_vals = [
+            r["bpfo_snr"]
+            for r in results
+            if r["method"] == m and r["fault_label"] != "healthy"
+        ]
+        bpfi_vals = [
+            r["bpfi_snr"]
+            for r in results
+            if r["method"] == m and r["fault_label"] != "healthy"
+        ]
         bpfo_means.append(np.mean(bpfo_vals) if bpfo_vals else 0)
         bpfi_means.append(np.mean(bpfi_vals) if bpfi_vals else 0)
     x = np.arange(len(methods))
@@ -264,7 +346,10 @@ def _plot_bearing_results(results: List[Dict]):
     save_figure(fig, "snr_at_fault_freq.png", "bearing")
 
     fig, ax = plt.subplots(figsize=(8, 4.5))
-    times = [np.mean([r["exec_time_ms"] for r in results if r["method"] == m]) for m in methods]
+    times = [
+        np.mean([r["exec_time_ms"] for r in results if r["method"] == m])
+        for m in methods
+    ]
     ax.barh(methods, times, color="darkgreen")
     ax.set_xlabel("平均执行时间 (ms)")
     ax.set_title("轴承诊断算法执行时间")
@@ -291,7 +376,6 @@ def _generate_bearing_report(results: List[Dict]) -> str:
         "| spectral_kurtosis | 谱峭度重加权 | 自适应频带评分 |",
         "| sc_scoh | 谱相关/谱相干 | 循环平稳分析，抗噪强 |",
         "| mckd | 最大相关峭度解卷积+包络 | 周期约束增强，优于MED |",
-
         "",
         "## 2. HUSTbear 数据集性能",
         "",
@@ -304,66 +388,130 @@ def _generate_bearing_report(results: List[Dict]) -> str:
     lines.append("| 方法 | 检出率 | 误报率 | 分离度 | 健康均值 | 故障均值 |")
     lines.append("|------|--------|--------|--------|----------|----------|")
     for m in methods:
-        healthy_hs = [r["health_score"] for r in hust if r["method"]==m and r["fault_label"]=="healthy"]
-        fault_hs = [r["health_score"] for r in hust if r["method"]==m and r["fault_label"]!="healthy"]
+        healthy_hs = [
+            r["health_score"]
+            for r in hust
+            if r["method"] == m and r["fault_label"] == "healthy"
+        ]
+        fault_hs = [
+            r["health_score"]
+            for r in hust
+            if r["method"] == m and r["fault_label"] != "healthy"
+        ]
         if healthy_hs and fault_hs:
             det_rate = sum(1 for h in fault_hs if h < 85) / len(fault_hs)
             fa_rate = sum(1 for h in healthy_hs if h < 85) / len(healthy_hs)
             sep = np.mean(healthy_hs) - np.mean(fault_hs)
-            lines.append(f"| {m} | {det_rate:.2%} | {fa_rate:.2%} | {sep:.1f} | {np.mean(healthy_hs):.1f} | {np.mean(fault_hs):.1f} |")
+            lines.append(
+                f"| {m} | {det_rate:.2%} | {fa_rate:.2%} | {sep:.1f} | {np.mean(healthy_hs):.1f} | {np.mean(fault_hs):.1f} |"
+            )
         else:
             lines.append(f"| {m} | N/A | N/A | N/A | N/A | N/A |")
 
-    lines.extend([
-        "",
-        "### 2.2 故障频率SNR (故障样本平均)",
-        "",
-        "| 方法 | BPFO SNR | BPFI SNR | BSF SNR | 谐波数 |",
-        "|------|----------|----------|---------|--------|",
-    ])
+    lines.extend(
+        [
+            "",
+            "### 2.2 故障频率SNR (故障样本平均)",
+            "",
+            "| 方法 | BPFO SNR | BPFI SNR | BSF SNR | 谐波数 |",
+            "|------|----------|----------|---------|--------|",
+        ]
+    )
     for m in methods:
-        bpfo = [r["bpfo_snr"] for r in hust if r["method"]==m and r["fault_label"]!="healthy"]
-        bpfi = [r["bpfi_snr"] for r in hust if r["method"]==m and r["fault_label"]!="healthy"]
-        bsf = [r["bsf_snr"] for r in hust if r["method"]==m and r["fault_label"]!="healthy"]
-        harms = [r["harmonic_count"] for r in hust if r["method"]==m and r["fault_label"]!="healthy"]
-        lines.append(f"| {m} | {np.mean(bpfo):.2f} | {np.mean(bpfi):.2f} | {np.mean(bsf):.2f} | {np.mean(harms):.1f} |")
+        bpfo = [
+            r["bpfo_snr"]
+            for r in hust
+            if r["method"] == m and r["fault_label"] != "healthy"
+        ]
+        bpfi = [
+            r["bpfi_snr"]
+            for r in hust
+            if r["method"] == m and r["fault_label"] != "healthy"
+        ]
+        bsf = [
+            r["bsf_snr"]
+            for r in hust
+            if r["method"] == m and r["fault_label"] != "healthy"
+        ]
+        harms = [
+            r["harmonic_count"]
+            for r in hust
+            if r["method"] == m and r["fault_label"] != "healthy"
+        ]
+        lines.append(
+            f"| {m} | {np.mean(bpfo):.2f} | {np.mean(bpfi):.2f} | {np.mean(bsf):.2f} | {np.mean(harms):.1f} |"
+        )
 
-    lines.extend([
-        "",
-        "## 3. CW 变速数据集性能",
-        "",
-        "| 方法 | BPFO SNR | BPFI SNR | 执行时间(ms) |",
-        "|------|----------|----------|-------------|"
-    ])
+    lines.extend(
+        [
+            "",
+            "## 3. CW 变速数据集性能",
+            "",
+            "| 方法 | BPFO SNR | BPFI SNR | 执行时间(ms) |",
+            "|------|----------|----------|-------------|",
+        ]
+    )
     cw = [r for r in results if r["dataset"] == "CW"]
     for m in sorted(set(r["method"] for r in cw)):
-        bpfo = [r["bpfo_snr"] for r in cw if r["method"]==m and r["fault_label"]!="healthy"]
-        bpfi = [r["bpfi_snr"] for r in cw if r["method"]==m and r["fault_label"]!="healthy"]
-        times = [r["exec_time_ms"] for r in cw if r["method"]==m]
-        lines.append(f"| {m} | {np.mean(bpfo):.2f} | {np.mean(bpfi):.2f} | {np.mean(times):.1f} |")
+        bpfo = [
+            r["bpfo_snr"]
+            for r in cw
+            if r["method"] == m and r["fault_label"] != "healthy"
+        ]
+        bpfi = [
+            r["bpfi_snr"]
+            for r in cw
+            if r["method"] == m and r["fault_label"] != "healthy"
+        ]
+        times = [r["exec_time_ms"] for r in cw if r["method"] == m]
+        lines.append(
+            f"| {m} | {np.mean(bpfo):.2f} | {np.mean(bpfi):.2f} | {np.mean(times):.1f} |"
+        )
 
-    lines.extend([
-        "",
-        "## 4. 计算效率",
-        "",
-        "| 方法 | 平均时间(ms) | 2G服务器评估 |",
-        "|------|-------------|-------------|",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 4. 计算效率",
+            "",
+            "| 方法 | 平均时间(ms) | 2G服务器评估 |",
+            "|------|-------------|-------------|",
+        ]
+    )
     for m in methods:
         t = np.mean([r["exec_time_ms"] for r in hust if r["method"] == m])
         eval_str = "✅ 实时" if t < 200 else ("⚠️ 可用" if t < 1000 else "❌ 慢")
         lines.append(f"| {m} | {t:.1f} | {eval_str} |")
 
-    lines.extend([
-        "",
-        "## 5. 结论与建议",
-        "",
-        "### 5.1 各方法优势",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 5. 结论与建议",
+            "",
+            "### 5.1 各方法优势",
+            "",
+        ]
+    )
     if hust:
-        best_bpfo = max(methods, key=lambda m: np.mean([r["bpfo_snr"] for r in hust if r["method"]==m and r["fault_label"]!="healthy"]) if any(r["method"]==m for r in hust) else 0)
-        fastest = min(methods, key=lambda m: np.mean([r["exec_time_ms"] for r in hust if r["method"]==m]))
+        best_bpfo = max(
+            methods,
+            key=lambda m: (
+                np.mean(
+                    [
+                        r["bpfo_snr"]
+                        for r in hust
+                        if r["method"] == m and r["fault_label"] != "healthy"
+                    ]
+                )
+                if any(r["method"] == m for r in hust)
+                else 0
+            ),
+        )
+        fastest = min(
+            methods,
+            key=lambda m: np.mean(
+                [r["exec_time_ms"] for r in hust if r["method"] == m]
+            ),
+        )
         lines.append(f"- **最佳BPFO SNR**: `{best_bpfo}`")
         lines.append(f"- **最快**: `{fastest}`")
     lines.append("")

@@ -1,6 +1,7 @@
 """
 设备 CRUD 接口
 """
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -41,5 +42,5 @@ def get_devices(db: Session = Depends(get_db)):
                 "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
             }
             for d in devices
-        ]
+        ],
     }

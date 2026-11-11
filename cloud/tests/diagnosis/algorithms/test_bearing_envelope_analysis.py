@@ -1,4 +1,5 @@
 """包络指标与评估的独立数学测试；频谱和期望值均手工构造。"""
+
 import os
 import sys
 import unittest
@@ -13,7 +14,10 @@ from app.algorithms.bearing.analysis import (
     analyze_envelope_spectrum,
     compute_sideband_metrics,
 )
-from app.algorithms.bearing.evaluation import evaluate_envelope, evaluate_sideband_evidence
+from app.algorithms.bearing.evaluation import (
+    evaluate_envelope,
+    evaluate_sideband_evidence,
+)
 from app.algorithms.core import Spectrum
 from app.algorithms.mechanics import BearingGeometry
 
@@ -132,20 +136,25 @@ class BearingEnvelopeAnalysisMathTest(unittest.TestCase):
         self.assertEqual(result["sideband_significant_count"], 2)
         self.assertAlmostEqual(result["sideband_density"], 2.0 / 3.0)
 
-        upper_only = compute_sideband_metrics(observations[:1], as_targets(observations[:1]))
+        upper_only = compute_sideband_metrics(
+            observations[:1], as_targets(observations[:1])
+        )
         self.assertIsNone(upper_only.asymmetry)
         self.assertIsNone(evaluate_sideband_evidence(upper_only)["high_asymmetry"])
         empty = evaluate_sideband_evidence(compute_sideband_metrics((), ()))
         self.assertIsNone(empty["sideband_density"])
 
     def test_sideband_asymmetry_formula(self):
-        evidence = compute_sideband_metrics((
-            SidebandObservation(1, "upper", 100.0, 10.0),
-            SidebandObservation(1, "lower", 50.0, 4.0),
-        ), (
-            SidebandTarget(1, "upper", 100.0),
-            SidebandTarget(1, "lower", 50.0),
-        ))
+        evidence = compute_sideband_metrics(
+            (
+                SidebandObservation(1, "upper", 100.0, 10.0),
+                SidebandObservation(1, "lower", 50.0, 4.0),
+            ),
+            (
+                SidebandTarget(1, "upper", 100.0),
+                SidebandTarget(1, "lower", 50.0),
+            ),
+        )
         self.assertAlmostEqual(evidence.asymmetry, 6.0 / 14.0)
 
     def test_shifted_local_peak_is_selected_within_tolerance(self):
@@ -187,7 +196,9 @@ class BearingEnvelopeAnalysisMathTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             Spectrum(frequency_hz=np.array([0.0, 1.0, 3.0]), amplitude=np.ones(3))
         with self.assertRaises(ValueError):
-            Spectrum(frequency_hz=np.array([0.0, 1.0]), amplitude=np.array([0.0, np.nan]))
+            Spectrum(
+                frequency_hz=np.array([0.0, 1.0]), amplitude=np.array([0.0, np.nan])
+            )
 
     def test_geometry_validation(self):
         with self.assertRaises(ValueError):

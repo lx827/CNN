@@ -1,4 +1,5 @@
 """定轴齿轮 DataView HTTP 响应契约测试，使用隔离内存 SQLite。"""
+
 import os
 import sys
 import unittest
@@ -20,7 +21,9 @@ from app.models import Device, SensorData
 class FixedAxisGearApiTest(unittest.TestCase):
     def test_gear_response_exposes_metric_status_not_fake_zero(self) -> None:
         engine = create_engine(
-            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
         )
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(bind=engine)
@@ -33,13 +36,22 @@ class FixedAxisGearApiTest(unittest.TestCase):
             + 0.2 * np.sin(2 * np.pi * 272 * time)
             + 0.2 * np.sin(2 * np.pi * 304 * time)
         )
-        db.add(Device(
-            device_id="TEST-FIXED-GEAR", name="定轴齿轮测试设备", gear_teeth={"input": 18},
-        ))
-        db.add(SensorData(
-            device_id="TEST-FIXED-GEAR", batch_index=1, channel=1,
-            data=signal.tolist(), sample_rate=fs,
-        ))
+        db.add(
+            Device(
+                device_id="TEST-FIXED-GEAR",
+                name="定轴齿轮测试设备",
+                gear_teeth={"input": 18},
+            )
+        )
+        db.add(
+            SensorData(
+                device_id="TEST-FIXED-GEAR",
+                batch_index=1,
+                channel=1,
+                data=signal.tolist(),
+                sample_rate=fs,
+            )
+        )
         db.commit()
 
         def override_get_db():
@@ -61,7 +73,9 @@ class FixedAxisGearApiTest(unittest.TestCase):
             data = response.json()["data"]
             self.assertIn("metrics", data)
             self.assertIn("evaluation", data)
-            self.assertEqual(data["metrics"]["ser"]["status"], "evaluated", data["metrics"]["ser"])
+            self.assertEqual(
+                data["metrics"]["ser"]["status"], "evaluated", data["metrics"]["ser"]
+            )
             self.assertIsNone(data["na4"])
             self.assertEqual(data["metrics"]["na4"]["status"], "not_evaluable")
             self.assertIsNone(data["fault_indicators"]["na4"]["warning"])
@@ -71,9 +85,14 @@ class FixedAxisGearApiTest(unittest.TestCase):
             app.dependency_overrides.pop(optional_auth, None)
             db.close()
             engine.dispose()
-    def test_analyze_http_ensemble_skips_unavailable_values_and_zero_is_not_healthy(self) -> None:
+
+    def test_analyze_http_ensemble_skips_unavailable_values_and_zero_is_not_healthy(
+        self,
+    ) -> None:
         engine = create_engine(
-            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
         )
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(bind=engine)
@@ -85,17 +104,31 @@ class FixedAxisGearApiTest(unittest.TestCase):
             + np.sin(2 * np.pi * 288 * time)
             + 0.2 * np.sin(2 * np.pi * 272 * time)
         )
-        db.add(Device(
-            device_id="TEST-FIXED-ENSEMBLE", name="定轴集成测试设备", gear_teeth={"input": 18},
-        ))
-        db.add(SensorData(
-            device_id="TEST-FIXED-ENSEMBLE", batch_index=1, channel=1,
-            data=signal.tolist(), sample_rate=fs,
-        ))
-        db.add(SensorData(
-            device_id="TEST-FIXED-ENSEMBLE", batch_index=2, channel=1,
-            data=np.zeros(fs).tolist(), sample_rate=fs,
-        ))
+        db.add(
+            Device(
+                device_id="TEST-FIXED-ENSEMBLE",
+                name="定轴集成测试设备",
+                gear_teeth={"input": 18},
+            )
+        )
+        db.add(
+            SensorData(
+                device_id="TEST-FIXED-ENSEMBLE",
+                batch_index=1,
+                channel=1,
+                data=signal.tolist(),
+                sample_rate=fs,
+            )
+        )
+        db.add(
+            SensorData(
+                device_id="TEST-FIXED-ENSEMBLE",
+                batch_index=2,
+                channel=1,
+                data=np.zeros(fs).tolist(),
+                sample_rate=fs,
+            )
+        )
         db.commit()
 
         def override_get_db():

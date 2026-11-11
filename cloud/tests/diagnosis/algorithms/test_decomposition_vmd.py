@@ -1,4 +1,5 @@
 """VMD 双模态、Hz 单位、奇数与长输入有效区间测试。"""
+
 import os
 import sys
 import unittest
@@ -19,14 +20,17 @@ class VMDDecompositionTest(unittest.TestCase):
     def test_dual_modes_are_sorted_and_centers_are_hz(self):
         fs = 1000.0
         result = decompose_vmd(
-            self.signal(), fs,
+            self.signal(),
+            fs,
             VMDParameters(modes=2, alpha=2000.0, tolerance=1e-7, max_iterations=300),
         )
         self.assertEqual(result.status, "valid")
         self.assertEqual(result.modes.shape, (2, 1000))
         self.assertEqual(result.center_frequencies_hz.shape, (2,))
         self.assertEqual(result.center_frequency_history_hz.shape[1], 2)
-        np.testing.assert_allclose(result.center_frequencies_hz, [30.0, 150.0], atol=8.0)
+        np.testing.assert_allclose(
+            result.center_frequencies_hz, [30.0, 150.0], atol=8.0
+        )
         self.assertTrue(np.all(np.diff(result.center_frequencies_hz) >= 0.0))
         self.assertEqual(result.valid_interval.stop_index, 1000)
         self.assertEqual(len(result.residual), 1000)
@@ -38,7 +42,9 @@ class VMDDecompositionTest(unittest.TestCase):
 
     def test_odd_input_keeps_every_original_sample(self):
         signal = self.signal(1001)
-        result = decompose_vmd(signal, 1000.0, VMDParameters(modes=2, max_iterations=150))
+        result = decompose_vmd(
+            signal, 1000.0, VMDParameters(modes=2, max_iterations=150)
+        )
         self.assertEqual(result.modes.shape, (2, 1001))
         self.assertEqual(len(result.residual), 1001)
         self.assertEqual(result.valid_interval.stop_index, 1001)
@@ -47,7 +53,8 @@ class VMDDecompositionTest(unittest.TestCase):
     def test_long_input_returns_explicit_window_without_zero_padding(self):
         signal = self.signal(1200)
         result = decompose_vmd(
-            signal, 1000.0,
+            signal,
+            1000.0,
             VMDParameters(modes=2, max_iterations=100, max_samples=256),
         )
         self.assertEqual(result.input_length, 1200)

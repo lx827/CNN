@@ -4,6 +4,7 @@
 统一计算混淆矩阵、ROC/PR 曲线、Kappa、MCC、Macro-F1、Balanced Accuracy、FDR/MDR/FIA，
 供所有诊断模块调用。
 """
+
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -62,7 +63,9 @@ def evaluate_classification_performance(
     - pr_curves: Dict[label, (recall, precision, auc)]
     - macro_auc_roc, macro_auc_pr
     """
-    print(f"  [分类指标] 计算 {title_prefix} 分类性能 ({len(y_true)} 样本, {len(labels)} 类)...")
+    print(
+        f"  [分类指标] 计算 {title_prefix} 分类性能 ({len(y_true)} 样本, {len(labels)} 类)..."
+    )
 
     # 混淆矩阵
     cm = compute_confusion_matrix(y_true, y_pred, labels)
@@ -90,7 +93,9 @@ def evaluate_classification_performance(
     out_dir = Path(output_subdir) if output_subdir else Path("classification")
 
     plot_confusion_matrix(cm, labels, f"{title} 淰淆矩阵", str(out_dir), normalize=True)
-    plot_confusion_matrix(cm, labels, f"{title} 混淆矩阵(原始)", str(out_dir), normalize=False)
+    plot_confusion_matrix(
+        cm, labels, f"{title} 混淆矩阵(原始)", str(out_dir), normalize=False
+    )
     plot_roc_curves(roc_pr["roc"], f"{title} ROC曲线", str(out_dir))
     plot_pr_curves(roc_pr["pr"], f"{title} PR曲线", str(out_dir))
 
@@ -109,13 +114,19 @@ def evaluate_classification_performance(
         "macro_auc_pr": roc_pr["macro_auc_pr"],
     }
 
-    cache_name = f"classification_metrics_{title_prefix.lower().replace(' ', '_')}" if title_prefix else "classification_metrics"
+    cache_name = (
+        f"classification_metrics_{title_prefix.lower().replace(' ', '_')}"
+        if title_prefix
+        else "classification_metrics"
+    )
     save_cache(cache_name, result)
 
     return result
 
 
-def generate_classification_metrics_table(metrics: Dict[str, Any], title: str = "") -> str:
+def generate_classification_metrics_table(
+    metrics: Dict[str, Any], title: str = ""
+) -> str:
     """生成分类指标汇总 Markdown 表格"""
     lines = [
         f"## {title} 分类量化指标汇总",
@@ -162,7 +173,11 @@ def generate_classification_metrics_table(metrics: Dict[str, Any], title: str = 
         lines.append(header)
         lines.append(sep)
         for i, lbl in enumerate(labels):
-            row = f"| {lbl} | " + " | ".join(str(cm[i, j]) for j in range(len(labels))) + " |"
+            row = (
+                f"| {lbl} | "
+                + " | ".join(str(cm[i, j]) for j in range(len(labels)))
+                + " |"
+            )
             lines.append(row)
         lines.append("")
 

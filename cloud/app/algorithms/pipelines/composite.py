@@ -3,20 +3,34 @@
 AM/FM、MSB、CVS→MED→MSB、VMD→ICA 和 MSWPEE 各自保留真实阶段链。
 共享信号/分解/包络的结果属于同一 evidence_family，不能按方法数量重复投票。
 """
+
 from dataclasses import dataclass, field
 
 import numpy as np
 
 from app.algorithms.composite.amfm import demodulate_amfm, analyze_modulation_peak
-from app.algorithms.composite.cvs import CVSAlignment, reconstruct_continuous_planet_signal
+from app.algorithms.composite.cvs import (
+    CVSAlignment,
+    reconstruct_continuous_planet_signal,
+)
 from app.algorithms.composite.ica import FastICAParameters, compute_fast_ica
-from app.algorithms.composite.msb import MSBParameters, compute_modulation_bispectrum, analyze_msb_slice
-from app.algorithms.bearing.deconvolution import MEDParameters, minimum_entropy_deconvolution
+from app.algorithms.composite.msb import (
+    MSBParameters,
+    compute_modulation_bispectrum,
+    analyze_msb_slice,
+)
+from app.algorithms.bearing.deconvolution import (
+    MEDParameters,
+    minimum_entropy_deconvolution,
+)
 from app.algorithms.decomposition.vmd import VMDParameters, decompose_vmd
 from app.algorithms.mechanics import FixedAxisGearGeometry
 from app.algorithms.mechanics.planetary import PlanetaryGearGeometry
 from app.algorithms.order import ScalarSpeed
-from app.algorithms.pipelines.decomposition import select_ranked_components, WaveletPacketEnergyPipeline
+from app.algorithms.pipelines.decomposition import (
+    select_ranked_components,
+    WaveletPacketEnergyPipeline,
+)
 
 
 @dataclass(frozen=True)
@@ -58,9 +72,17 @@ class ResearchCompositePipeline:
     def evaluate(self, analysis: CompositeAnalysis) -> CompositeEvaluation:
         """只重评已有原始指标。当前无设备基线/效果标定，阈值与结论保持未知。"""
         return CompositeEvaluation(
-            "not_evaluable", analysis.reason or "research_combination_has_no_validated_fault_thresholds",
-            {key: {"value": value, "warning": None, "critical": None,
-                   "status": "raw_only"} for key, value in analysis.metrics.items()},
+            "not_evaluable",
+            analysis.reason or "research_combination_has_no_validated_fault_thresholds",
+            {
+                key: {
+                    "value": value,
+                    "warning": None,
+                    "critical": None,
+                    "status": "raw_only",
+                }
+                for key, value in analysis.metrics.items()
+            },
         )
 
     def run(self, *args, **kwargs):
@@ -69,135 +91,276 @@ class ResearchCompositePipeline:
 
 
 def _failed(method, stages, reason, data=None):
-    return CompositeAnalysis(method, "indeterminate", tuple(stages), data or {}, reason=reason)
+    return CompositeAnalysis(
+        method, "indeterminate", tuple(stages), data or {}, reason=reason
+    )
 
 
 def _bounded_vmd(parameters):
-    if parameters.modes > 5 or parameters.max_samples is None or parameters.max_samples > 51200:
-        raise ValueError("research VMD requires modes<=5 and explicit window<=51200 samples")
+    if (
+        parameters.modes > 5
+        or parameters.max_samples is None
+        or parameters.max_samples > 51200
+    ):
+        raise ValueError(
+            "research VMD requires modes<=5 and explicit window<=51200 samples"
+        )
     if parameters.max_iterations > 500:
         raise ValueError("research VMD iteration limit must not exceed 500")
 
 
 def _targets(geometry, speed):
     if not isinstance(speed, ScalarSpeed):
-        raise ValueError("AM/FM requires explicit constant ScalarSpeed, not trajectory median")
+        raise ValueError(
+            "AM/FM requires explicit constant ScalarSpeed, not trajectory median"
+        )
     if isinstance(geometry, PlanetaryGearGeometry):
         return geometry.mesh_order * speed.frequency_hz, {
-            key: order * speed.frequency_hz for key, order in geometry.event_orders.items()}
+            key: order * speed.frequency_hz
+            for key, order in geometry.event_orders.items()
+        }
     if isinstance(geometry, FixedAxisGearGeometry):
         targets = {"input_rotation": speed.frequency_hz}
         if geometry.output_teeth is not None:
-            targets["output_rotation"] = speed.frequency_hz * geometry.input_teeth / geometry.output_teeth
+            targets["output_rotation"] = (
+                speed.frequency_hz * geometry.input_teeth / geometry.output_teeth
+            )
         return geometry.mesh_frequency_hz(speed.frequency_hz), targets
     raise ValueError("AM/FM requires validated fixed-axis or planetary geometry")
 
 
 class VMDAMFMPipeline(ResearchCompositePipeline):
-    def __init__(self, parameters=VMDParameters(modes=3), *, mode_tolerance_fraction=.25):
+    def __init__(
+        self, parameters=VMDParameters(modes=3), *, mode_tolerance_fraction=0.25
+    ):
         _bounded_vmd(parameters)
-        if not np.isfinite(mode_tolerance_fraction) or not 0 < mode_tolerance_fraction < 1:
+        if (
+            not np.isfinite(mode_tolerance_fraction)
+            or not 0 < mode_tolerance_fraction < 1
+        ):
             raise ValueError("mode tolerance must be within (0,1)")
-        self.parameters, self.mode_tolerance_fraction = parameters, mode_tolerance_fraction
+        self.parameters, self.mode_tolerance_fraction = (
+            parameters,
+            mode_tolerance_fraction,
+        )
 
     def analyze(self, signal, sample_rate_hz, geometry, speed, *, decomposition=None):
-        method = "vmd_amfm_planetary" if isinstance(geometry, PlanetaryGearGeometry) else "vmd_amfm_fixed_axis"
+        method = (
+            "vmd_amfm_planetary"
+            if isinstance(geometry, PlanetaryGearGeometry)
+            else "vmd_amfm_fixed_axis"
+        )
         carrier_hz, targets = _targets(geometry, speed)
         if carrier_hz >= sample_rate_hz / 2:
             return _failed(method, (), "mesh_carrier_above_Nyquist")
-        result = decomposition if decomposition is not None else decompose_vmd(signal, sample_rate_hz, self.parameters)
+        result = (
+            decomposition
+            if decomposition is not None
+            else decompose_vmd(signal, sample_rate_hz, self.parameters)
+        )
         stages = [CompositeStage("VMD", result.status, result.reason)]
-        data = {"decomposition": result, "vmd_parameters": self.parameters, "mesh_frequency_hz": carrier_hz,
-                "reference_frequency_hz": speed.frequency_hz, "modulation_targets_hz": targets}
+        data = {
+            "decomposition": result,
+            "vmd_parameters": self.parameters,
+            "mesh_frequency_hz": carrier_hz,
+            "reference_frequency_hz": speed.frequency_hz,
+            "modulation_targets_hz": targets,
+        }
         if result.status != "valid" or not len(result.modes):
             return _failed(method, stages, result.reason or "VMD_unavailable", data)
         if not np.isclose(result.sample_rate_hz, sample_rate_hz):
             raise ValueError("VMD sample rate does not match AM/FM input")
         selected = int(np.argmin(np.abs(result.center_frequencies_hz - carrier_hz)))
         data["selected_mode"] = selected
-        if abs(result.center_frequencies_hz[selected] - carrier_hz) > carrier_hz * self.mode_tolerance_fraction:
+        if (
+            abs(result.center_frequencies_hz[selected] - carrier_hz)
+            > carrier_hz * self.mode_tolerance_fraction
+        ):
             return _failed(method, stages, "no_VMD_mode_near_mesh_carrier", data)
         stages.append(CompositeStage("mesh_mode_selection", "computed"))
         try:
             representation = demodulate_amfm(result.modes[selected], sample_rate_hz)
         except ValueError as exc:
-            return _failed(method, stages + [CompositeStage("AM_FM", "indeterminate", str(exc))], str(exc), data)
+            return _failed(
+                method,
+                stages + [CompositeStage("AM_FM", "indeterminate", str(exc))],
+                str(exc),
+                data,
+            )
         data["demodulation"] = representation
-        data["amplitude_peaks"] = {key: analyze_modulation_peak(
-            representation.amplitude_spectrum, target, reference_hz=speed.frequency_hz) for key, target in targets.items()}
-        data["frequency_peaks"] = {key: analyze_modulation_peak(
-            representation.frequency_spectrum, target, reference_hz=speed.frequency_hz) for key, target in targets.items()}
+        data["amplitude_peaks"] = {
+            key: analyze_modulation_peak(
+                representation.amplitude_spectrum,
+                target,
+                reference_hz=speed.frequency_hz,
+            )
+            for key, target in targets.items()
+        }
+        data["frequency_peaks"] = {
+            key: analyze_modulation_peak(
+                representation.frequency_spectrum,
+                target,
+                reference_hz=speed.frequency_hz,
+            )
+            for key, target in targets.items()
+        }
         stages.append(CompositeStage("AM_FM", "computed"))
         status = "computed" if result.converged else "approximate"
-        metrics = {f"{kind}_{key}_amplitude": peak.amplitude
-                   for kind, peaks in (("AM", data["amplitude_peaks"]), ("FM", data["frequency_peaks"]))
-                   for key, peak in peaks.items()}
-        return CompositeAnalysis(method, status, tuple(stages), data, metrics,
-                                 None if result.converged else "VMD_not_converged")
+        metrics = {
+            f"{kind}_{key}_amplitude": peak.amplitude
+            for kind, peaks in (
+                ("AM", data["amplitude_peaks"]),
+                ("FM", data["frequency_peaks"]),
+            )
+            for key, peak in peaks.items()
+        }
+        return CompositeAnalysis(
+            method,
+            status,
+            tuple(stages),
+            data,
+            metrics,
+            None if result.converged else "VMD_not_converged",
+        )
 
 
 class ModulationBispectrumPipeline(ResearchCompositePipeline):
     def __init__(self, parameters=MSBParameters()):
         self.parameters = parameters
 
-    def analyze(self, signal, sample_rate_hz, carrier_frequencies_hz, modulation_frequencies_hz):
+    def analyze(
+        self, signal, sample_rate_hz, carrier_frequencies_hz, modulation_frequencies_hz
+    ):
         try:
             representation = compute_modulation_bispectrum(
-                signal, sample_rate_hz, carrier_frequencies_hz, modulation_frequencies_hz, self.parameters)
+                signal,
+                sample_rate_hz,
+                carrier_frequencies_hz,
+                modulation_frequencies_hz,
+                self.parameters,
+            )
         except ValueError as exc:
-            return _failed("modulation_bispectrum", (CompositeStage("MSB", "indeterminate", str(exc)),), str(exc))
+            return _failed(
+                "modulation_bispectrum",
+                (CompositeStage("MSB", "indeterminate", str(exc)),),
+                str(exc),
+            )
         if not np.any(representation.valid):
-            return _failed("modulation_bispectrum", (CompositeStage("MSB", "indeterminate"),), "no_observable_MSB_frequency_pairs",
-                           {"representation": representation})
+            return _failed(
+                "modulation_bispectrum",
+                (CompositeStage("MSB", "indeterminate"),),
+                "no_observable_MSB_frequency_pairs",
+                {"representation": representation},
+            )
         analysis = analyze_msb_slice(representation)
         usable = representation.coherence[np.isfinite(representation.coherence)]
-        metrics = {"maximum_phase_coherence": float(np.max(usable)) if len(usable) else None,
-                   "fourth_order_background": analysis["background"]}
-        return CompositeAnalysis("modulation_bispectrum", "computed", (CompositeStage("MSB", "computed"),),
-                                 {"representation": representation, "slice": analysis, "parameters": self.parameters}, metrics)
+        metrics = {
+            "maximum_phase_coherence": float(np.max(usable)) if len(usable) else None,
+            "fourth_order_background": analysis["background"],
+        }
+        return CompositeAnalysis(
+            "modulation_bispectrum",
+            "computed",
+            (CompositeStage("MSB", "computed"),),
+            {
+                "representation": representation,
+                "slice": analysis,
+                "parameters": self.parameters,
+            },
+            metrics,
+        )
 
 
 class CVSMEDMSBPipeline(ResearchCompositePipeline):
-    def __init__(self, med_parameters=MEDParameters(filter_length=30), msb_parameters=MSBParameters()):
+    def __init__(
+        self,
+        med_parameters=MEDParameters(filter_length=30),
+        msb_parameters=MSBParameters(),
+    ):
         self.med_parameters, self.msb_parameters = med_parameters, msb_parameters
 
-    def analyze(self, signal, sample_rate_hz, alignment: CVSAlignment | None,
-                carrier_frequencies_hz, modulation_frequencies_hz):
+    def analyze(
+        self,
+        signal,
+        sample_rate_hz,
+        alignment: CVSAlignment | None,
+        carrier_frequencies_hz,
+        modulation_frequencies_hz,
+    ):
         cvs = reconstruct_continuous_planet_signal(signal, sample_rate_hz, alignment)
         stages = [CompositeStage("CVS", cvs.status, cvs.reason)]
-        data = {"cvs": cvs, "med_parameters": self.med_parameters, "msb_parameters": self.msb_parameters}
+        data = {
+            "cvs": cvs,
+            "med_parameters": self.med_parameters,
+            "msb_parameters": self.msb_parameters,
+        }
         if cvs.signal is None:
             return _failed("cvs_med_msb", stages, cvs.reason, data)
         try:
             med = minimum_entropy_deconvolution(cvs.signal, self.med_parameters)
         except (ValueError, np.linalg.LinAlgError) as exc:
-            return _failed("cvs_med_msb", stages + [CompositeStage("MED", "indeterminate", str(exc))], str(exc), data)
+            return _failed(
+                "cvs_med_msb",
+                stages + [CompositeStage("MED", "indeterminate", str(exc))],
+                str(exc),
+                data,
+            )
         data["med"] = med
-        stages.append(CompositeStage("MED", "computed" if med.converged else "approximate"))
+        stages.append(
+            CompositeStage("MED", "computed" if med.converged else "approximate")
+        )
         # 此处严格消费MED输出及CVS重组后的采样率，不旁路原始signal。
         msb = ModulationBispectrumPipeline(self.msb_parameters).analyze(
-            med.signal, cvs.sample_rate_hz, carrier_frequencies_hz, modulation_frequencies_hz)
+            med.signal,
+            cvs.sample_rate_hz,
+            carrier_frequencies_hz,
+            modulation_frequencies_hz,
+        )
         data["msb"] = msb
         stages.extend(msb.stages)
         if msb.status == "indeterminate":
             return _failed("cvs_med_msb", stages, msb.reason, data)
-        return CompositeAnalysis("cvs_med_msb", "computed" if med.converged else "approximate",
-                                 tuple(stages), data, msb.metrics, None if med.converged else "MED_not_converged")
+        return CompositeAnalysis(
+            "cvs_med_msb",
+            "computed" if med.converged else "approximate",
+            tuple(stages),
+            data,
+            msb.metrics,
+            None if med.converged else "MED_not_converged",
+        )
 
 
 class VMDICAPipeline(ResearchCompositePipeline):
-    def __init__(self, vmd_parameters=VMDParameters(modes=3), ica_parameters=FastICAParameters(), top_n=1):
+    def __init__(
+        self,
+        vmd_parameters=VMDParameters(modes=3),
+        ica_parameters=FastICAParameters(),
+        top_n=1,
+    ):
         _bounded_vmd(vmd_parameters)
-        self.vmd_parameters, self.ica_parameters, self.top_n = vmd_parameters, ica_parameters, top_n
+        self.vmd_parameters, self.ica_parameters, self.top_n = (
+            vmd_parameters,
+            ica_parameters,
+            top_n,
+        )
 
     def analyze(self, signal, sample_rate_hz, *, decomposition=None):
-        result = decomposition if decomposition is not None else decompose_vmd(signal, sample_rate_hz, self.vmd_parameters)
+        result = (
+            decomposition
+            if decomposition is not None
+            else decompose_vmd(signal, sample_rate_hz, self.vmd_parameters)
+        )
         stages = [CompositeStage("VMD", result.status, result.reason)]
-        data = {"decomposition": result, "vmd_parameters": self.vmd_parameters,
-                "ica_parameters": self.ica_parameters,
-                "observability": "single_sensor_virtual_channels_are_not_independent_measurements"}
+        data = {
+            "decomposition": result,
+            "vmd_parameters": self.vmd_parameters,
+            "ica_parameters": self.ica_parameters,
+            "observability": "single_sensor_virtual_channels_are_not_independent_measurements",
+        }
         if result.status != "valid" or not result.converged:
-            return _failed("vmd_ica", stages, result.reason or "VMD_not_converged", data)
+            return _failed(
+                "vmd_ica", stages, result.reason or "VMD_not_converged", data
+            )
         if not np.isclose(result.sample_rate_hz, sample_rate_hz):
             raise ValueError("VMD sample rate does not match ICA input")
         ica = compute_fast_ica(result.modes.T, self.ica_parameters)
@@ -207,14 +370,25 @@ class VMDICAPipeline(ResearchCompositePipeline):
             return _failed("vmd_ica", stages, ica.reason, data)
         # 每个独立分量逆映射到VMD观测通道后求和，保持输入物理单位。
         contributions = ica.components.T * np.sum(ica.mixing, axis=0)[:, None]
-        reference = np.asarray(signal, dtype=float)[result.valid_interval.start_index:result.valid_interval.stop_index]
-        selection = select_ranked_components(contributions, reference, sample_rate_hz, top_n=self.top_n)
+        reference = np.asarray(signal, dtype=float)[
+            result.valid_interval.start_index : result.valid_interval.stop_index
+        ]
+        selection = select_ranked_components(
+            contributions, reference, sample_rate_hz, top_n=self.top_n
+        )
         data["source_contributions"], data["selection"] = contributions, selection
-        stages.append(CompositeStage("component_selection", selection.status, selection.reason))
+        stages.append(
+            CompositeStage("component_selection", selection.status, selection.reason)
+        )
         if selection.representation is None:
             return _failed("vmd_ica", stages, selection.reason, data)
-        return CompositeAnalysis("vmd_ica", "computed", tuple(stages), data,
-                                 {"selected_components": selection.selected_indices})
+        return CompositeAnalysis(
+            "vmd_ica",
+            "computed",
+            tuple(stages),
+            data,
+            {"selected_components": selection.selected_indices},
+        )
 
 
 def coarse_grain(signal, scale):
@@ -227,12 +401,16 @@ def coarse_grain(signal, scale):
     count = len(values) // scale
     if count < 2:
         raise ValueError("insufficient_samples_after_coarse_graining")
-    return np.mean(values[:count * scale].reshape(count, scale), axis=1)
+    return np.mean(values[: count * scale].reshape(count, scale), axis=1)
 
 
 class MSWPEEPipeline(ResearchCompositePipeline):
     def __init__(self, wavelet="db8", level=3, max_scale=5):
-        if isinstance(max_scale, bool) or not isinstance(max_scale, int) or not 1 <= max_scale <= 64:
+        if (
+            isinstance(max_scale, bool)
+            or not isinstance(max_scale, int)
+            or not 1 <= max_scale <= 64
+        ):
             raise ValueError("MSWPEE max_scale must be an integer in [1,64]")
         self.wavelet, self.level, self.max_scale = wavelet, level, max_scale
 
@@ -244,24 +422,60 @@ class MSWPEEPipeline(ResearchCompositePipeline):
         for scale in range(1, self.max_scale + 1):
             try:
                 coarse = coarse_grain(signal, scale)
-                result = WaveletPacketEnergyPipeline(self.wavelet, self.level).analyze(coarse, sample_rate_hz / scale)
+                result = WaveletPacketEnergyPipeline(self.wavelet, self.level).analyze(
+                    coarse, sample_rate_hz / scale
+                )
                 normalized, entropy = result.normalized_entropy, result.entropy_bits
-                reason = None if normalized is not None else "zero_wavelet_packet_energy"
-                detail = {"scale": scale, "sample_rate_hz": sample_rate_hz / scale,
-                          "retained_input_samples": len(coarse) * scale, "coarse_samples": len(coarse),
-                          "entropy_bits": entropy, "normalized_entropy": normalized,
-                          "energy_ratios": result.energy_ratios,
-                          "node_frequency_bands_hz": tuple(node.frequency_band_hz for node in result.decomposition.nodes)}
+                reason = (
+                    None if normalized is not None else "zero_wavelet_packet_energy"
+                )
+                detail = {
+                    "scale": scale,
+                    "sample_rate_hz": sample_rate_hz / scale,
+                    "retained_input_samples": len(coarse) * scale,
+                    "coarse_samples": len(coarse),
+                    "entropy_bits": entropy,
+                    "normalized_entropy": normalized,
+                    "energy_ratios": result.energy_ratios,
+                    "node_frequency_bands_hz": tuple(
+                        node.frequency_band_hz for node in result.decomposition.nodes
+                    ),
+                }
             except ValueError as exc:
                 normalized, reason = None, str(exc)
-                detail = {"scale": scale, "sample_rate_hz": sample_rate_hz / scale, "reason": reason,
-                          "entropy_bits": None, "normalized_entropy": None}
-            stages.append(CompositeStage(f"coarse_grain_{scale}_WP_energy_entropy", "computed" if normalized is not None else "indeterminate", reason))
+                detail = {
+                    "scale": scale,
+                    "sample_rate_hz": sample_rate_hz / scale,
+                    "reason": reason,
+                    "entropy_bits": None,
+                    "normalized_entropy": None,
+                }
+            stages.append(
+                CompositeStage(
+                    f"coarse_grain_{scale}_WP_energy_entropy",
+                    "computed" if normalized is not None else "indeterminate",
+                    reason,
+                )
+            )
             scales.append(detail)
         valid = all(item["normalized_entropy"] is not None for item in scales)
-        vector = np.asarray([item["normalized_entropy"] if item["normalized_entropy"] is not None else np.nan for item in scales])
-        return CompositeAnalysis("mswpee", "computed" if valid else "indeterminate", tuple(stages),
-                                 {"scales": tuple(scales), "normalized_entropy_vector": vector,
-                                  "coarse_graining_is_box_average_not_anti_alias_resampling": True},
-                                 {"mean_normalized_entropy": float(np.mean(vector)) if valid else None},
-                                 None if valid else "some_multiscale_entropies_are_not_evaluable")
+        vector = np.asarray(
+            [
+                item["normalized_entropy"]
+                if item["normalized_entropy"] is not None
+                else np.nan
+                for item in scales
+            ]
+        )
+        return CompositeAnalysis(
+            "mswpee",
+            "computed" if valid else "indeterminate",
+            tuple(stages),
+            {
+                "scales": tuple(scales),
+                "normalized_entropy_vector": vector,
+                "coarse_graining_is_box_average_not_anti_alias_resampling": True,
+            },
+            {"mean_normalized_entropy": float(np.mean(vector)) if valid else None},
+            None if valid else "some_multiscale_entropies_are_not_evaluable",
+        )

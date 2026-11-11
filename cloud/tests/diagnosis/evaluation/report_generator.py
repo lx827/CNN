@@ -1,6 +1,7 @@
 """
 最终报告生成模块
 """
+
 import time
 from pathlib import Path
 from typing import Any, Dict, List
@@ -8,7 +9,16 @@ from typing import Any, Dict, List
 from .config import OUTPUT_DIR
 
 
-def generate_final_report(denoise_results, bearing_results, gear_results, comprehensive_results, robustness_results, ds_fusion_results=None, health_trend_results=None, channel_consensus_results=None):
+def generate_final_report(
+    denoise_results,
+    bearing_results,
+    gear_results,
+    comprehensive_results,
+    robustness_results,
+    ds_fusion_results=None,
+    health_trend_results=None,
+    channel_consensus_results=None,
+):
     """生成最终综合报告"""
     print("\n" + "=" * 60)
     print("【模块6】生成最终综合报告")
@@ -88,25 +98,39 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
 
     if denoise_results:
         best = max(denoise_results, key=lambda r: r["snr_improvement_db"])
-        lines.append(f"- **最佳去噪**: `{best['method']}` (SNR提升 {best['snr_improvement_db']:+.2f} dB)")
+        lines.append(
+            f"- **最佳去噪**: `{best['method']}` (SNR提升 {best['snr_improvement_db']:+.2f} dB)"
+        )
 
     if bearing_results:
-        hust = [r for r in bearing_results if r["dataset"] == "HUSTbear" and r["fault_label"] != "healthy"]
+        hust = [
+            r
+            for r in bearing_results
+            if r["dataset"] == "HUSTbear" and r["fault_label"] != "healthy"
+        ]
         if hust:
             methods = list(set(r["method"] for r in hust))
-            best_bpfo = max(methods, key=lambda m: sum(r["bpfo_snr"] for r in hust if r["method"]==m) / max(1, sum(1 for r in hust if r["method"]==m)))
+            best_bpfo = max(
+                methods,
+                key=lambda m: (
+                    sum(r["bpfo_snr"] for r in hust if r["method"] == m)
+                    / max(1, sum(1 for r in hust if r["method"] == m))
+                ),
+            )
             lines.append(f"- **最佳轴承诊断**: `{best_bpfo}` (BPFO SNR最高)")
 
     if gear_results:
         sep_scores = []
         for key in ["ser", "fm4", "tsa_kurt"]:
-            h = [r[key] for r in gear_results if r["fault_label"]=="healthy"]
-            f = [r[key] for r in gear_results if r["fault_label"]!="healthy"]
+            h = [r[key] for r in gear_results if r["fault_label"] == "healthy"]
+            f = [r[key] for r in gear_results if r["fault_label"] != "healthy"]
             if h and f:
-                sep_scores.append((key, abs(sum(f)/len(f) - sum(h)/len(h))))
+                sep_scores.append((key, abs(sum(f) / len(f) - sum(h) / len(h))))
         if sep_scores:
             best_gear = max(sep_scores, key=lambda x: x[1])
-            lines.append(f"- **最佳齿轮指标**: `{best_gear[0].upper()}` (分离度 {best_gear[1]:.4f})")
+            lines.append(
+                f"- **最佳齿轮指标**: `{best_gear[0].upper()}` (分离度 {best_gear[1]:.4f})"
+            )
 
     lines.append("")
     lines.append("---")
@@ -121,10 +145,12 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
     if denoise_results:
         lines.append("### 核心指标汇总")
         lines.append("")
-        lines.append("| 方法 | 平均SNR提升(dB) | 平均MSE | 平均相关系数 | 平均时间(ms) |")
+        lines.append(
+            "| 方法 | 平均SNR提升(dB) | 平均MSE | 平均相关系数 | 平均时间(ms) |"
+        )
         lines.append("|------|----------------|---------|-------------|-------------|")
         for m in sorted(set(r["method"] for r in denoise_results)):
-            items = [r for r in denoise_results if r["method"]==m]
+            items = [r for r in denoise_results if r["method"] == m]
             snr_imp = sum(r["snr_improvement_db"] for r in items) / len(items)
             mse = sum(r["mse"] for r in items) / len(items)
             corr = sum(r["correlation"] for r in items) / len(items)
@@ -154,7 +180,9 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
     lines.append("")
     lines.append("## 5. 综合诊断评价")
     lines.append("")
-    lines.append("详见: [comprehensive/comprehensive_evaluation.md](comprehensive/comprehensive_evaluation.md)")
+    lines.append(
+        "详见: [comprehensive/comprehensive_evaluation.md](comprehensive/comprehensive_evaluation.md)"
+    )
     lines.append("")
     lines.append("![健康度热力图](comprehensive/health_heatmap.png)")
     lines.append("")
@@ -162,7 +190,9 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
     lines.append("")
     lines.append("## 6. 噪声鲁棒性测试")
     lines.append("")
-    lines.append("详见: [robustness/robustness_evaluation.md](robustness/robustness_evaluation.md)")
+    lines.append(
+        "详见: [robustness/robustness_evaluation.md](robustness/robustness_evaluation.md)"
+    )
     lines.append("")
     lines.append("![鲁棒性曲线](robustness/snr_vs_accuracy.png)")
     lines.append("")
@@ -194,16 +224,30 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
     lines.append("")
     lines.append("| 算法 | 类别 | 集成路径 | 状态 |")
     lines.append("|------|------|---------|------|")
-    lines.append("| EMD | 去噪 | `engine.py` preprocess → `emd_denoise.py` | ✅ 已集成，exhaustive profile |")
-    lines.append("| CEEMDAN | 去噪 | `engine.py` preprocess → `emd_denoise.py` | ✅ 已集成，exhaustive profile |")
-    lines.append("| Savitzky-Golay | 去噪/平滑 | `engine.py` preprocess → `savgol_denoise.py` | ✅ 已集成，exhaustive profile |")
-    lines.append("| MCKD | 轴承诊断 | `engine.py` analyze_bearing → `mckd.py` | ✅ 已集成，balanced/exhaustive |")
-    lines.append("| 小波包能量熵 | 齿轮特征 | `engine.py` analyze_gear → `wavelet_packet.py` | ✅ 已集成，齿轮诊断补充特征 |")
+    lines.append(
+        "| EMD | 去噪 | `engine.py` preprocess → `emd_denoise.py` | ✅ 已集成，exhaustive profile |"
+    )
+    lines.append(
+        "| CEEMDAN | 去噪 | `engine.py` preprocess → `emd_denoise.py` | ✅ 已集成，exhaustive profile |"
+    )
+    lines.append(
+        "| Savitzky-Golay | 去噪/平滑 | `engine.py` preprocess → `savgol_denoise.py` | ✅ 已集成，exhaustive profile |"
+    )
+    lines.append(
+        "| MCKD | 轴承诊断 | `engine.py` analyze_bearing → `mckd.py` | ✅ 已集成，balanced/exhaustive |"
+    )
+    lines.append(
+        "| 小波包能量熵 | 齿轮特征 | `engine.py` analyze_gear → `wavelet_packet.py` | ✅ 已集成，齿轮诊断补充特征 |"
+    )
     lines.append("")
     lines.append("### 集成验证")
     lines.append("")
-    lines.append("- **ensemble.py** profile 已扩展：exhaustive 包含全部新方法，balanced 包含 MCKD")
-    lines.append("- **engine.py** 已增加 `EMD`/`CEEMDAN`/`SAVGOL` 预处理分支和 `MCKD` 轴承分支")
+    lines.append(
+        "- **ensemble.py** profile 已扩展：exhaustive 包含全部新方法，balanced 包含 MCKD"
+    )
+    lines.append(
+        "- **engine.py** 已增加 `EMD`/`CEEMDAN`/`SAVGOL` 预处理分支和 `MCKD` 轴承分支"
+    )
     lines.append("- **health_score.py** 已增加小波包能量熵扣分权重映射")
     lines.append("- **recommendation.py** 已增加 MCKD 中文方法名")
     lines.append("")
@@ -219,11 +263,15 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
     lines.append("")
     lines.append("### 9.1 当前系统优势")
     lines.append("")
-    lines.append("1. **算法覆盖面广**: 轴承8种 + 齿轮8种 + 去噪8种 + 融合3种，工程完整度高")
+    lines.append(
+        "1. **算法覆盖面广**: 轴承8种 + 齿轮8种 + 去噪8种 + 融合3种，工程完整度高"
+    )
     lines.append("2. **集成诊断有效**: 弱投票融合+D-S证据理论显著降低单一方法误报")
     lines.append("3. **变速工况支持**: CW数据集验证，阶次跟踪和谱相关分析适配良好")
     lines.append("4. **内存优化**: VMD核心实现内存占用从~3GB降至~20MB，适配2G服务器")
-    lines.append("5. **新算法互补**: EMD/CEEMDAN 与 VMD 互补；MCKD 与 MED 互补；小波包补充齿轮频域特征")
+    lines.append(
+        "5. **新算法互补**: EMD/CEEMDAN 与 VMD 互补；MCKD 与 MED 互补；小波包补充齿轮频域特征"
+    )
     lines.append("")
     lines.append("### 9.2 改进建议")
     lines.append("")
@@ -236,17 +284,25 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
     lines.append("| 应用场景 | 推荐去噪 | 推荐轴承方法 | 推荐齿轮方法 | 推荐融合策略 |")
     lines.append("|---------|---------|-------------|-------------|-------------|")
     lines.append("| 快速在线监测 | wavelet | envelope | SER | runtime |")
-    lines.append("| 定期精密诊断 | wavelet_vmd / ceemdan | kurtogram / mckd | FM4+TSA | balanced |")
-    lines.append("| 故障确认/仲裁 | vmd / emd | sc_scoh / mckd | 全部+行星解调+小波包 | exhaustive |")
+    lines.append(
+        "| 定期精密诊断 | wavelet_vmd / ceemdan | kurtogram / mckd | FM4+TSA | balanced |"
+    )
+    lines.append(
+        "| 故障确认/仲裁 | vmd / emd | sc_scoh / mckd | 全部+行星解调+小波包 | exhaustive |"
+    )
     lines.append("| 强噪声环境 | med | med / mckd | FM4 | balanced |")
-    lines.append("| 变速工况 | wavelet / savgol | kurtogram / mckd | SER+阶次 | balanced |")
+    lines.append(
+        "| 变速工况 | wavelet / savgol | kurtogram / mckd | SER+阶次 | balanced |"
+    )
     lines.append("| 实时平滑 | savgol | — | — | — |")
     lines.append("")
     lines.append("---")
     lines.append("")
     lines.append("## 10. 分类指标量化评价")
     lines.append("")
-    lines.append("本章节基于混淆矩阵、ROC/PR曲线、Cohen's Kappa、MCC、Macro-F1等论文级指标，")
+    lines.append(
+        "本章节基于混淆矩阵、ROC/PR曲线、Cohen's Kappa、MCC、Macro-F1等论文级指标，"
+    )
     lines.append("对各诊断方法的分类性能进行系统量化评价。")
     lines.append("")
     lines.append("![混淆矩阵](classification/confusion_matrix.png)")
@@ -304,7 +360,9 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
     lines.append("本章节基于WTgearbox数据集的退化序列，评价健康度指标的PHM趋势性质量。")
     lines.append("核心指标包括：Monotonicity、Trendability、Prognosability。")
     lines.append("")
-    lines.append("详见: [health_trend/health_trend_report.md](health_trend/health_trend_report.md)")
+    lines.append(
+        "详见: [health_trend/health_trend_report.md](health_trend/health_trend_report.md)"
+    )
     lines.append("")
     lines.append("![退化趋势](health_trend/degradation_curve.png)")
     lines.append("")
@@ -318,7 +376,15 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
             phm = health_trend_results.get("phm_metrics", {})
             if phm:
                 for key, val in phm.items():
-                    target = "≥0.85" if key == "Monotonicity" else ("≥0.90" if key == "Trendability" else ("≥0.70" if key == "Prognosability" else "—"))
+                    target = (
+                        "≥0.85"
+                        if key == "Monotonicity"
+                        else (
+                            "≥0.90"
+                            if key == "Trendability"
+                            else ("≥0.70" if key == "Prognosability" else "—")
+                        )
+                    )
                     lines.append(f"| {key} | {target} | {val:.4f} | PHM退化趋势度量 |")
         lines.append("")
 
@@ -329,7 +395,9 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
     lines.append("本章节分析多通道振动信号对诊断准确性的增益效应。")
     lines.append("对比单通道诊断与多通道共识（投票/加权融合）的性能差异。")
     lines.append("")
-    lines.append("详见: [channel_consensus/channel_consensus_report.md](channel_consensus/channel_consensus_report.md)")
+    lines.append(
+        "详见: [channel_consensus/channel_consensus_report.md](channel_consensus/channel_consensus_report.md)"
+    )
     lines.append("")
     lines.append("![共识增益](channel_consensus/consensus_gain_comparison.png)")
     lines.append("")
@@ -338,7 +406,9 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
         lines.append("### 13.1 通道共识增益")
         lines.append("")
         if isinstance(channel_consensus_results, list) and channel_consensus_results:
-            lines.append(f"- 共识方法对比数据量: {len(channel_consensus_results)} 条记录")
+            lines.append(
+                f"- 共识方法对比数据量: {len(channel_consensus_results)} 条记录"
+            )
         elif isinstance(channel_consensus_results, dict):
             lines.append("- 共识方法对比数据已生成，见详细报告")
         lines.append("")
@@ -369,7 +439,9 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
     lines.append("| 指标 | 公式 | 适用 | 论文引用 |")
     lines.append("|------|------|------|---------|")
     lines.append("| PSNR | 10×log10(MAX²/MSE) | 去噪评价 | Hore & Ziou 2010 |")
-    lines.append("| PRD | sqrt(Σ(x-x')²)/sqrt(Σx²)×100 | 信号保真度 | Zigel et al. 2000 |")
+    lines.append(
+        "| PRD | sqrt(Σ(x-x')²)/sqrt(Σx²)×100 | 信号保真度 | Zigel et al. 2000 |"
+    )
     lines.append("| NCC | Σ(x×x')/(||x||×||x'||) | 波形相似度 | — |")
     lines.append("| Crest Factor | max(|x|)/RMS | 冲击增强 | Randall & Antoni 2011 |")
     lines.append("")
@@ -379,7 +451,9 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
     lines.append("|------|------|------|---------|")
     lines.append("| Monotonicity | Σ|R(Mi)-R(Mj)| / C(N,2) | ≥0.85 | Lei et al. 2018 |")
     lines.append("| Trendability | |mean(r(Ri,Mi))| | ≥0.90 | Lei et al. 2018 |")
-    lines.append("| Prognosability | (R(Mfail)-R(Mwarn))/(σwarn+σfail) | ≥0.70 | Saxena et al. 2009 |")
+    lines.append(
+        "| Prognosability | (R(Mfail)-R(Mwarn))/(σwarn+σfail) | ≥0.70 | Saxena et al. 2009 |"
+    )
     lines.append("| HI Robustness | 1-σ(HI)/mean(HI) | ≥0.80 | — |")
     lines.append("")
     lines.append("### 14.4 鲁棒性指标")
@@ -387,7 +461,9 @@ def generate_final_report(denoise_results, bearing_results, gear_results, compre
     lines.append("| 指标 | 定义 | 适用 | 说明 |")
     lines.append("|------|------|------|------|")
     lines.append("| Critical SNR | 首个Accuracy<80%的SNR | 轴承/去噪 | 方法失效阈值 |")
-    lines.append("| Robustness Index | SNR-Acc曲线AUC/最大AUC | 轴承/去噪 | 全SNR范围鲁棒性 |")
+    lines.append(
+        "| Robustness Index | SNR-Acc曲线AUC/最大AUC | 轴承/去噪 | 全SNR范围鲁棒性 |"
+    )
     lines.append("")
     lines.append("---")
     lines.append("")

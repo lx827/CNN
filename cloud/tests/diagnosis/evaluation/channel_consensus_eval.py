@@ -11,6 +11,7 @@
   - channel_consensus/consensus_gain.png
   - channel_consensus/correction_cases.md
 """
+
 import sys
 import time
 from pathlib import Path
@@ -21,22 +22,41 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 
-from app.services.diagnosis import DiagnosisEngine, DiagnosisStrategy, GearMethod, DenoiseMethod
+from app.services.diagnosis import (
+    DiagnosisEngine,
+    DiagnosisStrategy,
+    GearMethod,
+    DenoiseMethod,
+)
 from app.services.diagnosis.channel_consensus import cross_channel_consensus
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
 
 from .config import (
-    OUTPUT_DIR, SAMPLE_RATE, MAX_SAMPLES, WTGEARBOX_GEAR,
-    WTGEARBOX_DIR, HEALTH_THRESHOLD,
+    OUTPUT_DIR,
+    SAMPLE_RATE,
+    MAX_SAMPLES,
+    WTGEARBOX_GEAR,
+    WTGEARBOX_DIR,
+    HEALTH_THRESHOLD,
 )
 from .datasets import classify_wtgearbox
 from .utils import load_npy, save_cache, save_figure
-from .classification_metrics_eval import evaluate_classification_performance, generate_classification_metrics_table
+from .classification_metrics_eval import (
+    evaluate_classification_performance,
+    generate_classification_metrics_table,
+)
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "KaiTi", "Arial Unicode MS"]
+
+plt.rcParams["font.sans-serif"] = [
+    "Microsoft YaHei",
+    "SimHei",
+    "KaiTi",
+    "Arial Unicode MS",
+]
 plt.rcParams["axes.unicode_minus"] = False
 
 
@@ -44,7 +64,10 @@ plt.rcParams["axes.unicode_minus"] = False
 # WTgearbox 双通道数据加载
 # ═══════════════════════════════════════════════════════════
 
-def get_wtgearbox_both_channels(max_per_class: int = 3) -> List[Tuple[Path, Path, Dict]]:
+
+def get_wtgearbox_both_channels(
+    max_per_class: int = 3,
+) -> List[Tuple[Path, Path, Dict]]:
     """
     获取 WTgearbox 数据集的双通道配对文件列表。
 
@@ -93,6 +116,7 @@ def get_wtgearbox_both_channels(max_per_class: int = 3) -> List[Tuple[Path, Path
 
     # 每类限制样本数（三元组格式，不能用 _limit_files）
     from collections import defaultdict
+
     class_paired = defaultdict(list)
     for c1, c2, info in paired:
         lbl = info.get("label", "unknown")
@@ -101,14 +125,17 @@ def get_wtgearbox_both_channels(max_per_class: int = 3) -> List[Tuple[Path, Path
     for lbl in sorted(class_paired.keys()):
         paired.extend(class_paired[lbl][:max_per_class])
 
-    print(f"  WTgearbox 双通道配对: {len(paired)} 样本 "
-          f"({len(set(i['label'] for _, _, i in paired))} 类)")
+    print(
+        f"  WTgearbox 双通道配对: {len(paired)} 样本 "
+        f"({len(set(i['label'] for _, _, i in paired))} 类)"
+    )
     return paired
 
 
 # ═══════════════════════════════════════════════════════════
 # 单通道诊断
 # ═══════════════════════════════════════════════════════════
+
 
 def _run_single_channel_diagnosis(
     signal: np.ndarray,
@@ -173,6 +200,7 @@ def _infer_label_from_result(result: Dict[str, Any], true_label: str) -> str:
 # 多通道一致性融合诊断
 # ═══════════════════════════════════════════════════════════
 
+
 def _run_consensus_diagnosis(
     signal_c1: np.ndarray,
     signal_c2: np.ndarray,
@@ -214,7 +242,9 @@ def _run_consensus_diagnosis(
 
     # 单通道异常惩罚降低
     if consensus["single_channel_penalty"] < 1.0:
-        penalty_reduction = int(round((100 - device_health) * (1.0 - consensus["single_channel_penalty"])))
+        penalty_reduction = int(
+            round((100 - device_health) * (1.0 - consensus["single_channel_penalty"]))
+        )
         device_health = min(100, device_health + penalty_reduction)
 
     # 融合 status
@@ -251,7 +281,9 @@ def _run_consensus_diagnosis(
     merged_probs = {}
     for result in [result_c1, result_c2]:
         # 从 bearing fault_indicators 提取
-        bearing_ind = result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
+        bearing_ind = (
+            result.get("bearing", {}).get("evaluation", {}).get("indicators", {})
+        )
         for name, info in bearing_ind.items():
             if isinstance(info, dict) and info.get("significant"):
                 snr_val = float(info.get("snr", 0))
@@ -262,15 +294,21 @@ def _run_consensus_diagnosis(
                     fault_key = "轴承内圈故障"
                 elif "BSF" in name:
                     fault_key = "滚动体故障"
-                merged_probs[fault_key] = max(merged_probs.get(fault_key, 0), min(1.0, snr_val / 10))
+                merged_probs[fault_key] = max(
+                    merged_probs.get(fault_key, 0), min(1.0, snr_val / 10)
+                )
 
         # 齿轮指标
         gear_ind = result.get("gear", {}).get("fault_indicators", {})
         for name, info in gear_ind.items():
             if isinstance(info, dict) and (info.get("critical") or info.get("warning")):
-                severity = 0.6 if info.get("critical") else 0.3 if info.get("warning") else 0
+                severity = (
+                    0.6 if info.get("critical") else 0.3 if info.get("warning") else 0
+                )
                 if severity > 0:
-                    merged_probs["齿轮磨损"] = max(merged_probs.get("齿轮磨损", 0), severity)
+                    merged_probs["齿轮磨损"] = max(
+                        merged_probs.get("齿轮磨损", 0), severity
+                    )
 
         # 峭度证据
         tf = result.get("time_features", {})
@@ -284,7 +322,9 @@ def _run_consensus_diagnosis(
     if consensus["consensus_boost"] > 1.0:
         for fault_key in consensus.get("consensus_faults", {}):
             if fault_key in merged_probs:
-                merged_probs[fault_key] = min(1.0, merged_probs[fault_key] * consensus["consensus_boost"])
+                merged_probs[fault_key] = min(
+                    1.0, merged_probs[fault_key] * consensus["consensus_boost"]
+                )
 
     # 推断融合后的预测标签
     consensus_pred = fault_label_map.get(consensus_label, "")
@@ -321,6 +361,7 @@ def _run_consensus_diagnosis(
 # 评价主函数
 # ═══════════════════════════════════════════════════════════
 
+
 def evaluate_channel_consensus():
     """评价多通道一致性诊断"""
     print("\n" + "=" * 60)
@@ -353,7 +394,12 @@ def evaluate_channel_consensus():
             result_c1 = _run_single_channel_diagnosis(signal_c1, rot_freq)
             time_c1 = (time.perf_counter() - t0) * 1000
         except Exception as e:
-            result_c1 = {"health_score": 100, "status": "normal", "fault_label": "", "_error": str(e)}
+            result_c1 = {
+                "health_score": 100,
+                "status": "normal",
+                "fault_label": "",
+                "_error": str(e),
+            }
             time_c1 = 0.0
 
         # ── 单通道 c2 ──
@@ -362,7 +408,12 @@ def evaluate_channel_consensus():
             result_c2 = _run_single_channel_diagnosis(signal_c2, rot_freq)
             time_c2 = (time.perf_counter() - t0) * 1000
         except Exception as e:
-            result_c2 = {"health_score": 100, "status": "normal", "fault_label": "", "_error": str(e)}
+            result_c2 = {
+                "health_score": 100,
+                "status": "normal",
+                "fault_label": "",
+                "_error": str(e),
+            }
             time_c2 = 0.0
 
         # ── 多通道共识 ──
@@ -372,8 +423,10 @@ def evaluate_channel_consensus():
             time_consensus = (time.perf_counter() - t0) * 1000
         except Exception as e:
             consensus_result = {
-                "health_score": 100, "status": "normal",
-                "pred_label": "healthy", "consensus": {},
+                "health_score": 100,
+                "status": "normal",
+                "pred_label": "healthy",
+                "consensus": {},
                 "_error": str(e),
             }
             time_consensus = 0.0
@@ -398,9 +451,15 @@ def evaluate_channel_consensus():
             "status_c1": result_c1.get("status", "normal"),
             "status_c2": result_c2.get("status", "normal"),
             "status_consensus": consensus_result.get("status", "normal"),
-            "consensus_fault_label": consensus_result.get("consensus", {}).get("consensus_fault_label", "unknown"),
-            "consensus_boost": consensus_result.get("consensus", {}).get("consensus_boost", 1.0),
-            "single_channel_penalty": consensus_result.get("consensus", {}).get("single_channel_penalty", 1.0),
+            "consensus_fault_label": consensus_result.get("consensus", {}).get(
+                "consensus_fault_label", "unknown"
+            ),
+            "consensus_boost": consensus_result.get("consensus", {}).get(
+                "consensus_boost", 1.0
+            ),
+            "single_channel_penalty": consensus_result.get("consensus", {}).get(
+                "single_channel_penalty", 1.0
+            ),
             "time_c1_ms": round(time_c1, 2),
             "time_c2_ms": round(time_c2, 2),
             "time_consensus_ms": round(time_consensus, 2),
@@ -409,9 +468,9 @@ def evaluate_channel_consensus():
 
         # ── 检查共识修正 ──
         # 修正定义：单通道误分类但共思纠正为正确标签
-        c1_wrong = (pred_c1 != true_label)
-        c2_wrong = (pred_c2 != true_label)
-        consensus_correct = (pred_consensus == true_label)
+        c1_wrong = pred_c1 != true_label
+        c2_wrong = pred_c2 != true_label
+        consensus_correct = pred_consensus == true_label
 
         if consensus_correct and (c1_wrong or c2_wrong):
             corrected_channels = []
@@ -419,19 +478,21 @@ def evaluate_channel_consensus():
                 corrected_channels.append("c1")
             if c2_wrong:
                 corrected_channels.append("c2")
-            correction_cases.append({
-                "file": entry["file"],
-                "true_label": true_label,
-                "pred_c1": pred_c1,
-                "pred_c2": pred_c2,
-                "pred_consensus": pred_consensus,
-                "hs_c1": entry["hs_c1"],
-                "hs_c2": entry["hs_c2"],
-                "hs_consensus": entry["hs_consensus"],
-                "corrected_channels": corrected_channels,
-                "consensus_fault_label": entry["consensus_fault_label"],
-                "consensus_boost": entry["consensus_boost"],
-            })
+            correction_cases.append(
+                {
+                    "file": entry["file"],
+                    "true_label": true_label,
+                    "pred_c1": pred_c1,
+                    "pred_c2": pred_c2,
+                    "pred_consensus": pred_consensus,
+                    "hs_c1": entry["hs_c1"],
+                    "hs_c2": entry["hs_c2"],
+                    "hs_consensus": entry["hs_consensus"],
+                    "corrected_channels": corrected_channels,
+                    "consensus_fault_label": entry["consensus_fault_label"],
+                    "consensus_boost": entry["consensus_boost"],
+                }
+            )
 
     save_cache("channel_consensus_results", all_results)
     save_cache("channel_consensus_corrections", correction_cases)
@@ -447,24 +508,36 @@ def evaluate_channel_consensus():
     y_pred_c1 = [r["pred_c1"] for r in all_results]
     scores_c1 = [100 - r["hs_c1"] for r in all_results]  # 反转健康度作为故障分数
     metrics_c1 = evaluate_classification_performance(
-        y_true, y_pred_c1, scores_c1, labels,
-        output_subdir="channel_consensus", title_prefix="单通道c1",
+        y_true,
+        y_pred_c1,
+        scores_c1,
+        labels,
+        output_subdir="channel_consensus",
+        title_prefix="单通道c1",
     )
 
     # 单通道 c2 分类性能
     y_pred_c2 = [r["pred_c2"] for r in all_results]
     scores_c2 = [100 - r["hs_c2"] for r in all_results]
     metrics_c2 = evaluate_classification_performance(
-        y_true, y_pred_c2, scores_c2, labels,
-        output_subdir="channel_consensus", title_prefix="单通道c2",
+        y_true,
+        y_pred_c2,
+        scores_c2,
+        labels,
+        output_subdir="channel_consensus",
+        title_prefix="单通道c2",
     )
 
     # 共识分类性能
     y_pred_consensus = [r["pred_consensus"] for r in all_results]
     scores_consensus = [100 - r["hs_consensus"] for r in all_results]
     metrics_consensus = evaluate_classification_performance(
-        y_true, y_pred_consensus, scores_consensus, labels,
-        output_subdir="channel_consensus", title_prefix="多通道共识",
+        y_true,
+        y_pred_consensus,
+        scores_consensus,
+        labels,
+        output_subdir="channel_consensus",
+        title_prefix="多通道共识",
     )
 
     # ═══════════════════════════════════════════════════════
@@ -493,7 +566,9 @@ def evaluate_channel_consensus():
     # 绘图
     # ═══════════════════════════════════════════════════════
 
-    _plot_consensus_gain(all_results, metrics_c1, metrics_c2, metrics_consensus, gain_info)
+    _plot_consensus_gain(
+        all_results, metrics_c1, metrics_c2, metrics_consensus, gain_info
+    )
     _plot_health_score_comparison(all_results)
     _plot_consensus_boost_distribution(all_results)
 
@@ -510,8 +585,17 @@ def evaluate_channel_consensus():
     # 生成完整评价报告
     # ═══════════════════════════════════════════════════════
 
-    report = _generate_report(all_results, metrics_c1, metrics_c2, metrics_consensus, gain_info, correction_cases)
-    with open(consensus_dir / "channel_consensus_evaluation.md", "w", encoding="utf-8") as f:
+    report = _generate_report(
+        all_results,
+        metrics_c1,
+        metrics_c2,
+        metrics_consensus,
+        gain_info,
+        correction_cases,
+    )
+    with open(
+        consensus_dir / "channel_consensus_evaluation.md", "w", encoding="utf-8"
+    ) as f:
         f.write(report)
     print(f"  评价报告: {consensus_dir / 'channel_consensus_evaluation.md'}")
 
@@ -525,6 +609,7 @@ def evaluate_channel_consensus():
 # ═══════════════════════════════════════════════════════════
 # 绘图函数
 # ═══════════════════════════════════════════════════════════
+
 
 def _plot_consensus_gain(
     results: List[Dict],
@@ -543,8 +628,15 @@ def _plot_consensus_gain(
     colors = ["#4ECDC4", "#45B7D1", "#FF6B6B"]
     bars = ax.bar(methods, fia_values, color=colors, edgecolor="black", linewidth=0.8)
     for bar, val in zip(bars, fia_values):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
-                f"{val:.3f}", ha="center", va="bottom", fontsize=11, fontweight="bold")
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.02,
+            f"{val:.3f}",
+            ha="center",
+            va="bottom",
+            fontsize=11,
+            fontweight="bold",
+        )
     ax.set_ylabel("FIA (故障隔离准确率)")
     ax.set_title("FIA 对比: 单通道 vs 多通道共思")
     ax.set_ylim(0, max(fia_values) * 1.3 + 0.1)
@@ -553,12 +645,22 @@ def _plot_consensus_gain(
     # ── Consensus Gain ──
     ax = axes[1]
     gain = gain_info["consensus_gain"]
-    bar = ax.bar(["Consensus Gain"], [gain], color="#FF6B6B" if gain > 0 else "#4ECDC4",
-                 edgecolor="black", linewidth=0.8)
-    ax.text(bar[0].get_x() + bar[0].get_width() / 2,
-            bar[0].get_height() + (0.02 if gain >= 0 else -0.04),
-            f"{gain:+.4f}", ha="center", va="bottom" if gain >= 0 else "top",
-            fontsize=12, fontweight="bold")
+    bar = ax.bar(
+        ["Consensus Gain"],
+        [gain],
+        color="#FF6B6B" if gain > 0 else "#4ECDC4",
+        edgecolor="black",
+        linewidth=0.8,
+    )
+    ax.text(
+        bar[0].get_x() + bar[0].get_width() / 2,
+        bar[0].get_height() + (0.02 if gain >= 0 else -0.04),
+        f"{gain:+.4f}",
+        ha="center",
+        va="bottom" if gain >= 0 else "top",
+        fontsize=12,
+        fontweight="bold",
+    )
     ax.set_ylabel("Gain = FIA_consensus - max(FIA_ch1, FIA_ch2)")
     ax.set_title("Consensus Gain")
     ax.axhline(y=0, color="black", linestyle="--", alpha=0.5)
@@ -567,18 +669,48 @@ def _plot_consensus_gain(
     # ── 分类指标综合对比 ──
     ax = axes[2]
     metric_names = ["FIA", "FDR", "Macro-F1", "Accuracy"]
-    c1_vals = [metrics_c1.get("fia", 0), metrics_c1.get("fdr", 0),
-               metrics_c1.get("macro_f1", 0), metrics_c1.get("accuracy", 0)]
-    c2_vals = [metrics_c2.get("fia", 0), metrics_c2.get("fdr", 0),
-               metrics_c2.get("macro_f1", 0), metrics_c2.get("accuracy", 0)]
-    con_vals = [metrics_consensus.get("fia", 0), metrics_consensus.get("fdr", 0),
-               metrics_consensus.get("macro_f1", 0), metrics_consensus.get("accuracy", 0)]
+    c1_vals = [
+        metrics_c1.get("fia", 0),
+        metrics_c1.get("fdr", 0),
+        metrics_c1.get("macro_f1", 0),
+        metrics_c1.get("accuracy", 0),
+    ]
+    c2_vals = [
+        metrics_c2.get("fia", 0),
+        metrics_c2.get("fdr", 0),
+        metrics_c2.get("macro_f1", 0),
+        metrics_c2.get("accuracy", 0),
+    ]
+    con_vals = [
+        metrics_consensus.get("fia", 0),
+        metrics_consensus.get("fdr", 0),
+        metrics_consensus.get("macro_f1", 0),
+        metrics_consensus.get("accuracy", 0),
+    ]
 
     x = np.arange(len(metric_names))
     width = 0.25
-    ax.bar(x - width, c1_vals, width, label="c1", color="#4ECDC4", edgecolor="black", linewidth=0.5)
-    ax.bar(x, c2_vals, width, label="c2", color="#45B7D1", edgecolor="black", linewidth=0.5)
-    ax.bar(x + width, con_vals, width, label="共思", color="#FF6B6B", edgecolor="black", linewidth=0.5)
+    ax.bar(
+        x - width,
+        c1_vals,
+        width,
+        label="c1",
+        color="#4ECDC4",
+        edgecolor="black",
+        linewidth=0.5,
+    )
+    ax.bar(
+        x, c2_vals, width, label="c2", color="#45B7D1", edgecolor="black", linewidth=0.5
+    )
+    ax.bar(
+        x + width,
+        con_vals,
+        width,
+        label="共思",
+        color="#FF6B6B",
+        edgecolor="black",
+        linewidth=0.5,
+    )
     ax.set_xticks(x)
     ax.set_xticklabels(metric_names)
     ax.set_ylabel("值")
@@ -603,10 +735,29 @@ def _plot_health_score_comparison(results: List[Dict]):
         fault_vals = [r[key] for r in results if r["true_label"] != "healthy"]
 
         if healthy_vals:
-            ax.hist(healthy_vals, bins=10, alpha=0.6, label="健康", color="green", edgecolor="black")
+            ax.hist(
+                healthy_vals,
+                bins=10,
+                alpha=0.6,
+                label="健康",
+                color="green",
+                edgecolor="black",
+            )
         if fault_vals:
-            ax.hist(fault_vals, bins=10, alpha=0.6, label="故障", color="red", edgecolor="black")
-        ax.axvline(x=HEALTH_THRESHOLD, color="black", linestyle="--", label=f"阈值={HEALTH_THRESHOLD}")
+            ax.hist(
+                fault_vals,
+                bins=10,
+                alpha=0.6,
+                label="故障",
+                color="red",
+                edgecolor="black",
+            )
+        ax.axvline(
+            x=HEALTH_THRESHOLD,
+            color="black",
+            linestyle="--",
+            label=f"阈值={HEALTH_THRESHOLD}",
+        )
         ax.set_xlabel("健康度")
         ax.set_ylabel("频数")
         ax.set_title(title)
@@ -626,11 +777,17 @@ def _plot_consensus_boost_distribution(results: List[Dict]):
     boosts = [r["consensus_boost"] for r in results]
     labels_list = [r["true_label"] for r in results]
     unique_labels = sorted(set(labels_list))
-    boost_by_label = {lbl: [b for b, l in zip(boosts, labels_list) if l == lbl] for lbl in unique_labels}
+    boost_by_label = {
+        lbl: [b for b, l in zip(boosts, labels_list) if l == lbl]
+        for lbl in unique_labels
+    }
 
     positions = range(len(unique_labels))
-    bp = ax.boxplot([boost_by_label.get(lbl, [1.0]) for lbl in unique_labels],
-                    labels=unique_labels, patch_artist=True)
+    bp = ax.boxplot(
+        [boost_by_label.get(lbl, [1.0]) for lbl in unique_labels],
+        labels=unique_labels,
+        patch_artist=True,
+    )
     for patch in bp["boxes"]:
         patch.set_facecolor("lightblue")
     ax.set_xlabel("故障类型")
@@ -643,10 +800,16 @@ def _plot_consensus_boost_distribution(results: List[Dict]):
     # ── Single Channel Penalty ──
     ax = axes[1]
     penalties = [r["single_channel_penalty"] for r in results]
-    penalty_by_label = {lbl: [p for p, l in zip(penalties, labels_list) if l == lbl] for lbl in unique_labels}
+    penalty_by_label = {
+        lbl: [p for p, l in zip(penalties, labels_list) if l == lbl]
+        for lbl in unique_labels
+    }
 
-    bp = ax.boxplot([penalty_by_label.get(lbl, [1.0]) for lbl in unique_labels],
-                    labels=unique_labels, patch_artist=True)
+    bp = ax.boxplot(
+        [penalty_by_label.get(lbl, [1.0]) for lbl in unique_labels],
+        labels=unique_labels,
+        patch_artist=True,
+    )
     for patch in bp["boxes"]:
         patch.set_facecolor("lightsalmon")
     ax.set_xlabel("故障类型")
@@ -663,6 +826,7 @@ def _plot_consensus_boost_distribution(results: List[Dict]):
 # ═══════════════════════════════════════════════════════════
 # 报告生成
 # ═══════════════════════════════════════════════════════════
+
 
 def _generate_correction_cases_md(
     correction_cases: List[Dict],
@@ -687,19 +851,23 @@ def _generate_correction_cases_md(
     ]
 
     if not correction_cases:
-        lines.extend([
-            "## 结果",
-            "",
-            "本次评价中未发现共思修正案例。",
-            "",
-        ])
+        lines.extend(
+            [
+                "## 结果",
+                "",
+                "本次评价中未发现共思修正案例。",
+                "",
+            ]
+        )
     else:
-        lines.extend([
-            "## 修正案例详情",
-            "",
-            "| # | 文件 | 真实标签 | c1预测 | c2预测 | 共思预测 | c1健康度 | c2健康度 | 共思健康度 | 修正通道 | 共思标签 | Boost |",
-            "|---|------|---------|---------|---------|----------|----------|----------|-----------|----------|----------|-------|",
-        ])
+        lines.extend(
+            [
+                "## 修正案例详情",
+                "",
+                "| # | 文件 | 真实标签 | c1预测 | c2预测 | 共思预测 | c1健康度 | c2健康度 | 共思健康度 | 修正通道 | 共思标签 | Boost |",
+                "|---|------|---------|---------|---------|----------|----------|----------|-----------|----------|----------|-------|",
+            ]
+        )
         for i, case in enumerate(correction_cases, 1):
             lines.append(
                 f"| {i} | {case['file']} | {case['true_label']} | "
@@ -709,15 +877,25 @@ def _generate_correction_cases_md(
                 f"{case['consensus_boost']} |"
             )
 
-        lines.extend([
-            "",
-            "## 修正机制分析",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                "## 修正机制分析",
+                "",
+            ]
+        )
         # 统计修正类型
-        c1_corrected = sum(1 for c in correction_cases if "c1" in c["corrected_channels"])
-        c2_corrected = sum(1 for c in correction_cases if "c2" in c["corrected_channels"])
-        both_corrected = sum(1 for c in correction_cases if "c1" in c["corrected_channels"] and "c2" in c["corrected_channels"])
+        c1_corrected = sum(
+            1 for c in correction_cases if "c1" in c["corrected_channels"]
+        )
+        c2_corrected = sum(
+            1 for c in correction_cases if "c2" in c["corrected_channels"]
+        )
+        both_corrected = sum(
+            1
+            for c in correction_cases
+            if "c1" in c["corrected_channels"] and "c2" in c["corrected_channels"]
+        )
 
         lines.append(f"- c1 被修正: {c1_corrected} 次")
         lines.append(f"- c2 被修正: {c2_corrected} 次")
@@ -730,22 +908,34 @@ def _generate_correction_cases_md(
             lines.append(f"- 最大 Consensus Boost: {max(boosts):.2f}")
 
         # 按故障类型统计修正
-        lines.extend(["", "### 按故障类型统计", "",
-                      "| 故障类型 | 修正次数 |",
-                      "|----------|---------|"])
+        lines.extend(
+            [
+                "",
+                "### 按故障类型统计",
+                "",
+                "| 故障类型 | 修正次数 |",
+                "|----------|---------|",
+            ]
+        )
         from collections import Counter
+
         label_counts = Counter(c["true_label"] for c in correction_cases)
         for lbl in sorted(label_counts.keys()):
             lines.append(f"| {lbl} | {label_counts[lbl]} |")
 
-    lines.extend(["", "---", "",
-        "## Consensus Gain 汇总",
-        "",
-        f"| 指标 | c1 | c2 | 共思 | Gain |",
-        f"|------|----|----|------|------|",
-        f"| FIA | {gain_info['fia_c1']:.4f} | {gain_info['fia_c2']:.4f} | {gain_info['fia_consensus']:.4f} | {gain_info['consensus_gain']:+.4f} |",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "---",
+            "",
+            "## Consensus Gain 汇总",
+            "",
+            f"| 指标 | c1 | c2 | 共思 | Gain |",
+            f"|------|----|----|------|------|",
+            f"| FIA | {gain_info['fia_c1']:.4f} | {gain_info['fia_c2']:.4f} | {gain_info['fia_consensus']:.4f} | {gain_info['consensus_gain']:+.4f} |",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -800,27 +990,31 @@ def _generate_report(
     lines.append(generate_classification_metrics_table(metrics_consensus, "多通道共思"))
 
     # ── 2.4 FIA 对比汇总 ──
-    lines.extend([
-        "",
-        "### 2.4 FIA 对比汇总",
-        "",
-        "| 诊断方式 | FIA | FDR | FAR | Macro-F1 | Accuracy |",
-        "|----------|-----|-----|-----|----------|----------|",
-        f"| 单通道 c1 | {metrics_c1.get('fia', 0):.4f} | {metrics_c1.get('fdr', 0):.4f} | {metrics_c1.get('far', 0):.4f} | {metrics_c1.get('macro_f1', 0):.4f} | {metrics_c1.get('accuracy', 0):.4f} |",
-        f"| 单通道 c2 | {metrics_c2.get('fia', 0):.4f} | {metrics_c2.get('fdr', 0):.4f} | {metrics_c2.get('far', 0):.4f} | {metrics_c2.get('macro_f1', 0):.4f} | {metrics_c2.get('accuracy', 0):.4f} |",
-        f"| 多通道共思 | {metrics_consensus.get('fia', 0):.4f} | {metrics_consensus.get('fdr', 0):.4f} | {metrics_consensus.get('far', 0):.4f} | {metrics_consensus.get('macro_f1', 0):.4f} | {metrics_consensus.get('accuracy', 0):.4f} |",
-        "",
-        f"**Consensus Gain = {gain_info['consensus_gain']:+.4f}**",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "### 2.4 FIA 对比汇总",
+            "",
+            "| 诊断方式 | FIA | FDR | FAR | Macro-F1 | Accuracy |",
+            "|----------|-----|-----|-----|----------|----------|",
+            f"| 单通道 c1 | {metrics_c1.get('fia', 0):.4f} | {metrics_c1.get('fdr', 0):.4f} | {metrics_c1.get('far', 0):.4f} | {metrics_c1.get('macro_f1', 0):.4f} | {metrics_c1.get('accuracy', 0):.4f} |",
+            f"| 单通道 c2 | {metrics_c2.get('fia', 0):.4f} | {metrics_c2.get('fdr', 0):.4f} | {metrics_c2.get('far', 0):.4f} | {metrics_c2.get('macro_f1', 0):.4f} | {metrics_c2.get('accuracy', 0):.4f} |",
+            f"| 多通道共思 | {metrics_consensus.get('fia', 0):.4f} | {metrics_consensus.get('fdr', 0):.4f} | {metrics_consensus.get('far', 0):.4f} | {metrics_consensus.get('macro_f1', 0):.4f} | {metrics_consensus.get('accuracy', 0):.4f} |",
+            "",
+            f"**Consensus Gain = {gain_info['consensus_gain']:+.4f}**",
+            "",
+        ]
+    )
 
     # ── 3. 健康度统计 ──
-    lines.extend([
-        "## 3. 健康度统计",
-        "",
-        "| 诊断方式 | 健康均值 | 健康标准差 | 故障均值 | 故障标准差 | 分离度 |",
-        "|----------|----------|-----------|----------|-----------|--------|",
-    ])
+    lines.extend(
+        [
+            "## 3. 健康度统计",
+            "",
+            "| 诊断方式 | 健康均值 | 健康标准差 | 故障均值 | 故障标准差 | 分离度 |",
+            "|----------|----------|-----------|----------|-----------|--------|",
+        ]
+    )
     for key, name in [("hs_c1", "c1"), ("hs_c2", "c2"), ("hs_consensus", "共思")]:
         healthy_hs = [r[key] for r in results if r["true_label"] == "healthy"]
         fault_hs = [r[key] for r in results if r["true_label"] != "healthy"]
@@ -830,24 +1024,30 @@ def _generate_report(
             f_mean = np.mean(fault_hs)
             f_std = np.std(fault_hs)
             sep = h_mean - f_mean
-            lines.append(f"| {name} | {h_mean:.1f} | {h_std:.1f} | {f_mean:.1f} | {f_std:.1f} | {sep:.1f} |")
+            lines.append(
+                f"| {name} | {h_mean:.1f} | {h_std:.1f} | {f_mean:.1f} | {f_std:.1f} | {sep:.1f} |"
+            )
         else:
             lines.append(f"| {name} | N/A | N/A | N/A | N/A | N/A |")
 
     # ── 4. 各故障类型 ──
-    lines.extend([
-        "",
-        "## 4. 各故障类型健康度",
-        "",
-        "| 故障类型 | 样本数 | c1均值 | c2均值 | 共思均值 | 共思 vs c1 | 共思 vs c2 |",
-        "|----------|--------|--------|--------|----------|-----------|-----------|",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 4. 各故障类型健康度",
+            "",
+            "| 故障类型 | 样本数 | c1均值 | c2均值 | 共思均值 | 共思 vs c1 | 共思 vs c2 |",
+            "|----------|--------|--------|--------|----------|-----------|-----------|",
+        ]
+    )
     fault_labels = sorted(set(r["true_label"] for r in results))
     for lbl in fault_labels:
         n = sum(1 for r in results if r["true_label"] == lbl)
         c1_mean = np.mean([r["hs_c1"] for r in results if r["true_label"] == lbl])
         c2_mean = np.mean([r["hs_c2"] for r in results if r["true_label"] == lbl])
-        con_mean = np.mean([r["hs_consensus"] for r in results if r["true_label"] == lbl])
+        con_mean = np.mean(
+            [r["hs_consensus"] for r in results if r["true_label"] == lbl]
+        )
         diff_c1 = con_mean - c1_mean
         diff_c2 = con_mean - c2_mean
         lines.append(
@@ -856,21 +1056,25 @@ def _generate_report(
         )
 
     # ── 5. 修正案例 ──
-    lines.extend([
-        "",
-        "## 5. 共思修正案例",
-        "",
-        f"- 总修正次数: {len(correction_cases)}",
-        f"- 总样本数: {len(results)}",
-        f"- 修正率: {len(correction_cases) / len(results):.2%}",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 5. 共思修正案例",
+            "",
+            f"- 总修正次数: {len(correction_cases)}",
+            f"- 总样本数: {len(results)}",
+            f"- 修正率: {len(correction_cases) / len(results):.2%}",
+            "",
+        ]
+    )
 
     if correction_cases:
-        lines.extend([
-            "| # | 文件 | 真实 | c1 | c2 | 共思 | 修正通道 |",
-            "|---|------|------|-----|-----|------|----------|",
-        ])
+        lines.extend(
+            [
+                "| # | 文件 | 真实 | c1 | c2 | 共思 | 修正通道 |",
+                "|---|------|------|-----|-----|------|----------|",
+            ]
+        )
         for i, case in enumerate(correction_cases, 1):
             lines.append(
                 f"| {i} | {case['file']} | {case['true_label']} | "
@@ -880,41 +1084,51 @@ def _generate_report(
 
     # ── 6. 结论 ──
     gain = gain_info["consensus_gain"]
-    lines.extend([
-        "",
-        "## 6. 结论与建议",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 6. 结论与建议",
+            "",
+        ]
+    )
     if gain > 0:
-        lines.extend([
-            f"- Consensus Gain 为正值 ({gain:+.4f})，多通道共思优于最佳单通道",
-            "- 一致性投票有效减少了单通道误分类",
-            "- 建议在生产环境中始终启用多通道共思诊断",
-        ])
+        lines.extend(
+            [
+                f"- Consensus Gain 为正值 ({gain:+.4f})，多通道共思优于最佳单通道",
+                "- 一致性投票有效减少了单通道误分类",
+                "- 建议在生产环境中始终启用多通道共思诊断",
+            ]
+        )
     elif gain == 0:
-        lines.extend([
-            f"- Consensus Gain 为零 ({gain:+.4f})，多通道共思与最佳单通道持平",
-            "- 一致性投票未带来额外增益，但未降低性能",
-            "- 建议保留多通道共思作为安全冗余机制",
-        ])
+        lines.extend(
+            [
+                f"- Consensus Gain 为零 ({gain:+.4f})，多通道共思与最佳单通道持平",
+                "- 一致性投票未带来额外增益，但未降低性能",
+                "- 建议保留多通道共思作为安全冗余机制",
+            ]
+        )
     else:
-        lines.extend([
-            f"- Consensus Gain 为负值 ({gain:+.4f})，多通道共思反而降低了 FIA",
-            "- 可能原因：两通道诊断结果差异过大，融合权重设置不当",
-            "- 建议调整 worst_weight 或检查通道数据质量",
-        ])
+        lines.extend(
+            [
+                f"- Consensus Gain 为负值 ({gain:+.4f})，多通道共思反而降低了 FIA",
+                "- 可能原因：两通道诊断结果差异过大，融合权重设置不当",
+                "- 建议调整 worst_weight 或检查通道数据质量",
+            ]
+        )
 
-    lines.extend([
-        "",
-        "### 6.1 优化方向",
-        "",
-        "| 方向 | 建议 | 预期效果 |",
-        "|------|------|----------|",
-        "| 权重调整 | 根据通道信噪比动态调整 worst_weight | 更精准融合 |",
-        "| 通道筛选 | 自动剔除低质量通道 | 减少噪声干扰 |",
-        "| 时域证据门控 | 共思前检查 kurt>5 或 crest>10 | 减少误报 |",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "### 6.1 优化方向",
+            "",
+            "| 方向 | 建议 | 预期效果 |",
+            "|------|------|----------|",
+            "| 权重调整 | 根据通道信噪比动态调整 worst_weight | 更精准融合 |",
+            "| 通道筛选 | 自动剔除低质量通道 | 减少噪声干扰 |",
+            "| 时域证据门控 | 共思前检查 kurt>5 或 crest>10 | 减少误报 |",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 

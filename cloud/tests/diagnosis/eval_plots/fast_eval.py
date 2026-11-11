@@ -2,6 +2,7 @@
 快速综合评估 — 每类取少量样本，重点覆盖所有方法×数据集
 用法(uv-only,见 AGENTS.md §2/§4): cd cloud && uv run python tests/diagnosis/eval_plots/fast_eval.py
 """
+
 import sys, json, time, warnings, os
 from pathlib import Path
 import numpy as np
@@ -12,7 +13,12 @@ sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 sys.path.insert(0, str(PROJECT_ROOT / "cloud" / "tests" / "diagnosis"))
 from data_paths import HUSTBEAR_DIR, CW_DIR, WTGEARBOX_DIR as WTGEAR_DIR
 
-from app.services.diagnosis.engine import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod
+from app.services.diagnosis.engine import (
+    DiagnosisEngine,
+    BearingMethod,
+    GearMethod,
+    DenoiseMethod,
+)
 from app.services.diagnosis.ensemble import run_research_ensemble
 
 OUTPUT_DIR = PROJECT_ROOT / "cloud" / "tests" / "output" / "eval_plots"
@@ -31,7 +37,9 @@ def load_sig(d, f):
 
 
 def save_json(data, name):
-    (OUTPUT_DIR / name).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    (OUTPUT_DIR / name).write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 def fault_hust(fname):
@@ -48,7 +56,7 @@ def fault_cw(fname):
 
 # ═══ 轴承二分类 ═══
 def eval_bearing_binary(dataset_name, data_dir, file_glob, fault_func, class_names):
-    print(f"\n{'='*60}\n{dataset_name} 轴承二分类\n{'='*60}")
+    print(f"\n{'=' * 60}\n{dataset_name} 轴承二分类\n{'=' * 60}")
     files = []
     for f in sorted(Path(data_dir).glob(file_glob)):
         fc = fault_func(f.name)
@@ -60,11 +68,16 @@ def eval_bearing_binary(dataset_name, data_dir, file_glob, fault_func, class_nam
     print(f"  健康:{len(h)} 故障:{len(f_)}")
 
     METHODS = [
-        ("标准包络", BearingMethod.ENVELOPE), ("Kurtogram", BearingMethod.FILTER_BANK_SK),
-        ("CPW预白化", BearingMethod.CPW), ("MED增强", BearingMethod.MED),
-        ("MCKD", BearingMethod.MCKD), ("Teager", BearingMethod.TEAGER),
-        ("谱峭度重加权", BearingMethod.SPECTRAL_KURTOSIS), ("DWT", BearingMethod.DWT),
-        ("EMD", BearingMethod.EMD_ENVELOPE), ("VMD", BearingMethod.VMD_ENVELOPE),
+        ("标准包络", BearingMethod.ENVELOPE),
+        ("Kurtogram", BearingMethod.FILTER_BANK_SK),
+        ("CPW预白化", BearingMethod.CPW),
+        ("MED增强", BearingMethod.MED),
+        ("MCKD", BearingMethod.MCKD),
+        ("Teager", BearingMethod.TEAGER),
+        ("谱峭度重加权", BearingMethod.SPECTRAL_KURTOSIS),
+        ("DWT", BearingMethod.DWT),
+        ("EMD", BearingMethod.EMD_ENVELOPE),
+        ("VMD", BearingMethod.VMD_ENVELOPE),
     ]
 
     results = {"total": len(files), "healthy": len(h), "fault": len(f_), "methods": {}}
@@ -77,13 +90,19 @@ def eval_bearing_binary(dataset_name, data_dir, file_glob, fault_func, class_nam
                 continue
             try:
                 t1 = time.perf_counter()
-                engine = DiagnosisEngine(bearing_method=method, bearing_params=BEARING_PARAMS,
-                                         denoise_method=DenoiseMethod.NONE)
+                engine = DiagnosisEngine(
+                    bearing_method=method,
+                    bearing_params=BEARING_PARAMS,
+                    denoise_method=DenoiseMethod.NONE,
+                )
                 res = engine.analyze_bearing(sig, FS)
                 times.append((time.perf_counter() - t1) * 1000)
                 inds = res.get("evaluation", {}).get("indicators", {})
-                has_f = any(v.get("significant") for k, v in inds.items()
-                            if isinstance(v, dict) and not k.endswith("_stat"))
+                has_f = any(
+                    v.get("significant")
+                    for k, v in inds.items()
+                    if isinstance(v, dict) and not k.endswith("_stat")
+                )
                 if has_f != is_h:
                     correct += 1
                 total += 1
@@ -92,8 +111,12 @@ def eval_bearing_binary(dataset_name, data_dir, file_glob, fault_func, class_nam
         acc = correct / max(total, 1) * 100
         avg_ms = round(np.mean(times), 1) if times else 0
         print(f"  [{name}] {acc:.1f}% ({correct}/{total}) {avg_ms}ms")
-        results["methods"][name] = {"accuracy": round(acc, 2), "correct": correct,
-                                     "total": total, "avg_time_ms": avg_ms}
+        results["methods"][name] = {
+            "accuracy": round(acc, 2),
+            "correct": correct,
+            "total": total,
+            "avg_time_ms": avg_ms,
+        }
 
     # Ensemble
     t0 = time.perf_counter()
@@ -104,7 +127,9 @@ def eval_bearing_binary(dataset_name, data_dir, file_glob, fault_func, class_nam
             continue
         try:
             t1 = time.perf_counter()
-            res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, max_seconds=5.0)
+            res = run_research_ensemble(
+                sig, FS, bearing_params=BEARING_PARAMS, max_seconds=5.0
+            )
             times.append((time.perf_counter() - t1) * 1000)
             hs = res.get("health_score", 100)
             st = res.get("status", "normal")
@@ -117,22 +142,37 @@ def eval_bearing_binary(dataset_name, data_dir, file_glob, fault_func, class_nam
     acc = correct / max(total, 1) * 100
     avg_ms = round(np.mean(times), 1) if times else 0
     print(f"  [Ensemble] {acc:.1f}% ({correct}/{total}) {avg_ms}ms")
-    results["methods"]["Ensemble"] = {"accuracy": round(acc, 2), "correct": correct,
-                                       "total": total, "avg_time_ms": avg_ms}
+    results["methods"]["Ensemble"] = {
+        "accuracy": round(acc, 2),
+        "correct": correct,
+        "total": total,
+        "avg_time_ms": avg_ms,
+    }
     return results
 
 
 # ═══ 齿轮二分类 ═══
 def eval_gear_binary():
-    print(f"\n{'='*60}\nWTgearbox 齿轮二分类\n{'='*60}")
+    print(f"\n{'=' * 60}\nWTgearbox 齿轮二分类\n{'=' * 60}")
     files_h = sorted(f.name for f in WTGEAR_DIR.glob("He_*-c1.npy"))
-    files_f = sorted(f.name for f in WTGEAR_DIR.glob("*.npy")
-                     if "-c1.npy" in f.name and not f.name.startswith("He"))
+    files_f = sorted(
+        f.name
+        for f in WTGEAR_DIR.glob("*.npy")
+        if "-c1.npy" in f.name and not f.name.startswith("He")
+    )
     files = [(f, True) for f in files_h] + [(f, False) for f in files_f]
     print(f"  健康:{len(files_h)} 故障:{len(files_f)}")
 
-    results = {"total": len(files), "healthy": len(files_h), "fault": len(files_f), "methods": {}}
-    for name, method in [("标准边频分析", GearMethod.STANDARD), ("高级综合", GearMethod.ADVANCED)]:
+    results = {
+        "total": len(files),
+        "healthy": len(files_h),
+        "fault": len(files_f),
+        "methods": {},
+    }
+    for name, method in [
+        ("标准边频分析", GearMethod.STANDARD),
+        ("高级综合", GearMethod.ADVANCED),
+    ]:
         t0 = time.perf_counter()
         correct, total, times = 0, 0, []
         for fname, is_h in files:
@@ -145,13 +185,19 @@ def eval_gear_binary():
                 rf = 30.0
             try:
                 t1 = time.perf_counter()
-                engine = DiagnosisEngine(gear_method=method, gear_teeth=GEAR_PARAMS,
-                                         denoise_method=DenoiseMethod.NONE)
+                engine = DiagnosisEngine(
+                    gear_method=method,
+                    gear_teeth=GEAR_PARAMS,
+                    denoise_method=DenoiseMethod.NONE,
+                )
                 res = engine.analyze_gear(sig, FS, rot_freq=rf)
                 times.append((time.perf_counter() - t1) * 1000)
                 inds = res.get("evaluation", {}).get("indicators", {})
-                has_w = any(v.get("warning") or v.get("critical")
-                            for v in inds.values() if isinstance(v, dict))
+                has_w = any(
+                    v.get("warning") or v.get("critical")
+                    for v in inds.values()
+                    if isinstance(v, dict)
+                )
                 if has_w != is_h:
                     correct += 1
                 total += 1
@@ -160,8 +206,12 @@ def eval_gear_binary():
         acc = correct / max(total, 1) * 100
         avg_ms = round(np.mean(times), 1) if times else 0
         print(f"  [{name}] {acc:.1f}% ({correct}/{total}) {avg_ms}ms")
-        results["methods"][name] = {"accuracy": round(acc, 2), "correct": correct,
-                                     "total": total, "avg_time_ms": avg_ms}
+        results["methods"][name] = {
+            "accuracy": round(acc, 2),
+            "correct": correct,
+            "total": total,
+            "avg_time_ms": avg_ms,
+        }
 
     # Ensemble
     t0 = time.perf_counter()
@@ -172,7 +222,13 @@ def eval_gear_binary():
             continue
         try:
             t1 = time.perf_counter()
-            res = run_research_ensemble(sig, FS, bearing_params=BEARING_PARAMS, gear_teeth=GEAR_PARAMS, max_seconds=5.0)
+            res = run_research_ensemble(
+                sig,
+                FS,
+                bearing_params=BEARING_PARAMS,
+                gear_teeth=GEAR_PARAMS,
+                max_seconds=5.0,
+            )
             times.append((time.perf_counter() - t1) * 1000)
             hs = res.get("health_score", 100)
             st = res.get("status", "normal")
@@ -184,17 +240,23 @@ def eval_gear_binary():
     acc = correct / max(total, 1) * 100
     avg_ms = round(np.mean(times), 1) if times else 0
     print(f"  [Ensemble] {acc:.1f}% ({correct}/{total}) {avg_ms}ms")
-    results["methods"]["Ensemble"] = {"accuracy": round(acc, 2), "correct": correct,
-                                       "total": total, "avg_time_ms": avg_ms}
+    results["methods"]["Ensemble"] = {
+        "accuracy": round(acc, 2),
+        "correct": correct,
+        "total": total,
+        "avg_time_ms": avg_ms,
+    }
     return results
 
 
 # ═══ 去噪效果 ═══
 def eval_denoise():
-    print(f"\n{'='*60}\n去噪效果\n{'='*60}")
+    print(f"\n{'=' * 60}\n去噪效果\n{'=' * 60}")
     results = {"methods": {}}
     for label, fault_code in [("外圈故障", "O"), ("健康", "H")]:
-        files = sorted(f for f in HUSTBEAR_DIR.glob("*-X.npy") if fault_hust(f.name) == fault_code)
+        files = sorted(
+            f for f in HUSTBEAR_DIR.glob("*-X.npy") if fault_hust(f.name) == fault_code
+        )
         if not files:
             continue
         sig_c = load_sig(HUSTBEAR_DIR, files[0].name)
@@ -203,12 +265,17 @@ def eval_denoise():
         bp = np.var(sig_c)
 
         engine = DiagnosisEngine()
-        for dn, dl in [("none", "无去噪"), ("wavelet", "小波去噪"), ("vmd", "VMD去噪"),
-                        ("med", "MED去噪"), ("wavelet_vmd", "小波+VMD级联")]:
+        for dn, dl in [
+            ("none", "无去噪"),
+            ("wavelet", "小波去噪"),
+            ("vmd", "VMD去噪"),
+            ("med", "MED去噪"),
+            ("wavelet_vmd", "小波+VMD级联"),
+        ]:
             engine.denoise_method = DenoiseMethod(dn)
             try:
                 proc = engine.preprocess(sig_n)
-                rp = np.var(sig_c - proc[:len(sig_c)])
+                rp = np.var(sig_c - proc[: len(sig_c)])
             except Exception:
                 rp = bp
             dsnr = 10 * np.log10(max(bp, 1e-12) / max(rp, 1e-12))
@@ -223,13 +290,23 @@ def main():
     t0 = time.time()
 
     # 轴承二分类 HUST
-    r1 = eval_bearing_binary("4.2.1 HUSTbear", HUSTBEAR_DIR, "*-X.npy", fault_hust,
-                             {"H": "健康", "B": "球故障", "I": "内圈", "O": "外圈", "C": "复合"})
+    r1 = eval_bearing_binary(
+        "4.2.1 HUSTbear",
+        HUSTBEAR_DIR,
+        "*-X.npy",
+        fault_hust,
+        {"H": "健康", "B": "球故障", "I": "内圈", "O": "外圈", "C": "复合"},
+    )
     save_json(r1, "fast_hust_binary.json")
 
     # 轴承二分类 Ottawa
-    r2 = eval_bearing_binary("4.3.1 Ottawa/CW", CW_DIR, "*.npy", fault_cw,
-                             {"H": "健康", "I": "内圈", "O": "外圈"})
+    r2 = eval_bearing_binary(
+        "4.3.1 Ottawa/CW",
+        CW_DIR,
+        "*.npy",
+        fault_cw,
+        {"H": "健康", "I": "内圈", "O": "外圈"},
+    )
     save_json(r2, "fast_ottawa_binary.json")
 
     # 齿轮二分类
@@ -240,7 +317,7 @@ def main():
     r4 = eval_denoise()
     save_json(r4, "fast_denoise.json")
 
-    print(f"\n完成 {time.time()-t0:.0f}s")
+    print(f"\n完成 {time.time() - t0:.0f}s")
 
 
 if __name__ == "__main__":

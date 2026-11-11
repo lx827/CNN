@@ -1,4 +1,5 @@
 """恒定频率梳状干扰的倒谱预白化（CPW）及包络 Pipeline。"""
+
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
@@ -23,11 +24,15 @@ class CPWEnvelopeResult:
     kurtogram: Optional[FilterBankKurtogramResult] = None
 
 
-def _validate_comb(sample_rate_hz: float, comb_frequencies_hz: Sequence[float]) -> tuple[float, ...]:
+def _validate_comb(
+    sample_rate_hz: float, comb_frequencies_hz: Sequence[float]
+) -> tuple[float, ...]:
     values = tuple(sorted(set(float(value) for value in comb_frequencies_hz)))
     if not values:
         raise ValueError("CPW 必须提供至少一个稳定梳状频率")
-    if not all(np.isfinite(value) and 0.0 < value < sample_rate_hz / 2.0 for value in values):
+    if not all(
+        np.isfinite(value) and 0.0 < value < sample_rate_hz / 2.0 for value in values
+    ):
         raise ValueError("梳状频率必须全部有限、为正且低于 Nyquist")
     return values
 
@@ -45,7 +50,11 @@ def cepstral_pre_whitening(
     arr = np.asarray(signal, dtype=np.float64)
     if arr.ndim != 1 or len(arr) < 256:
         raise ValueError("CPW 输入必须是一维且至少 256 点")
-    if not np.all(np.isfinite(arr)) or not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
+    if (
+        not np.all(np.isfinite(arr))
+        or not np.isfinite(sample_rate_hz)
+        or sample_rate_hz <= 0
+    ):
         raise ValueError("CPW 输入和采样率必须为有限值，采样率为正")
     if not np.isfinite(notch_width_ratio) or not 0.0 < notch_width_ratio <= 0.1:
         raise ValueError("倒谱陷波相对宽度必须位于 (0,0.1]")
@@ -115,7 +124,9 @@ class CPWEnvelopePipeline:
             )
         comb = _validate_comb(sample_rate_hz, comb_frequencies)
         whitened = cepstral_pre_whitening(signal, sample_rate_hz, comb)
-        downstream = FilterBankKurtogramPipeline().run(whitened, sample_rate_hz, parameters)
+        downstream = FilterBankKurtogramPipeline().run(
+            whitened, sample_rate_hz, parameters
+        )
         return CPWEnvelopeResult(
             status=downstream.status,
             method=self.method,

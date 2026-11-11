@@ -1,4 +1,5 @@
 """转速/相位垂直切片的独立合成正确性测试，不使用旧输出作 golden。"""
+
 import os
 import sys
 
@@ -46,7 +47,7 @@ def _triangle_speed(time_s, low=12.0, high=36.0):
 
 def _linear_revolutions(time_s, initial_hz, acceleration_hz_s):
     """线性扫频的解析累计转数，不与被测梯形积分共用实现。"""
-    return initial_hz * time_s + 0.5 * acceleration_hz_s * time_s ** 2
+    return initial_hz * time_s + 0.5 * acceleration_hz_s * time_s**2
 
 
 def _triangle_revolutions(time_s, low=12.0, high=36.0):
@@ -58,8 +59,8 @@ def _triangle_revolutions(time_s, low=12.0, high=36.0):
     revolutions = np.empty_like(time_s)
     revolutions[before] = _linear_revolutions(time_s[before], low, slope)
     tau = time_s[~before] - half
-    half_revolutions = low * half + 0.5 * slope * half ** 2
-    revolutions[~before] = half_revolutions + high * tau - 0.5 * slope * tau ** 2
+    half_revolutions = low * half + 0.5 * slope * half**2
+    revolutions[~before] = half_revolutions + high * tau - 0.5 * slope * tau**2
     return revolutions
 
 
@@ -96,9 +97,8 @@ def test_constant_speed_axis_and_single_sided_amplitude():
 def test_nearby_order_bins_match_hand_calculation():
     fs, rot_freq, samples_per_rev = 8192.0, 16.0, 512
     time_s = np.arange(fs + 1) / fs  # 含末端共 16 转，FFT 阶次分辨率=1/16。
-    signal = (
-        0.6 * np.sin(2 * np.pi * 3.0 * rot_freq * time_s)
-        + 0.4 * np.sin(2 * np.pi * 3.5 * rot_freq * time_s)
+    signal = 0.6 * np.sin(2 * np.pi * 3.0 * rot_freq * time_s) + 0.4 * np.sin(
+        2 * np.pi * 3.5 * rot_freq * time_s
     )
     result = ConstantSpeedOrderPipeline(
         OrderParameters(samples_per_revolution=samples_per_rev, max_order=10),
@@ -113,8 +113,10 @@ def test_nearby_order_bins_match_hand_calculation():
 def test_phase_integration_uses_analytic_integral():
     time_s = np.linspace(0, 2, 2001)
     speed_hz = 10 + 2 * time_s
-    phase = integrate_speed_trajectory(SpeedTrajectory(time_s, speed_hz, "test_formula"))
-    expected_revolutions = 10 * time_s + time_s ** 2
+    phase = integrate_speed_trajectory(
+        SpeedTrajectory(time_s, speed_hz, "test_formula")
+    )
+    expected_revolutions = 10 * time_s + time_s**2
     assert np.allclose(phase.revolutions, expected_revolutions, atol=1e-12)
     assert np.allclose(phase.phase_rad, 2 * np.pi * expected_revolutions, atol=1e-11)
 
@@ -186,7 +188,9 @@ def test_stft_sustained_search_range_exit_is_indeterminate():
 def test_zero_mad_still_rejects_true_outlier():
     frequencies = np.array([20.0, 20.0, 20.0, 20.0, 40.0])
     retained = select_retained_speed_frames(
-        frequencies, np.ones(5, dtype=bool), FrameParameters(),
+        frequencies,
+        np.ones(5, dtype=bool),
+        FrameParameters(),
     )
     assert retained.tolist() == [True, True, True, True, False]
 
@@ -224,19 +228,31 @@ def test_edge_outside_run_uses_sample_count_and_rejects_long_or_internal():
     stft_times = np.array([0.5, 0.75])
     frequency = np.full(100, 20.0)
     frequency[:20] = 14.0
-    assert _speed_range_violation(
-        frequency, time_s, stft_times, SpeedSearchRange(15, 25),
-        maximum_edge_outside_samples=25,
-    ) is None
+    assert (
+        _speed_range_violation(
+            frequency,
+            time_s,
+            stft_times,
+            SpeedSearchRange(15, 25),
+            maximum_edge_outside_samples=25,
+        )
+        is None
+    )
     frequency[:30] = 14.0
     assert "边缘长时间" in _speed_range_violation(
-        frequency, time_s, stft_times, SpeedSearchRange(15, 25),
+        frequency,
+        time_s,
+        stft_times,
+        SpeedSearchRange(15, 25),
         maximum_edge_outside_samples=25,
     )
     frequency = np.full(100, 20.0)
     frequency[60] = 30.0
     assert "记录内部" in _speed_range_violation(
-        frequency, time_s, np.array([0.25, 0.75]), SpeedSearchRange(15, 25),
+        frequency,
+        time_s,
+        np.array([0.25, 0.75]),
+        SpeedSearchRange(15, 25),
         maximum_edge_outside_samples=25,
     )
 
@@ -356,7 +372,11 @@ def test_stft_resolution_depends_on_sample_rate_not_fixed_512():
 def test_bearing_fault_modulation_is_not_mistaken_for_shaft_speed():
     np.random.seed(7)
     signal, fs, truth = bearing_outer_race(
-        bpfo=90.0, rot_freq=25.0, duration=3.0, fs=8192, snr_db=15,
+        bpfo=90.0,
+        rot_freq=25.0,
+        duration=3.0,
+        fs=8192,
+        snr_db=15,
     )
     result = AutomaticOrderPipeline(
         OrderParameters(samples_per_revolution=256, max_order=20),
@@ -364,7 +384,9 @@ def test_bearing_fault_modulation_is_not_mistaken_for_shaft_speed():
     ).run(signal, fs)
     assert result.status == "valid", result.reason
     assert result.tracking_method == "multi_frame"
-    assert abs(result.speed.median_hz - truth["rot_freq"]) < 1.0, result.speed.frequency_hz
+    assert abs(result.speed.median_hz - truth["rot_freq"]) < 1.0, (
+        result.speed.frequency_hz
+    )
 
 
 def test_estimation_signal_is_separate_from_fault_enhancement():

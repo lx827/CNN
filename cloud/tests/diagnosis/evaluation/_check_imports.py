@@ -1,4 +1,5 @@
 """验证所有模块可正确导入"""
+
 import sys
 from pathlib import Path
 
@@ -9,8 +10,14 @@ sys.path.insert(0, str(PROJECT_ROOT / "cloud" / "tests" / "diagnosis"))
 
 modules = [
     ("evaluation.config", "OUTPUT_DIR, SAMPLE_RATE, MAX_SAMPLES, HEALTH_THRESHOLD"),
-    ("evaluation.utils", "compute_confusion_matrix, compute_cohen_kappa, compute_mcc, compute_macro_f1, compute_fdr_far_mdr_fia, compute_psnr, compute_monotonicity, compute_trendability"),
-    ("evaluation.classification_metrics_eval", "evaluate_classification_performance, generate_classification_metrics_table"),
+    (
+        "evaluation.utils",
+        "compute_confusion_matrix, compute_cohen_kappa, compute_mcc, compute_macro_f1, compute_fdr_far_mdr_fia, compute_psnr, compute_monotonicity, compute_trendability",
+    ),
+    (
+        "evaluation.classification_metrics_eval",
+        "evaluate_classification_performance, generate_classification_metrics_table",
+    ),
     ("evaluation.denoise_eval", "evaluate_denoise_methods"),
     ("evaluation.bearing_eval", "evaluate_bearing_methods"),
     ("evaluation.gear_eval", "evaluate_gear_methods"),

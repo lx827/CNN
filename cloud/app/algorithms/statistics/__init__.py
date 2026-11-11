@@ -1,4 +1,5 @@
 """统计表示与分析函数公共接口。"""
+
 from .time_domain import (
     SegmentedRMS,
     SignalStatistics,

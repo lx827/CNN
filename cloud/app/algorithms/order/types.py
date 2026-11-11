@@ -1,4 +1,5 @@
 """转速、相位与阶次分析的结构化数据契约。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -45,14 +46,20 @@ class ScalarSpeed:
         if self.status not in {"valid", "indeterminate"}:
             raise ValueError("标量转频状态必须是 valid 或 indeterminate")
         if self.status == "valid":
-            if self.frequency_hz is None or not np.isfinite(self.frequency_hz) or self.frequency_hz <= 0:
+            if (
+                self.frequency_hz is None
+                or not np.isfinite(self.frequency_hz)
+                or self.frequency_hz <= 0
+            ):
                 raise ValueError("有效标量转频必须是有限正数")
         elif self.frequency_hz is not None:
             raise ValueError("不可判定的标量转频不能携带频率值")
 
     @classmethod
     def indeterminate(cls, source: str, reason: str) -> "ScalarSpeed":
-        return cls(frequency_hz=None, source=source, status="indeterminate", reason=reason)
+        return cls(
+            frequency_hz=None, source=source, status="indeterminate", reason=reason
+        )
 
 
 @dataclass(frozen=True)
@@ -68,19 +75,29 @@ class LocalSpeedEstimates:
 
     def __post_init__(self) -> None:
         lengths = {
-            len(self.frame_start_s), len(self.frame_time_s), len(self.frequency_hz),
-            len(self.reliable_mask), len(self.retained_mask),
+            len(self.frame_start_s),
+            len(self.frame_time_s),
+            len(self.frequency_hz),
+            len(self.reliable_mask),
+            len(self.retained_mask),
         }
         if len(lengths) != 1 or not lengths or next(iter(lengths)) == 0:
             raise ValueError("局部转频序列各字段必须是非空等长数组")
-        for name, values in (("帧起点", self.frame_start_s), ("帧中心时间", self.frame_time_s)):
+        for name, values in (
+            ("帧起点", self.frame_start_s),
+            ("帧中心时间", self.frame_time_s),
+        ):
             _validate_finite_vector(name, values)
         if self.frequency_hz.ndim != 1:
             raise ValueError("局部转频必须是一维数组")
         reliable = self.reliable_mask
-        if not np.all(np.isfinite(self.frequency_hz[reliable])) or np.any(self.frequency_hz[reliable] <= 0):
+        if not np.all(np.isfinite(self.frequency_hz[reliable])) or np.any(
+            self.frequency_hz[reliable] <= 0
+        ):
             raise ValueError("可靠局部转频必须是有限正数；不可靠帧可用 NaN 占位")
-        if np.any(~reliable & np.isfinite(self.frequency_hz) & (self.frequency_hz <= 0)):
+        if np.any(
+            ~reliable & np.isfinite(self.frequency_hz) & (self.frequency_hz <= 0)
+        ):
             raise ValueError("局部转频占位值不能是非正有限数")
         if np.any(self.retained_mask & ~self.reliable_mask):
             raise ValueError("保留帧必须是可靠帧的子集")
@@ -164,11 +181,16 @@ class AngleDomainSignal:
         _validate_finite_vector("角域信号", self.samples)
         if len(self.angle_revolutions) != len(self.samples):
             raise ValueError("角域采样点轴与信号长度必须一致")
-        if isinstance(self.samples_per_revolution, bool) or self.samples_per_revolution < 8:
+        if (
+            isinstance(self.samples_per_revolution, bool)
+            or self.samples_per_revolution < 8
+        ):
             raise ValueError("每转采样点数必须是不小于 8 的整数")
         if len(self.angle_revolutions) > 1 and not np.allclose(
-            np.diff(self.angle_revolutions), 1.0 / self.samples_per_revolution,
-            rtol=1e-8, atol=1e-12,
+            np.diff(self.angle_revolutions),
+            1.0 / self.samples_per_revolution,
+            rtol=1e-8,
+            atol=1e-12,
         ):
             raise ValueError("角域采样点轴必须按 1/samples_per_revolution 等间隔")
 
@@ -193,7 +215,8 @@ class OrderSpectrum:
         if np.any(self.amplitude < 0):
             raise ValueError("阶次谱幅值不能为负数")
         if self.order_bins[0] != 0 or (
-            len(self.order_bins) > 1 and not np.allclose(
+            len(self.order_bins) > 1
+            and not np.allclose(
                 np.diff(self.order_bins), self.order_resolution, rtol=1e-7, atol=1e-12
             )
         ):
@@ -206,7 +229,9 @@ class OrderParameters:
     max_order: float = 50.0
 
     def __post_init__(self) -> None:
-        if isinstance(self.samples_per_revolution, bool) or not isinstance(self.samples_per_revolution, int):
+        if isinstance(self.samples_per_revolution, bool) or not isinstance(
+            self.samples_per_revolution, int
+        ):
             raise ValueError("每转采样点数必须是整数")
         if self.samples_per_revolution < 16:
             raise ValueError("每转采样点数至少为 16")
@@ -230,7 +255,11 @@ class FrameParameters:
             raise ValueError("帧长必须是有限正数")
         if not np.isfinite(self.overlap) or not 0 <= self.overlap < 1:
             raise ValueError("帧重叠率必须位于 [0, 1)")
-        if self.mad_threshold <= 0 or self.relative_mad_floor < 0 or self.absolute_mad_floor_hz <= 0:
+        if (
+            self.mad_threshold <= 0
+            or self.relative_mad_floor < 0
+            or self.absolute_mad_floor_hz <= 0
+        ):
             raise ValueError("MAD 阈值和绝对下限必须为正数，相对下限不能为负数")
         if self.varying_speed_cv_threshold <= 0:
             raise ValueError("快速变速判据必须为正数")
@@ -250,11 +279,17 @@ class RidgeParameters:
     maximum_boundary_frame_fraction: float = 0.20
 
     def __post_init__(self) -> None:
-        if self.target_frequency_resolution_hz <= 0 or self.maximum_window_duration_s <= 0:
+        if (
+            self.target_frequency_resolution_hz <= 0
+            or self.maximum_window_duration_s <= 0
+        ):
             raise ValueError("STFT 目标分辨率和最长窗时长必须为正数")
         if not 0 <= self.overlap < 1:
             raise ValueError("STFT 重叠率必须位于 [0, 1)")
-        if self.minimum_peak_to_background <= 1 or self.minimum_local_energy_fraction <= 0:
+        if (
+            self.minimum_peak_to_background <= 1
+            or self.minimum_local_energy_fraction <= 0
+        ):
             raise ValueError("STFT 脊线可靠性阈值无效")
         if not 0 < self.minimum_reliable_frame_fraction <= 1:
             raise ValueError("可靠脊线帧比例必须位于 (0, 1]")
@@ -299,14 +334,22 @@ class OrderAnalysis:
             raise ValueError("有效阶次分析必须包含阶次谱")
         if self.status == "indeterminate" and self.spectrum is not None:
             raise ValueError("不可判定结果不能携带正常阶次谱")
-        if self.tracking_method == "multi_frame" and (self.phase is not None or self.angle_domain is not None):
+        if self.tracking_method == "multi_frame" and (
+            self.phase is not None or self.angle_domain is not None
+        ):
             raise ValueError("多帧谱平均不能伪装成连续相位重采样")
 
     @classmethod
     def failed(
-        cls, tracking_method: str, speed: SpeedRepresentation, reason: str,
+        cls,
+        tracking_method: str,
+        speed: SpeedRepresentation,
+        reason: str,
     ) -> "OrderAnalysis":
         return cls(
-            status="indeterminate", tracking_method=tracking_method,
-            speed=speed, spectrum=None, reason=reason,
+            status="indeterminate",
+            tracking_method=tracking_method,
+            speed=speed,
+            spectrum=None,
+            reason=reason,
         )

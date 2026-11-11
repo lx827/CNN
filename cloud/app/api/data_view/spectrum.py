@@ -31,15 +31,22 @@ async def get_channel_fft(
     channel: int,
     max_freq: Optional[int] = 5000,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
-    db: Session = Depends(get_db)
+    denoise: str = Query(
+        default="none",
+        description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+    ),
+    db: Session = Depends(get_db),
 ):
     """实时计算 Hann 单边峰值幅值谱；响应字段保持兼容。"""
-    record = db.query(SensorData).filter(
-        SensorData.device_id == device_id,
-        SensorData.batch_index == batch_index,
-        SensorData.channel == channel
-    ).first()
+    record = (
+        db.query(SensorData)
+        .filter(
+            SensorData.device_id == device_id,
+            SensorData.batch_index == batch_index,
+            SensorData.channel == channel,
+        )
+        .first()
+    )
 
     if not record or not record.data:
         raise HTTPException(status_code=404, detail="数据不存在")
@@ -63,7 +70,7 @@ async def get_channel_fft(
                 "is_special": bool(record.is_special),
                 "fft_freq": [round(float(value), 2) for value in spectrum.frequency_hz],
                 "fft_amp": [round(float(value), 4) for value in spectrum.amplitude],
-            }
+            },
         }
     except DenoisingError as e:
         raise denoising_http_error(e) from e
@@ -78,18 +85,29 @@ async def get_channel_stft(
     batch_index: int,
     channel: int,
     max_freq: Optional[int] = 5000,
-    nperseg: int = Query(default=512, ge=64, le=4096, description="STFT 窗口长度（点数）"),
-    noverlap: int = Query(default=256, ge=0, le=4095, description="STFT 窗口重叠长度（点数）"),
+    nperseg: int = Query(
+        default=512, ge=64, le=4096, description="STFT 窗口长度（点数）"
+    ),
+    noverlap: int = Query(
+        default=256, ge=0, le=4095, description="STFT 窗口重叠长度（点数）"
+    ),
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
-    db: Session = Depends(get_db)
+    denoise: str = Query(
+        default="none",
+        description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+    ),
+    db: Session = Depends(get_db),
 ):
     """实时 STFT；time 为帧中心秒，freq 为 Hz，magnitude 为单边幅值 dB。"""
-    record = db.query(SensorData).filter(
-        SensorData.device_id == device_id,
-        SensorData.batch_index == batch_index,
-        SensorData.channel == channel
-    ).first()
+    record = (
+        db.query(SensorData)
+        .filter(
+            SensorData.device_id == device_id,
+            SensorData.batch_index == batch_index,
+            SensorData.channel == channel,
+        )
+        .first()
+    )
 
     if not record or not record.data:
         raise HTTPException(status_code=404, detail="数据不存在")
@@ -132,10 +150,9 @@ async def get_channel_stft(
                 "time": [round(float(value), 4) for value in time],
                 "freq": [round(float(value), 2) for value in frequency],
                 "magnitude": [
-                    [round(float(value), 2) for value in row]
-                    for row in magnitude_db
+                    [round(float(value), 2) for value in row] for row in magnitude_db
                 ],
-            }
+            },
         }
     except DenoisingError as e:
         raise denoising_http_error(e) from e
@@ -149,18 +166,29 @@ async def get_channel_stats(
     device_id: str,
     batch_index: int,
     channel: int,
-    window_size: int = Query(default=1024, ge=64, le=8192, description="加窗窗口大小（点数）"),
-    step: int = Query(default=None, ge=1, le=4096, description="滑动步长（点数），默认窗口大小的一半"),
+    window_size: int = Query(
+        default=1024, ge=64, le=8192, description="加窗窗口大小（点数）"
+    ),
+    step: int = Query(
+        default=None, ge=1, le=4096, description="滑动步长（点数），默认窗口大小的一半"
+    ),
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
-    db: Session = Depends(get_db)
+    denoise: str = Query(
+        default="none",
+        description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+    ),
+    db: Session = Depends(get_db),
 ):
     """实时总体统计与周期 Hann 加窗序列；算法层不序列化数组。"""
-    record = db.query(SensorData).filter(
-        SensorData.device_id == device_id,
-        SensorData.batch_index == batch_index,
-        SensorData.channel == channel
-    ).first()
+    record = (
+        db.query(SensorData)
+        .filter(
+            SensorData.device_id == device_id,
+            SensorData.batch_index == batch_index,
+            SensorData.channel == channel,
+        )
+        .first()
+    )
 
     if not record or not record.data:
         raise HTTPException(status_code=404, detail="数据不存在")
@@ -203,15 +231,21 @@ async def get_channel_stats(
                     "rms": [round(float(value), 6) for value in windowed.rms],
                     "peak": [round(float(value), 6) for value in windowed.peak],
                     "margin": [round(float(value), 4) for value in windowed.margin],
-                    "crest_factor": [round(float(value), 4) for value in windowed.crest_factor],
-                    "shape_factor": [round(float(value), 4) for value in windowed.shape_factor],
-                    "impulse_factor": [round(float(value), 4) for value in windowed.impulse_factor],
+                    "crest_factor": [
+                        round(float(value), 4) for value in windowed.crest_factor
+                    ],
+                    "shape_factor": [
+                        round(float(value), 4) for value in windowed.shape_factor
+                    ],
+                    "impulse_factor": [
+                        round(float(value), 4) for value in windowed.impulse_factor
+                    ],
                 },
                 "window_params": {
                     "window_size": analysis.window_size,
                     "step": analysis.step,
                 },
-            }
+            },
         }
     except DenoisingError as e:
         raise denoising_http_error(e) from e

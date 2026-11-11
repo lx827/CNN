@@ -1,4 +1,5 @@
 """基于 Chirp-Z 的窄带密集频率采样，不虚构超分辨率。"""
+
 from __future__ import annotations
 
 import numpy as np

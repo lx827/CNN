@@ -1,6 +1,7 @@
 """
 齿轮诊断最终效果测试 — 40Hz 和 55Hz 所有故障类型
 """
+
 import sys
 from pathlib import Path
 import numpy as np
@@ -9,7 +10,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT / "cloud"))
 sys.path.insert(0, str(PROJECT_ROOT / "cloud" / "tests" / "diagnosis"))
 from data_paths import WTGEARBOX_DIR
-from app.services.diagnosis.engine import DiagnosisEngine, GearMethod, DiagnosisStrategy, DenoiseMethod
+from app.services.diagnosis.engine import (
+    DiagnosisEngine,
+    GearMethod,
+    DiagnosisStrategy,
+    DenoiseMethod,
+)
 from app.services.diagnosis.ensemble import run_research_ensemble
 
 GEAR_PARAMS = {"input": 28, "ring": 100, "planet": 36, "planet_count": 4}
@@ -34,7 +40,9 @@ test_files = [
 print("=" * 120)
 print("齿轮诊断最终效果测试")
 print("=" * 120)
-print(f"{'文件名':<25} {'故障':<6} {'转速':>4} {'SER':>6} {'FM4':>6} {'order_kurt':>11} {'peak_conc':>10} {'SER⚠':>4} {'FM4⚠':>4} {'kurt⚠':>4} {'peak⚠':>4} {'hs':>4} {'status':<8}")
+print(
+    f"{'文件名':<25} {'故障':<6} {'转速':>4} {'SER':>6} {'FM4':>6} {'order_kurt':>11} {'peak_conc':>10} {'SER⚠':>4} {'FM4⚠':>4} {'kurt⚠':>4} {'peak⚠':>4} {'hs':>4} {'status':<8}"
+)
 print("-" * 120)
 
 for fname, label_cn, rot_freq in test_files:
@@ -67,7 +75,8 @@ for fname, label_cn, rot_freq in test_files:
     # Ensemble
     try:
         ens_result = run_research_ensemble(
-            sig, SAMPLE_RATE,
+            sig,
+            SAMPLE_RATE,
             bearing_params=None,
             gear_teeth=GEAR_PARAMS,
             denoise_method="none",
@@ -86,7 +95,9 @@ for fname, label_cn, rot_freq in test_files:
     kurt_sym = "⚠" if kurt_w else ""
     peak_sym = "⚠" if peak_w else ""
 
-    print(f"{fname:<25} {label_cn:<6} {rot_freq:>3}Hz {ser:>6.2f} {fm4:>6.2f} {order_kurt:>11.2f} {peak_conc:>10.4f} {ser_sym:>4} {fm4_sym:>4} {kurt_sym:>4} {peak_sym:>4} {hs:>4} {status:<8}")
+    print(
+        f"{fname:<25} {label_cn:<6} {rot_freq:>3}Hz {ser:>6.2f} {fm4:>6.2f} {order_kurt:>11.2f} {peak_conc:>10.4f} {ser_sym:>4} {fm4_sym:>4} {kurt_sym:>4} {peak_sym:>4} {hs:>4} {status:<8}"
+    )
 
 print()
 print("=" * 120)

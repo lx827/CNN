@@ -3,6 +3,7 @@
 Guo 等 Sensors 2018 (doi:10.3390/s18092908), Eq.10。它不是三阶常规双谱。
 返回复均值；先 abs 再平均不能抑制非耦合相位。只估计指定小网格，避免全二维 O(N²) 内存。
 """
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -17,11 +18,19 @@ class MSBParameters:
     minimum_segments: int = 3
 
     def __post_init__(self):
-        if isinstance(self.segment_length, bool) or not isinstance(self.segment_length, int) or self.segment_length < 32:
+        if (
+            isinstance(self.segment_length, bool)
+            or not isinstance(self.segment_length, int)
+            or self.segment_length < 32
+        ):
             raise ValueError("MSB segment_length must be an integer >=32")
         if not np.isfinite(self.overlap) or not 0 <= self.overlap < 1:
             raise ValueError("MSB overlap must be within [0,1)")
-        if isinstance(self.minimum_segments, bool) or not isinstance(self.minimum_segments, int) or self.minimum_segments < 2:
+        if (
+            isinstance(self.minimum_segments, bool)
+            or not isinstance(self.minimum_segments, int)
+            or self.minimum_segments < 2
+        ):
             raise ValueError("MSB needs at least two segments")
 
 
@@ -44,16 +53,38 @@ class ModulationBispectrum:
         return np.abs(self.complex_mean)
 
 
-def compute_modulation_bispectrum(signal, sample_rate_hz, carrier_frequency_hz, modulation_frequency_hz,
-                                  parameters=MSBParameters(), *, input_unit="input_signal"):
+def compute_modulation_bispectrum(
+    signal,
+    sample_rate_hz,
+    carrier_frequency_hz,
+    modulation_frequency_hz,
+    parameters=MSBParameters(),
+    *,
+    input_unit="input_signal",
+):
     values = np.asarray(signal, dtype=float)
-    if values.ndim != 1 or not np.all(np.isfinite(values)) or not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
+    if (
+        values.ndim != 1
+        or not np.all(np.isfinite(values))
+        or not np.isfinite(sample_rate_hz)
+        or sample_rate_hz <= 0
+    ):
         raise ValueError("MSB input must be a finite vector with positive sample rate")
     carriers = np.atleast_1d(np.asarray(carrier_frequency_hz, dtype=float))
     modulation = np.atleast_1d(np.asarray(modulation_frequency_hz, dtype=float))
-    if carriers.ndim != 1 or modulation.ndim != 1 or not len(carriers) or not len(modulation):
+    if (
+        carriers.ndim != 1
+        or modulation.ndim != 1
+        or not len(carriers)
+        or not len(modulation)
+    ):
         raise ValueError("MSB axes must be nonempty vectors")
-    if not np.all(np.isfinite(carriers)) or not np.all(np.isfinite(modulation)) or np.any(carriers <= 0) or np.any(modulation <= 0):
+    if (
+        not np.all(np.isfinite(carriers))
+        or not np.all(np.isfinite(modulation))
+        or np.any(carriers <= 0)
+        or np.any(modulation <= 0)
+    ):
         raise ValueError("MSB frequencies must be finite positive Hz")
     if np.any(carriers > sample_rate_hz / 2) or np.any(modulation > sample_rate_hz / 2):
         raise ValueError("MSB requested frequencies must not exceed Nyquist")
@@ -72,8 +103,8 @@ def compute_modulation_bispectrum(signal, sample_rate_hz, carrier_frequency_hz, 
     lower = carrier_bins[:, None] - modulation_bins[None, :]
     # 不把低于一bin的调制折叠到DC，也不把超Nyquist目标夹到边界。
     valid = (lower >= 1) & (upper <= length // 2) & (modulation_bins[None, :] >= 1)
-    valid &= (carriers[:, None] + modulation[None, :] <= sample_rate_hz / 2)
-    valid &= (carriers[:, None] - modulation[None, :] > 0)
+    valid &= carriers[:, None] + modulation[None, :] <= sample_rate_hz / 2
+    valid &= carriers[:, None] - modulation[None, :] > 0
     shape = (len(carriers), len(modulation))
     total = np.zeros(shape, dtype=complex)
     side_power = np.zeros(shape)
@@ -84,7 +115,7 @@ def compute_modulation_bispectrum(signal, sample_rate_hz, carrier_frequency_hz, 
     safe_upper = np.clip(upper, 0, length // 2)
     safe_lower = np.clip(lower, 0, length // 2)
     for start in starts:
-        segment = values[start:start + length]
+        segment = values[start : start + length]
         transformed = rfft((segment - np.mean(segment)) * window) / np.sum(window)
         side = transformed[safe_upper] * transformed[safe_lower]
         center = transformed[safe_carriers, None] ** 2
@@ -97,8 +128,18 @@ def compute_modulation_bispectrum(signal, sample_rate_hz, carrier_frequency_hz, 
     np.divide(np.abs(mean), denominator, out=coherence, where=valid & (denominator > 0))
     coherence = np.minimum(coherence, 1.0)
     mean[~valid] = complex(np.nan, np.nan)
-    return ModulationBispectrum(carrier_bins * df, modulation_bins * df, mean, coherence, valid, count, df, carriers, modulation,
-                                 f"{input_unit}^4")
+    return ModulationBispectrum(
+        carrier_bins * df,
+        modulation_bins * df,
+        mean,
+        coherence,
+        valid,
+        count,
+        df,
+        carriers,
+        modulation,
+        f"{input_unit}^4",
+    )
 
 
 def analyze_msb_slice(representation: ModulationBispectrum):
@@ -106,12 +147,25 @@ def analyze_msb_slice(representation: ModulationBispectrum):
     magnitude = representation.magnitude
     valid_counts = np.sum(representation.valid, axis=0)
     slice_values = np.full(magnitude.shape[1], np.nan)
-    np.divide(np.nansum(magnitude, axis=0), valid_counts, out=slice_values, where=valid_counts > 0)
+    np.divide(
+        np.nansum(magnitude, axis=0),
+        valid_counts,
+        out=slice_values,
+        where=valid_counts > 0,
+    )
     usable = np.isfinite(slice_values)
-    background = float(np.median(slice_values[usable])) if np.count_nonzero(usable) >= 3 else None
+    background = (
+        float(np.median(slice_values[usable]))
+        if np.count_nonzero(usable) >= 3
+        else None
+    )
     ratios = np.full_like(slice_values, np.nan)
     if background is not None and background > 0:
         ratios[usable] = slice_values[usable] / background
-    return {"modulation_frequency_hz": representation.modulation_frequency_hz, "magnitude": slice_values,
-            "background": background, "peak_to_background": ratios,
-            "amplitude_unit": representation.amplitude_unit}
+    return {
+        "modulation_frequency_hz": representation.modulation_frequency_hz,
+        "magnitude": slice_values,
+        "background": background,
+        "peak_to_background": ratios,
+        "amplitude_unit": representation.amplitude_unit,
+    }

@@ -1,4 +1,5 @@
 """机械对象的运动学模型；长度单位为一致单位，频率单位为 Hz。"""
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -77,7 +78,9 @@ class BearingGeometry:
         return {
             "BPFO": self.roller_count / 2.0 * rot_frequency_hz * (1.0 - ratio),
             "BPFI": self.roller_count / 2.0 * rot_frequency_hz * (1.0 + ratio),
-            "BSF": self.pitch_diameter / (2.0 * self.roller_diameter)
-            * rot_frequency_hz * (1.0 - ratio**2),
+            "BSF": self.pitch_diameter
+            / (2.0 * self.roller_diameter)
+            * rot_frequency_hz
+            * (1.0 - ratio**2),
             "FTF": 0.5 * rot_frequency_hz * (1.0 - ratio),
         }

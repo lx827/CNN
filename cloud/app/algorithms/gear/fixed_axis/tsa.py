@@ -1,4 +1,5 @@
 """真实角域 TSA 与经典 regular/residual/differential 构造。"""
+
 from __future__ import annotations
 
 import numpy as np
@@ -68,7 +69,11 @@ def compute_tsa_representation(
     - residual：TSA-regular，去除啮合谐波及 regular 边带；
     - differential：regular-mesh，仅含 regular 边带，不是高通近似。
     """
-    if not np.isfinite(mesh_order) or mesh_order < 2 or not float(mesh_order).is_integer():
+    if (
+        not np.isfinite(mesh_order)
+        or mesh_order < 2
+        or not float(mesh_order).is_integer()
+    ):
         raise ValueError("定轴 TSA regular 构造要求不小于 2 的整数啮合阶次")
     if isinstance(mesh_harmonics, bool) or mesh_harmonics < 1:
         raise ValueError("啮合谐波数必须为正整数")
@@ -76,7 +81,9 @@ def compute_tsa_representation(
         raise ValueError("regular 边带阶数必须是非负整数")
     mesh = int(mesh_order)
     nyquist = synchronous.angle_domain.samples_per_revolution / 2.0
-    mesh_orders = tuple(float(mesh * harmonic) for harmonic in range(1, mesh_harmonics + 1))
+    mesh_orders = tuple(
+        float(mesh * harmonic) for harmonic in range(1, mesh_harmonics + 1)
+    )
     if mesh_orders[-1] >= nyquist:
         raise ValueError("请求的啮合谐波超出角域奈奎斯特覆盖")
     mesh_bins = {int(order) for order in mesh_orders}

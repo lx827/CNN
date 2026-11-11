@@ -1,4 +1,5 @@
 """敏感分量的原始物理/统计指标；不包含阈值、归一化、排序或故障判断。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

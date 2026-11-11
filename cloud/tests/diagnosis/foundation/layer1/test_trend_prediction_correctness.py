@@ -5,13 +5,17 @@ Layer 1 信号基元 — trend_prediction 正确性验证
 
 输出: layer1/output/trend_prediction.json
 """
+
 import json, sys, os
 from pathlib import Path
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
-from app.services.diagnosis.trend_prediction import holt_winters_forecast, kalman_smooth_health_scores
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+from app.services.diagnosis.trend_prediction import (
+    holt_winters_forecast,
+    kalman_smooth_health_scores,
+)
 from tests.diagnosis.foundation.layer1.synthetic_signals import NumpyEncoder
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -33,13 +37,17 @@ def test_holt_winters_degrading():
     degrading = direction == "degrading"
     # 预测值应继续下降
     forecast_decreasing = forecasts[-1] < forecasts[0] if len(forecasts) >= 2 else False
-    results.append({
-        "test": "hw_degrading",
-        "forecasts": forecasts,
-        "direction": direction,
-        "passed": has_forecast and degrading and forecast_decreasing,
-    })
-    print(f"  [{'PASS' if has_forecast and degrading and forecast_decreasing else 'FAIL'}] 退化预测: dir={direction}, forecasts={forecasts}")
+    results.append(
+        {
+            "test": "hw_degrading",
+            "forecasts": forecasts,
+            "direction": direction,
+            "passed": has_forecast and degrading and forecast_decreasing,
+        }
+    )
+    print(
+        f"  [{'PASS' if has_forecast and degrading and forecast_decreasing else 'FAIL'}] 退化预测: dir={direction}, forecasts={forecasts}"
+    )
 
     return results
 
@@ -58,13 +66,17 @@ def test_holt_winters_stable():
     # 预测值应在合理范围
     forecasts = res.get("forecast_values", [])
     in_range = all(0 <= f <= 100 for f in forecasts)
-    results.append({
-        "test": "hw_stable",
-        "direction": direction,
-        "forecasts": forecasts,
-        "passed": stable_ok and in_range,
-    })
-    print(f"  [{'PASS' if stable_ok and in_range else 'FAIL'}] 稳定预测: dir={direction}, forecasts={forecasts}")
+    results.append(
+        {
+            "test": "hw_stable",
+            "direction": direction,
+            "forecasts": forecasts,
+            "passed": stable_ok and in_range,
+        }
+    )
+    print(
+        f"  [{'PASS' if stable_ok and in_range else 'FAIL'}] 稳定预测: dir={direction}, forecasts={forecasts}"
+    )
 
     return results
 
@@ -107,16 +119,20 @@ def test_kalman_smooth():
 
     # 平滑后应降低方差
     var_before = float(np.var(noisy_hs))
-    var_after = float(np.var(smoothed)) if smoothed else float('inf')
+    var_after = float(np.var(smoothed)) if smoothed else float("inf")
     reduced = var_after < var_before * 1.2  # 允许小幅增加（边界效应）
 
-    results.append({
-        "test": "kalman_smooth",
-        "var_before": round(var_before, 4),
-        "var_after": round(var_after, 4),
-        "passed": has_smoothed and has_rates and reduced,
-    })
-    print(f"  [{'PASS' if has_smoothed and has_rates and reduced else 'FAIL'}] 卡尔曼平滑: var {var_before:.3f} -> {var_after:.3f}")
+    results.append(
+        {
+            "test": "kalman_smooth",
+            "var_before": round(var_before, 4),
+            "var_after": round(var_after, 4),
+            "passed": has_smoothed and has_rates and reduced,
+        }
+    )
+    print(
+        f"  [{'PASS' if has_smoothed and has_rates and reduced else 'FAIL'}] 卡尔曼平滑: var {var_before:.3f} -> {var_after:.3f}"
+    )
 
     # 空序列
     res2 = kalman_smooth_health_scores([])
@@ -143,14 +159,24 @@ def main():
     for items in all_results.values():
         for it in items:
             total += 1
-            if it.get("passed", False): passed += 1
-    all_results["summary"] = {"total": total, "passed": passed, "failed": total - passed}
+            if it.get("passed", False):
+                passed += 1
+    all_results["summary"] = {
+        "total": total,
+        "passed": passed,
+        "failed": total - passed,
+    }
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUTPUT_DIR / "trend_prediction.json"
-    out.write_text(json.dumps(all_results, indent=2, cls=NumpyEncoder, ensure_ascii=False), encoding='utf-8')
+    out.write_text(
+        json.dumps(all_results, indent=2, cls=NumpyEncoder, ensure_ascii=False),
+        encoding="utf-8",
+    )
     s = all_results["summary"]
-    print(f"\n结果: {out}\n总计: {s['total']}, 通过: {s['passed']}, 失败: {s['failed']}")
+    print(
+        f"\n结果: {out}\n总计: {s['total']}, 通过: {s['passed']}, 失败: {s['failed']}"
+    )
 
 
 if __name__ == "__main__":

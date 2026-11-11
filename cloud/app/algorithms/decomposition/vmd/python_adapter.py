@@ -1,4 +1,5 @@
 """内存有界的 NumPy VMD 实现；只保留前后两轮模态频谱。"""
+
 from __future__ import annotations
 
 import numpy as np
@@ -31,33 +32,47 @@ def _real_modes(positive_spectra: np.ndarray) -> np.ndarray:
 class PythonVMDImplementation:
     """Dragomiretskiy & Zosso (2014) ADMM 更新；频率内部单位为 cycles/sample。"""
 
-    def vmd(self, signal: FloatArray, sample_rate_hz: float, parameters: VMDParameters) -> VMDResult:
+    def vmd(
+        self, signal: FloatArray, sample_rate_hz: float, parameters: VMDParameters
+    ) -> VMDResult:
         input_length = len(signal)
-        valid_length = input_length if parameters.max_samples is None else min(
-            input_length, parameters.max_samples,
+        valid_length = (
+            input_length
+            if parameters.max_samples is None
+            else min(
+                input_length,
+                parameters.max_samples,
+            )
         )
         valid = ValidInterval(0, valid_length)
         segment = signal[:valid_length]
         scale = float(np.max(np.abs(segment)))
         if scale == 0 or float(np.std(segment / scale)) == 0:
             return VMDResult(
-                status="indeterminate", input_length=input_length, sample_rate_hz=sample_rate_hz,
+                status="indeterminate",
+                input_length=input_length,
+                sample_rate_hz=sample_rate_hz,
                 modes=np.empty((0, valid_length), dtype=np.float64),
                 center_frequencies_hz=np.empty(0, dtype=np.float64),
                 center_frequency_history_hz=np.empty((0, 0), dtype=np.float64),
-                residual=segment.copy(), valid_interval=valid,
-                iterations=0, converged=False, reason="zero_variance",
+                residual=segment.copy(),
+                valid_interval=valid,
+                iterations=0,
+                converged=False,
+                reason="zero_variance",
             )
 
         normalized = segment / scale
         # 归一化后执行 ADMM，使固定收敛容差不依赖振动幅值单位。
         # 奇数输入左右各镜像 floor(N/2) 点；原区间始终精确取 N 点。
         left = valid_length // 2
-        mirrored = np.concatenate((normalized[:left][::-1], normalized, normalized[-left:][::-1]))
+        mirrored = np.concatenate(
+            (normalized[:left][::-1], normalized, normalized[-left:][::-1])
+        )
         length = len(mirrored)
         frequencies = np.fft.fftshift(np.fft.fftfreq(length))
         spectrum_plus = np.fft.fftshift(np.fft.fft(mirrored))
-        spectrum_plus[:length // 2] = 0.0
+        spectrum_plus[: length // 2] = 0.0
         positive_slice = slice(length // 2, length)
         positive_frequencies = frequencies[positive_slice]
 
@@ -80,14 +95,16 @@ class PythonVMDImplementation:
                     sum_modes = previous[:, -1] + sum_modes - previous[:, 0]
                 else:
                     sum_modes = current[:, mode - 1] + sum_modes - previous[:, mode]
-                current[:, mode] = (
-                    spectrum_plus - sum_modes - dual / 2.0
-                ) / (1.0 + alpha[mode] * (frequencies - centers[mode]) ** 2)
+                current[:, mode] = (spectrum_plus - sum_modes - dual / 2.0) / (
+                    1.0 + alpha[mode] * (frequencies - centers[mode]) ** 2
+                )
                 if mode > 0 or not parameters.dc:
                     power = np.abs(current[positive_slice, mode]) ** 2
                     denominator = float(np.sum(power))
                     if denominator > np.finfo(np.float64).tiny:
-                        centers[mode] = float(np.dot(positive_frequencies, power) / denominator)
+                        centers[mode] = float(
+                            np.dot(positive_frequencies, power) / denominator
+                        )
             dual = dual + parameters.tau * (np.sum(current, axis=1) - spectrum_plus)
             difference = float(np.spacing(1))
             for mode in range(count):
@@ -101,7 +118,7 @@ class PythonVMDImplementation:
                 converged = True
                 break
 
-        modes = _real_modes(previous)[:, left:left + valid_length] * scale
+        modes = _real_modes(previous)[:, left : left + valid_length] * scale
         centers_hz = centers * sample_rate_hz
         history_hz = history[:iterations] * sample_rate_hz
         order = np.argsort(centers_hz)
@@ -110,10 +127,15 @@ class PythonVMDImplementation:
         history_hz = history_hz[:, order]
         residual = segment - np.sum(modes, axis=0)
         return VMDResult(
-            status="valid", input_length=input_length, sample_rate_hz=sample_rate_hz,
-            modes=modes, center_frequencies_hz=centers_hz,
+            status="valid",
+            input_length=input_length,
+            sample_rate_hz=sample_rate_hz,
+            modes=modes,
+            center_frequencies_hz=centers_hz,
             center_frequency_history_hz=history_hz,
-            residual=residual, valid_interval=valid,
-            iterations=iterations, converged=converged,
+            residual=residual,
+            valid_interval=valid,
+            iterations=iterations,
+            converged=converged,
             reason=None if converged else "maximum_iterations_reached",
         )

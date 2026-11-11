@@ -1,4 +1,5 @@
 """DWT/WP 数学、频率映射、时间轴与重构的独立测试。"""
+
 import os
 import sys
 import unittest
@@ -18,8 +19,10 @@ from app.algorithms.decomposition.wavelet import (
 class WaveletDecompositionTest(unittest.TestCase):
     def test_wp_natural_paths_have_explicit_gray_frequency_order(self):
         result = decompose_wavelet_packet(
-            np.arange(256, dtype=np.float64), 1024.0,
-            wavelet="haar", level=3,
+            np.arange(256, dtype=np.float64),
+            1024.0,
+            wavelet="haar",
+            level=3,
         )
         natural_paths = tuple(node.path for node in result.nodes)
         self.assertEqual(
@@ -36,7 +39,9 @@ class WaveletDecompositionTest(unittest.TestCase):
         )
         for node in result.nodes:
             expected_low = node.frequency_index * 1024.0 / 16.0
-            self.assertEqual(node.frequency_band_hz, (expected_low, expected_low + 64.0))
+            self.assertEqual(
+                node.frequency_band_hz, (expected_low, expected_low + 64.0)
+            )
 
     def test_wp_coefficient_rate_and_original_rate_reconstruction(self):
         signal = np.sin(2 * np.pi * 170.0 * np.arange(513) / 1024.0)
@@ -50,7 +55,9 @@ class WaveletDecompositionTest(unittest.TestCase):
         self.assertEqual(target.path, "ad")
         reconstructed = reconstruct_wavelet_packet(result, ("ad",))
         np.testing.assert_allclose(reconstructed, target.reconstructed, atol=1e-10)
-        full = reconstruct_wavelet_packet(result, tuple(node.path for node in result.nodes))
+        full = reconstruct_wavelet_packet(
+            result, tuple(node.path for node in result.nodes)
+        )
         np.testing.assert_allclose(full, signal, atol=1e-9)
 
     def test_dwt_selected_detail_excludes_approximation_and_other_details(self):
@@ -59,7 +66,9 @@ class WaveletDecompositionTest(unittest.TestCase):
         low = np.sin(2 * np.pi * 32.0 * t)
         high = 0.4 * np.sin(2 * np.pi * 320.0 * t)
         signal = low + high
-        result = decompose_dwt(signal, fs, wavelet="haar", level=1, mode="periodization")
+        result = decompose_dwt(
+            signal, fs, wavelet="haar", level=1, mode="periodization"
+        )
 
         self.assertEqual(tuple(detail.level for detail in result.details), (1,))
         self.assertEqual(result.details[0].coefficient_sample_rate_hz, 512.0)
@@ -68,7 +77,9 @@ class WaveletDecompositionTest(unittest.TestCase):
             self.assertEqual(len(band.reconstructed), len(signal))
 
         detail_1 = reconstruct_dwt(result, detail_levels=(1,))
-        np.testing.assert_allclose(detail_1, result.details[0].reconstructed, atol=1e-10)
+        np.testing.assert_allclose(
+            detail_1, result.details[0].reconstructed, atol=1e-10
+        )
         spectrum = np.abs(np.fft.rfft(detail_1))
         peak_hz = np.fft.rfftfreq(len(detail_1), 1.0 / fs)[np.argmax(spectrum)]
         self.assertEqual(peak_hz, 320.0)

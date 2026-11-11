@@ -15,9 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/devices")
-def get_all_device_data(
-    db: Session = Depends(get_db)
-):
+def get_all_device_data(db: Session = Depends(get_db)):
     """
     获取所有设备的批次列表（表格展示用）
     返回每个设备的所有批次，含时间和特殊标记
@@ -33,21 +31,20 @@ def get_all_device_data(
     device_ids = [d.device_id for d in devices]
 
     # 1. 一次性查询所有批次（所有设备）
-    batch_records = db.query(
-        SensorData.device_id,
-        SensorData.batch_index,
-        func.max(SensorData.created_at).label("created_at"),
-        func.max(SensorData.is_special).label("is_special"),
-        func.count(SensorData.channel).label("channel_count"),
-        func.max(SensorData.sample_rate).label("sample_rate"),
-    ).filter(
-        SensorData.device_id.in_(device_ids)
-    ).group_by(
-        SensorData.device_id,
-        SensorData.batch_index
-    ).order_by(
-        desc(func.max(SensorData.created_at))
-    ).all()
+    batch_records = (
+        db.query(
+            SensorData.device_id,
+            SensorData.batch_index,
+            func.max(SensorData.created_at).label("created_at"),
+            func.max(SensorData.is_special).label("is_special"),
+            func.count(SensorData.channel).label("channel_count"),
+            func.max(SensorData.sample_rate).label("sample_rate"),
+        )
+        .filter(SensorData.device_id.in_(device_ids))
+        .group_by(SensorData.device_id, SensorData.batch_index)
+        .order_by(desc(func.max(SensorData.created_at)))
+        .all()
+    )
 
     # 按 device_id 分组
     batch_map = {did: [] for did in device_ids}
@@ -65,23 +62,29 @@ def get_all_device_data(
         for r in batch_map.get(dev.device_id, []):
             diag = diag_map.get((dev.device_id, r.batch_index))
 
-            batches.append({
-                "batch_index": r.batch_index,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-                "is_special": bool(r.is_special),
-                "channel_count": r.channel_count,
-                "sample_rate": r.sample_rate or 25600,
-                **summary_state(diag),
-                "analyzed_at": diag.analyzed_at.isoformat() if diag and diag.analyzed_at else None,
-            })
+            batches.append(
+                {
+                    "batch_index": r.batch_index,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "is_special": bool(r.is_special),
+                    "channel_count": r.channel_count,
+                    "sample_rate": r.sample_rate or 25600,
+                    **summary_state(diag),
+                    "analyzed_at": diag.analyzed_at.isoformat()
+                    if diag and diag.analyzed_at
+                    else None,
+                }
+            )
 
-        result.append({
-            "device_id": dev.device_id,
-            "device_name": dev.name,
-            "channel_count": dev.channel_count,
-            "channel_names": dev.channel_names,
-            "batches": batches,
-        })
+        result.append(
+            {
+                "device_id": dev.device_id,
+                "device_name": dev.name,
+                "channel_count": dev.channel_count,
+                "channel_names": dev.channel_names,
+                "batches": batches,
+            }
+        )
 
     return {"code": 200, "data": result}
 
@@ -90,24 +93,23 @@ def get_all_device_data(
 def get_device_batches(
     device_id: str,
     include_special: bool = Query(default=True, description="包含特殊数据"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     获取某设备最近批次（普通+特殊）的概要信息
     特殊数据会用 is_special 标记
     """
-    query = db.query(
-        SensorData.batch_index,
-        func.max(SensorData.created_at).label("created_at"),
-        func.max(SensorData.is_special).label("is_special"),
-        func.count(SensorData.channel).label("channel_count"),
-        func.max(SensorData.sample_rate).label("sample_rate"),
-    ).filter(
-        SensorData.device_id == device_id
-    ).group_by(
-        SensorData.batch_index
-    ).order_by(
-        desc(func.max(SensorData.created_at))
+    query = (
+        db.query(
+            SensorData.batch_index,
+            func.max(SensorData.created_at).label("created_at"),
+            func.max(SensorData.is_special).label("is_special"),
+            func.count(SensorData.channel).label("channel_count"),
+            func.max(SensorData.sample_rate).label("sample_rate"),
+        )
+        .filter(SensorData.device_id == device_id)
+        .group_by(SensorData.batch_index)
+        .order_by(desc(func.max(SensorData.created_at)))
     )
 
     if not include_special:
@@ -122,15 +124,19 @@ def get_device_batches(
     batches = []
     for batch_index, created_at, is_special, ch_count, sr in batch_records:
         diag = diag_map.get(batch_index)
-        batches.append({
-            "batch_index": batch_index,
-            "created_at": created_at.isoformat() if created_at else None,
-            "is_special": bool(is_special),
-            "channel_count": ch_count,
-            "sample_rate": sr or 25600,
-            **summary_state(diag),
-            "analyzed_at": diag.analyzed_at.isoformat() if diag and diag.analyzed_at else None,
-        })
+        batches.append(
+            {
+                "batch_index": batch_index,
+                "created_at": created_at.isoformat() if created_at else None,
+                "is_special": bool(is_special),
+                "channel_count": ch_count,
+                "sample_rate": sr or 25600,
+                **summary_state(diag),
+                "analyzed_at": diag.analyzed_at.isoformat()
+                if diag and diag.analyzed_at
+                else None,
+            }
+        )
 
     return {"code": 200, "data": batches}
 
@@ -141,17 +147,24 @@ def get_channel_data(
     batch_index: int,
     channel: int,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
-    db: Session = Depends(get_db)
+    denoise: str = Query(
+        default="none",
+        description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+    ),
+    db: Session = Depends(get_db),
 ):
     """
     查询某批次某通道的原始时域数据
     """
-    record = db.query(SensorData).filter(
-        SensorData.device_id == device_id,
-        SensorData.batch_index == batch_index,
-        SensorData.channel == channel
-    ).first()
+    record = (
+        db.query(SensorData)
+        .filter(
+            SensorData.device_id == device_id,
+            SensorData.batch_index == batch_index,
+            SensorData.channel == channel,
+        )
+        .first()
+    )
 
     if not record:
         raise HTTPException(status_code=404, detail="数据不存在")
@@ -178,15 +191,12 @@ def get_channel_data(
             "is_analyzed": record.is_analyzed,
             "is_special": bool(record.is_special),
             "created_at": record.created_at.isoformat() if record.created_at else None,
-        }
+        },
     }
 
 
 @router.delete("/{device_id}/special")
-def delete_special_batches(
-    device_id: str,
-    db: Session = Depends(get_db)
-):
+def delete_special_batches(device_id: str, db: Session = Depends(get_db)):
     """
     删除某设备的所有特殊数据批次
     同时删除关联的诊断结果
@@ -195,16 +205,18 @@ def delete_special_batches(
     否则 "special" 会被当成 batch_index 导致 422 错误。
     """
     # 查询该设备的所有特殊批次
-    special_batches = db.query(SensorData.batch_index).filter(
-        SensorData.device_id == device_id,
-        SensorData.is_special == 1
-    ).distinct().all()
+    special_batches = (
+        db.query(SensorData.batch_index)
+        .filter(SensorData.device_id == device_id, SensorData.is_special == 1)
+        .distinct()
+        .all()
+    )
 
     if not special_batches:
         return {
             "code": 200,
             "message": "该设备没有特殊数据",
-            "data": {"deleted_batches": 0}
+            "data": {"deleted_batches": 0},
         }
 
     batch_indices = [b[0] for b in special_batches]
@@ -214,14 +226,12 @@ def delete_special_batches(
         for bi in batch_indices:
             # 删除传感器数据
             db.query(SensorData).filter(
-                SensorData.device_id == device_id,
-                SensorData.batch_index == bi
+                SensorData.device_id == device_id, SensorData.batch_index == bi
             ).delete(synchronize_session=False)
 
             # 删除关联的诊断结果
             db.query(Diagnosis).filter(
-                Diagnosis.device_id == device_id,
-                Diagnosis.batch_index == bi
+                Diagnosis.device_id == device_id, Diagnosis.batch_index == bi
             ).delete(synchronize_session=False)
 
             deleted_count += 1
@@ -235,7 +245,7 @@ def delete_special_batches(
                 "device_id": device_id,
                 "deleted_batches": deleted_count,
                 "batch_indices": batch_indices,
-            }
+            },
         }
     except Exception as e:
         db.rollback()
@@ -243,20 +253,19 @@ def delete_special_batches(
 
 
 @router.delete("/{device_id}/{batch_index}")
-def delete_batch(
-    device_id: str,
-    batch_index: int,
-    db: Session = Depends(get_db)
-):
+def delete_batch(device_id: str, batch_index: int, db: Session = Depends(get_db)):
     """
     删除某设备的整条批次数据（包括该批次的所有通道）
     同时删除关联的诊断结果和告警记录
     """
     # 先查询确认数据存在
-    records = db.query(SensorData).filter(
-        SensorData.device_id == device_id,
-        SensorData.batch_index == batch_index
-    ).all()
+    records = (
+        db.query(SensorData)
+        .filter(
+            SensorData.device_id == device_id, SensorData.batch_index == batch_index
+        )
+        .all()
+    )
 
     if not records:
         raise HTTPException(status_code=404, detail="批次不存在")
@@ -266,14 +275,12 @@ def delete_batch(
     try:
         # 删除传感器数据
         db.query(SensorData).filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index
+            SensorData.device_id == device_id, SensorData.batch_index == batch_index
         ).delete(synchronize_session=False)
 
         # 删除关联的诊断结果
         db.query(Diagnosis).filter(
-            Diagnosis.device_id == device_id,
-            Diagnosis.batch_index == batch_index
+            Diagnosis.device_id == device_id, Diagnosis.batch_index == batch_index
         ).delete(synchronize_session=False)
 
         db.commit()
@@ -286,7 +293,7 @@ def delete_batch(
                 "batch_index": batch_index,
                 "deleted_channels": len(records),
                 "is_special": is_special,
-            }
+            },
         }
     except Exception as e:
         db.rollback()

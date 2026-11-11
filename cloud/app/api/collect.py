@@ -10,6 +10,7 @@
   - 普通采集：边端自动定时执行（is_special=0）
   - 手动采集：前端触发，边端响应（is_special=1）
 """
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -26,7 +27,7 @@ def request_collection(
     device_id: str,
     sample_rate: int = 25600,
     duration: int = 10,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     前端请求对指定设备进行手动采集（特殊数据）
@@ -38,10 +39,14 @@ def request_collection(
         raise HTTPException(status_code=404, detail=f"设备 {device_id} 不存在")
 
     # 检查是否有未完成的同名任务（避免重复创建）
-    existing = db.query(CollectionTask).filter(
-        CollectionTask.device_id == device_id,
-        CollectionTask.status.in_(["pending", "processing"])
-    ).first()
+    existing = (
+        db.query(CollectionTask)
+        .filter(
+            CollectionTask.device_id == device_id,
+            CollectionTask.status.in_(["pending", "processing"]),
+        )
+        .first()
+    )
 
     if existing:
         return {
@@ -50,8 +55,10 @@ def request_collection(
             "data": {
                 "task_id": existing.id,
                 "status": existing.status,
-                "created_at": existing.created_at.isoformat() if existing.created_at else None,
-            }
+                "created_at": existing.created_at.isoformat()
+                if existing.created_at
+                else None,
+            },
         }
 
     task = CollectionTask(
@@ -74,15 +81,12 @@ def request_collection(
             "sample_rate": sample_rate,
             "duration": duration,
             "created_at": task.created_at.isoformat() if task.created_at else None,
-        }
+        },
     }
 
 
 @router.get("/tasks")
-def get_pending_tasks(
-    device_id: str,
-    db: Session = Depends(get_db)
-):
+def get_pending_tasks(device_id: str, db: Session = Depends(get_db)):
     """
     边端轮询接口：查询该设备的待采集任务
     边端应每隔几秒调用一次
@@ -95,10 +99,14 @@ def get_pending_tasks(
         db.commit()
 
     # 获取最早的 pending 任务
-    task = db.query(CollectionTask).filter(
-        CollectionTask.device_id == device_id,
-        CollectionTask.status == "pending"
-    ).order_by(CollectionTask.created_at.asc()).first()
+    task = (
+        db.query(CollectionTask)
+        .filter(
+            CollectionTask.device_id == device_id, CollectionTask.status == "pending"
+        )
+        .order_by(CollectionTask.created_at.asc())
+        .first()
+    )
 
     if not task:
         return {"code": 200, "data": {"has_task": False}}
@@ -116,16 +124,12 @@ def get_pending_tasks(
             "device_id": task.device_id,
             "sample_rate": task.sample_rate,
             "duration": task.duration,
-        }
+        },
     }
 
 
 @router.post("/tasks/{task_id}/complete")
-def complete_task(
-    task_id: int,
-    batch_index: int,
-    db: Session = Depends(get_db)
-):
+def complete_task(task_id: int, batch_index: int, db: Session = Depends(get_db)):
     """
     边端完成采集上传后，通知云端任务已完成
     由 ingest.py 内部调用，无需前端直接调用
@@ -143,10 +147,7 @@ def complete_task(
 
 
 @router.get("/tasks/{task_id}/status")
-def get_task_status(
-    task_id: int,
-    db: Session = Depends(get_db)
-):
+def get_task_status(task_id: int, db: Session = Depends(get_db)):
     """
     前端查询采集任务状态
     用于轮询"采集中..."的进度
@@ -165,18 +166,18 @@ def get_task_status(
             "duration": task.duration,
             "created_at": task.created_at.isoformat() if task.created_at else None,
             "started_at": task.started_at.isoformat() if task.started_at else None,
-            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            "completed_at": task.completed_at.isoformat()
+            if task.completed_at
+            else None,
             "result_batch_index": task.result_batch_index,
             "error_message": task.error_message,
-        }
+        },
     }
 
 
 @router.get("/history")
 def get_collection_history(
-    device_id: Optional[str] = None,
-    limit: int = 20,
-    db: Session = Depends(get_db)
+    device_id: Optional[str] = None, limit: int = 20, db: Session = Depends(get_db)
 ):
     """
     查询采集历史（含普通和特殊采集记录）
@@ -189,15 +190,17 @@ def get_collection_history(
 
     items = []
     for t in tasks:
-        items.append({
-            "task_id": t.id,
-            "device_id": t.device_id,
-            "status": t.status,
-            "sample_rate": t.sample_rate,
-            "duration": t.duration,
-            "created_at": t.created_at.isoformat() if t.created_at else None,
-            "completed_at": t.completed_at.isoformat() if t.completed_at else None,
-            "result_batch_index": t.result_batch_index,
-        })
+        items.append(
+            {
+                "task_id": t.id,
+                "device_id": t.device_id,
+                "status": t.status,
+                "sample_rate": t.sample_rate,
+                "duration": t.duration,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+                "result_batch_index": t.result_batch_index,
+            }
+        )
 
     return {"code": 200, "data": items}

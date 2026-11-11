@@ -1,4 +1,5 @@
 """CPW 稳定梳状前提与 TEO 负值/多分量组合语义。"""
+
 import os
 import sys
 import unittest
@@ -33,7 +34,10 @@ class CPWTests(unittest.TestCase):
         before = np.abs(np.fft.rfft(self.signal))
         after = np.abs(np.fft.rfft(whitened))
         indices = [int(np.argmin(np.abs(frequency - 100.0 * k))) for k in (1, 2, 3, 4)]
-        self.assertLess(float(np.sum(after[indices] ** 2)), 0.35 * float(np.sum(before[indices] ** 2)))
+        self.assertLess(
+            float(np.sum(after[indices] ** 2)),
+            0.35 * float(np.sum(before[indices] ** 2)),
+        )
 
     def test_empty_comb_is_explicitly_not_cpw(self):
         with self.assertRaisesRegex(ValueError, "梳状频率"):
@@ -51,11 +55,15 @@ class CPWTests(unittest.TestCase):
             comb_is_stable=False,
         )
         self.assertEqual(result.status, "indeterminate")
-        self.assertEqual(result.reason, "time_varying_comb_requires_time_frequency_model")
+        self.assertEqual(
+            result.reason, "time_varying_comb_requires_time_frequency_model"
+        )
         self.assertIsNone(result.representation)
 
     def test_stable_comb_pipeline_computes_filter_bank_envelope(self):
-        result = CPWEnvelopePipeline().run(self.signal, self.fs, comb_frequencies=[100.0])
+        result = CPWEnvelopePipeline().run(
+            self.signal, self.fs, comb_frequencies=[100.0]
+        )
         self.assertEqual(result.status, "computed", result.reason)
         self.assertEqual(result.metadata["comb_frequencies_hz"], (100.0,))
         self.assertIsNotNone(result.representation)
@@ -79,7 +87,9 @@ class TEOTests(unittest.TestCase):
         rng = np.random.default_rng(8)
         signal = rng.standard_normal(128)
         raw = teager_energy_operator(signal)
-        np.testing.assert_allclose(raw[1:-1], signal[1:-1] ** 2 - signal[:-2] * signal[2:])
+        np.testing.assert_allclose(
+            raw[1:-1], signal[1:-1] ** 2 - signal[:-2] * signal[2:]
+        )
         self.assertLess(float(np.min(raw)), 0.0)
 
         t = np.arange(2048) / 2048.0
@@ -92,13 +102,22 @@ class TEOTests(unittest.TestCase):
     def test_pipeline_clips_only_envelope_input_after_preserving_raw_teo(self):
         fs = 2048.0
         t = np.arange(8192) / fs
-        signal = (1.0 + 0.8 * np.cos(2 * np.pi * 40.0 * t)) * np.sin(2 * np.pi * 700.0 * t)
+        signal = (1.0 + 0.8 * np.cos(2 * np.pi * 40.0 * t)) * np.sin(
+            2 * np.pi * 700.0 * t
+        )
         result = TEOEnvelopePipeline().run(signal, fs)
         self.assertEqual(result.status, "computed", result.reason)
-        np.testing.assert_allclose(result.envelope_input, np.maximum(result.raw_teo, 0.0))
+        np.testing.assert_allclose(
+            result.envelope_input, np.maximum(result.raw_teo, 0.0)
+        )
         self.assertGreaterEqual(float(np.min(result.envelope_input)), 0.0)
-        self.assertEqual(result.metadata["negative_value_policy"], "clip_only_after_raw_teo")
-        self.assertEqual(result.metadata["multi_component_policy"], "bandpass_before_teo_cross_terms_remain_engineering_approximation")
+        self.assertEqual(
+            result.metadata["negative_value_policy"], "clip_only_after_raw_teo"
+        )
+        self.assertEqual(
+            result.metadata["multi_component_policy"],
+            "bandpass_before_teo_cross_terms_remain_engineering_approximation",
+        )
         self.assertNotIn("variable_speed", result.metadata)
         self.assertIsNotNone(result.representation)
 

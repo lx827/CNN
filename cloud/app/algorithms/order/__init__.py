@@ -1,4 +1,5 @@
 """转速、连续相位、角域重采样与阶次谱的纯计算算法。"""
+
 from .estimation import (
     SpeedTrajectoryEstimate,
     estimate_autocorrelation_speed,

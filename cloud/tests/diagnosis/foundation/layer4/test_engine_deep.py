@@ -5,12 +5,13 @@ Layer 4 中央调度器 — engine.py 深层功能测试
 
 输出: layer4/output/engine_deep.json
 """
+
 import json, sys, os
 from pathlib import Path
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 from app.services.diagnosis.engine import DiagnosisEngine, DenoiseMethod
 from tests.diagnosis.foundation.layer1.synthetic_signals import NumpyEncoder
 
@@ -28,9 +29,16 @@ def test_preprocess_none():
     out = engine.preprocess(sig)
     mean_near_zero = abs(np.mean(out)) < 0.1
     shape_ok = len(out) == len(sig)
-    results.append({"test": "preprocess_none", "mean": round(float(np.mean(out)), 4),
-                    "passed": mean_near_zero and shape_ok})
-    print(f"  [{'PASS' if mean_near_zero and shape_ok else 'FAIL'}] NONE: mean={np.mean(out):.4f}, shape={shape_ok}")
+    results.append(
+        {
+            "test": "preprocess_none",
+            "mean": round(float(np.mean(out)), 4),
+            "passed": mean_near_zero and shape_ok,
+        }
+    )
+    print(
+        f"  [{'PASS' if mean_near_zero and shape_ok else 'FAIL'}] NONE: mean={np.mean(out):.4f}, shape={shape_ok}"
+    )
     return results
 
 
@@ -45,9 +53,17 @@ def test_preprocess_wavelet():
     out = engine.preprocess(sig)
     # 去噪后应降低噪声方差
     var_reduced = np.var(out) < np.var(sig) * 0.9
-    results.append({"test": "preprocess_wavelet", "var_in": round(float(np.var(sig)), 4),
-                    "var_out": round(float(np.var(out)), 4), "passed": var_reduced})
-    print(f"  [{'PASS' if var_reduced else 'FAIL'}] WAVELET: var {np.var(sig):.3f} -> {np.var(out):.3f}")
+    results.append(
+        {
+            "test": "preprocess_wavelet",
+            "var_in": round(float(np.var(sig)), 4),
+            "var_out": round(float(np.var(out)), 4),
+            "passed": var_reduced,
+        }
+    )
+    print(
+        f"  [{'PASS' if var_reduced else 'FAIL'}] WAVELET: var {np.var(sig):.3f} -> {np.var(out):.3f}"
+    )
     return results
 
 
@@ -62,9 +78,16 @@ def test_preprocess_vmd():
     out = engine.preprocess(sig)
     # VMD 去噪后信号应仍有明显结构（非全0）
     not_zero = np.max(np.abs(out)) > 0.01
-    results.append({"test": "preprocess_vmd", "max_amp": round(float(np.max(np.abs(out))), 4),
-                    "passed": not_zero})
-    print(f"  [{'PASS' if not_zero else 'FAIL'}] VMD: max_amp={np.max(np.abs(out)):.4f}")
+    results.append(
+        {
+            "test": "preprocess_vmd",
+            "max_amp": round(float(np.max(np.abs(out))), 4),
+            "passed": not_zero,
+        }
+    )
+    print(
+        f"  [{'PASS' if not_zero else 'FAIL'}] VMD: max_amp={np.max(np.abs(out)):.4f}"
+    )
     return results
 
 
@@ -85,18 +108,31 @@ def test_estimate_rot_freq():
     rf, oa, os_, method, rsd = engine._estimate_rot_freq(sig, FS)
     rf_ok = rf is not None and abs(rf - rot_freq) / rot_freq < 0.15
     method_ok = method in ("multi_frame", "single_frame", "varying_speed", "fallback")
-    results.append({
-        "test": "estimate_rot_freq_const",
-        "rot_freq": round(float(rf), 2), "method": method,
-        "passed": rf_ok and method_ok,
-    })
-    print(f"  [{'PASS' if rf_ok and method_ok else 'FAIL'}] 恒速转频: rf={rf:.2f}Hz, method={method}")
+    results.append(
+        {
+            "test": "estimate_rot_freq_const",
+            "rot_freq": round(float(rf), 2),
+            "method": method,
+            "passed": rf_ok and method_ok,
+        }
+    )
+    print(
+        f"  [{'PASS' if rf_ok and method_ok else 'FAIL'}] 恒速转频: rf={rf:.2f}Hz, method={method}"
+    )
 
     # 极短无变化信号必须明确不可判定，不得回退到固定 10 Hz。
     rf2, _, _, method2, _ = engine._estimate_rot_freq(np.ones(50), FS)
     indeterminate_ok = method2 == "indeterminate" and rf2 is None
-    results.append({"test": "estimate_rot_freq_short", "method": method2, "passed": indeterminate_ok})
-    print(f"  [{'PASS' if indeterminate_ok else 'FAIL'}] 短信号不可判定: method={method2}")
+    results.append(
+        {
+            "test": "estimate_rot_freq_short",
+            "method": method2,
+            "passed": indeterminate_ok,
+        }
+    )
+    print(
+        f"  [{'PASS' if indeterminate_ok else 'FAIL'}] 短信号不可判定: method={method2}"
+    )
 
     return results
 
@@ -117,14 +153,24 @@ def main():
     for items in all_results.values():
         for it in items:
             total += 1
-            if it.get("passed", False): passed += 1
-    all_results["summary"] = {"total": total, "passed": passed, "failed": total - passed}
+            if it.get("passed", False):
+                passed += 1
+    all_results["summary"] = {
+        "total": total,
+        "passed": passed,
+        "failed": total - passed,
+    }
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUTPUT_DIR / "engine_deep.json"
-    out.write_text(json.dumps(all_results, indent=2, cls=NumpyEncoder, ensure_ascii=False), encoding='utf-8')
+    out.write_text(
+        json.dumps(all_results, indent=2, cls=NumpyEncoder, ensure_ascii=False),
+        encoding="utf-8",
+    )
     s = all_results["summary"]
-    print(f"\n结果: {out}\n总计: {s['total']}, 通过: {s['passed']}, 失败: {s['failed']}")
+    print(
+        f"\n结果: {out}\n总计: {s['total']}, 通过: {s['passed']}, 失败: {s['failed']}"
+    )
 
 
 if __name__ == "__main__":

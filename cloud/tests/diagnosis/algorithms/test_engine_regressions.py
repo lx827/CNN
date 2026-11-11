@@ -5,6 +5,7 @@
 - 转频估计在噪声下保持稳定。
 - 若本地数据集存在，抽样检查健康/故障可区分性。
 """
+
 import glob
 import os
 import sys
@@ -31,7 +32,7 @@ def _impulse_signal(fs=FS, seconds=5, rot_freq=25.0):
     period = int(fs / rot_freq)
     for idx in range(period // 2, len(sig), period):
         width = min(24, len(sig) - idx)
-        sig[idx:idx + width] += np.hanning(width) * 4.0
+        sig[idx : idx + width] += np.hanning(width) * 4.0
     return sig
 
 
@@ -57,10 +58,12 @@ def test_advanced_gear_uses_tsa_residual():
     period = int(FS / rot_freq)
     for idx in range(period // 3, len(t), period):
         width = min(16, len(t) - idx)
-        local_tooth_fault[idx:idx + width] += np.hanning(width) * 2.0
+        local_tooth_fault[idx : idx + width] += np.hanning(width) * 2.0
     sig = mesh + local_tooth_fault
 
-    engine = DiagnosisEngine(gear_method=GearMethod.ADVANCED, gear_teeth={"input": teeth})
+    engine = DiagnosisEngine(
+        gear_method=GearMethod.ADVANCED, gear_teeth={"input": teeth}
+    )
     result = engine.analyze_gear(sig, FS, rot_freq=rot_freq)
 
     assert result["tsa_revolutions"] >= 4
@@ -95,7 +98,9 @@ def test_dataset_sample_fault_scores_when_available():
     healthy_result = engine.analyze_comprehensive(healthy, FS)
     fault_result = engine.analyze_comprehensive(fault, FS)
 
-    assert fault_result["health_score"] is None and healthy_result["health_score"] is None
+    assert (
+        fault_result["health_score"] is None and healthy_result["health_score"] is None
+    )
 
 
 def test_cw_dataset_can_be_loaded_when_available():
@@ -111,10 +116,15 @@ def test_cw_dataset_can_be_loaded_when_available():
 
 def test_zero_signal_comprehensive_is_indeterminate_not_healthy():
     engine = DiagnosisEngine(gear_teeth={"input": 18})
-    result = engine.analyze_comprehensive(np.zeros(FS), FS, rot_freq=20.0, skip_bearing=True)
+    result = engine.analyze_comprehensive(
+        np.zeros(FS), FS, rot_freq=20.0, skip_bearing=True
+    )
     assert result["gear"]["analysis"]["status"] == "indeterminate"
     assert result["gear"]["order_peak_concentration"] is None
-    assert result["gear"]["fault_indicators"]["order_kurtosis"]["status"] == "not_evaluable"
+    assert (
+        result["gear"]["fault_indicators"]["order_kurtosis"]["status"]
+        == "not_evaluable"
+    )
     assert result["health_score"] is None
     assert result["evaluation_status"] == "indeterminate"
 
@@ -124,11 +134,18 @@ def test_zero_signal_ensemble_paths_are_indeterminate_not_healthy():
     bearing_params = {"n": 9, "d": 7.94, "D": 39.04}
     gear_teeth = {"input": 18}
     for name, kwargs in (
-        ("bearing_and_gear", {"bearing_params": bearing_params, "gear_teeth": gear_teeth}),
+        (
+            "bearing_and_gear",
+            {"bearing_params": bearing_params, "gear_teeth": gear_teeth},
+        ),
         ("no_mechanical_params", {}),
     ):
         result = run_research_ensemble(
-            signal, 2048, rot_freq=16, profile="runtime", **kwargs,
+            signal,
+            2048,
+            rot_freq=16,
+            profile="runtime",
+            **kwargs,
         )
         assert result["health_score"] is None, name
         assert result["evaluation_status"] == "indeterminate", name
@@ -147,7 +164,10 @@ def test_zero_signal_all_methods_paths_are_indeterminate_not_healthy():
         ),
     ):
         result = engine.analyze_all_methods(
-            signal, 2048, rot_freq=16, skip_bearing=skip_bearing,
+            signal,
+            2048,
+            rot_freq=16,
+            skip_bearing=skip_bearing,
         )
         assert result["health_score"] is None, name
         assert result["evaluation_status"] == "indeterminate", name

@@ -1,4 +1,5 @@
 """原始 ADC counts 的可选显示分析；不作故障判定，不改变原始波形。"""
+
 import numpy as np
 
 from app.algorithms.core import FrequencyBand
@@ -48,20 +49,22 @@ def analyze_counts(values, rate, options):
         counts = values[:, channel].astype(np.float64)
         item = {
             "channel": channel,
-            "label": f"CH{channel+1} / 原厂6-{channel+1}",
+            "label": f"CH{channel + 1} / 原厂6-{channel + 1}",
             "samples": len(counts),
             "minimum": float(counts.min()),
             "maximum": float(counts.max()),
-            "rail_samples": int(np.count_nonzero(
-                (counts == -8388608) | (counts == 8388607)
-            )),
+            "rail_samples": int(
+                np.count_nonzero((counts == -8388608) | (counts == 8388607))
+            ),
             "waveform": display_points(time, counts),
         }
         prefix = f"ch{channel}"
         if options.get("fft", False):
             spectrum = compute_spectrum(counts, rate, amplitude_unit="ADC counts")
             item["fft"] = display_points(
-                spectrum.frequency_hz, spectrum.amplitude, 4096,
+                spectrum.frequency_hz,
+                spectrum.amplitude,
+                4096,
             )
             arrays[prefix + "_fft_frequency_hz"] = spectrum.frequency_hz
             arrays[prefix + "_fft_amplitude_counts"] = spectrum.amplitude
@@ -73,10 +76,14 @@ def analyze_counts(values, rate, options):
         if envelope:
             envelope_values = compute_bandpass_hilbert_envelope(counts, rate, band)
             spectrum = compute_spectrum(
-                envelope_values, rate, amplitude_unit="ADC counts",
+                envelope_values,
+                rate,
+                amplitude_unit="ADC counts",
             )
             item["envelope"] = display_points(
-                spectrum.frequency_hz, spectrum.amplitude, 4096,
+                spectrum.frequency_hz,
+                spectrum.amplitude,
+                4096,
             )
             arrays[prefix + "_envelope_frequency_hz"] = spectrum.frequency_hz
             arrays[prefix + "_envelope_amplitude_counts"] = spectrum.amplitude

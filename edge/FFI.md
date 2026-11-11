@@ -57,7 +57,7 @@ edge = lib.dc24_edge_open(config_json.encode(), err, len(err))
 lib.dc24_edge_start(edge, 10000, err, len(err))
 while True:
     if lib.dc24_edge_poll(edge, byref(msg), 250) == 1:
-        data = ctypes.string_at(msg.data, msg.len)   # 必须立即拷贝
+        data = ctypes.string_at(msg.data, msg.len)  # 必须立即拷贝
         ...
 lib.dc24_edge_stop(edge, err, len(err))
 lib.dc24_edge_close(edge)

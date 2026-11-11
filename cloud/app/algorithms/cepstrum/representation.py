@@ -1,4 +1,5 @@
 """实倒谱表示：只计算对数幅值谱的逆 FFT，不检测峰或判断故障。"""
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -24,7 +25,9 @@ class CepstrumRepresentation:
             raise ValueError("倒频率轴和倒谱幅值必须是一维数组")
         if len(self.quefrency_s) != len(self.amplitude) or len(self.quefrency_s) == 0:
             raise ValueError("倒频率轴和倒谱幅值必须是非空等长数组")
-        if not np.all(np.isfinite(self.quefrency_s)) or not np.all(np.isfinite(self.amplitude)):
+        if not np.all(np.isfinite(self.quefrency_s)) or not np.all(
+            np.isfinite(self.amplitude)
+        ):
             raise ValueError("倒谱表示不能包含 NaN 或无穷值")
 
     def truncated(self, max_quefrency_s: float) -> "CepstrumRepresentation":

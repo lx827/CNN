@@ -9,6 +9,7 @@
 运行方式：
     cd cloud && uv run python tests/diagnosis/method_eval/test_binary_all.py
 """
+
 import sys
 import time
 import warnings
@@ -31,15 +32,23 @@ sys.path.insert(0, str(PROJECT_ROOT / "cloud" / "tests" / "diagnosis"))
 # 导入配置
 # ═══════════════════════════════════════════════════════════
 from method_eval.config import (
-    HUSTBEAR_DIR, CW_DIR, WTGEARBOX_DIR,
-    SAMPLE_RATE, MAX_SAMPLES,
-    BEARING_PARAMS, GEAR_PARAMS,
-    HEALTH_THRESHOLD, ENSEMBLE_PROFILE, ENSEMBLE_MAX_SECONDS,
+    HUSTBEAR_DIR,
+    CW_DIR,
+    WTGEARBOX_DIR,
+    SAMPLE_RATE,
+    MAX_SAMPLES,
+    BEARING_PARAMS,
+    GEAR_PARAMS,
+    HEALTH_THRESHOLD,
+    ENSEMBLE_PROFILE,
+    ENSEMBLE_MAX_SECONDS,
     EXP_DIRS,
 )
 from method_eval.label_mapper import infer_binary_label
 from method_eval.visualizer import (
-    apply_style, plot_method_comparison_bar, plot_radar_chart,
+    apply_style,
+    plot_method_comparison_bar,
+    plot_radar_chart,
 )
 
 apply_style()
@@ -48,7 +57,11 @@ apply_style()
 # 导入诊断引擎
 # ═══════════════════════════════════════════════════════════
 from app.services.diagnosis.engine import (
-    DiagnosisEngine, BearingMethod, GearMethod, DiagnosisStrategy, DenoiseMethod,
+    DiagnosisEngine,
+    BearingMethod,
+    GearMethod,
+    DiagnosisStrategy,
+    DenoiseMethod,
 )
 from app.services.diagnosis.ensemble import run_research_ensemble
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
@@ -66,8 +79,11 @@ OUTPUT_DIR = EXP_DIRS["binary_all"]
 
 # 快速模式：5 个代表性方法
 METHODS_ACTIVE = [
-    ("标准包络", "envelope"), ("MCKD", "mckd"), ("DWT", "dwt"),
-    ("EMD", "emd_envelope"), ("谱峭度重加权", "spectral_kurtosis"),
+    ("标准包络", "envelope"),
+    ("MCKD", "mckd"),
+    ("DWT", "dwt"),
+    ("EMD", "emd_envelope"),
+    ("谱峭度重加权", "spectral_kurtosis"),
 ]
 # 全量模式：取消注释下面一行
 # METHODS_ACTIVE = [(n, v) for n, v in [
@@ -82,6 +98,7 @@ METHODS_ACTIVE = [
 # ═══════════════════════════════════════════════════════════
 # 辅助函数
 # ═══════════════════════════════════════════════════════════
+
 
 def _get_binary_files():
     """获取所有数据集的二分类文件"""
@@ -222,7 +239,8 @@ def _run_ensemble(files, bearing_params, gear_teeth):
 
             t0 = time.perf_counter()
             result = run_research_ensemble(
-                signal, SAMPLE_RATE,
+                signal,
+                SAMPLE_RATE,
                 bearing_params=bearing_params,
                 gear_teeth=gear_teeth,
                 denoise_method="none",
@@ -253,6 +271,7 @@ def _run_ensemble(files, bearing_params, gear_teeth):
 # ═══════════════════════════════════════════════════════════
 # 主流程
 # ═══════════════════════════════════════════════════════════
+
 
 def test_binary_all() -> Dict[str, Any]:
     print("\n" + "=" * 70)
@@ -297,7 +316,9 @@ def test_binary_all() -> Dict[str, Any]:
             acc_w = 0.0
 
         all_results[display_name] = {
-            "HUSTbear": acc_h, "CW": acc_c, "WTgearbox": acc_w,
+            "HUSTbear": acc_h,
+            "CW": acc_c,
+            "WTgearbox": acc_w,
             "avg": (acc_h + acc_c + acc_w) / 3,
         }
 
@@ -322,7 +343,9 @@ def test_binary_all() -> Dict[str, Any]:
         acc_w_e = 0.0
 
     all_results["Ensemble"] = {
-        "HUSTbear": acc_h_e, "CW": acc_c_e, "WTgearbox": acc_w_e,
+        "HUSTbear": acc_h_e,
+        "CW": acc_c_e,
+        "WTgearbox": acc_w_e,
         "avg": (acc_h_e + acc_c_e + acc_w_e) / 3,
     }
 
@@ -337,40 +360,57 @@ def test_binary_all() -> Dict[str, Any]:
     # 柱状图 — HUSTbear
     acc_list_h = [all_results[m]["HUSTbear"] for m in method_names]
     plot_method_comparison_bar(
-        method_names=method_names, metrics={"accuracy": acc_list_h},
-        metric_label="accuracy", title="HUSTbear 恒速轴承二分类准确率",
+        method_names=method_names,
+        metrics={"accuracy": acc_list_h},
+        metric_label="accuracy",
+        title="HUSTbear 恒速轴承二分类准确率",
         output_path=str(OUTPUT_DIR / "bar_hustbear.svg"),
-        highlight_indices=[ensemble_idx], ylim=(0.5, 1.05),
+        highlight_indices=[ensemble_idx],
+        ylim=(0.5, 1.05),
     )
 
     # 柱状图 — CW
     acc_list_c = [all_results[m]["CW"] for m in method_names]
     plot_method_comparison_bar(
-        method_names=method_names, metrics={"accuracy": acc_list_c},
-        metric_label="accuracy", title="CW 变速轴承二分类准确率",
+        method_names=method_names,
+        metrics={"accuracy": acc_list_c},
+        metric_label="accuracy",
+        title="CW 变速轴承二分类准确率",
         output_path=str(OUTPUT_DIR / "bar_cw.svg"),
-        highlight_indices=[ensemble_idx], ylim=(0.5, 1.05),
+        highlight_indices=[ensemble_idx],
+        ylim=(0.5, 1.05),
     )
 
     # 柱状图 — WTgearbox
     acc_list_w = [all_results[m]["WTgearbox"] for m in method_names]
     plot_method_comparison_bar(
-        method_names=method_names, metrics={"accuracy": acc_list_w},
-        metric_label="accuracy", title="WTgearbox 齿轮二分类准确率",
+        method_names=method_names,
+        metrics={"accuracy": acc_list_w},
+        metric_label="accuracy",
+        title="WTgearbox 齿轮二分类准确率",
         output_path=str(OUTPUT_DIR / "bar_wtgearbox.svg"),
-        highlight_indices=[ensemble_idx], ylim=(0.5, 1.05),
+        highlight_indices=[ensemble_idx],
+        ylim=(0.5, 1.05),
     )
 
     # 雷达图 — Top 5
-    sorted_methods = sorted(all_results.items(), key=lambda x: x[1]["avg"], reverse=True)[:5]
+    sorted_methods = sorted(
+        all_results.items(), key=lambda x: x[1]["avg"], reverse=True
+    )[:5]
     top_names = [m[0] for m in sorted_methods]
     dimensions = ["HUSTbear", "CW", "WTgearbox"]
-    data = np.array([[m[1]["HUSTbear"], m[1]["CW"], m[1]["WTgearbox"]] for m in sorted_methods])
+    data = np.array(
+        [[m[1]["HUSTbear"], m[1]["CW"], m[1]["WTgearbox"]] for m in sorted_methods]
+    )
 
     plot_radar_chart(
-        method_names=top_names, dimensions=dimensions,
-        data=data, output_path=str(OUTPUT_DIR / "radar_top5.svg"),
-        highlight_indices=[i for i, m in enumerate(sorted_methods) if m[0] == "Ensemble"],
+        method_names=top_names,
+        dimensions=dimensions,
+        data=data,
+        output_path=str(OUTPUT_DIR / "radar_top5.svg"),
+        highlight_indices=[
+            i for i, m in enumerate(sorted_methods) if m[0] == "Ensemble"
+        ],
         title="Top 5 方法跨数据集二分类准确率雷达图",
     )
 

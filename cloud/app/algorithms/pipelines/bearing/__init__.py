@@ -1,4 +1,5 @@
 """标准轴承包络的分析与诊断 Pipeline。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -55,7 +56,9 @@ class BearingEnvelopePipeline:
             raise ValueError("转频标准差必须是有限非负数")
         representation = compute_envelope(signal, sample_rate_hz, self.parameters)
         return self.analyze_representation(
-            representation, rot_frequency_hz, rot_frequency_std_hz,
+            representation,
+            rot_frequency_hz,
+            rot_frequency_std_hz,
         )
 
     def analyze_representation(
@@ -71,7 +74,9 @@ class BearingEnvelopePipeline:
             rot_frequency_hz=rot_frequency_hz,
             rot_frequency_std_hz=rot_frequency_std_hz,
         )
-        return BearingEnvelopeAnalysis(representation=representation, envelope_analysis=analysis)
+        return BearingEnvelopeAnalysis(
+            representation=representation, envelope_analysis=analysis
+        )
 
     def evaluate(self, analysis: BearingEnvelopeAnalysis) -> EnvelopeEvaluation:
         """直接评估已有指标，不重新执行滤波或 FFT。"""
@@ -90,4 +95,6 @@ class BearingEnvelopePipeline:
             rot_frequency_hz=rot_frequency_hz,
             rot_frequency_std_hz=rot_frequency_std_hz,
         )
-        return BearingEnvelopeDiagnosis(analysis=analysis, evaluation=self.evaluate(analysis))
+        return BearingEnvelopeDiagnosis(
+            analysis=analysis, evaluation=self.evaluate(analysis)
+        )

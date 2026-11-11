@@ -6,18 +6,23 @@ Layer 2 级联预处理 — preprocessing.py cascade 方法正确性验证
 
 输出: layer2/output/preprocessing_cascade_correctness.json
 """
+
 import json
 import sys
 import os
 from pathlib import Path
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
-from app.services.diagnosis.preprocessing import cascade_wavelet_vmd, cascade_wavelet_lms
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+from app.services.diagnosis.preprocessing import (
+    cascade_wavelet_vmd,
+    cascade_wavelet_lms,
+)
 from app.services.diagnosis.signal_utils import kurtosis
 from tests.diagnosis.foundation.layer1.synthetic_signals import (
-    NumpyEncoder, bearing_outer_race,
+    NumpyEncoder,
+    bearing_outer_race,
 )
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -29,9 +34,17 @@ def test_cascade_wavelet_vmd():
     print("\n--- cascade_wavelet_vmd ---")
     results = []
 
-    sig, fs, gt = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=2.0, fs=FS, snr_db=10)
-    denoised, info = cascade_wavelet_vmd(sig, wavelet="db8", wavelet_level=4, wavelet_mode="soft",
-                                          vmd_K=3, vmd_alpha=2000)
+    sig, fs, gt = bearing_outer_race(
+        bpfo=90.0, rot_freq=25.0, duration=2.0, fs=FS, snr_db=10
+    )
+    denoised, info = cascade_wavelet_vmd(
+        sig,
+        wavelet="db8",
+        wavelet_level=4,
+        wavelet_mode="soft",
+        vmd_K=3,
+        vmd_alpha=2000,
+    )
 
     kurt_before = info.get("kurtosis_before", 0)
     kurt_after = info.get("kurtosis_after_cascade", 0)
@@ -40,14 +53,18 @@ def test_cascade_wavelet_vmd():
     has_meta = info.get("method") == "cascade_wavelet_vmd"
 
     passed = has_meta and kurt_ok
-    results.append({
-        "test": "cascade_wavelet_vmd_bearing",
-        "kurt_before": round(kurt_before, 2),
-        "kurt_after_wavelet": round(info.get("kurtosis_after_wavelet", 0), 2),
-        "kurt_after_cascade": round(kurt_after, 2),
-        "passed": passed,
-    })
-    print(f"  [{'PASS' if passed else 'FAIL'}] Wav+VMD: kurt_before={kurt_before:.1f}, after_wavelet={info.get('kurtosis_after_wavelet', 0):.1f}, after_cascade={kurt_after:.1f}")
+    results.append(
+        {
+            "test": "cascade_wavelet_vmd_bearing",
+            "kurt_before": round(kurt_before, 2),
+            "kurt_after_wavelet": round(info.get("kurtosis_after_wavelet", 0), 2),
+            "kurt_after_cascade": round(kurt_after, 2),
+            "passed": passed,
+        }
+    )
+    print(
+        f"  [{'PASS' if passed else 'FAIL'}] Wav+VMD: kurt_before={kurt_before:.1f}, after_wavelet={info.get('kurtosis_after_wavelet', 0):.1f}, after_cascade={kurt_after:.1f}"
+    )
 
     return results
 
@@ -57,9 +74,17 @@ def test_cascade_wavelet_lms():
     print("\n--- cascade_wavelet_lms ---")
     results = []
 
-    sig, fs, gt = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=2.0, fs=FS, snr_db=10)
-    denoised, info = cascade_wavelet_lms(sig, wavelet="db8", wavelet_level=4, wavelet_mode="soft",
-                                          lms_filter_len=32, lms_step_size=0.01)
+    sig, fs, gt = bearing_outer_race(
+        bpfo=90.0, rot_freq=25.0, duration=2.0, fs=FS, snr_db=10
+    )
+    denoised, info = cascade_wavelet_lms(
+        sig,
+        wavelet="db8",
+        wavelet_level=4,
+        wavelet_mode="soft",
+        lms_filter_len=32,
+        lms_step_size=0.01,
+    )
 
     kurt_before = info.get("kurtosis_before", 0)
     kurt_after = info.get("kurtosis_after_cascade", 0)
@@ -68,13 +93,17 @@ def test_cascade_wavelet_lms():
     has_meta = info.get("method") in ("cascade_wavelet_lms", "LMS")
 
     passed = has_meta and kurt_ok
-    results.append({
-        "test": "cascade_wavelet_lms_bearing",
-        "kurt_before": round(kurt_before, 2),
-        "kurt_after_cascade": round(kurt_after, 2),
-        "passed": passed,
-    })
-    print(f"  [{'PASS' if passed else 'FAIL'}] Wav+LMS: kurt_before={kurt_before:.1f}, after_cascade={kurt_after:.1f}")
+    results.append(
+        {
+            "test": "cascade_wavelet_lms_bearing",
+            "kurt_before": round(kurt_before, 2),
+            "kurt_after_cascade": round(kurt_after, 2),
+            "passed": passed,
+        }
+    )
+    print(
+        f"  [{'PASS' if passed else 'FAIL'}] Wav+LMS: kurt_before={kurt_before:.1f}, after_cascade={kurt_after:.1f}"
+    )
 
     return results
 
@@ -97,11 +126,18 @@ def main():
             if item.get("passed", False):
                 passed += 1
 
-    all_results["summary"] = {"total": total, "passed": passed, "failed": total - passed}
+    all_results["summary"] = {
+        "total": total,
+        "passed": passed,
+        "failed": total - passed,
+    }
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUTPUT_DIR / "preprocessing_cascade_correctness.json"
-    out_path.write_text(json.dumps(all_results, indent=2, cls=NumpyEncoder, ensure_ascii=False), encoding='utf-8')
+    out_path.write_text(
+        json.dumps(all_results, indent=2, cls=NumpyEncoder, ensure_ascii=False),
+        encoding="utf-8",
+    )
     print(f"\n结果已保存: {out_path}")
 
     s = all_results["summary"]

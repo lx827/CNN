@@ -4,6 +4,7 @@
 保存原始 TCP 字节、原始有符号 24 位 ADC 计数和命令记录，不冒充物理单位。
 协议依据及未确认字段见 ../docs/DC24_PROTOCOL.md。运行前让原厂软件脱机以释放 TCP 6800。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -22,12 +23,20 @@ PORT = 6800
 RATE = 10000
 SAMPLES_PER_FRAME = 254
 CONFIG_B2 = bytes.fromhex("00010001000100010301000000")
-INPUT_CONFIGURATION = {"measurement": "IEPE", "coupling": "AC0.2Hz", "upper_frequency": "PASS",
-                       "profile_id": "iepe-ac02-pass-20261106"}
+INPUT_CONFIGURATION = {
+    "measurement": "IEPE",
+    "coupling": "AC0.2Hz",
+    "upper_frequency": "PASS",
+    "profile_id": "iepe-ac02-pass-20261106",
+}
 # 原厂2026-11-06有效10kHz B5为基准，只替换已验证的采样率字段；未知字段原样保留。
 # 频率仅限此前原厂逐档确认的12档，不把其他档位冒充本次逐档新抓包。
-B5_PROFILES = {int(k): bytes.fromhex(v) for k, v in json.loads(
-    (Path(__file__).resolve().parents[0]/"dc24_profiles.json").read_text()).items()}
+B5_PROFILES = {
+    int(k): bytes.fromhex(v)
+    for k, v in json.loads(
+        (Path(__file__).resolve().parents[0] / "dc24_profiles.json").read_text()
+    ).items()
+}
 
 
 class CaptureCancelled(Exception):
@@ -67,7 +76,9 @@ class Frames:
             del self.buffer[:size]
             if frame[3] == 0x80:
                 if frame[-1] != 0xFF:
-                    raise ValueError("Data frame does not have the observed FF terminator")
+                    raise ValueError(
+                        "Data frame does not have the observed FF terminator"
+                    )
             elif sum(frame[3:]) & 255 != 255:
                 raise ValueError(f"Invalid control checksum: {frame[:24].hex()}")
             result.append(frame)
@@ -76,17 +87,21 @@ class Frames:
 
 def samples(frame: bytes):
     """返回 (帧序号, 四通道原始计数组)；拒绝未验证的帧尺寸和通道排列。"""
-    if frame[3] != 0x80 or len(frame) < 23 or (len(frame)-7) % 16:
+    if frame[3] != 0x80 or len(frame) < 23 or (len(frame) - 7) % 16:
         raise ValueError("Invalid four-channel data frame size")
     sequence = int.from_bytes(frame[4:6], "little")
     data = frame[6:-1]
     rows = []
     for offset in range(0, len(data), 16):
-        group = data[offset:offset+16]
+        group = data[offset : offset + 16]
         if group[::4] != b"\x00\x01\x02\x03":
             raise ValueError(f"Unverified channel order: {group[::4].hex()}")
-        rows.append(tuple(int.from_bytes(group[j+1:j+4], "little", signed=True)
-                          for j in range(0, 16, 4)))
+        rows.append(
+            tuple(
+                int.from_bytes(group[j + 1 : j + 4], "little", signed=True)
+                for j in range(0, 16, 4)
+            )
+        )
     return sequence, rows
 
 
@@ -102,8 +117,13 @@ class Link:
         self.rx_bytes = 0
 
     def event(self, **entry):
-        self.events.write(json.dumps({"host_time_utc": datetime.now(timezone.utc).isoformat(),
-                                      **entry}, ensure_ascii=False) + "\n")
+        self.events.write(
+            json.dumps(
+                {"host_time_utc": datetime.now(timezone.utc).isoformat(), **entry},
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
         self.events.flush()
 
     def send(self, code, payload=b""):
@@ -130,7 +150,11 @@ class Link:
                 if self.on_data:
                     self.on_data(frame)
             else:
-                self.event(direction="device_to_host", command=f"{frame[3]:02X}", hex=frame.hex())
+                self.event(
+                    direction="device_to_host",
+                    command=f"{frame[3]:02X}",
+                    hex=frame.hex(),
+                )
         return frames
 
     def exchange(self, code, payload=b"", timeout=5, status=True):
@@ -140,30 +164,48 @@ class Link:
             for frame in self.pump():
                 if frame[3] == code:
                     if status and frame[4:-1] != b"\x00":
-                        raise RuntimeError(f"Unexpected {code:02X} response: {frame.hex()}")
+                        raise RuntimeError(
+                            f"Unexpected {code:02X} response: {frame.hex()}"
+                        )
                     return frame
         raise TimeoutError(f"No response to command {code:02X}")
 
 
-def record(output: Path, seconds: float, host=HOST, peer=PEER, wait=45, sample_rate=RATE,
-           on_progress=None, should_stop=None):
+def record(
+    output: Path,
+    seconds: float,
+    host=HOST,
+    peer=PEER,
+    wait=45,
+    sample_rate=RATE,
+    on_progress=None,
+    should_stop=None,
+):
     if sample_rate not in B5_PROFILES:
         raise ValueError("Sampling rate must be a supported native profile")
     target_samples = math.ceil(seconds * sample_rate)
     output.mkdir(parents=True, exist_ok=False)  # 永不覆盖已有采集结果。
     metadata = {
         "profile": f"DC24_observed_{sample_rate}Hz_four_channels",
-        "host_ip": host, "device_ip": peer, "host_tcp_port": PORT,
-        "sample_rate_hz": sample_rate, "sample_rate_source": "native supported rate; IEPE/PASS base captured at 10000Hz; verified rate field",
+        "host_ip": host,
+        "device_ip": peer,
+        "host_tcp_port": PORT,
+        "sample_rate_hz": sample_rate,
+        "sample_rate_source": "native supported rate; IEPE/PASS base captured at 10000Hz; verified rate field",
         "b5_payload_hex": B5_PROFILES[sample_rate].hex(),
-        "b2_payload_hex": CONFIG_B2.hex(), "input_configuration": dict(INPUT_CONFIGURATION),
-        "channel_tags": [0, 1, 2, 3], "value_unit": "signed_24_bit_ADC_counts",
+        "b2_payload_hex": CONFIG_B2.hex(),
+        "input_configuration": dict(INPUT_CONFIGURATION),
+        "channel_tags": [0, 1, 2, 3],
+        "value_unit": "signed_24_bit_ADC_counts",
         "physical_scaling": "NOT VERIFIED; no voltage/acceleration conversion applied",
         "time_axis": f"relative sample index / {sample_rate}; not a device UTC timestamp",
         "duration_policy": "at least requested samples; stop on whole frames",
         "target_samples_per_channel": target_samples,
-        "requested_duration_s": seconds, "data_frames": 0, "samples_per_channel": 0,
-        "sequence_gaps": [], "complete": False,
+        "requested_duration_s": seconds,
+        "data_frames": 0,
+        "samples_per_channel": 0,
+        "sequence_gaps": [],
+        "complete": False,
     }
     connection = None
     link = None
@@ -177,9 +219,15 @@ def record(output: Path, seconds: float, host=HOST, peer=PEER, wait=45, sample_r
 
     def notify(stage):
         if on_progress:
-            on_progress({"stage": stage, "samples_per_channel": current_index,
-                         "target_samples_per_channel": target_samples,
-                         "hardware_connected": stage in ("configuring", "capturing")})
+            on_progress(
+                {
+                    "stage": stage,
+                    "samples_per_channel": current_index,
+                    "target_samples_per_channel": target_samples,
+                    "hardware_connected": stage in ("configuring", "capturing"),
+                }
+            )
+
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
             if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
@@ -192,7 +240,7 @@ def record(output: Path, seconds: float, host=HOST, peer=PEER, wait=45, sample_r
             while time.monotonic() < deadline:
                 if stopping():
                     raise CaptureCancelled()
-                server.settimeout(min(.5, max(.1, deadline-time.monotonic())))
+                server.settimeout(min(0.5, max(0.1, deadline - time.monotonic())))
                 try:
                     candidate, address = server.accept()
                 except socket.timeout:
@@ -206,15 +254,34 @@ def record(output: Path, seconds: float, host=HOST, peer=PEER, wait=45, sample_r
                 raise TimeoutError("Device did not connect")
             print(f"Connected: {peer}:{metadata['device_source_port']}", flush=True)
             notify("configuring")
-            with connection, (output/"rx_stream.bin").open("xb") as raw, \
-                    (output/"commands.jsonl").open("x", encoding="utf-8") as events, \
-                    (output/"samples.csv").open("x", encoding="utf-8", newline="") as csvfile:
+            with (
+                connection,
+                (output / "rx_stream.bin").open("xb") as raw,
+                (output / "commands.jsonl").open("x", encoding="utf-8") as events,
+                (output / "samples.csv").open(
+                    "x", encoding="utf-8", newline=""
+                ) as csvfile,
+            ):
                 writer = csv.writer(csvfile)
-                writer.writerow(["sample_index", "time_s", "ch0_counts", "ch1_counts", "ch2_counts", "ch3_counts"])
+                writer.writerow(
+                    [
+                        "sample_index",
+                        "time_s",
+                        "ch0_counts",
+                        "ch1_counts",
+                        "ch2_counts",
+                        "ch3_counts",
+                    ]
+                )
                 link = Link(connection, raw, events)
 
                 def consume(frame):
-                    nonlocal previous_sequence, current_index, first_frame_time, last_frame_time, first_frame_samples
+                    nonlocal \
+                        previous_sequence, \
+                        current_index, \
+                        first_frame_time, \
+                        last_frame_time, \
+                        first_frame_samples
                     sequence, rows = samples(frame)
                     now = time.monotonic()
                     if first_frame_time is None:
@@ -223,12 +290,18 @@ def record(output: Path, seconds: float, host=HOST, peer=PEER, wait=45, sample_r
                     last_frame_time = now
                     if previous_sequence is None:
                         if sequence != 0:
-                            raise ValueError(f"First data sequence is {sequence}, not 0")
-                    elif (sequence-previous_sequence) & 0xFFFF != 1:
+                            raise ValueError(
+                                f"First data sequence is {sequence}, not 0"
+                            )
+                    elif (sequence - previous_sequence) & 0xFFFF != 1:
                         metadata["sequence_gaps"].append([previous_sequence, sequence])
-                        raise ValueError(f"Nonconsecutive frame sequence: {previous_sequence} -> {sequence}")
+                        raise ValueError(
+                            f"Nonconsecutive frame sequence: {previous_sequence} -> {sequence}"
+                        )
                     for row in rows:
-                        writer.writerow([current_index, f"{current_index/sample_rate:.7f}", *row])
+                        writer.writerow(
+                            [current_index, f"{current_index / sample_rate:.7f}", *row]
+                        )
                         current_index += 1
                     previous_sequence = sequence
                     metadata["data_frames"] += 1
@@ -250,17 +323,26 @@ def record(output: Path, seconds: float, host=HOST, peer=PEER, wait=45, sample_r
                     while current_index < target_samples and not stopping():
                         link.pump()
                         if current_index >= next_progress:
-                            print(f"Samples/channel: {current_index}/{target_samples}", flush=True)
+                            print(
+                                f"Samples/channel: {current_index}/{target_samples}",
+                                flush=True,
+                            )
                             next_progress += sample_rate * 10
                         if time.monotonic() > until:
-                            raise TimeoutError(f"Only {current_index}/{target_samples} samples received")
+                            raise TimeoutError(
+                                f"Only {current_index}/{target_samples} samples received"
+                            )
                     link.exchange(0xB8)
                     started = False
                     metadata["cancelled"] = bool(stopping())
                     if link.frames.buffer:
-                        raise RuntimeError("Incomplete frame remains after the stop acknowledgement")
+                        raise RuntimeError(
+                            "Incomplete frame remains after the stop acknowledgement"
+                        )
                     if metadata["data_frames"] == 0 and not metadata["cancelled"]:
-                        raise RuntimeError("Start/stop acknowledged but no sample frames received")
+                        raise RuntimeError(
+                            "Start/stop acknowledged but no sample frames received"
+                        )
                     metadata["complete"] = not metadata["cancelled"]
                 finally:
                     if started:
@@ -278,22 +360,37 @@ def record(output: Path, seconds: float, host=HOST, peer=PEER, wait=45, sample_r
     finally:
         if connection:
             connection.close()
-        metadata["recorded_sample_duration_s"] = metadata["samples_per_channel"] / sample_rate
+        metadata["recorded_sample_duration_s"] = (
+            metadata["samples_per_channel"] / sample_rate
+        )
         if first_frame_time is not None and last_frame_time > first_frame_time:
-            span = last_frame_time-first_frame_time
+            span = last_frame_time - first_frame_time
             metadata["data_frame_arrival_span_s"] = span
-            metadata["arrival_rate_estimate_hz"] = (current_index-first_frame_samples)/span
-        (output/"metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+            metadata["arrival_rate_estimate_hz"] = (
+                current_index - first_frame_samples
+            ) / span
+        (output / "metadata.json").write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         print(json.dumps(metadata, ensure_ascii=False), flush=True)
     return metadata
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--seconds", type=float, default=5, help="最少样本时长，默认 5 秒；按完整帧收尾")
-    parser.add_argument("--rate", type=int, choices=sorted(B5_PROFILES), default=RATE,
-                        help="采用原厂支持的采样率，默认 10000 Hz；IEPE/AC0.2Hz/PASS配置")
-    parser.add_argument("--output", type=Path, required=True, help="新目录，不覆盖旧结果")
+    parser.add_argument(
+        "--seconds", type=float, default=5, help="最少样本时长，默认 5 秒；按完整帧收尾"
+    )
+    parser.add_argument(
+        "--rate",
+        type=int,
+        choices=sorted(B5_PROFILES),
+        default=RATE,
+        help="采用原厂支持的采样率，默认 10000 Hz；IEPE/AC0.2Hz/PASS配置",
+    )
+    parser.add_argument(
+        "--output", type=Path, required=True, help="新目录，不覆盖旧结果"
+    )
     args = parser.parse_args()
     if not math.isfinite(args.seconds) or args.seconds <= 0:
         parser.error("--seconds 必须为大于 0 的有限数")
