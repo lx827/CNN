@@ -7,6 +7,7 @@
  */
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { formatErrorMessage } from '../utils/errorMessage'
+import { getDiagnosisView } from '../utils/diagnosisStatus'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getAllDeviceData,
@@ -34,26 +35,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   bearingFrequencyAnnotations,
   significantBearingFaults,
+  bearingMethodLabel,
 } from '../utils/bearingDiagnosis'
 
-export const bearingMethodLabel = (key) => {
-  const map = {
-    envelope: '标准包络分析',
-    filter_bank_sk: '二叉滤波器组谱峭度',
-    cpw: 'CPW预白化+包络',
-    teager: 'TEO能量算子+包络',
-    spectral_kurtosis: '自适应谱峭度包络',
-    med: 'MED最小熵解卷积+包络',
-    mckd: 'MCKD最大相关峭度解卷积+包络',
-    sc_scoh: '谱相关/谱相干',
-    wp: 'WP小波包+包络',
-    dwt: 'DWT离散小波+包络',
-    emd_envelope: 'EMD经验模态+包络',
-    ceemdan_envelope: 'CEEMDAN互补集合+包络',
-    vmd_envelope: 'VMD变分模态+包络',
-  }
-  return map[key] || key
-}
 
 export const statsDisplay = [
   { key: 'peak', label: '峰值', precision: 4, normal: '—' },
@@ -182,19 +166,15 @@ export function useDataView() {
   const fullAnalysisDenoise = ref('none')
 
   // 策略快速诊断
-  const analyzeStrategy = ref('standard')
   const analyzeDenoise = ref('none')
   const computedStrategyAnalyze = ref(false)
   const loadingStrategyAnalyze = ref(false)
   const strategyAnalyzeData = ref(null)
-  const analyzeStrategyLabel = computed(() => {
-    const labels = { standard: '标准策略', advanced: '高级策略', expert: '专家策略' }
-    return labels[analyzeStrategy.value] || analyzeStrategy.value
-  })
 
   // 频域/阶次诊断明细（手动加载）
   const showDiagnosisDetail = ref(false)
   const loadingDiagnosisDetail = ref(false)
+  const diagnosisDetailData = ref(null)
 
   // 特征频率标注（从诊断缓存提取，用于 FFT/包络谱 markLine）
   const faultFreqAnnotations = ref(null)
@@ -236,7 +216,7 @@ export function useDataView() {
         method: bearingMethodLabel(methodKey),
         methodKey,
         faults,
-        evaluationStatus: result.evaluation?.status ?? 'indeterminate',
+        evaluationStatus: result.evaluation?.evaluation_status ?? null,
         params: params.join(' | ') || '-',
       })
     }
@@ -279,19 +259,16 @@ export function useDataView() {
     if (!selectedBatch.value) return ''
     const batch = selectedBatch.value
     const parts = []
-    if (batch.health_score != null) {
-      parts.push(`健康度评分: ${batch.health_score} 分`)
-    }
+    const view = getDiagnosisView(batch)
+    parts.push(`诊断：${view.label}`)
+    if (view.scoreText !== '-') parts.push(`健康度评分: ${view.scoreText} 分`)
     if (batch.rot_freq != null) {
       parts.push(`估计转速: ${(batch.rot_freq * 60).toFixed(0)} RPM`)
     }
     if (batch.top_fault) {
       parts.push(`主要异常: ${batch.top_fault}`)
-    } else if (batch.diagnosis_status === 'fault') {
-      parts.push('检测到故障特征，建议进一步分析频谱和阶次跟踪')
-    } else if (batch.diagnosis_status === 'warning') {
-      parts.push('检测到预警信号，建议关注设备运行状态')
     }
+    if (batch.coverage === 'partial') parts.push('仅部分对象形成有效评估')
     return parts.join('；')
   })
 
@@ -320,24 +297,13 @@ export function useDataView() {
   const loadDiagnosisDetail = async () => {
     loadingDiagnosisDetail.value = true
     try {
-      // 先尝试加载通道级缓存诊断
-      try {
-        const res = await getChannelDiagnosis(
-          selectedDevice.value.device_id,
-          selectedBatch.value.batch_index,
-          selectedChannel.value,
-          fullAnalysisDenoise.value
-        )
-        const d = res.data
-        if (d && d.order_analysis) {
-          selectedBatch.value.order_analysis = d.order_analysis
-        }
-        if (d && d.rot_freq) {
-          selectedBatch.value.rot_freq = d.rot_freq
-        }
-      } catch (e) {
-        // 404 表示无缓存，不做处理
-      }
+      const res = await getChannelDiagnosis(
+        selectedDevice.value.device_id,
+        selectedBatch.value.batch_index,
+        selectedChannel.value,
+        { denoise_method: denoiseMethod.value }
+      )
+      diagnosisDetailData.value = res.data || null
       showDiagnosisDetail.value = true
     } catch (e) {
       console.error('加载诊断明细失败:', e)
@@ -355,7 +321,7 @@ export function useDataView() {
         selectedDevice.value.device_id,
         selectedBatch.value.batch_index,
         selectedChannel.value,
-        fullAnalysisDenoise.value
+        { denoise_method: fullAnalysisDenoise.value }
       )
       const d = res.data
       if (d) {
@@ -394,18 +360,13 @@ export function useDataView() {
       const res = await getChannelDiagnosis(
         selectedDevice.value.device_id,
         selectedBatch.value.batch_index,
-        selectedChannel.value  // 使用当前选中通道
+        selectedChannel.value,
+        { denoise_method: 'none' }
       )
       const d = res.data
       if (d) {
-        // rot_freq 优先取顶层字段，其次取 order_analysis 中的
-        const savedRf = d.rot_freq ?? d.order_analysis?.rot_freq_hz
-        if (savedRf != null && savedRf > 0) {
-          selectedBatch.value.rot_freq = savedRf
-          if (d.order_analysis) {
-            selectedBatch.value.order_analysis = d.order_analysis
-          }
-        }
+        const savedRf = d.rot_freq_hz
+        if (savedRf != null && savedRf > 0) selectedBatch.value.rot_freq = savedRf
         // 提取特征频率标注信息（轴承特征频率 + 齿轮啮合频率）
         extractFaultFreqAnnotations(d)
       }
@@ -417,9 +378,7 @@ export function useDataView() {
   /** 从诊断结果提取特征频率列表，用于 FFT/包络谱的 markLine 标注 */
   const extractFaultFreqAnnotations = (diagData) => {
     const annotations = []
-    // 兼容缓存外层与策略/全分析直接返回的 engine_result 本体
-    const engineResult = diagData.engine_result || diagData.full_analysis
-      || ((diagData.bearing || diagData.bearing_results || diagData.gear || diagData.gear_results) ? diagData : null)
+    const engineResult = diagData
     if (!engineResult) {
       faultFreqAnnotations.value = null
       return
@@ -549,6 +508,7 @@ export function useDataView() {
     computedGear.value = false
     computedFullAnalysis.value = false
     showDiagnosisDetail.value = false
+    diagnosisDetailData.value = null
     statsData.value = null
     orderData.value = null
     cepstrumData.value = null
@@ -597,6 +557,8 @@ export function useDataView() {
 
   watch(denoiseMethod, () => {
     if (!selectedDevice.value || !selectedBatch.value) return
+    showDiagnosisDetail.value = false
+    diagnosisDetailData.value = null
     timeOption.value = null
     nextTick(() => loadTimeDomain())
     if (computedFFT.value) computeFFT()
@@ -852,19 +814,11 @@ export function useDataView() {
             selectedDevice.value.device_id,
             selectedBatch.value.batch_index,
             {
-              order_analysis: {
-                rot_freq_hz: d.rot_freq,
-                rot_rpm: d.rot_rpm,
-              },
               rot_freq: d.rot_freq,
             }
           )
           // 同步更新本地数据，避免刷新前显示不一致
           selectedBatch.value.rot_freq = d.rot_freq
-          if (selectedBatch.value.order_analysis) {
-            selectedBatch.value.order_analysis.rot_freq_hz = d.rot_freq
-            selectedBatch.value.order_analysis.rot_rpm = d.rot_rpm
-          }
           ElMessage.success('诊断转频已更新为实时计算值')
         } catch (err) {
           console.error('更新诊断数据失败:', err)
@@ -1021,7 +975,7 @@ export function useDataView() {
           selectedDevice.value.device_id,
           selectedBatch.value.batch_index,
           selectedChannel.value,
-          fullAnalysisDenoise.value
+          { denoise_method: fullAnalysisDenoise.value }
         )
         const d = cached.data
         // 全算法结果必须有 bearing_results 和 gear_results，否则是普通诊断缓存
@@ -1081,7 +1035,6 @@ export function useDataView() {
         selectedBatch.value.batch_index,
         selectedChannel.value,
         {
-          strategy: analyzeStrategy.value,
           denoise: analyzeDenoise.value,
         }
       )
@@ -1241,14 +1194,10 @@ export function useDataView() {
         selectedBatch.value.batch_index
       )
       const d = res.data || {}
-      ElMessage.success(`重新诊断完成，健康度 ${d.health_score} 分`)
-      // 更新本地选中批次数据
-      selectedBatch.value.health_score = d.health_score
-      selectedBatch.value.diagnosis_status = d.status
-      selectedBatch.value.rot_freq = d.rot_freq
-      if (d.order_analysis) {
-        selectedBatch.value.order_analysis = d.order_analysis
-      }
+      const view = getDiagnosisView(d)
+      ElMessage.success(`重新诊断完成：${view.label}${view.scoreText === '-' ? '' : `，健康度 ${view.scoreText} 分`}`)
+      Object.assign(selectedBatch.value, d)
+      diagnosisDetailData.value = d.channels?.[`ch${selectedChannel.value}`] || null
       // 刷新设备列表以同步最新状态
       await loadAllDevices()
     } catch (e) {
@@ -1383,8 +1332,8 @@ export function useDataView() {
     loadingFFT, loadingSTFT, loadingEnvelope, loadingStats, loadingOrder, loadingCepstrum, loadingGear,
     statsData, orderData, cepstrumData, gearData, envelopeData,
     computedFullAnalysis, loadingFullAnalysis, fullAnalysisData, fullAnalysisDenoise,
-    computedStrategyAnalyze, loadingStrategyAnalyze, strategyAnalyzeData, analyzeStrategy, analyzeDenoise, analyzeStrategyLabel,
-    showDiagnosisDetail, loadingDiagnosisDetail, faultFreqAnnotations,
+    computedStrategyAnalyze, loadingStrategyAnalyze, strategyAnalyzeData, analyzeDenoise,
+    showDiagnosisDetail, loadingDiagnosisDetail, diagnosisDetailData, faultFreqAnnotations,
     statsWindowSize, statsStep, stftNperseg, stftNoverlap,
     orderFreqMin, orderFreqMax, orderSamplesPerRev, cepstrumMaxQuefrency,
     bearingSummaryTable, gearSummaryTable, diagnosisDesc,

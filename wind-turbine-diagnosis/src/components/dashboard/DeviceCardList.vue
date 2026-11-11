@@ -7,31 +7,32 @@
     >
       <el-card
         class="device-card"
-        :class="{ active: selectedId === dev.deviceId, offline: dev.status === 'offline' }"
+        :class="{ active: selectedId === dev.deviceId, offline: dev.is_offline }"
         shadow="hover"
         @click="$emit('select', dev)"
       >
         <div class="device-header">
           <div class="device-id">{{ dev.deviceId }}</div>
-          <el-tag :type="getStatusType(dev.status)" size="small" effect="dark">
-            {{ getStatusText(dev.status) }}
+          <el-tag :type="getDiagnosisView(dev).tagType" size="small" effect="dark">
+            {{ getDiagnosisView(dev).label }}
           </el-tag>
         </div>
         <div class="device-name">{{ dev.deviceName }}</div>
         <div class="device-location">{{ dev.location }}</div>
-        <div v-if="dev.status === 'offline'" class="offline-hint">
+        <el-text v-if="dev.coverage === 'partial'" type="info" size="small">仅部分对象形成有效评估</el-text>
+        <div v-if="dev.is_offline" class="offline-hint">
           <el-icon><Warning /></el-icon> 已离线
         </div>
 
         <div class="health-section">
           <div class="health-label">健康度</div>
-          <div v-if="dev.status === 'offline'" class="offline-health">
-            <el-icon><Warning /></el-icon> 离线，暂无数据
+          <div v-if="getDiagnosisView(dev).scoreText === '-'" class="offline-health">
+            暂无有效评分
           </div>
           <el-progress
             v-else
-            :percentage="dev.healthScore || 0"
-            :color="getHealthColor(dev.healthScore || 0)"
+            :percentage="dev.health_score"
+            :status="getDiagnosisView(dev).tone === 'danger' ? 'exception' : getDiagnosisView(dev).tone"
             :stroke-width="12"
             :format="(p) => p"
           />
@@ -39,7 +40,7 @@
 
         <div class="device-footer">
           <span><el-icon><Clock /></el-icon> {{ dev.runHours }} h</span>
-          <span v-if="['fault', 'critical', 'warning'].includes(dev.status)" class="fault-hint">
+          <span v-if="['danger', 'warning'].includes(getDiagnosisView(dev).tone)" class="fault-hint">
             <el-icon><Warning /></el-icon> 需关注
           </span>
         </div>
@@ -49,7 +50,7 @@
 </template>
 
 <script setup>
-import { getStatusType, getStatusText, getHealthColor } from '../../composables/useDashboard'
+import { getDiagnosisView } from '../../utils/diagnosisStatus'
 
 defineProps({
   devices: { type: Array, default: () => [] },

@@ -4,13 +4,8 @@
       <div class="section-header">
         <span class="chart-title">综合故障诊断</span>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <!-- 策略快速诊断 -->
+          <!-- 对象快速诊断 -->
           <template v-if="!computedStrategyAnalyze && !computedFullAnalysis">
-            <el-select v-model="analyzeStrategy" size="small" style="width: 120px">
-              <el-option label="标准策略" value="standard" />
-              <el-option label="高级策略" value="advanced" />
-              <el-option label="专家策略" value="expert" />
-            </el-select>
             <el-select v-model="analyzeDenoise" size="small" style="width: 150px">
               <el-option label="无预处理" value="none" />
               <el-option label="小波去噪" value="wavelet" />
@@ -30,15 +25,12 @@
               :loading="loadingStrategyAnalyze"
               @click="$emit('compute-strategy')"
             >
-              <el-icon><DataAnalysis /></el-icon> 策略诊断
+              <el-icon><DataAnalysis /></el-icon> 对象诊断
             </el-button>
             <el-divider direction="vertical" />
           </template>
-          <el-tag v-if="computedStrategyAnalyze && !computedFullAnalysis" type="success" size="small" effect="plain">
-            {{ analyzeStrategyLabel }}
-          </el-tag>
           <el-button v-if="computedStrategyAnalyze && !computedFullAnalysis" type="info" size="small" @click="$emit('clear-strategy')">
-            <el-icon><Close /></el-icon> 收起策略
+            <el-icon><Close /></el-icon> 收起诊断
           </el-button>
           <!-- 全算法诊断 -->
           <template v-if="!computedFullAnalysis">
@@ -70,47 +62,41 @@
         </div>
       </div>
       <div v-if="computedStrategyAnalyze && strategyAnalyzeData && !computedFullAnalysis">
-        <!-- 策略诊断简洁结果 -->
+        <!-- 对象诊断简洁结果 -->
         <el-alert
-          :title="statusAlertTitle(strategyStatusView)"
+          :title="`对象诊断：${strategyStatusView.label}`"
           :type="strategyStatusView.alertType"
-          :description="statusAlertDescription(
-            strategyStatusView,
-            strategyAnalyzeData.recommendation,
-            '策略诊断未检出显著故障特征，设备运行正常。',
-          )"
+          :description="strategyAnalyzeData.recommendation || strategyAnalyzeData.reason"
           show-icon
           :closable="false"
           style="margin-bottom: 12px"
         />
         <el-descriptions :column="4" size="small" border>
-          <el-descriptions-item label="健康度">{{ strategyAnalyzeData.health_score }}</el-descriptions-item>
-          <el-descriptions-item label="状态">{{ strategyAnalyzeData.status }}</el-descriptions-item>
+          <el-descriptions-item label="健康度">{{ strategyStatusView.scoreText }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ strategyStatusView.label }}</el-descriptions-item>
           <el-descriptions-item label="转频">{{ strategyAnalyzeData.rot_freq_hz }} Hz</el-descriptions-item>
-          <el-descriptions-item label="策略">{{ analyzeStrategyLabel }}</el-descriptions-item>
           <el-descriptions-item label="峭度" v-if="strategyAnalyzeData.time_features">{{ strategyAnalyzeData.time_features.kurtosis?.toFixed(4) }}</el-descriptions-item>
           <el-descriptions-item label="RMS" v-if="strategyAnalyzeData.time_features">{{ strategyAnalyzeData.time_features.rms?.toFixed(4) }}</el-descriptions-item>
           <el-descriptions-item label="峰值因子" v-if="strategyAnalyzeData.time_features">{{ strategyAnalyzeData.time_features.crest_factor?.toFixed(4) }}</el-descriptions-item>
         </el-descriptions>
+        <DiagnosisCoverage :result="strategyAnalyzeData" />
       </div>
       <div v-else-if="loadingStrategyAnalyze" class="placeholder">
-        <el-icon class="is-loading"><Loading /></el-icon> 正在执行策略诊断...
+        <el-icon class="is-loading"><Loading /></el-icon> 正在执行对象诊断...
       </div>
       <div v-if="computedFullAnalysis && fullAnalysisData">
         <!-- 综合结论 -->
         <el-alert
-          :title="statusAlertTitle(fullAnalysisStatusView)"
+          :title="`综合诊断：${fullAnalysisStatusView.label}`"
           :type="fullAnalysisStatusView.alertType"
-          :description="statusAlertDescription(
-            fullAnalysisStatusView,
-            fullAnalysisData.recommendation,
-            '所有诊断方法均未检出显著故障特征，设备运行正常。',
-          )"
+          :description="fullAnalysisData.recommendation || fullAnalysisData.reason"
           show-icon
           :closable="false"
           style="margin-bottom: 12px"
         />
 
+        <el-text :type="fullAnalysisStatusView.tone">健康度：{{ fullAnalysisStatusView.scoreText }}</el-text>
+        <DiagnosisCoverage :result="fullAnalysisData" />
         <!-- 时域特征 -->
         <el-card size="small" style="margin-bottom: 12px">
           <template #header>
@@ -148,8 +134,8 @@
                 <el-tag v-for="(f, idx) in row.faults" :key="idx" :type="(f.snr ?? f.score) > 5 ? 'danger' : 'warning'" size="small" style="margin-right: 6px; margin-bottom: 4px;">
                   {{ f.fault_type }} ({{ f.snr != null ? 'SNR' : 'score' }}={{ f.snr ?? f.score }})
                 </el-tag>
-                <el-text v-if="row.evaluationStatus !== 'evaluated'" type="info" size="small">输入不足，暂不可判定</el-text>
-                <el-text v-else-if="row.faults.length === 0" type="info" size="small">未检出显著故障</el-text>
+                <el-text type="info" size="small">评估条件：{{ row.evaluationStatus || 'unknown' }}</el-text>
+                <el-text v-if="row.evaluationStatus === 'evaluated' && row.faults.length === 0" type="info" size="small">未检出显著故障</el-text>
               </template>
             </el-table-column>
             <el-table-column prop="params" label="关键参数" min-width="200">
@@ -203,7 +189,7 @@
             <el-table-column prop="method" label="诊断方法" width="140" />
             <el-table-column prop="ser" label="SER" width="100">
               <template #default="{ row }">
-                <el-tag :type="row.ser > 3 ? 'danger' : row.ser > 1.5 ? 'warning' : 'success'" size="small">{{ row.ser?.toFixed(3) ?? '-' }}</el-tag>
+                <el-tag type="info" size="small">{{ row.ser?.toFixed(3) ?? '-' }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="fm0" label="FM0" width="90">
@@ -227,7 +213,7 @@
                 <el-tag v-for="(a, idx) in row.alerts" :key="idx" :type="a.level === 'critical' ? 'danger' : 'warning'" size="small" style="margin-right: 6px; margin-bottom: 4px;">
                   {{ a.indicator }}
                 </el-tag>
-                <el-text v-if="row.alerts.length === 0" type="info" size="small">无告警</el-text>
+                <el-text v-if="row.alerts.length === 0" type="info" size="small">无已报告阈值告警</el-text>
               </template>
             </el-table-column>
           </el-table>
@@ -254,30 +240,15 @@
 <script setup>
 import { computed } from 'vue'
 import PlanetaryResult from '../research/PlanetaryResult.vue'
-import { bearingMethodLabel } from '../../composables/useDataView'
+import { bearingMethodLabel } from '../../utils/bearingDiagnosis'
 import { bearingIndicatorEntries as bearingEntries } from '../../utils/bearingDiagnosis'
-import { getDiagnosisStatusView } from '../../utils/diagnosisStatus'
-
-function statusAlertTitle(view) {
-  if (view.tone === 'success') return '✅ 未检出显著故障特征'
-  if (view.tone === 'warning') return '⚡ 检出预警信号'
-  if (view.tone === 'danger') return '⚠️ 检出故障特征'
-  if (view.tone === 'info') return view.text === '未知' ? '诊断状态未知' : `诊断${view.text}`
-  return view.text
-}
-
-function statusAlertDescription(view, recommendation, normalDescription) {
-  if (recommendation) return recommendation
-  if (view.tone === 'success') return normalDescription
-  if (view.tone === 'warning' || view.tone === 'danger') return ''
-  return '当前诊断不可判定或状态未知，不能据此判断设备健康。'
-}
+import DiagnosisCoverage from '../DiagnosisCoverage.vue'
+import { getDiagnosisView } from '../../utils/diagnosisStatus'
 
 const props = defineProps({
   computedStrategyAnalyze: { type: Boolean, default: false },
   loadingStrategyAnalyze: { type: Boolean, default: false },
   strategyAnalyzeData: { type: Object, default: null },
-  analyzeStrategyLabel: { type: String, default: '' },
   computedFullAnalysis: { type: Boolean, default: false },
   loadingFullAnalysis: { type: Boolean, default: false },
   fullAnalysisData: { type: Object, default: null },
@@ -286,14 +257,13 @@ const props = defineProps({
   faultFreqAnnotations: { type: Object, default: null },
 })
 
-const analyzeStrategy = defineModel('analyzeStrategy', { type: String, default: 'standard' })
 const analyzeDenoise = defineModel('analyzeDenoise', { type: String, default: 'none' })
 const fullAnalysisDenoise = defineModel('fullAnalysisDenoise', { type: String, default: 'none' })
 
 defineEmits(['compute-strategy', 'clear-strategy', 'compute-full', 'clear-full', 'goto-research'])
 
-const strategyStatusView = computed(() => getDiagnosisStatusView(props.strategyAnalyzeData?.status))
-const fullAnalysisStatusView = computed(() => getDiagnosisStatusView(props.fullAnalysisData?.status))
+const strategyStatusView = computed(() => getDiagnosisView(props.strategyAnalyzeData))
+const fullAnalysisStatusView = computed(() => getDiagnosisView(props.fullAnalysisData))
 const planetaryResults = computed(() => Object.fromEntries(Object.entries(props.fullAnalysisData?.gear_results || {}).filter(([, result]) => result?.is_planetary)))
 </script>
 

@@ -5,6 +5,8 @@ const { createRequire } = require('node:module')
 const path = require('node:path')
 const test = require('node:test')
 const vm = require('node:vm')
+let getDiagnosisView
+test.before(async () => { ({ getDiagnosisView } = await import('../src/utils/diagnosisStatus.js')) })
 
 const frontendRequire = createRequire(path.resolve(__dirname, '../package.json'))
 const vue = frontendRequire('vue')
@@ -65,7 +67,7 @@ function createHarness({ devicesPromise, fetchData, taskStatus, timers = {} } = 
   }
   const context = {
     ...vue,
-    console,
+    console, getDiagnosisView,
     setTimeout,
     clearTimeout,
     setInterval,
@@ -136,6 +138,23 @@ function assertWaveforms(charts) {
   assert.deepEqual(Array.from(charts[1].option.series[0].data), channels[0].frequency,
     '首次进入应自动显示频谱')
 }
+
+test('监测诊断使用服务端两维结论，RMS不能替代未知评估', async t => {
+  const received = channels.map((channel, index) => ({ ...channel,
+    rms: index === 0 ? 999 : 0,
+    evaluation_status: index === 0 ? 'evaluated' : 'not_evaluable',
+    diagnosis_conclusion: index === 0 ? 'normal' : 'unknown',
+    health_score: index === 0 ? 98 : null,
+  }))
+  const harness = createHarness({ fetchData: async () => ({ data: { channels: received, sensorParams: {} } }) })
+  const { app, state } = harness.mount()
+  t.after(() => app.unmount())
+  await flush()
+  assert.equal(state.sensors[0].status, 'success')
+  assert.equal(state.sensors[0].statusText, '正常')
+  assert.equal(state.sensors[1].status, 'info')
+  assert.equal(state.sensors[1].statusText, '不可评估')
+})
 
 test('首次进入显示默认通道，切换通道仍正常', async t => {
   const harness = createHarness()

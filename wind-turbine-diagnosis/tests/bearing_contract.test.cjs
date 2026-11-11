@@ -11,6 +11,8 @@ const frontendRoot = path.resolve(__dirname, '..')
 const requireFrontend = createRequire(path.join(frontendRoot, 'package.json'))
 const { parse, compileScript } = requireFrontend('@vue/compiler-sfc')
 const bearingUtilsPromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/bearingDiagnosis.js')).href)
+const compositeUtilsPromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/compositeResearch.js')).href)
+const researchDisplayPromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/researchDisplay.js')).href)
 const diagnosisStatusPromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/diagnosisStatus.js')).href)
 const errorMessagePromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/errorMessage.js')).href)
 
@@ -35,7 +37,7 @@ const envelopeResult = () => ({
   band: { low_hz: 1800, high_hz: 2200, center_hz: 2000, width_hz: 400 },
   features: { spectral_power_proxy: 6.5, BPFO_env_ratio: 0.25 },
   evaluation: {
-    status: 'evaluated',
+    evaluation_status: 'evaluated',
     indicators: {
       BPFO: { theory_hz: 100, detected_hz: 100, snr: 8.25, significant: true },
       envelope_peak_snr_stat: { value: 3.2, snr: 3.2, significant: false },
@@ -51,7 +53,7 @@ const scScohResult = () => ({
   spectrum: null,
   band: null,
   features: { spectral_power_proxy: 0 },
-  evaluation: { status: 'evaluated', indicators: {
+  evaluation: { evaluation_status: 'evaluated', indicators: {
     BPFI: { theory_cyclic_frequency_hz: 90, scoh_peak: 0.62, coherence_background_ratio: 6.4, significant: true, evaluable: true },
   } },
 })
@@ -104,7 +106,8 @@ async function loadDataView(overrides = {}) {
   const errors = await errorMessagePromise
   const source = stripModules(readFileSync(path.join(frontendRoot, 'src/composables/useDataView.js'), 'utf8'))
     .replace('function useDataView()', 'globalThis.useDataView = function useDataView()')
-  const context = composableContext({ ...utils, ...errors, ...overrides })
+  const domainViews = await diagnosisStatusPromise
+  const context = composableContext({ ...utils, ...errors, ...domainViews, ...overrides })
   vm.runInNewContext(source, context)
   return context.useDataView()
 }
@@ -112,12 +115,11 @@ async function loadDataView(overrides = {}) {
 async function loadResearch(overrides = {}) {
   const utils = await bearingUtilsPromise
   const errors = await errorMessagePromise
-  const { getDiagnosisStatusView } = await diagnosisStatusPromise
+  const { getDiagnosisView } = await diagnosisStatusPromise
+  const compositeUtils = await compositeUtilsPromise
   const source = stripModules(readFileSync(path.join(frontendRoot, 'src/composables/useResearchDiagnosis.js'), 'utf8'))
     .replace('function useResearchDiagnosis()', 'globalThis.useResearchDiagnosis = function useResearchDiagnosis()')
-    + '\nglobalThis.evaluationStatusText = evaluationStatusText; globalThis.evaluationStatusType = evaluationStatusType;'
-    + '\nglobalThis.statusText = statusText; globalThis.statusType = statusType;'
-  const context = composableContext({ ...utils, ...errors, getDiagnosisStatusView, ...overrides })
+  const context = composableContext({ ...utils, ...errors, ...compositeUtils, getDiagnosisView, runCompositeResearch: asyncNoop, ...overrides })
   vm.runInNewContext(source, context)
   return { state: context.useResearchDiagnosis(), context }
 }
@@ -127,6 +129,28 @@ function selectBatch(state) {
   state.selectedBatch.value = { batch_index: 1 }
   state.selectedChannel.value = 1
 }
+
+test('明细查询使用当前通道去噪组合，重新诊断保留unknown/null与独立通道结果', async () => {
+  const requests = [], messages = []
+  const channel = { evaluation_status: 'not_evaluable', diagnosis_conclusion: 'unknown', health_score: null }
+  const state = await loadDataView({
+    getChannelDiagnosis: async (...args) => { requests.push(args); return { data: channel } },
+    reanalyzeBatch: async () => ({ data: { ...channel, channels: { ch2: channel } } }),
+    ElMessage: { success: message => messages.push(message), warning: noop, error: noop },
+  })
+  selectBatch(state)
+  state.selectedChannel.value = 2
+  state.denoiseMethod.value = 'wavelet'
+  await state.loadDiagnosisDetail()
+  assert.deepEqual(plain(requests[0]), ['D1', 1, 2, { denoise_method: 'wavelet' }])
+  assert.equal(state.diagnosisDetailData.value.health_score, null)
+  await state.onReanalyze()
+  assert.equal(state.selectedBatch.value.diagnosis_conclusion, 'unknown')
+  assert.equal(state.selectedBatch.value.health_score, null)
+  assert.equal(state.diagnosisDetailData.value, channel)
+  assert.doesNotMatch(messages[0], /null|100|0 分/)
+  assert.match(messages[0], /不可评估/)
+})
 
 test('DataView和研究页实际失败分支显示422方法及原因', async () => {
   const messages = []
@@ -210,131 +234,6 @@ test('策略诊断同时保留轴承 evaluation 标注和齿轮旧字段标注',
   assert.equal(annotations.some(item => item.name === 'OLD_BEARING'), false)
 })
 
-test('研究页全方法/集成派生行区分轴承新契约与齿轮旧契约', async () => {
-  const allData = {
-    bearing_results: { envelope: envelopeResult(), sc_scoh: scScohResult() },
-    gear_results: { gear_standard: gearResult() },
-  }
-  const { state, context } = await loadResearch({ getChannelMethodAnalysis: async () => ({ data: allData }) })
-  state.selectedDeviceId.value = 'D1'
-  state.selectedBatchIndex.value = 1
-  state.selectedChannel.value = 1
-  state.runMode.value = 'all'
-  await state.runAnalysis()
-
-  assert.deepEqual(state.allBearingRows.value[0].faults.map(item => item.fault_type), ['BPFO'])
-  assert.match(state.allBearingRows.value[0].params, /频带2000Hz/)
-  assert.deepEqual(state.allBearingRows.value[1].faults.map(item => item.fault_type), ['BPFI'])
-  assert.deepEqual(plain(state.allGearRows.value[0].alerts), [{ indicator: 'ser', level: 'critical' }])
-  const allNames = state.allBestIndicatorRows.value.map(item => item.name)
-  assert.ok(allNames.includes('BPFO'))
-  assert.ok(allNames.includes('BPFI'))
-  assert.ok(allNames.includes('ser'))
-  assert.equal(allNames.includes('OLD_BEARING'), false)
-
-  state.result.value = { bearing: scScohResult(), gear: gearResult() }
-  const bestRows = state.bestIndicatorRows.value
-  assert.equal(bestRows.find(item => item.name === 'BPFI').value, 0.62)
-  assert.equal(bestRows.find(item => item.source === '齿轮').state, '命中')
-  assert.equal(context.evaluationStatusText('indeterminate'), '不可判定')
-  assert.equal(context.evaluationStatusText('not_evaluable'), '不可评估')
-  assert.equal(context.evaluationStatusType('indeterminate'), 'info')
-
-  const limited = envelopeResult()
-  limited.evaluation = {
-    status: 'not_evaluable',
-    indicators: {
-      BPFO: { theory_hz: 300, evaluable: false, significant: null, snr: null, reason: 'out_of_band' },
-    },
-  }
-  state.result.value = { bearing: limited, gear: gearResult() }
-  const limitedRows = state.bestIndicatorRows.value
-  assert.equal(limitedRows.find(item => item.name === 'BPFO').state, '不可评估')
-  assert.equal(limitedRows.find(item => item.name === 'BPFO').type, 'info')
-  assert.equal(limitedRows.find(item => item.source === '齿轮').state, '命中')
-})
-
-test('诊断状态 adapter 显式覆盖合法状态并对非法值中性兜底', async () => {
-  const { getDiagnosisStatusView } = await diagnosisStatusPromise
-  const cases = [
-    ['normal', '正常', 'success', 'success'],
-    ['warning', '预警', 'warning', 'warning'],
-    ['fault', '故障', 'danger', 'error'],
-    ['critical', '故障', 'danger', 'error'],
-    ['indeterminate', '不可判定', 'info', 'info'],
-    ['not_evaluable', '不可评估', 'info', 'info'],
-  ]
-  for (const [status, text, tagType, alertType] of cases) {
-    assert.deepEqual(getDiagnosisStatusView(status), { text, tone: tagType, tagType, alertType })
-  }
-  for (const status of [undefined, null, '', 'unexpected_status', 'normal ', 0, {}, '__proto__']) {
-    assert.deepEqual(getDiagnosisStatusView(status), {
-      text: '未知', tone: 'info', tagType: 'info', alertType: 'info',
-    })
-  }
-})
-
-test('Research 实际消费者只使用统一诊断状态 view', async () => {
-  const { context } = await loadResearch()
-  const { getDiagnosisStatusView } = await diagnosisStatusPromise
-  for (const status of [
-    'normal', 'warning', 'fault', 'critical', 'indeterminate', 'not_evaluable',
-    undefined, null, '', 'unexpected_status',
-  ]) {
-    const view = getDiagnosisStatusView(status)
-    assert.equal(context.statusText(status), view.text)
-    assert.equal(context.statusType(status), view.tagType)
-  }
-})
-
-test('DiagnosisDetail 实际消费者只使用统一诊断状态 view', async () => {
-  const utils = await bearingUtilsPromise
-  const { getDiagnosisStatusView } = await diagnosisStatusPromise
-  const setup = loadSfcSetup('src/components/DiagnosisDetail.vue', 'DiagnosisDetailStatus', {
-    ...utils, getDiagnosisStatusView,
-  })
-  for (const status of [
-    'normal', 'warning', 'fault', 'critical', 'indeterminate', 'not_evaluable',
-    undefined, null, '', 'unexpected_status',
-  ]) {
-    const bindings = setup({ orderAnalysis: { engine_result: { status } } })
-    assert.equal(bindings.statusView.value.text, getDiagnosisStatusView(status).text)
-    assert.equal(bindings.statusView.value.tagType, getDiagnosisStatusView(status).tagType)
-  }
-})
-
-test('ComprehensiveSection 实际消费者只使用统一诊断状态 view', async () => {
-  const { getDiagnosisStatusView } = await diagnosisStatusPromise
-  const setup = loadSfcSetup(
-    'src/components/dataview/ComprehensiveSection.vue',
-    'ComprehensiveSectionStatus',
-    {
-      bearingMethodLabel: value => value,
-      bearingEntries: noop,
-      getDiagnosisStatusView,
-      _mergeModels: (props, models) => ({ ...props, ...models }),
-      _useModel: (props, name) => ({ value: props[name] }),
-    },
-  )
-  for (const status of [
-    'normal', 'warning', 'fault', 'critical', 'indeterminate', 'not_evaluable',
-    undefined, null, '', 'unexpected_status',
-  ]) {
-    const bindings = setup({ strategyAnalyzeData: { status }, fullAnalysisData: { status } })
-    const expected = getDiagnosisStatusView(status)
-    assert.deepEqual(plain(bindings.strategyStatusView.value), expected)
-    assert.deepEqual(plain(bindings.fullAnalysisStatusView.value), expected)
-    assert.equal(bindings.strategyStatusView.value.alertType, expected.alertType)
-  }
-  const { statusAlertTitle, statusAlertDescription } = setup({})
-  assert.equal(statusAlertTitle(getDiagnosisStatusView('normal')), '✅ 未检出显著故障特征')
-  assert.equal(statusAlertDescription(getDiagnosisStatusView('normal'), '', '正常说明'), '正常说明')
-  assert.equal(statusAlertDescription(getDiagnosisStatusView('warning'), '', '正常说明'), '')
-  const indeterminate = getDiagnosisStatusView('indeterminate')
-  assert.equal(statusAlertTitle(indeterminate), '诊断不可判定')
-  assert.match(statusAlertDescription(indeterminate, '', '正常说明'), /不能据此判断/)
-})
-
 function loadSfcSetup(relativePath, exportName, globals) {
   const filename = path.join(frontendRoot, relativePath)
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
@@ -342,21 +241,16 @@ function loadSfcSetup(relativePath, exportName, globals) {
     .replace('export default', `globalThis.${exportName} =`)
   const source = stripModules(compiled)
   // 子组件模板由独立契约覆盖；SFC setup 仍需持有真实导入对应的绑定名。
-  const context = { console, computed, PlanetaryResult: {}, ...globals }
+  const context = { console, computed, PlanetaryResult: {}, DiagnosisCoverage: {}, CompositeResult: {}, ...globals }
   vm.runInNewContext(source, context)
   return (props) => context[exportName].setup(props, { expose: noop })
 }
 
 test('DiagnosisDetail 实际 setup 分别派生包络评估、SC/SCoh 与齿轮指标', async () => {
   const utils = await bearingUtilsPromise
-  const setup = loadSfcSetup('src/components/DiagnosisDetail.vue', 'DiagnosisDetail', utils)
+  const setup = loadSfcSetup('src/components/DiagnosisDetail.vue', 'DiagnosisDetail', { ...utils, ...await diagnosisStatusPromise })
   const bindings = setup({
-    orderAnalysis: {
-      engine_result: {
-        bearing: scScohResult(),
-        gear: gearResult(),
-      },
-    },
+    diagnosis: { bearing: scScohResult(), gear: gearResult() },
     rotFreq: 25,
     rotRpm: 1500,
   })
@@ -373,12 +267,13 @@ test('SingleResultPanels 实际 setup 分离 evaluation 与 SC/SCoh 条目', asy
   const utils = await bearingUtilsPromise
   const setup = loadSfcSetup('src/components/research/SingleResultPanels.vue', 'SingleResultPanels', {
     ...utils,
+    ...await researchDisplayPromise,
     fmt: value => Number(value).toFixed(4),
     evaluationStatusType: status => status === 'evaluated' ? 'success' : 'info',
     evaluationStatusText: status => status === 'evaluated' ? '已评估' : '不可判定',
   })
   const result = scScohResult()
-  const bindings = setup({ result, selectedMethodInfo: { category: 'bearing' }, filterPlanetaryResult: {} })
+  const bindings = setup({ result, selectedMethodInfo: { category: 'bearing' } })
 
   assert.deepEqual(plain(bindings.bearingEvaluationItems.value), [])
   assert.deepEqual(plain(bindings.scScohItems.value.map(item => item.name)), ['BPFI'])

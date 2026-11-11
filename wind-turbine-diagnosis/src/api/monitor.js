@@ -20,6 +20,7 @@ export const getRealtimeVibrationData = async (deviceId = 'WTG-001', preferSpeci
     const fftAmp = item.fft_amp || []
 
     return {
+      ...item,
       id: item.channel || idx + 1,
       name: item.channel_name || defaultChannelNames[idx] || `通道${idx + 1}`,
       channel_name: item.channel_name || defaultChannelNames[idx] || `通道${idx + 1}`,

@@ -16,7 +16,7 @@
         <div class="card-content">
           <el-icon :size="32" color="#52C41A"><CircleCheck /></el-icon>
           <div class="card-info">
-            <div class="label">正常运行</div>
+            <div class="label">诊断正常</div>
             <div class="value" style="color: #52C41A">{{ normal }}</div>
           </div>
         </div>
@@ -55,6 +55,11 @@
         </div>
       </el-card>
     </el-col>
+    <el-col :xs="12" :sm="8" :md="8" :lg="4">
+      <el-card class="summary-card"><div class="card-info">
+        <div class="label">诊断未知 / 不可评估</div><div class="value">{{ unknown }}</div>
+      </div></el-card>
+    </el-col>
   </el-row>
 </template>
 
@@ -65,6 +70,7 @@ defineProps({
   warning: { type: Number, default: 0 },
   fault: { type: Number, default: 0 },
   offline: { type: Number, default: 0 },
+  unknown: { type: Number, default: 0 },
 })
 </script>
 
