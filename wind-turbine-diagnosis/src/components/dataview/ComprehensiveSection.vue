@@ -172,7 +172,7 @@
                   >
                     <span v-if="entry.info.significant || entry.info.critical" style="color: #F5222D; font-weight: 600;">
                       检出 ({{ entry.info.detected_hz ?? entry.info.theory_hz }}Hz,
-                      {{ entry.source === 'sc_scoh' ? `SCoh=${entry.info.scoh_peak}, SNR=${entry.info.scoh_snr}` : `SNR=${entry.info.snr}` }})
+                      {{ entry.source === 'sc_scoh' ? `SCoh=${entry.info.scoh_peak}, 相干峰背景比=${entry.info.coherence_background_ratio}` : `SNR=${entry.info.snr}` }})
                     </span>
                     <span v-else-if="entry.info.evaluable === false || entry.info.significant == null" style="color: #999;">
                       不可评估（{{ entry.info.reason || '输入或频率覆盖不足' }}）

@@ -54,7 +54,7 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
             "denoise": list(dict.fromkeys(denoise_methods + ["wavelet", "vmd", "wavelet_vmd", "wavelet_lms", "emd", "ceemdan", "savgol", "wavelet_packet", "eemd"])),
             "bearing": [
                 BearingMethod.ENVELOPE,
-                BearingMethod.KURTOGRAM,
+                BearingMethod.FILTER_BANK_SK,
                 BearingMethod.CPW,
                 BearingMethod.TEAGER,
                 BearingMethod.SPECTRAL_KURTOSIS,
@@ -75,7 +75,7 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
             "denoise": denoise_methods,
             "bearing": [
                 BearingMethod.ENVELOPE,
-                BearingMethod.KURTOGRAM,
+                BearingMethod.FILTER_BANK_SK,
                 BearingMethod.CPW,
                 BearingMethod.TEAGER,
                 BearingMethod.SPECTRAL_KURTOSIS,
@@ -90,7 +90,7 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
         "denoise": denoise_methods[:1],
         "bearing": [
             BearingMethod.ENVELOPE,
-            BearingMethod.KURTOGRAM,
+            BearingMethod.FILTER_BANK_SK,
             BearingMethod.CPW,
             BearingMethod.TEAGER,
         ],
@@ -99,6 +99,16 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
 
 
 def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
+    if not _has_diagnosis_evidence((result,), time_features):
+        return {"confidence": 0.0, "abnormal": False, "evaluable": False,
+                "reason": result.get("reason") or result.get("fallback_reason") or "not_evaluable", "hits": []}
+    if result.get("evaluation_kind") == "sc_scoh":
+        # SC/SCoh 显著性已联合检查复相关与相干的离目标背景，不套用包络 SNR。
+        hits = [name for name, item in result["evaluation"]["indicators"].items()
+                if item.get("evaluable") and item.get("significant")]
+        return {"confidence": 0.85 if len(hits) >= 2 else 0.65 if hits else 0.0,
+                "abnormal": bool(hits), "evaluable": True, "param_hits": len(hits),
+                "stat_hits": 0, "hits": hits, "metric_kind": "sc_scoh"}
     indicators = result.get("evaluation", {}).get("indicators", {}) or {}
     param_hits = 0
     stat_hits = 0
@@ -343,19 +353,20 @@ def _fault_label(best_bearing: Dict, best_gear: Dict, bearing_score: float, gear
         return f"gear_{gear_subtype}"
 
     indicators = best_bearing.get("evaluation", {}).get("indicators", {}) if best_bearing else {}
+    strength_key = "coherence_background_ratio" if best_bearing.get("evaluation_kind") == "sc_scoh" else "snr"
     param_hits = [
-        (name, float(item["snr"]))
+        (name, float(item[strength_key]))
         for name, item in indicators.items()
         if (
             isinstance(item, dict)
             and item.get("significant")
             and item.get("status") != "not_evaluable"
-            and item.get("snr") is not None
+            and item.get(strength_key) is not None
             and not name.endswith("_stat")
         )
     ]
     if param_hits:
-        # 按 SNR 降序取主导故障类型，避免多故障拼接导致子串误判
+        # 只在本方法的专属强度指标内排序，不把循环相干背景比冒充包络 SNR。
         param_hits.sort(key=lambda x: x[1], reverse=True)
         dominant = param_hits[0][0].lower()
         return f"bearing_{dominant}"
@@ -373,6 +384,7 @@ def run_research_ensemble(
     rot_freq: Optional[float] = None,
     profile: str = "runtime",
     max_seconds: float = 5.0,
+    bearing_options: Optional[Dict] = None,
 ) -> Dict[str, Any]:
     arr = np.array(signal, dtype=np.float64)
     if max_seconds and max_seconds > 0:
@@ -396,7 +408,7 @@ def run_research_ensemble(
     gear_results: Dict[str, Dict] = {}
     bearing_votes: Dict[str, Dict] = {}
     gear_votes: Dict[str, Dict] = {}
-    rot_freq_by_denoise: Dict[str, float] = {}
+    rot_freq_by_denoise: Dict[str, Optional[float]] = {}
 
     best_time_features: Optional[Dict] = None
     best_bearing_key = None
@@ -408,6 +420,7 @@ def run_research_ensemble(
             denoise_method=_safe_denoise(denoise),
             bearing_params=bearing_params,
             gear_teeth=gear_teeth,
+            bearing_options=bearing_options,
         )
         proc = base.preprocess(arr)
         time_features = compute_time_features(proc)
@@ -418,12 +431,18 @@ def run_research_ensemble(
             proc, fs, rot_freq=rot_freq, estimation_signal=arr,
         )
         rf, _ = base._order_speed_summary(order_analysis)
-        rot_freq_by_denoise[denoise] = round(float(rf or 0.0), 3)
+        rot_freq_by_denoise[denoise] = round(float(rf), 3) if rf is not None else None
 
         for method in config["bearing"]:
             if skip_bearing:
                 continue
-            key = f"{denoise}:{method.value}"
+            effective_method = (
+                BearingMethod.MED if method == BearingMethod.MCKD
+                and not (bearing_options or {}).get("target_fault") else method
+            )
+            key = f"{denoise}:{effective_method.value}"
+            if key in bearing_results:
+                continue  # 无目标 MCKD 实际走 MED，每个去噪组合只计算和投票一次。
             try:
                 engine = DiagnosisEngine(
                     strategy=DiagnosisStrategy.STANDARD,
@@ -431,6 +450,7 @@ def run_research_ensemble(
                     denoise_method=_safe_denoise(denoise),
                     bearing_params=bearing_params,
                     gear_teeth=gear_teeth,
+                    bearing_options=bearing_options,
                 )
                 result = engine.analyze_bearing(
                     proc, fs, rf, preprocess=False, _cached_order=order_analysis,
@@ -439,11 +459,13 @@ def run_research_ensemble(
                 bearing_results[key] = result
                 vote = _bearing_confidence(result, time_features)
                 bearing_votes[key] = vote
-                if best_bearing_key is None or vote["confidence"] > bearing_votes[best_bearing_key]["confidence"]:
+                if vote.get("evaluable", True) and (
+                    best_bearing_key is None or vote["confidence"] > bearing_votes[best_bearing_key]["confidence"]
+                ):
                     best_bearing_key = key
             except Exception as exc:
                 bearing_results[key] = {"error": str(exc), "denoise": denoise, "method": method.value}
-                bearing_votes[key] = {"confidence": 0.0, "abnormal": False, "error": str(exc)}
+                bearing_votes[key] = {"confidence": 0.0, "abnormal": False, "evaluable": False, "error": str(exc)}
 
         for method in config["gear"]:
             if skip_gear:
@@ -480,7 +502,7 @@ def run_research_ensemble(
     time_features = best_time_features or compute_time_features(arr)
     time_score = _time_confidence(time_features)
 
-    bearing_conf = [v.get("confidence", 0.0) for v in bearing_votes.values()]
+    bearing_conf = [v.get("confidence", 0.0) for v in bearing_votes.values() if v.get("evaluable", True)]
     gear_conf = [v.get("confidence", 0.0) for v in gear_votes.values()]
     bearing_vote_fraction = (
         sum(1 for v in bearing_conf if v >= 0.55) / len(bearing_conf)
@@ -511,6 +533,8 @@ def run_research_ensemble(
         # 合并轴承和齿轮的投票为统一 method_results
         all_method_votes = {}
         for key, vote in bearing_votes.items():
+            if not vote.get("evaluable", True):
+                continue
             all_method_votes[key] = {
                 "confidence": vote.get("confidence", 0.0),
                 "abnormal": vote.get("abnormal", False),

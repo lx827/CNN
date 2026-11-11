@@ -4,6 +4,15 @@
  */
 import request from '../utils/request'
 
+const advancedBearingParams = config => ({
+  ...(config.rot_freq_hz > 0 ? { rot_freq_hz: config.rot_freq_hz } : {}),
+  ...(config.target_fault ? { target_fault: config.target_fault } : {}),
+  ...(config.target_frequency_hz > 0 ? { target_frequency_hz: config.target_frequency_hz } : {}),
+  ...(config.period_samples > 0 ? { period_samples: config.period_samples } : {}),
+  ...(config.comb_frequencies_hz?.length ? { comb_frequencies_hz: config.comb_frequencies_hz } : {}),
+  ...(config.comb_is_stable === true ? { comb_is_stable: true } : {}),
+})
+
 export const getChannelDiagnosis = async (deviceId, batchIndex, channel, denoiseMethod = null) => {
   const params = {}
   if (denoiseMethod) params.denoise_method = denoiseMethod
@@ -34,12 +43,13 @@ export const getChannelFullAnalysis = async (deviceId, batchIndex, channel, conf
 
 export const getChannelResearchAnalysis = async (deviceId, batchIndex, channel, config = {}) => {
   const params = {
+    ...advancedBearingParams(config),
     detrend: config.detrend ?? false,
     profile: config.profile || 'balanced',
     denoise: config.denoise || 'none',
     max_seconds: config.max_seconds || 5,
   }
-  const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/research-analysis`, { params })
+  const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/research-analysis`, { params, paramsSerializer: { indexes: null } })
   return res
 }
 
@@ -50,11 +60,12 @@ export const getMethodInfo = async () => {
 
 export const getChannelMethodAnalysis = async (deviceId, batchIndex, channel, method, config = {}) => {
   const params = {
+    ...advancedBearingParams(config),
     method,
     denoise: config.denoise || 'none',
     detrend: config.detrend ?? false,
   }
-  const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/method-analysis`, { params })
+  const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/method-analysis`, { params, paramsSerializer: { indexes: null } })
   return res
 }
 

@@ -92,18 +92,6 @@ def _generate_recommendation(
     if bearing_faults:
         parts.append(f"检测到轴承故障特征（{'/'.join(bearing_faults)}），建议检查润滑状态并安排精密诊断。")
 
-    # SC/SCoh 方法结果
-    bearing_method = bearing_result.get("method", "")
-    if bearing_method != "sc_scoh":
-        scoh_max = 0.0
-        try:
-            for k, v in bearing_ind.items():
-                if isinstance(v, dict) and "scoh_peak" in v:
-                    scoh_max = max(scoh_max, float(v.get("scoh_peak", 0)))
-        except (TypeError, ValueError):
-            pass
-        # SCoh 结果来自非 SC_SCOH 方法的 fault_indicators 中不包含 scoh_peak
-
     # 齿轮建议（有参数模式）
     gear_ind = gear_result.get("fault_indicators", {})
     if gear_ind.get("ser", {}).get("critical"):
@@ -196,7 +184,7 @@ def _summarize_all_methods(bearing_results: Dict, gear_results: Dict) -> Dict[st
     # 轴承各方法检出情况
     method_name_map = {
         "envelope": "标准包络分析",
-        "kurtogram": "Fast Kurtogram",
+        "filter_bank_sk": "二叉滤波器组复谱峭度",
         "cpw": "CPW预白化+包络",
         "med": "MED最小熵解卷积+包络",
         "mckd": "MCKD最大相关峭度解卷积+包络",
@@ -213,9 +201,11 @@ def _summarize_all_methods(bearing_results: Dict, gear_results: Dict) -> Dict[st
             if isinstance(info, dict) and info.get("significant"):
                 detected.append({
                     "fault_type": fname,
-                    "theory_hz": info.get("theory_hz"),
-                    "detected_hz": info.get("detected_hz"),
+                    "theory_hz": info.get("theory_hz", info.get("theory_cyclic_frequency_hz")),
+                    "detected_hz": info.get("detected_hz", info.get("detected_cyclic_frequency_hz")),
                     "snr": info.get("snr"),
+                    "metric_kind": info.get("metric_kind", "envelope_snr"),
+                    "coherence_background_ratio": info.get("coherence_background_ratio"),
                 })
         if detected:
             summary["bearing_detections"].append({

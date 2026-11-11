@@ -350,7 +350,8 @@ def analyze_envelope_spectrum(
         spectrum=spectrum,
         features=EnvelopeFeatures(
             spectral_power_proxy=power_proxy,
-            spectral_power_unit=f"{spectrum.amplitude_unit}^2",
+            spectral_power_unit=(f"({spectrum.amplitude_unit})^2" if "^" in spectrum.amplitude_unit
+                                 else f"{spectrum.amplitude_unit}^2"),
             frequency_resolution_hz=resolution,
             statistics=statistics,
             fault_frequency_hz=fault_frequencies,

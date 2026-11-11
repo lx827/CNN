@@ -27,14 +27,7 @@ from app.algorithms.order import (
     SpeedTrajectory,
     resample_constant_speed,
 )
-from .bearing import (
-    fast_kurtogram,
-    cpw_envelope_analysis,
-    med_envelope_analysis,
-    teager_envelope_analysis,
-    spectral_kurtosis_envelope_analysis,
-)
-from .bearing_cyclostationary import bearing_sc_scoh_analysis
+from .advanced_bearing import ADVANCED_BEARING_METHODS, analyze_advanced_bearing
 from .gear import _evaluate_gear_faults
 from .gear.planetary_demod import (
     analyze_planetary_sidebands_order,
@@ -95,7 +88,7 @@ class DiagnosisStrategy(str, Enum):
 class BearingMethod(str, Enum):
     """轴承诊断方法"""
     ENVELOPE = "envelope"           # 标准包络分析
-    KURTOGRAM = "kurtogram"         # Fast Kurtogram 自适应包络
+    FILTER_BANK_SK = "filter_bank_sk"  # 二叉 IIR 滤波器组复谱峭度包络
     CPW = "cpw"                     # CPW 预白化 + 包络
     MED = "med"                     # MED 增强 + 包络
     TEAGER = "teager"               # Teager 能量算子 + 包络
@@ -145,6 +138,7 @@ class DiagnosisEngine:
         denoise_method = DenoiseMethod.NONE,
         bearing_params: Optional[Dict] = None,
         gear_teeth: Optional[Dict] = None,
+        bearing_options: Optional[Dict] = None,
     ):
         # 兼容字符串传入
         self.strategy = strategy if isinstance(strategy, DiagnosisStrategy) else DiagnosisStrategy(strategy)
@@ -153,6 +147,7 @@ class DiagnosisEngine:
         self.denoise_method = denoise_method if isinstance(denoise_method, DenoiseMethod) else DenoiseMethod(denoise_method)
         self.bearing_params = bearing_params or {}
         self.gear_teeth = gear_teeth or {}
+        self.bearing_options = dict(bearing_options or {})
 
     def preprocess(self, signal: np.ndarray) -> np.ndarray:
         """去直流 + 线性去趋势 + 可选去噪（所有诊断路径统一入口）"""
@@ -261,6 +256,8 @@ class DiagnosisEngine:
         返回结构化 spectrum、band、features 和 evaluation，不再返回旧包络数组字段。
         """
         arr = self.preprocess(signal) if preprocess else np.array(signal, dtype=np.float64)
+        if rot_freq is not None and (not np.isfinite(rot_freq) or rot_freq <= 0):
+            raise ValueError("已知转频必须是有限正数；未知转频请传 None")
 
         # 轴承包络与物理故障频率评估尚未消费连续相位；即使调用方已把轨迹摘要成
         # 标量 rot_freq，也必须以结构化缓存为准拒绝快速变速，不能绕过此前提。
@@ -271,7 +268,7 @@ class DiagnosisEngine:
         ):
             raise ValueError("快速变速轴承物理频率评估尚未迁移连续相位接口，请先使用 /order")
 
-        rot_std = 0.0
+        rot_std = self._order_speed_summary(_cached_order)[1] if _cached_order is not None else 0.0
         if rot_freq is None:
             # 转速估计使用未做故障增强的线性去趋势信号；阶次/诊断仍可使用显式去噪结果。
             if _cached_order is None:
@@ -289,6 +286,13 @@ class DiagnosisEngine:
             arr = linear_detrend(arr)
 
         geometry = bearing_geometry_from_config(self.bearing_params)
+        if self.bearing_method.value in ADVANCED_BEARING_METHODS:
+            result = analyze_advanced_bearing(
+                self.bearing_method.value, arr, fs, geometry, rot_freq, rot_std,
+                options=self.bearing_options, max_freq=max_freq,
+            )
+            result.update(strategy=self.strategy.value, rot_freq_hz=rot_freq)
+            return result
         if self.bearing_method == BearingMethod.ENVELOPE:
             pipeline = BearingEnvelopePipeline(geometry=geometry)
             diagnosis = pipeline.run(
@@ -302,49 +306,8 @@ class DiagnosisEngine:
             evaluation = diagnosis.evaluation
             metadata = {}
         else:
-            # 其他方法仍保留各自的选带/增强流程，但共用同一指标和评估实现。
-            if self.bearing_method == BearingMethod.KURTOGRAM:
-                result = fast_kurtogram(arr, fs)
-            elif self.bearing_method == BearingMethod.CPW:
-                comb_freqs = []
-                if self.gear_teeth:
-                    z_in = (self.gear_teeth.get("input") or 0) if self.gear_teeth else 0
-                    planet_count = (self.gear_teeth.get("planet_count") or self.gear_teeth.get("n_planets") or 0) if self.gear_teeth else 0
-                    z_sun = (self.gear_teeth.get("sun") or 0) if self.gear_teeth else 0
-                    z_ring = (self.gear_teeth.get("ring") or 0) if self.gear_teeth else 0
-                    if z_in > 0 and rot_freq is not None and rot_freq > 0:
-                        if planet_count >= 3 and z_sun > 0 and z_ring > 0:
-                            comb_freqs.append(rot_freq * z_ring * z_sun / (z_sun + z_ring))
-                        else:
-                            comb_freqs.append(rot_freq * z_in)
-                if rot_freq is not None and rot_freq > 0:
-                    comb_freqs.append(rot_freq)
-                result = cpw_envelope_analysis(arr, fs, comb_frequencies=comb_freqs)
-            elif self.bearing_method == BearingMethod.MED:
-                result = med_envelope_analysis(arr, fs)
-            elif self.bearing_method == BearingMethod.TEAGER:
-                if rot_freq and rot_freq > 0:
-                    angle_domain, _ = resample_constant_speed(
-                        arr, fs, ScalarSpeed(float(rot_freq), "caller_supplied"),
-                        samples_per_revolution=256,
-                    )
-                    result = teager_envelope_analysis(
-                        angle_domain.samples - angle_domain.samples.mean(), 256 * rot_freq,
-                    )
-                else:
-                    result = teager_envelope_analysis(arr, fs)
-            elif self.bearing_method == BearingMethod.SPECTRAL_KURTOSIS:
-                result = spectral_kurtosis_envelope_analysis(arr, fs)
-            elif self.bearing_method == BearingMethod.SC_SCOH:
-                result = bearing_sc_scoh_analysis(
-                    arr, fs, bearing_params=self.bearing_params, rot_freq=rot_freq
-                )
-            elif self.bearing_method == BearingMethod.MCKD:
-                from .mckd import mckd_envelope_analysis
-                result = mckd_envelope_analysis(
-                    arr, fs, bearing_params=self.bearing_params, rot_freq=rot_freq
-                )
-            elif self.bearing_method == BearingMethod.WP:
+            # 模态分解入口由独立 #74 切片迁移。
+            if self.bearing_method == BearingMethod.WP:
                 from .wavelet_bearing import wavelet_packet_bearing_analysis
                 result = wavelet_packet_bearing_analysis(arr, fs)
             elif self.bearing_method == BearingMethod.DWT:
@@ -387,7 +350,7 @@ class DiagnosisEngine:
                 )
                 evaluation = evaluate_envelope(analysis)
             metadata = {
-                ("sc_scoh_indicators" if key == "fault_indicators" else key): value
+                key: value
                 for key, value in result.items()
                 if key not in {"method", "representation", "envelope_freq", "envelope_amp"}
             }
@@ -884,6 +847,7 @@ class DiagnosisEngine:
             rot_freq=rot_freq,
             profile=profile,
             max_seconds=max_seconds,
+            bearing_options=self.bearing_options,
         )
 
     def analyze_all_methods(
@@ -925,6 +889,8 @@ class DiagnosisEngine:
         bearing_results = {}
         if not skip_bearing:
             for method in BearingMethod:
+                if method == BearingMethod.MCKD and not self.bearing_options.get("target_fault"):
+                    continue  # 无目标时本次运行的 MED 已覆盖，不能再挂 MCKD 标签。
                 self.bearing_method = method
                 try:
                     bearing_results[method.value] = self.analyze_bearing(

@@ -67,7 +67,7 @@ for d in EXP_DIRS.values():
 # 注：SC_SCOH 计算量极大，默认跳过
 BEARING_METHODS = [
     ("标准包络",       "envelope"),
-    ("Kurtogram",      "kurtogram"),
+    ("Kurtogram",      "filter_bank_sk"),
     ("CPW预白化",      "cpw"),
     ("MED增强",        "med"),
     ("MCKD",           "mckd"),

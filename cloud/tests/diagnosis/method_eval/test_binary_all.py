@@ -71,7 +71,7 @@ METHODS_ACTIVE = [
 ]
 # 全量模式：取消注释下面一行
 # METHODS_ACTIVE = [(n, v) for n, v in [
-#     ("标准包络", "envelope"), ("Kurtogram", "kurtogram"),
+#     ("标准包络", "envelope"), ("Kurtogram", "filter_bank_sk"),
 #     ("CPW预白化", "cpw"), ("MED增强", "med"), ("MCKD", "mckd"),
 #     ("Teager", "teager"), ("谱峭度重加权", "spectral_kurtosis"),
 #     ("DWT", "dwt"), ("EMD", "emd_envelope"), ("CEEMDAN", "ceemdan_envelope"),

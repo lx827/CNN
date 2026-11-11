@@ -94,7 +94,7 @@ DS_DOMINANT_MAP = {
 # 单方法诊断使用的轴承方法列表
 SINGLE_BEARING_METHODS = [
     BearingMethod.ENVELOPE,
-    BearingMethod.KURTOGRAM,
+    BearingMethod.FILTER_BANK_SK,
     BearingMethod.CPW,
     BearingMethod.MED,
     BearingMethod.TEAGER,
