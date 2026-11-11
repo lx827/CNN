@@ -11,15 +11,15 @@
 """
 import sys
 import os
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 import numpy as np
 from app.services.diagnosis.features import _compute_bearing_fault_freqs
-from app.services.diagnosis.rule_based import (
-    _extract_spectrum_features,
-    _extract_order_features,
-)
+from app.algorithms.order import ScalarSpeed
+from app.algorithms.pipelines.gear.fixed_axis import FixedAxisGearPipeline
+from app.services.diagnosis.rule_based import _rule_based_analyze
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod
 
 
@@ -41,31 +41,34 @@ def test_bearing_fault_freqs_with_all_none():
     print("  [PASS] bearing_params 全 None 返回空 dict")
 
 
-def test_extract_spectrum_features_with_none_gear_teeth():
-    """_extract_spectrum_features: gear_teeth 含 None 值不应崩溃"""
-    xf = np.linspace(0, 1000, 1000)
-    yf = np.random.rand(1000)
-    gear_teeth = {"input": None, "output": None}
-    features = _extract_spectrum_features(
-        xf, yf, rot_freq=25.0, gear_teeth=gear_teeth, bearing_params=None
+def test_fixed_axis_pipeline_without_geometry_has_no_mesh_evidence():
+    """没有几何参数时，保留通用统计，但 SER 明确不可评估而不是 0。"""
+    time = np.arange(8192) / 8192
+    signal = np.sin(2 * np.pi * 25.0 * time)
+    diagnosis = FixedAxisGearPipeline(geometry=None).run(
+        signal, 8192, speed=ScalarSpeed(25.0, "test_truth"),
     )
-    assert isinstance(features, dict)
-    # 齿轮特征不应生成
-    assert "mesh_freq_hz" not in features
-    print("  [PASS] spectrum_features gear_teeth=None 未崩溃")
+    assert diagnosis.analysis.mesh_order is None
+    ser = diagnosis.analysis.sideband_analysis.ser
+    assert ser.status == "not_evaluable" and ser.value is None
+    assert ser.reason == "missing_fixed_axis_geometry"
+    indicator = diagnosis.evaluation.indicators["ser"]
+    assert indicator["evaluable"] is False
+    assert indicator["warning"] is None and indicator["critical"] is None
+    print("  [PASS] 定轴 Pipeline 缺少几何参数时不伪造啮合/SER 证据")
 
 
-def test_extract_order_features_with_none_gear_teeth():
-    """_extract_order_features: gear_teeth 含 None 值不应崩溃"""
-    orders = np.linspace(0, 50, 500)
-    spectrum = np.random.rand(500)
-    gear_teeth = {"input": None, "output": None}
-    features = _extract_order_features(
-        orders, spectrum, rot_freq=25.0, gear_teeth=gear_teeth, bearing_params=None
-    )
-    assert isinstance(features, dict)
-    assert "mesh_order" not in features
-    print("  [PASS] order_features gear_teeth=None 未崩溃")
+def test_rule_fallback_with_none_teeth_is_indeterminate():
+    """已配置却缺失的齿数不能在规则回退中变成健康诊断。"""
+    time = np.arange(8192) / 8192
+    signal = np.sin(2 * np.pi * 25.0 * time)
+    device = SimpleNamespace(gear_teeth={"input": None, "output": None}, bearing_params=None)
+    result = _rule_based_analyze({"ch1": signal}, sample_rate=8192, device=device)
+    assert result["status"] == "indeterminate"
+    assert result["health_score"] is None
+    assert result["fault_probabilities"] == {}
+    assert result["order_analysis"]["reason"] == "invalid_fixed_axis_geometry"
+    print("  [PASS] 规则回退 gear_teeth=None 保留不可判定")
 
 
 def test_diagnosis_engine_bearing_with_none_params():
@@ -114,8 +117,8 @@ def run_all_tests():
 
     test_bearing_fault_freqs_with_none_alpha()
     test_bearing_fault_freqs_with_all_none()
-    test_extract_spectrum_features_with_none_gear_teeth()
-    test_extract_order_features_with_none_gear_teeth()
+    test_fixed_axis_pipeline_without_geometry_has_no_mesh_evidence()
+    test_rule_fallback_with_none_teeth_is_indeterminate()
     test_diagnosis_engine_bearing_with_none_params()
     test_diagnosis_engine_gear_with_none_teeth()
     test_diagnosis_engine_advanced_gear_with_none_teeth()
