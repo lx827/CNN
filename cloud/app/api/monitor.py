@@ -18,6 +18,8 @@ from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
 from app.algorithms.transforms import compute_spectrum
 from app.api.data_view import _get_channel_name
+from app.services.diagnosis.domain import DiagnosisKey
+from app.services.diagnosis_store import cache_query, summary_state
 
 router = APIRouter(prefix="/api/monitor", tags=["实时监测"])
 
@@ -105,13 +107,18 @@ def get_latest_monitor(
                 "timestamp": record.created_at.isoformat() if record.created_at else None,
                 "fft_freq": fft_freq,
                 "fft_amp": fft_amp,
+                **summary_state(cache_query(db, DiagnosisKey(device_id, record.batch_index, channel_num, "none")).with_entities(
+                    Diagnosis.evaluation_status, Diagnosis.diagnosis_conclusion, Diagnosis.health_score, Diagnosis.coverage,
+                ).first()),
+                "is_offline": device is not None and device.is_online == 0,
             })
 
     # 查询最新诊断结果，获取估计转频
     # 这里只需要转频，避免加载完整诊断 JSON。
     latest_diag = db.query(Diagnosis.rot_freq).filter(
-        Diagnosis.device_id == device_id
-    ).order_by(Diagnosis.analyzed_at.desc()).first()
+        Diagnosis.device_id == device_id, Diagnosis.batch_index == latest_batch,
+        Diagnosis.channel == 0, Diagnosis.denoise_method == "none",
+    ).order_by(Diagnosis.analyzed_at.desc(), Diagnosis.id.desc()).first()
 
     sensor_params = {}
     if latest_diag and latest_diag.rot_freq:
