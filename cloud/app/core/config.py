@@ -81,18 +81,12 @@ DIAGNOSIS_WEIGHTS = {
     "bpfo": float(os.getenv("DW_BPFO", "1.2")),
     "bpfi": float(os.getenv("DW_BPFI", "1.2")),
     "bsf": float(os.getenv("DW_BSF", "1.0")),
-    "sideband": float(os.getenv("DW_SIDEBAND", "0.9")),
     # 齿轮指标权重
     "fm4": float(os.getenv("DW_FM4", "0.8")),
     "ser": float(os.getenv("DW_SER", "0.9")),
     "car": float(os.getenv("DW_CAR", "0.7")),
     "gear_sideband": float(os.getenv("DW_GEAR_SIDEBAND", "0.8")),
     # 特殊指标权重
-    "na4_nb4": float(os.getenv("DW_NA4_NB4", "1.0")),
     "scoh_evidence": float(os.getenv("DW_SCOH_EVIDENCE", "0.8")),
-    "wp_entropy": float(os.getenv("DW_WP_ENTROPY", "0.7")),
     "ds_conflict": float(os.getenv("DW_DS_CONFLICT", "8")),
-    # 融合权重
-    "worst_channel": float(os.getenv("DW_WORST_CHANNEL", "0.35")),
-    "avg_channel": float(os.getenv("DW_AVG_CHANNEL", "0.65")),
 }

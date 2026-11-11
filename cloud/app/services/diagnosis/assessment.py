@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from math import isfinite
 from typing import Mapping
+from app.core.config import DIAGNOSIS_WEIGHTS
 
 from .domain import (
     Deduction, Diagnosis, DiagnosisConclusion, Evaluation, EvaluationStatus, Evidence,
@@ -46,7 +47,7 @@ DEDUCTION_POLICIES = {
 @dataclass(frozen=True)
 class AssessmentPolicy:
     """业务工程策略，不声称具有跨设备、跨数据集的诊断效果保证。"""
-    weights: Mapping[str, float] = field(default_factory=dict)
+    weights: Mapping[str, float] = field(default_factory=lambda: dict(DIAGNOSIS_WEIGHTS))
     conflict_limit: float = .8
 
     def __post_init__(self) -> None:
