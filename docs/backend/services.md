@@ -4,12 +4,12 @@
 
 ## 多通道后台分析
 
-`services/analyzer.py` 是后台综合分析入口。它读取同一批次的通道数据和设备机械参数，协调特征、诊断 Engine、通道共识与规则路径，返回供 worker 持久化的结构化结果。
+`services/analyzer.py` 按真实通道排序，为每条记录建立 DiagnosisKey、选择本通道机械参数并运行 runtime 对象诊断；局部 Evidence 保留，批次按 `chN/object` 区分对象，再由 assessment 形成整体 Domain。没有旧通道共识或规则备用成功链。
 
 - 不自行决定 HTTP 响应格式，不绕过 worker 的事务与严格 JSON 边界。
 - 通道结果与批次结果保持明确层级；通道缺失或算法不可判定不能合成为伪健康设备。
 - 多通道共识是辅助证据，不会把多数通道的未知变成确定正常。
-- 去噪失败通道保留 `health_score=None/status=indeterminate` 与原因，不用规则回退伪装本次成功；其他合法通道按当前编排处理。runtime profile 实际运行设备配置的去噪方法。
+- 去噪/计算失败通道保留局部 unknown/null、评估状态和原因，合法通道不被清空；总体 coverage 可为 partial。runtime 实际运行指定去噪，不把 none 冒充配置方法。
 
 ## 诊断摘要读模型
 
@@ -17,15 +17,19 @@
 
 - 设备摘要每设备一条，批次摘要每设备批次一条。
 - 按 `analyzed_at`、`id` 降序选择；有效时间晚于空时间，同时间以较大 id 打破并列。
-- 保持“所有诊断类型中取最新”的现行规则，不静默改成仅批次级诊断。
+- 只选 channel=0、denoise=none 的批次摘要；手工通道分析不再覆盖设备/批次摘要。
 - 只读取摘要列，不加载 `order_analysis`、`engine_result`、`full_analysis` 等大 JSON。
 - 使用调用方 Session，不提交或关闭会话；空设备集合返回空结果。
 
 ## 告警服务
 
-`services/alarms/` 将通道特征、设备状态和诊断结果转换为告警记录。告警生成与诊断评分是不同责任：算法指标先按自身不可判定语义输出，告警层再应用阈值、去重和持久化规则。缺少证据不应生成“正常”诊断告警。
+`services/alarms/__init__.py` 只消费校验通过的完整 Domain，不另读原始指标/健康阈值重判诊断。在线设备的有效 warning 生成 warning，fault 生成 critical；设备摘要和每个通道分别处理，沿用一小时同设备/通道、类别、级别、未处理去重。
 
-健康分为 `None` 的失败通道跳过健康阈值告警，不做 `float(None)` 或默认 100 分；行星未校准指标也不能直接触发健康告警。未知不代表已经通过健康评估，其他告警类型继续服从自身证据。
+normal、unknown、未评估、离线和研究限定结果均不生成机械诊断告警。告警建议直接来自 assessment，描述保留覆盖范围；旧逐指标 channel/device/diagnosis 告警实现已删除。设备阈值配置仍是配置接口，不等同于第二套诊断解释。
+
+## 唯一事务编排
+
+`diagnosis_workflow.process_batch` 被手工重新分析和后台 worker 共同调用，计算/通道与批次缓存/原始标记/告警同事务，commit 后再推 WS。故障 rollback 与缓存历史身份详见 [持久化](persistence.md)。只读谱和研究计算不借该事务写生产结果。
 
 ## 离线监测
 

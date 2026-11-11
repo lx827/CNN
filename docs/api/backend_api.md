@@ -23,6 +23,23 @@
 
 ## 通用约定
 
+### 诊断 Domain（#77/#84，破坏性响应更新）
+
+生产诊断与研究结果统一使用顶层 `contract_version=1`；局部对象同样保留自己的完整 Domain，不额外嵌套 diagnosis。诊断领域不输出旧 `status`，也不从分数反推结论。
+
+| 字段 | 契约 |
+|------|------|
+| evaluation_status | evaluated / indeterminate / not_evaluable |
+| diagnosis_conclusion | normal / warning / fault / unknown |
+| health_score | 0–100 有限浮点或 null；不可评/不可判定必须 unknown/null |
+| coverage | complete / partial / none；partial 只覆盖有效对象，局部未知不隐藏 |
+| evaluations | 对象评估，含每个方法 Evidence、依赖组、融合支持、冲突与原因 |
+| deductions | code、来源证据、原量、权重和实际扣分；不再由前端重算 |
+| fault_propositions | 可共存的规范物理命题，不是旧主导标签或概率字典 |
+| recommendation/reason | 单源建议、前提/冲突/旧缓存等原因 |
+
+对象计算态保留在 `analysis`，指标保留在对应 evaluation；计算完成不等于诊断 normal。`DiagnosisResponse/DiagnosisSnapshot` 约束状态与分数不变量。旧 votes/best/fault_likelihood/fault_probabilities/status 不作为新诊断读取协议；依赖融合和覆盖语义见 [业务契约](../backend/assessment.md)。
+
 ### 基础 URL
 
 - 开发环境：`http://localhost:8000`
@@ -113,7 +130,7 @@ GET /api/dashboard/
 | 字段路径 | 类型 | 说明 |
 |---------|------|------|
 | `data.devices` | `List[Device]` | 全部设备列表及状态 |
-| `data.diagnosis` | `List[Diagnosis]` | 最新诊断结果摘要 |
+| `data.diagnosis` | `dict` | device_id → 最新 channel=0/none 批次诊断摘要 |
 | `data.alarm_stats` | `dict` | 告警统计（按级别分组） |
 
 **内部常量**：
@@ -121,7 +138,7 @@ GET /api/dashboard/
 - `VALID_FAULT_TYPES`：17 种有效故障类型白名单
 - `BEARING_FAULT_MAP`：轴承频率指示器 → 中文故障名映射
 
-> **2026-05-19 修复**：`health_score` 不再因设备离线而返回 `None`。离线仅影响 `status` 标签（显示 "offline"），已存储的诊断数据正常返回。
+设备项和诊断摘要使用两维状态、health_score 与 coverage；离线通过 is_offline/is_online 单独表达，不替代诊断结论。没有有效评估时分数为 null，不能沿用旧“离线才空分”规则。摘要只取批次 channel=0、denoise=none，手动通道计算不覆盖它。
 
 **调用方**：`views/Dashboard.vue` → `api/dashboard.js::getDeviceInfo()`
 
@@ -141,7 +158,7 @@ GET /api/devices/
 |---------|------|------|
 | `data` | `List[Device]` | 设备完整字段列表 |
 
-**返回字段包含**：`id`, `device_id`, `name`, `location`, `channel_count`, `channel_names`, `sample_rate`, `window_seconds`, `health_score`, `status`, `runtime_hours`, `upload_interval`, `task_poll_interval`, `alarm_thresholds`, `gear_teeth`, `bearing_params`, `compression_enabled`, `downsample_ratio`, `is_online`, `last_seen_at`
+**返回字段包含**：设备身份/配置、`evaluation_status/diagnosis_conclusion/health_score/coverage` 与独立 `is_online/last_seen_at`；不返回旧诊断 status。runtime、采样、通道、阈值与机械参数字段仍按设备配置读取。
 
 **调用方**：`views/Settings.vue`, `views/Alarm.vue`, `views/Monitor.vue` → `api/devices.js::getDevices()`
 
@@ -508,10 +525,10 @@ GET /api/data/{device_id}/{batch_index}/{channel}/envelope?max_freq={max_freq}&d
 - `spectrum`：`{frequency_hz, amplitude, amplitude_unit, scaling}`；标准包络为 `single_sided_amplitude`。
 - `band`：`{low_hz, high_hz, center_hz, width_hz}`，为实际滤波频带。
 - `features`：`spectral_power_proxy`（幅值平方和）、`spectral_power_unit`、故障频率及谐波能量比。
-- `evaluation`：`{status, indicators}`；单项 `not_evaluable` 带 `reason`、`significant=None`，不表示未检出或健康。
+- `evaluation`：业务对象评估使用 `{evaluation_status, indicators}`；算法指标内部的 not_evaluable 带 reason 和未知显著性，不表示未检出或健康。顶层完整 Domain 另有结论、分数与覆盖。
 - 另含 `method/strategy/rot_freq_hz/envelope_low_pass_hz` 和方法元数据；不再返回 `envelope_freq`、`envelope_amp` 或顶层 `fault_indicators`。
 
-当前高级方法标识为 `filter_bank_sk/spectral_kurtosis/cpw/med/mckd/teager/sc_scoh`，不接受旧 `kurtogram` 冒名。`analysis_status/reason` 说明计算/前提状态，与 `evaluation.status` 分开；无稳定梳状先验的 CPW 不生成谱，MCKD 缺显式目标实际执行 MED 并保存 `requested_method/fallback_reason`。SC/SCoh 使用 `evaluation_kind=sc_scoh` 和规范 `evaluation.indicators`，二维 `cyclic_spectrum` 含循环/载波 Hz、SC 幅值（输入单位平方/Hz）、无量纲 SCoh 和循环分辨率；可以没有普通 `spectrum`。TEO 最终包络谱单位为 `input_signal^2`。
+当前高级方法标识为 `filter_bank_sk/spectral_kurtosis/cpw/med/mckd/teager/sc_scoh`，不接受旧 kurtogram 冒名。计算态保留在 analysis，与业务 evaluation_status 分开；无稳定 CPW 先验不生成谱，MCKD 缺目标实际 MED 并保存请求/回退。SC/SCoh 以 evaluation_kind 区分专属指标，cyclic_spectrum 的循环/载波 Hz、SC 输入平方/Hz 与无量纲 SCoh 保留；TEO 包络谱为输入平方单位。
 
 #### 6.3.2 阶次跟踪
 
@@ -556,7 +573,7 @@ GET /api/data/{device_id}/{batch_index}/{channel}/cepstrum?max_quefrency={max_qu
 #### 6.4.1 齿轮诊断分析
 
 ```
-GET /api/data/{device_id}/{batch_index}/{channel}/gear?detrend={detrend}&method={method}&denoise={denoise}
+GET /api/data/{device_id}/{batch_index}/{channel}/gear?method={method}&denoise={denoise}&rot_freq_hz={rot_freq_hz}
 ```
 
 | 参数 | 类型 | 默认值 | 说明 |
@@ -565,6 +582,8 @@ GET /api/data/{device_id}/{batch_index}/{channel}/gear?detrend={detrend}&method=
 | `denoise` | `str` | `"none"` | 去噪方法 |
 
 **注意**：该端点为 `async def`
+
+gear/analyze/full-analysis 生产请求统一精确 DiagnosisKey，成功后追加通道缓存，不更新 channel=0 摘要。去噪失败结构化 422，其他业务参数 ValueError 为字符串 detail 的 422；前端错误工具需同时处理这些形状。
 
 **齿轮对象契约（2026-11-11）**：定轴结果的规范指标来自 `evaluation.indicators`，`fault_indicators` 是兼容视图；TSA 采样率是点/转，缺历史的 NA4/NB4 保留未知。设备或当前通道含行星专属配置时进入同一行星入口，不因缺某项几何退回定轴。行星配置须显式含 `gear_type=planetary`、`sun/ring/planet/planet_count`、`reference_axis=sun|carrier`、`fixed_member=ring`；不按其他通道或 input 齿数推断。
 
@@ -587,22 +606,20 @@ GET /api/data/{device_id}/{batch_index}/{channel}/gear?detrend={detrend}&method=
 #### 6.4.2 综合故障诊断分析（统一入口）
 
 ```
-GET /api/data/{device_id}/{batch_index}/{channel}/analyze?detrend={detrend}&strategy={strategy}&bearing_method={bearing_method}&gear_method={gear_method}&denoise={denoise}
+GET /api/data/{device_id}/{batch_index}/{channel}/analyze?denoise={denoise}&rot_freq_hz={rot_freq_hz}
 ```
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `strategy` | `str` | `"standard"` | 诊断策略 |
-| `bearing_method` | `str` | `"envelope"` | 轴承分析方法 |
-| `gear_method` | `str` | `"standard"` | 齿轮分析方法 |
 | `denoise` | `str` | `"none"` | 去噪方法 |
+| `rot_freq_hz` | `float/null` | `null` | 可选恒定参考轴转频，正数 Hz；未给时自动工况分析 |
 
 **注意**：该端点为 `async def`
 
 #### 6.4.3 全算法对比分析
 
 ```
-GET /api/data/{device_id}/{batch_index}/{channel}/full-analysis?detrend={detrend}&denoise={denoise}
+GET /api/data/{device_id}/{batch_index}/{channel}/full-analysis?denoise={denoise}&rot_freq_hz={rot_freq_hz}
 ```
 
 **注意**：该端点为 `async def`
@@ -648,6 +665,31 @@ GET /api/data/{device_id}/{batch_index}/{channel}/research-analysis?detrend={det
 
 ---
 
+#### 6.5.4 复合流程研究分析
+
+```
+POST /api/data/{device_id}/{batch_index}/{channel}/composite-analysis
+```
+
+请求体含 `method`、可选正值 `rot_freq_hz`、`options` 对象和可选 `alignment` 对象。method 为 `composite_vmd_amfm/composite_msb/composite_cvs_med_msb/composite_vmd_ica/composite_mswpee`；元数据 category=composite、research_only=true、production_eligible=false。POST 使用原始记录并先执行最多 5 秒业务窗口，不隐式增加去噪/去趋势。
+
+`options` 控制算法族资源与数学参数；模态、迭代、滤波长度、段长、小波层数/尺度和分量数均有上限，准确约束以源码和 OpenAPI 为准。`alignment` 用于 CVS，包含逐样本 carrier/planet 连续相位 rad、行星方位/编号、传感器方位与窗口、相对自转 Hz、角域点/转及最少独立重组圈。它必须来自实际对齐记录，不能由振动或齿数伪造零位；具体数学责任见 [复合契约](../algorithms/composite/INDEX.md)。
+
+GET `method-analysis` 同样接受这五个 method，但没有 options/alignment 载荷；额外 `denoise!=none` 或 `detrend=true` 返回 400 防止隐式附加阶段。CVS 无相位时返回明确缺前提结果，不回退原信号。
+
+| 响应/错误 | 语义 |
+|-----------|------|
+| HTTP 200 | 研究计算或合法前提不足结果；后者 analysis.status=indeterminate 并有 reason |
+| HTTP 400 | 畸形几何、非法数学/资源参数、无效 alignment 或不允许的隐式前处理 |
+| HTTP 404 | 指定采样数据不存在 |
+| HTTP 422 | 请求体 method/类型/非正转频等校验失败 |
+
+响应 data 顶层为完整 Domain、内部 `method`、请求 `analysis_method` 与记录身份，另含 `analysis {status,stages,data,metrics,reason}`、研究原始 `evaluation`、research_only/production_eligible 与共同 evidence_family。Domain 固定 not_evaluable/unknown/null、coverage=none，不再携带空的旧故障概率/生产指标字段。计算状态和阶段状态不等于诊断结论，未标定指标 warning/critical 为 null。
+
+大型原始模态/源数组留在算法内；HTTP 返回中心 Hz、有效区间、选择、ICA 秩/收敛、CVS 圈/覆盖、MED 迭代历史与摘要曲线。AM/FM 图最多 800 点显示抽样；MSB 返回有限网格四阶幅值/相干。空值保留 null，抽点不改变完整分析。
+
+复合结果不进入 runtime 聚合、Device/Diagnosis 生产缓存或告警；研究 all/ensemble 也不写生产诊断缓存。生产重新诊断须用相应生产入口。
+
 ### 6.6 诊断结果操作
 
 #### 6.6.1 查询通道诊断结果
@@ -658,45 +700,11 @@ GET /api/data/{device_id}/{batch_index}/{channel}/diagnosis?denoise_method={deno
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `denoise_method` | `Optional[str]` | `None` | 指定去噪方法查询缓存 |
+| `denoise_method` | `str` | `none` | 精确去噪缓存身份，不跨方法回退 |
 
-**查询优先级**：
+只读精确四元键最新行，按 analyzed_at/id 排序；没有精确行返回 404。符合键但旧 engine_result 缺版本或不合法时，HTTP 200 返回规范 not_evaluable/unknown/null、coverage=none 与 reason=stored_contract_requires_reanalysis。不回退 full_analysis、order_analysis、其他通道/去噪或批次 JSON。
 
-1. 精确匹配 `device + batch + channel + denoise_method` → 返回 `engine_result` 或 `full_analysis`
-2. 若以上两列为空 → 回退到 `order_analysis.channels[ch{N}]` 提取该通道完整诊断结果
-3. 该通道最新结果（不限去噪方法）→ 同上两步
-4. 批次级诊断记录 → 优先 `order_analysis.channels` → `order_analysis.engine_result` → 传统批次数据（兼容旧数据）
-
-**响应体 `data` 字段说明**（通道级 `full_analysis` 完整结构）：
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `health_score` | `int/null` | 有证据时健康度 0-100；不可判定允许空值 |
-| `status` | `str` | normal/warning/critical；缺可评估证据可为 indeterminate，不能映射正常 |
-| `fault_likelihood` | `float` | 故障似然度 |
-| `fault_label` | `str` | 故障标签 |
-| `rot_freq_hz` | `float` | 估计转频 |
-| `time_features` | `dict` | 时域特征（rms/kurtosis/crest_factor/cusum/ewma 等） |
-| `bearing` | `dict` | 最佳轴承诊断结果（含 fault_indicators） |
-| `gear` | `dict` | 最佳齿轮诊断结果（含 fault_indicators） |
-| `ensemble` | `dict` | **集成诊断结果**（见下表） |
-| `recommendation` | `str` | 维护建议 |
-
-**`ensemble` 子字段**：
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `profile` | `str` | runtime/balanced/exhaustive |
-| `bearing_votes` | `dict` | 各轴承算法投票详情（method→{confidence, param_hits, stat_hits, hits}） |
-| `gear_votes` | `dict` | 各齿轮算法投票详情（method→{confidence, critical_hits, warning_hits, hits}） |
-| `bearing_vote_fraction` | `float` | 轴承投票一致率 |
-| `gear_vote_fraction` | `float` | 齿轮投票一致率 |
-| `bearing_confidence` | `float` | 轴承综合置信度 |
-| `gear_confidence` | `float` | 齿轮综合置信度 |
-| `time_confidence` | `float` | 时域冲击置信度 |
-| `best_bearing` | `str` | 最佳轴承算法键名 |
-| `best_gear` | `str` | 最佳齿轮算法键名 |
-| `ds_fusion` | `dict` | D-S 证据融合结果（fused_bpa/belief/plausibility/conflict/dominant_fault） |
+响应使用 DiagnosisResponse。集成结果可附 bearing/gear 代表对象、全部 bearing_results/gear_results、time_features、rot_freq_hz 和 ensemble；每个局部对象仍有完整 Domain。ensemble 只描述 profile、dependency_policy 与 object_fusion，不再返回旧票数/最佳方法/概率协议。局部原始谱和指标保留自己的分析/评估语义。
 
 #### 6.6.2 更新批次诊断结果
 
@@ -708,8 +716,9 @@ PUT /api/data/{device_id}/{batch_index}/diagnosis
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `order_analysis` | `Optional[dict]` | 阶次分析结果 |
-| `rot_freq` | `Optional[float]` | 估计转频 |
+| `rot_freq` | `float` | JSON 对象中的有限正数，只更新准确 channel=0/none 批次转频 |
+
+不再接收 order_analysis。无批次摘要返回 404，非法转频 422；不创建诊断、不写通道缓存、不修改状态/分数或 analyzed_at。
 
 #### 6.6.3 单批次重新诊断
 
@@ -717,7 +726,7 @@ PUT /api/data/{device_id}/{batch_index}/diagnosis
 POST /api/data/{device_id}/{batch_index}/reanalyze
 ```
 
-**说明**：覆盖更新数据库中的 Diagnosis 记录，要求设备在线
+**说明**：与后台 worker 复用 process_batch，在线程池/单批信号量内重新计算，追加所有通道与 channel=0 摘要、标记原始数据、生成规范告警并一次 commit。设备不存在 404，业务输入不合法 422；不以在线状态作为计算前提。响应是完整批次 Domain，含 channels；失败 rollback，成功 commit 后才推 WS。
 
 #### 6.6.4 全部批次重新诊断
 
@@ -726,6 +735,14 @@ POST /api/data/{device_id}/reanalyze-all
 ```
 
 **说明**：逐批次串行执行以避免 OOM，返回 `{total, updated, errors, results}`
+
+#### 6.6.5 已有证据直接重评
+
+```
+POST /api/data/{device_id}/{batch_index}/{channel}/reevaluate?denoise_method=none
+```
+
+读取精确键规范 Evidence，不运行算法或重读信号；追加新诊断历史行并返回 DiagnosisResponse，不更新设备批次摘要。无精确缓存 404，旧 JSON 需要重新分析时 409；合法规范缓存按统一策略重评，保持局部未知与 coverage。
 
 ---
 
@@ -847,8 +864,8 @@ WS /ws/monitor?token={token}
 | 事件类型 | 来源 | 说明 |
 |---------|------|------|
 | `sensor_update` | `ingest.py` | 新传感器数据到达 |
-| `diagnosis_update` | `lifespan.py` | 诊断完成更新 |
-| `alarm_new` | `alarms/__init__.py` | 新告警生成 |
+| `diagnosis_update` | `diagnosis_workflow.py` | commit 后发布完整批次 Domain 与 channels |
+| `new_alarm` | `diagnosis_workflow.py` | 同事务告警提交后通知 id/title/level/channel |
 | `device_online` | `offline_monitor.py` | 设备上线 |
 | `device_offline` | `offline_monitor.py` | 设备离线 |
 

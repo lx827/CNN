@@ -57,7 +57,7 @@ for path in markdown:
         if not target.exists():
             errors.append(f"{rel}: 失效链接: {raw}")
 
-for family in ("bearing", "order", "gear", "decomposition", "numeric"):
+for family in ("bearing", "order", "gear", "decomposition", "numeric", "composite"):
     path = root / "docs" / "algorithms" / family / "INDEX.md"
     if not path.exists():
         errors.append(f"缺少算法族入口: docs/algorithms/{family}/INDEX.md")
@@ -76,7 +76,7 @@ for name in ("AGENTS.md", "docs/INDEX.md", "docs/algorithms/INDEX.md", "docs/bac
 
 print(f"Markdown files: {len(markdown)}")
 print(f"Relative links: {checked_links}")
-print(f"Algorithm structures: 5 entries x {len(required_headings)} required sections")
+print(f"Algorithm structures: 6 entries x {len(required_headings)} required sections")
 if errors:
     print(f"FAILED: {len(errors)} issue(s)")
     for error in errors:

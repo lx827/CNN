@@ -141,15 +141,22 @@ DataView 计算、CSV 与研究分析去噪失败会得到 HTTP 422 `detail {sta
 
 诊断缓存读取、综合/全量/研究级分析、方法级分析、诊断更新与重新诊断。
 
+**#77/#84 外部响应更新**：所有诊断消费完整 `contract_version=1` Domain：evaluation_status、diagnosis_conclusion、health_score、coverage、evaluations、deductions、fault_propositions、recommendation/reason。局部对象同样保留顶层 Domain；不再读取 status、fault_likelihood、votes/best 或旧概率。展示统一交 `getDiagnosisView`，partial 必须显示未覆盖对象，null 不能 Number() 变成 0。
+
+缓存 GET 严格传当前通道与 `{denoise_method}`，不存在精确键不借其他方法/批次。旧缓存返回 unknown/null 与需重新分析原因；直接重评 POST reevaluate 只消费已有规范 Evidence，旧载荷返回 409。手工 reanalyze 返回完整批次 Domain+channels，前端选择实际通道。PUT 批次 diagnosis 只发送 `{rot_freq}`，不发送 order_analysis。
+
+生产 analyze/full-analysis 参数收敛为 denoise 与可选 rot_freq_hz，gear 另含 standard/advanced。旧策略/bearing_method/gear_method 不再作为该生产入口选择协议；研究方法选择仍在 method-analysis。`runCompositeResearch` 使用专用 POST body method/rot_freq_hz/options/alignment，研究运行不写生产缓存。
+
 | 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
 |--------|------|--------|----------|----------|
-| `getChannelDiagnosis(deviceId, batchIndex, channel, denoise_method)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`denoise_method?: string` | 诊断缓存结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/diagnosis?denoise_method=...` | `DataView.vue`, `DiagnosisDetail.vue` |
-| `getChannelAnalyze(deviceId, batchIndex, channel, strategy, bearing_method, gear_method, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`strategy?: string`<br>`bearing_method?: string`<br>`gear_method?: string`<br>`denoise?: string` | 综合分析结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/analyze?...` | `DataView.vue` |
+| `getChannelDiagnosis` | 记录身份与 config.denoise_method | 精确缓存 Domain | `GET /api/data/{id}/{batch}/{ch}/diagnosis` | DataView/详情 |
+| `getChannelAnalyze` | 记录身份与 config.denoise/rot_freq_hz | runtime Domain | `GET /api/data/{id}/{batch}/{ch}/analyze` | DataView |
 | `getChannelFullAnalysis(deviceId, batchIndex, channel, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`denoise?: string` | 全算法分析结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/full-analysis?denoise=...` | `DataView.vue` |
-| `getChannelResearchAnalysis(deviceId, batchIndex, channel, profile, denoise, max_seconds)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`profile?: string`<br>`denoise?: string`<br>`max_seconds?: number` | 研究级分析结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/research-analysis?...` | `ResearchDiagnosis.vue` |
+| `getChannelResearchAnalysis` | 记录身份与研究 config | 顶层 Domain/对象方法结果，不保存生产缓存 | `GET /api/data/{id}/{batch}/{ch}/research-analysis` | Research |
 | `getMethodInfo()` | 无 | 可用分析方法列表 | `GET /api/data/method-info` | `ResearchDiagnosis.vue` |
-| `getChannelMethodAnalysis(deviceId, batchIndex, channel, method, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`method: string`<br>`denoise?: string` | 单方法分析结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/method-analysis?method=...&denoise=...` | `ResearchDiagnosis.vue` |
-| `updateBatchDiagnosis(deviceId, batchIndex, order_analysis, rot_freq)` | `deviceId: string`<br>`batchIndex: number`<br>`order_analysis: object`<br>`rot_freq?: number` | 更新结果 | `PUT /api/data/{deviceId}/{batchIndex}/diagnosis` | `DataView.vue` |
+| `getChannelMethodAnalysis` | 记录身份、method 和 config | 单方法完整 Domain/原始表示 | `GET /api/data/{id}/{batch}/{ch}/method-analysis` | Research |
+| `runCompositeResearch` | 记录身份和 body | 研究限定 Domain 与阶段/原始指标 | `POST /api/data/{id}/{batch}/{ch}/composite-analysis` | Research |
+| `updateBatchDiagnosis` | 设备/批次与 `{rot_freq}` | 仅转频更新 | `PUT /api/data/{id}/{batch}/diagnosis` | DataView |
 | `reanalyzeBatch(deviceId, batchIndex)` | `deviceId: string`<br>`batchIndex: number` | 重新诊断结果 | `POST /api/data/{deviceId}/{batchIndex}/reanalyze` | `DataView.vue` |
 | `reanalyzeAllDevice(deviceId)` | `deviceId: string` | 批量重新诊断汇总 | `POST /api/data/{deviceId}/reanalyze-all` | `DataView.vue` |
 
@@ -701,7 +708,7 @@ import {
 | `rotFreq` | `number \| null` | `null` | 估计转频（Hz） |
 | `rotRpm` | `number \| null` | `null` | 估计转速（RPM） |
 
-**数据读取约定**：轴承统一读取 `bearing.evaluation.indicators`，由 `evaluation_kind` 区分包络与 SC/SCoh；频率读取相应的 `theory_hz/detected_hz` 或循环频率字段。真实 `snr`、一般 score 与 `coherence_background_ratio` 各自保留。定轴 `fault_indicators` 是规范评估兼容视图；行星交专属组件显示机械模型、原始指标与基线状态。
+**数据读取约定**：完整结果先由 getDiagnosisView/DiagnosisCoverage 显示诊断及覆盖；轴承原始指标来自 evaluation.indicators，以 evaluation_kind 区分 SC。频率、snr、score 和 coherence_background_ratio 保持原单位。齿轮/行星指标只作原始明细，不在组件重新判诊断或健康分。
 
 **Emits**
 
@@ -803,14 +810,14 @@ import {
 
 | 文件 | 服务视图 | 返回内容(概要) | 模块级导出 |
 |------|---------|---------------|-----------|
-| `useDashboard.js` | `Dashboard.vue` | `devices/selectedDevice` 等状态、`loadData()`(推送+轮询共享串行刷新)、`selectDevice()`、图表 ref(`gaugeChart/pieChart`)、状态映射工具 | `getStatusType/getStatusText/getHealthColor`(Dashboard 专属口径:critical 计故障、85/60 分档,勿与 utils/status.js 混用) |
+| `useDashboard.js` | `Dashboard.vue` | 串行刷新、选择与图表，读取完整 Domain；不补默认分或部件偏移 | 诊断展示统一使用 getDiagnosisView |
 | `useMonitor.js` | `Monitor.vue` | `channels/params/sensors/collectDevices`、`requestCollect()`、`startPolling(taskId)`、`refreshLatestData()`(推送合并串行)、`onMonitorDeviceChange()`、图表 ref | — |
 | `useSettings.js` | `Settings.vue` | `form/channelNames/thresholds/thresholdEnabled`、三级加载、`onSaveEdgeConfig/onSaveMechanical/onSaveThresholds/onSyncMechanical`、`intervalValue/intervalUnit` 与 `computedSeconds` | `unitOptions`(采集间隔单位)、`thresholdItems`(阈值指标定义) |
-| `useResearchDiagnosis.js` | `ResearchDiagnosis.vue` | 三级选择、运行与结果派生；轴承按 `evaluation_kind` 读规范评估，行星交专属组件，未校准不当作正常票 | `runModeOptions`、`fmt/percent/statusType/statusText`、`evaluationStatusType/evaluationStatusText` |
+| `useResearchDiagnosis.js` | `ResearchDiagnosis.vue` | 三模式运行/组合 POST/顶层局部结果；规范 Evidence 汇总，研究不投票 | runModeOptions；原始格式在 researchDisplay，诊断统一 getDiagnosisView |
 | `useDataView.js` | `DataView.vue` | 设备批次表格数据与选择、时域自动加载、FFT/STFT/结构化包络谱/阶次/倒谱/统计/齿轮 `computeX/clearX`、轴承与齿轮特征频率标注、综合/策略诊断、删除/重新诊断/导出、路由联动 | `bearingMethodLabel`、`statsGroups`、`statsDisplay`(预留) |
 
 **配套子组件目录**：`src/components/dashboard/`(SummaryCards、DeviceCardList)、`src/components/monitor/`(SensorStatusCard、RunParamsCard、CollectionProgress)、`src/components/settings/`(EdgeConfigCard、MechanicalParamsCard、ThresholdsCard、ConfigNotesCard)、`src/components/research/`(ResearchToolbar、SingleResultPanels、EnsembleResultPanels)、`src/components/dataview/`(StatsSection、FftEnvelopeSection、GearSection、ComprehensiveSection、OrderSection、CepstrumSection、StftSection、DiagnosisDetailSection)。
 
-**轴承包络适配点**：`FftEnvelopeSection` 展示实际频带、评估状态与 SC/SCoh 命中数；`ComprehensiveSection` 的轴承汇总和详细指标读取新契约；`SingleResultPanels` 分组展示实际频带、`features`、包络评估指标和 SC/SCoh 专属指标；`EnsembleResultPanels` 与 `ResearchDiagnosis.vue` 对 `indeterminate` 显示“不可判定”，对 `not_evaluable` 显示“不可评估”，均不视为正常。投票强度读取 `strongest_score`。这些组件通过 `utils/bearingDiagnosis.js` 统一派生轴承条目，不改变齿轮/行星箱面板的数据路径。
+**适配点**：FftEnvelopeSection/Comprehensive/详情/研究单方法以 bearingDiagnosis 只读派生指标；诊断文字、颜色、分数及 coverage 统一由 getDiagnosisView/DiagnosisCoverage 展示。EnsembleResultPanels 读 Evidence、依赖融合与扣分，不再读 strongest_score 投票协议。纯 bearingMethodLabel 位于工具模块，展示组件不因取方法名间接加载浏览器请求客户端。
 
 **回归测试约定**：`tests/dashboard_lifecycle.test.cjs`、`tests/monitor_lifecycle.test.cjs` 在同一 VM 上下文装载 composable 源码并以空壳桩替换子组件标识符,断言语义与拆分前一致;修改 composable 时两套测试必须保持全绿。`tests/bearing_contract.test.cjs` 直接验证结构化包络图 option、轴承/SC/齿轮标注与汇总，并通过 SFC 编译后的 `setup` 验证 `DiagnosisDetail` 和 `SingleResultPanels` 的派生数据；修改轴承响应读取逻辑后必须运行该测试及完整 `node --test tests/*.test.cjs`。
