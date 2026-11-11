@@ -11,9 +11,6 @@
 """
 from .engine import DiagnosisEngine, DiagnosisStrategy, BearingMethod, GearMethod, DenoiseMethod
 from .gear.msb import msb_residual_sideband_analysis
-from .preprocessing import (
-    wavelet_denoise,
-)
 from .features import (
     compute_time_features,
     compute_fft_features,
@@ -36,7 +33,6 @@ __all__ = [
     "DiagnosisEngine",
     "DiagnosisStrategy",
     "msb_residual_sideband_analysis",
-    "wavelet_denoise",
     "compute_time_features",
     "compute_fft_features",
     "run_research_ensemble",

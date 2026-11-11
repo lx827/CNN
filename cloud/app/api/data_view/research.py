@@ -5,6 +5,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 from .bearing_options import get_bearing_options
+from app.services.diagnosis.signal_utils import DenoisingError
+from .errors import denoising_http_error, configured_denoise
 from app.services.diagnosis.gear.planetary import analyze_planetary_gear, gear_config_for_channel
 
 from app.database import get_db
@@ -204,17 +206,7 @@ async def get_channel_method_analysis(
             bearing_params = _extract_device_param(device.bearing_params or {}, ("n", "d", "D", "alpha"))
             gear_teeth = gear_config_for_channel(device.gear_teeth, channel)
 
-        denoise_map = {
-            "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,
-            "vmd": DenoiseMethod.VMD, "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
-            "wavelet_lms": DenoiseMethod.WAVELET_LMS,
-            "emd": DenoiseMethod.EMD, "ceemdan": DenoiseMethod.CEEMDAN,
-            "savgol": DenoiseMethod.SAVGOL,
-            "wavelet_packet": DenoiseMethod.WAVELET_PACKET,
-            "ceemdan_wp": DenoiseMethod.CEEMDAN_WP,
-            "eemd": DenoiseMethod.EEMD,
-        }
-        denoise_method = denoise_map.get(denoise, DenoiseMethod.NONE)
+        denoise_method = configured_denoise(denoise)
 
         # ── 运行全部方法 ──
         if method == "all":
@@ -334,6 +326,8 @@ async def get_channel_method_analysis(
 
     except HTTPException:
         raise
+    except DenoisingError as exc:
+        raise denoising_http_error(exc) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"分析参数无效: {exc}") from exc
     except Exception as exc:
@@ -371,19 +365,6 @@ async def get_channel_research_analysis(
     device = db.query(Device).filter(Device.device_id == device_id).first()
 
     profile = profile if profile in {"runtime", "balanced", "exhaustive"} else "balanced"
-    denoise_map = {
-        "none": DenoiseMethod.NONE,
-        "wavelet": DenoiseMethod.WAVELET,
-        "vmd": DenoiseMethod.VMD,
-        "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
-        "wavelet_lms": DenoiseMethod.WAVELET_LMS,
-        "emd": DenoiseMethod.EMD,
-        "ceemdan": DenoiseMethod.CEEMDAN,
-        "savgol": DenoiseMethod.SAVGOL,
-        "wavelet_packet": DenoiseMethod.WAVELET_PACKET,
-        "ceemdan_wp": DenoiseMethod.CEEMDAN_WP,
-        "eemd": DenoiseMethod.EEMD,
-    }
 
     try:
         sample_rate = record.sample_rate or 25600
@@ -396,7 +377,7 @@ async def get_channel_research_analysis(
             gear_teeth = gear_config_for_channel(device.gear_teeth, channel)
 
         engine = DiagnosisEngine(
-            denoise_method=denoise_map.get(denoise, DenoiseMethod.NONE),
+            denoise_method=configured_denoise(denoise),
             bearing_options=bearing_options,
             bearing_params=bearing_params,
             gear_teeth=gear_teeth,
@@ -441,6 +422,8 @@ async def get_channel_research_analysis(
         # 写入数据库缓存，供 DataView 读取
         _save_research_diagnosis(db, device_id, batch_index, channel, denoise, result)
         return {"code": 200, "data": _sanitize_for_json(response_data)}
+    except DenoisingError as exc:
+        raise denoising_http_error(exc) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"分析参数无效: {exc}") from exc
     except Exception as exc:

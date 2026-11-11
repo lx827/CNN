@@ -41,7 +41,7 @@ from app.services.diagnosis.modality_bearing import (
     ceemdan_bearing_analysis,
     vmd_bearing_analysis,
 )
-from app.services.diagnosis.preprocessing import wavelet_denoise
+from app.algorithms.decomposition.wavelet import denoise_wavelet
 from app.services.diagnosis.vmd_denoise import vmd_denoise
 from app.services.diagnosis.emd_denoise import emd_denoise
 from app.services.diagnosis.savgol_denoise import sg_denoise

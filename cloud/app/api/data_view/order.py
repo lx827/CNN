@@ -15,7 +15,8 @@ from app.algorithms.order import (
     SpeedTrajectory,
 )
 from . import router, prepare_signal, _get_channel_name
-from app.services.diagnosis.signal_utils import denoise_signal
+from app.services.diagnosis.signal_utils import denoise_signal, DenoisingError
+from .errors import denoising_http_error
 from datetime import datetime, timezone
 import logging
 import numpy as np
@@ -140,6 +141,8 @@ async def get_channel_order(
                 "spectrum": [round(float(a), 6) for a in spectrum.tolist()],
             }
         }
+    except DenoisingError as e:
+        raise denoising_http_error(e) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
