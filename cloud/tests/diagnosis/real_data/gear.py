@@ -61,23 +61,33 @@ def _hust(entry: dict, path: Path, fs: float) -> LoadedRecord:
     if values.shape != (count, 5) or not np.isfinite(values).all():
         raise ValueError("Expected finite HUST time/speed/X/Y/Z columns")
     # 时间文本仅保留8位小数，允许其量化误差，不把Frequency Limit当fs。
-    if count > 1 and not np.allclose(np.diff(values[:, 0]), 1 / fs, rtol=0, atol=1.1e-8):
+    if count > 1 and not np.allclose(
+        np.diff(values[:, 0]), 1 / fs, rtol=0, atol=1.1e-8
+    ):
         raise ValueError("HUST time steps disagree with declared fs or cross a block")
     metadata = {k: v for k, v in entry.items() if k != "_window"}
     metadata.update(
-        source_format="hust_tab_text", full_sample_count=full_count,
-        source_shape=[full_count, 5], block_count=blocks,
-        continuous_block_sample_count=block_size, block_continuity="unknown",
+        source_format="hust_tab_text",
+        full_sample_count=full_count,
+        source_shape=[full_count, 5],
+        block_count=blocks,
+        continuous_block_sample_count=block_size,
+        block_continuity="unknown",
         loaded_block_index=start // block_size,
-        loaded_start_seconds=start / fs, loaded_sample_count=count,
+        loaded_start_seconds=start / fs,
+        loaded_sample_count=count,
         time_column="block-local seconds; resets at each acquisition block",
         speed_column="uncalibrated electrical signal; never interpreted as Hz",
         sample_rate_evidence="source description 25600 Hz; local time increments agree",
         header=header,
     )
     return LoadedRecord(
-        sample_id=entry["sample_id"], dataset_id=entry["dataset_id"], sample_rate_hz=fs,
-        vibration={name: values[:, i].copy() for i, name in enumerate(("X", "Y", "Z"), 2)},
+        sample_id=entry["sample_id"],
+        dataset_id=entry["dataset_id"],
+        sample_rate_hz=fs,
+        vibration={
+            name: values[:, i].copy() for i, name in enumerate(("X", "Y", "Z"), 2)
+        },
         auxiliary={"time": values[:, 0].copy(), "speed": values[:, 1].copy()},
         metadata=metadata,
     )
@@ -162,7 +172,11 @@ def _wt(entry: dict, path: Path, fs: float) -> LoadedRecord:
             stream.seek(layout[name]["offset"])
             scalars[name] = struct.unpack(endian + "d", stream.read(8))[0]
     shape = layout["Data"]["shape"]
-    if shape[1] != 4 or scalars["DataCount"] != shape[0] or scalars["ChannelCount"] != 4:
+    if (
+        shape[1] != 4
+        or scalars["DataCount"] != shape[0]
+        or scalars["ChannelCount"] != 4
+    ):
         raise ValueError("WT Data shape disagrees with verified four-channel layout")
     if not math.isclose(scalars["SampleRate"], fs, rel_tol=1e-12) or not math.isclose(
         scalars["Interval"], 1 / fs, rel_tol=1e-12
@@ -172,9 +186,16 @@ def _wt(entry: dict, path: Path, fs: float) -> LoadedRecord:
     if start >= shape[0]:
         raise ValueError("window starts beyond record")
     count = min(count, shape[0] - start)
-    mapped = np.memmap(path, mode="r", dtype=endian + "f8", offset=layout["Data"]["offset"], shape=shape, order="F")
+    mapped = np.memmap(
+        path,
+        mode="r",
+        dtype=endian + "f8",
+        offset=layout["Data"]["offset"],
+        shape=shape,
+        order="F",
+    )
     try:
-        values = np.array(mapped[start:start + count, :], dtype=np.float64, copy=True)
+        values = np.array(mapped[start : start + count, :], dtype=np.float64, copy=True)
     finally:
         # 输出不依赖映射，及时释放Windows文件句柄。
         mapped._mmap.close()
@@ -182,17 +203,25 @@ def _wt(entry: dict, path: Path, fs: float) -> LoadedRecord:
         raise ValueError("WT window contains nonfinite samples")
     metadata = {k: v for k, v in entry.items() if k != "_window"}
     metadata.update(
-        source_format="matlab_level5_uncompressed_double", source_shape=list(shape),
-        full_sample_count=shape[0], loaded_start_seconds=start / fs,
-        loaded_sample_count=count, mat_scalars=scalars,
+        source_format="matlab_level5_uncompressed_double",
+        source_shape=list(shape),
+        full_sample_count=shape[0],
+        loaded_start_seconds=start / fs,
+        loaded_sample_count=count,
+        mat_scalars=scalars,
         sample_rate_evidence="local MAT SampleRate and Interval agree with source 48000 Hz",
         encoder_column="uncalibrated electrical signal; pulses per revolution unknown",
         channel_4="unknown purpose and units; retained without interpretation",
     )
     return LoadedRecord(
-        sample_id=entry["sample_id"], dataset_id=entry["dataset_id"], sample_rate_hz=fs,
+        sample_id=entry["sample_id"],
+        dataset_id=entry["dataset_id"],
+        sample_rate_hz=fs,
         vibration={"X": values[:, 0].copy(), "Y": values[:, 1].copy()},
-        auxiliary={"encoder": values[:, 2].copy(), "raw_channel_4": values[:, 3].copy()},
+        auxiliary={
+            "encoder": values[:, 2].copy(),
+            "raw_channel_4": values[:, 3].copy(),
+        },
         metadata=metadata,
     )
 

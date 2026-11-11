@@ -25,26 +25,37 @@ class GearLoaderTests(unittest.TestCase):
 
     def _mat(self, **changes):
         data = np.arange(80, dtype=float).reshape(20, 4)
-        content = {"Data": data, "DataCount": 20., "ChannelCount": 4.,
-                   "SampleRate": 10., "Interval": .1}
+        content = {
+            "Data": data,
+            "DataCount": 20.0,
+            "ChannelCount": 4.0,
+            "SampleRate": 10.0,
+            "Interval": 0.1,
+        }
         content.update(changes)
         savemat(self.root / "record.mat", content, do_compression=False)
-        return {"sample_id": "synthetic", "dataset_id": "wt_planetary",
-                "source_path": "record.mat", "fs_hz": 10}, data
+        return {
+            "sample_id": "synthetic",
+            "dataset_id": "wt_planetary",
+            "source_path": "record.mat",
+            "fs_hz": 10,
+        }, data
 
     def test_mat_window_preserves_encoder_and_unknown_channel(self):
         entry, expected = self._mat()
-        entry["_window"] = {"start_seconds": .5, "duration_seconds": .3}
+        entry["_window"] = {"start_seconds": 0.5, "duration_seconds": 0.3}
         record = load_record(entry, self.root)
         np.testing.assert_array_equal(record.vibration["X"], expected[5:8, 0])
         np.testing.assert_array_equal(record.vibration["Y"], expected[5:8, 1])
         np.testing.assert_array_equal(record.auxiliary["encoder"], expected[5:8, 2])
-        np.testing.assert_array_equal(record.auxiliary["raw_channel_4"], expected[5:8, 3])
+        np.testing.assert_array_equal(
+            record.auxiliary["raw_channel_4"], expected[5:8, 3]
+        )
         self.assertEqual(record.metadata["full_sample_count"], 20)
-        self.assertEqual(record.metadata["loaded_start_seconds"], .5)
+        self.assertEqual(record.metadata["loaded_start_seconds"], 0.5)
 
     def test_mat_rejects_false_sampling_metadata_and_truncation(self):
-        entry, _ = self._mat(SampleRate=12.)
+        entry, _ = self._mat(SampleRate=12.0)
         with self.assertRaisesRegex(ValueError, "SampleRate/Interval"):
             load_record(entry, self.root)
         entry, _ = self._mat()
@@ -54,10 +65,12 @@ class GearLoaderTests(unittest.TestCase):
             load_record(entry, self.root)
 
     def test_mat_rejects_compression_and_wrong_channel_semantics(self):
-        entry, _ = self._mat(ChannelCount=3.)
+        entry, _ = self._mat(ChannelCount=3.0)
         with self.assertRaisesRegex(ValueError, "four-channel"):
             load_record(entry, self.root)
-        savemat(self.root / "record.mat", {"Data": np.zeros((20, 4))}, do_compression=True)
+        savemat(
+            self.root / "record.mat", {"Data": np.zeros((20, 4))}, do_compression=True
+        )
         with self.assertRaisesRegex(ValueError, "uncompressed"):
             load_record(entry, self.root)
 
@@ -67,16 +80,22 @@ class GearLoaderTests(unittest.TestCase):
             stream.write("Number of Blocks\t2\nTotal Data Rows\t8\n")
             stream.write("Time (seconds) and Data Channels\n")
             for index in range(8):
-                stream.write(f"{index % 4 / 10}\t{100+index}\t{index}\t{index+1}\t{index+2}\n")
-        entry = {"sample_id": "synthetic_hust", "dataset_id": "hust_gearbox",
-                 "source_path": "hust.txt", "fs_hz": 10}
+                stream.write(
+                    f"{index % 4 / 10}\t{100 + index}\t{index}\t{index + 1}\t{index + 2}\n"
+                )
+        entry = {
+            "sample_id": "synthetic_hust",
+            "dataset_id": "hust_gearbox",
+            "source_path": "hust.txt",
+            "fs_hz": 10,
+        }
         first = load_record(entry, self.root)
         self.assertEqual(first.vibration["X"].size, 4)
         self.assertEqual(first.metadata["block_continuity"], "unknown")
-        entry["_window"] = {"start_seconds": .6, "duration_seconds": 1}
+        entry["_window"] = {"start_seconds": 0.6, "duration_seconds": 1}
         second = load_record(entry, self.root)
         np.testing.assert_array_equal(second.vibration["X"], [6, 7])
-        np.testing.assert_array_equal(second.auxiliary["time"], [.2, .3])
+        np.testing.assert_array_equal(second.auxiliary["time"], [0.2, 0.3])
         np.testing.assert_array_equal(second.auxiliary["speed"], [106, 107])
 
     def test_window_and_source_path_cannot_escape_limits(self):
@@ -103,31 +122,61 @@ class LocalGearAcceptanceTests(unittest.TestCase):
         for entry in self.entries:
             with self.subTest(sample=entry["sample_id"]):
                 record = load_record(entry, self.root)
-                actual_first = ([record.auxiliary["time"][0], record.auxiliary["speed"][0]]
-                                + [record.vibration[key][0] for key in ("X", "Y", "Z")]
-                                if entry["dataset_id"] == "hust_gearbox" else
-                                [record.vibration["X"][0], record.vibration["Y"][0],
-                                 record.auxiliary["encoder"][0], record.auxiliary["raw_channel_4"][0]])
-                np.testing.assert_allclose(actual_first, entry["verification"]["first_row"], rtol=1e-12, atol=1e-12)
-                self.assertEqual(record.metadata["source_shape"], entry["verification"]["source_shape"])
+                actual_first = (
+                    [record.auxiliary["time"][0], record.auxiliary["speed"][0]]
+                    + [record.vibration[key][0] for key in ("X", "Y", "Z")]
+                    if entry["dataset_id"] == "hust_gearbox"
+                    else [
+                        record.vibration["X"][0],
+                        record.vibration["Y"][0],
+                        record.auxiliary["encoder"][0],
+                        record.auxiliary["raw_channel_4"][0],
+                    ]
+                )
+                np.testing.assert_allclose(
+                    actual_first,
+                    entry["verification"]["first_row"],
+                    rtol=1e-12,
+                    atol=1e-12,
+                )
+                self.assertEqual(
+                    record.metadata["source_shape"],
+                    entry["verification"]["source_shape"],
+                )
                 self.assertEqual(record.sample_rate_hz, entry["fs_hz"])
-                expected_count = 32768 if entry["dataset_id"] == "hust_gearbox" else 240000
+                expected_count = (
+                    32768 if entry["dataset_id"] == "hust_gearbox" else 240000
+                )
                 self.assertEqual(len(record.vibration["X"]), expected_count)
                 if entry["dataset_id"] == "wt_planetary":
-                    variables = {name: shape for name, shape, _ in whosmat(self.root / entry["source_path"])}
-                    self.assertEqual(list(variables["Data"]), entry["verification"]["source_shape"])
-                    self.assertEqual(record.metadata["mat_scalars"], entry["verification"]["mat_scalars"])
+                    variables = {
+                        name: shape
+                        for name, shape, _ in whosmat(self.root / entry["source_path"])
+                    }
+                    self.assertEqual(
+                        list(variables["Data"]), entry["verification"]["source_shape"]
+                    )
+                    self.assertEqual(
+                        record.metadata["mat_scalars"],
+                        entry["verification"]["mat_scalars"],
+                    )
 
     def test_one_real_mat_against_scipy_reference_once(self):
         # 只对健康MAT做一次独立scipy参考读取，顺序释放，不跑整记录算法。
         entry = next(e for e in self.entries if e["sample_id"] == "wt_N1_20")
         record = load_record(entry, self.root)
-        reference = loadmat(self.root / entry["source_path"], variable_names=["Data"])["Data"]
+        reference = loadmat(self.root / entry["source_path"], variable_names=["Data"])[
+            "Data"
+        ]
         self.assertEqual(list(reference.shape), record.metadata["source_shape"])
         for key, column in (("X", 0), ("Y", 1)):
-            np.testing.assert_array_equal(record.vibration[key], reference[:240000, column])
+            np.testing.assert_array_equal(
+                record.vibration[key], reference[:240000, column]
+            )
         for key, column in (("encoder", 2), ("raw_channel_4", 3)):
-            np.testing.assert_array_equal(record.auxiliary[key], reference[:240000, column])
+            np.testing.assert_array_equal(
+                record.auxiliary[key], reference[:240000, column]
+            )
         del reference
 
 
