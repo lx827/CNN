@@ -123,9 +123,11 @@ class FixedAxisGearPipeline:
             spectrum.order_bins[-1] + spectrum.order_resolution * 1e-9 < self.required_max_order(include_tsa)
             and order_analysis.angle_domain is not None
         ):
+            # 非整数转数时目标阶次通常落在相邻 FFT bin 之间；多保留一个真实
+            # 谱点以覆盖请求窗口，而不是放宽 SER 的覆盖判定或虚构谱值。
             spectrum = compute_order_spectrum(
                 order_analysis.angle_domain,
-                self.required_max_order(include_tsa),
+                self.required_max_order(include_tsa) + spectrum.order_resolution,
             )
 
         mesh_order = self.geometry.mesh_order if self.geometry else None

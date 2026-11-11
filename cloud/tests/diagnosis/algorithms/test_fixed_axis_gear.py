@@ -296,6 +296,45 @@ def test_standard_high_teeth_does_not_require_tsa_harmonics():
     assert diagnosis.analysis.spectrum.order_bins[-1] < 64.0
 
 
+def test_standard_non_integer_revolutions_cover_requested_sidebands():
+    fs = 8192.0
+    rot = 16.0
+    t = np.arange(4096) / fs
+    signal = (
+        np.sin(2 * np.pi * 180 * rot * t)
+        + 0.3 * np.sin(2 * np.pi * 174 * rot * t)
+        + 0.2 * np.sin(2 * np.pi * 186 * rot * t)
+    )
+    pipeline = FixedAxisGearPipeline(FixedAxisGearGeometry(180), n_sidebands=6)
+    diagnosis = pipeline.run(signal, fs, speed=ScalarSpeed(rot, "test"), include_tsa=False)
+    spectrum = diagnosis.analysis.spectrum
+    required_order = 186.25
+    assert spectrum.order_bins[-1] >= required_order, (
+        f"最外侧边带要求 {required_order} 阶，实际覆盖 {spectrum.order_bins[-1]} 阶，"
+        f"阶次分辨率 {spectrum.order_resolution}"
+    )
+    assert diagnosis.analysis.sideband_analysis.ser.status == "evaluated"
+
+
+def test_standard_other_non_integer_revolutions_cover_requested_sidebands():
+    fs = 8192.0
+    for sample_count, rot in ((5000, 16.0), (4096, 17.0)):
+        t = np.arange(sample_count) / fs
+        signal = (
+            np.sin(2 * np.pi * 180 * rot * t)
+            + 0.3 * np.sin(2 * np.pi * 174 * rot * t)
+            + 0.2 * np.sin(2 * np.pi * 186 * rot * t)
+        )
+        pipeline = FixedAxisGearPipeline(FixedAxisGearGeometry(180), n_sidebands=6)
+        diagnosis = pipeline.run(signal, fs, speed=ScalarSpeed(rot, "test"), include_tsa=False)
+        spectrum = diagnosis.analysis.spectrum
+        assert spectrum.order_bins[-1] >= 186.25, (
+            f"样本数 {sample_count}、转频 {rot} Hz：实际覆盖 {spectrum.order_bins[-1]} 阶，"
+            f"阶次分辨率 {spectrum.order_resolution}"
+        )
+        assert diagnosis.analysis.sideband_analysis.ser.status == "evaluated"
+
+
 def test_zero_energy_statistics_and_evaluation_are_indeterminate():
     pipeline = FixedAxisGearPipeline(FixedAxisGearGeometry(18))
     diagnosis = pipeline.run(np.zeros(4096), 2048.0, speed=ScalarSpeed(16.0, "test"))
