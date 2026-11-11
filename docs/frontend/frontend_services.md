@@ -177,20 +177,13 @@ view.connect();
 | `calcRms` | `calcRms(arr: number[]) -> number` | 计算数组 RMS 均方根值 |
 | `calcPeak` | `calcPeak(arr: number[]) -> number` | 计算数组峰值（最大绝对值） |
 
-### 2.7 状态处理工具 (`status.js`)
+### 2.7 唯一诊断展示 (`diagnosisStatus.js`)
 
-**文件路径**：`src/utils/status.js`
+`getDiagnosisView` 接收完整 Domain 对象，返回 label/text/tone/icon/tagType/alertType/scoreText/color，供文字、标签、提示和 ECharts 共用。只有明确 evaluated + normal/warning/fault 且健康分为有限数字 0–100 才显示正常/预警/故障；不从分数分档推导结论。null、缺失、非法值、未来枚举、旧 status 字符串均中性 info，scoreText=`-`。合法 indeterminate/not_evaluable + unknown/null 分别显示不可判定/不可评估。
 
-| 函数 | 签名 | 说明 |
-|------|------|------|
-| `getDeviceStatusText` | `getDeviceStatusText(status: string) -> string` | 获取设备状态文本 |
-| `getDeviceStatusColor` | `getDeviceStatusColor(status: string) -> string` | 获取设备状态颜色 |
-| `getAlarmLevelColor` | `getAlarmLevelColor(level: string) -> string` | 获取告警级别颜色 |
-| `getStatusType` | `getStatusType(status: string) -> string` | 获取状态 Element Plus 标签类型（`success`/`warning`/`danger`/`info`） |
-| `getStatusText` | `getStatusText(status: string) -> string` | 获取状态中文文本（正常/预警/故障/离线/未知） |
-| `getStatusColor` | `getStatusColor(status: string) -> string` | 获取状态十六进制颜色 |
-| `getHealthLevel` | `getHealthLevel(score: number) -> string` | 根据健康度分数返回级别（`normal`/`warning`/`fault`/`unknown`） |
-| `getHealthColor` | `getHealthColor(score: number) -> string` | 根据健康度分数返回十六进制颜色 |
+局部 Evaluation 有 object_id 且不含 health_score 时，允许按合法两维结论着色，分数仍为 `-`，不借父对象评分。`DiagnosisCoverage.vue` 展示 partial 提示与每个局部对象状态/reason；未知局部不被总体颜色掩盖。设备在线/离线、采集任务和告警处理状态单独解释，不进入此诊断 adapter。
+
+旧 `utils/status.js` 与 Dashboard getStatus/getHealth 映射已删除。Dashboard 卡/仪表、Monitor 传感器、DataView 头/表/告警/谱、详情/综合/齿轮、Research 都消费完整对象；不补默认 87 分、不按部件偏移造分、不以 RMS 或旧概率判健康。
 
 ### 2.8 轴承诊断结果适配 (`bearingDiagnosis.js`)
 
@@ -209,7 +202,7 @@ view.connect();
 | `bearingFrequencyAnnotations` | `(result) -> Array` | 从 `detected_hz ?? theory_hz ?? frequency_hz` 生成图表标注，区分 `bearing` 与 `bearing_sc_scoh` |
 | `indicatorDisplayValue` | `(info: object) -> number \| string` | 依次选择 `value/snr/scoh_peak/detected_hz`，空值返回 `-` |
 
-**评估状态**：`evaluation.status=evaluated` 表示已完成评估，`indeterminate` 表示输入不足、不可判定，`not_evaluable` 表示频率覆盖、分辨率等条件不足、不可评估；后两者都不等于正常或故障。研究页通过 `useResearchDiagnosis.js` 导出的 `evaluationStatusType/evaluationStatusText` 统一展示。投票行读取 `strongest_score`，真实峰值/背景比与一般证据分不混称为 SNR。
+**状态读取**：业务对象的 `evaluation.evaluation_status` 与顶层完整 Domain 分开，原始算法指标仍可有数学 status。诊断颜色/分数统一交 getDiagnosisView，不读旧 strongest_score 投票协议；真实峰背景比、一般指标分与循环相干背景比分别展示。
 
 `bearingReasonText` 将稳定梳状先验、缺 MCKD 目标/周期、数值解卷积失败、零能量、无冲击频带与变速限制显示为可读原因。实际回退 MED 显示请求方法和回退原因；SC 无普通包络谱时不创建伪空谱。TEO 最终包络谱单位为输入单位平方，单位标签读取响应。分解质量不足不得渲染为成功去噪或健康。
 
@@ -221,7 +214,13 @@ view.connect();
 
 `utils/errorMessage.js::formatErrorMessage` 是公共错误显示边界。request 拦截器、DataView 与研究页共同使用：HTTP 422 的去噪对象显示实际方法和 reason，参数校验数组合并 msg，既有字符串与网络 message 继续可读；原错误仍向调用方抛出。不把 detail 对象直接交给消息组件，也不替换成成功原信号。
 
-`PlanetaryResult.vue` 在研究单方法、集成、DataView 综合与诊断详情复用。`planetaryDiagnosis.js` 只读派生原始指标、参考轴、候选事件与失败原因；SER 明确标为行星架间隔。`analysis_status=computed` 不等于诊断完成，只有 `evaluation.status=evaluated` 才显示基线结论；没有基线显示不可评估/unknown，空值显示 `-`。矩、边带和事件峰不直接命名断齿/裂纹/磨损，TSA 残差无峰不能排除同步损伤。
+`PlanetaryResult.vue` 在研究单方法、集成、DataView 综合与诊断详情复用。原始指标/参考轴/候选事件/原因只读派生，SER 标行星架间隔。计算态在 analysis，完整 Domain 交统一 adapter；无基线不可评估/unknown，空值为 `-`。矩和候选峰不直接命名损伤，TSA residual 无峰不排除同步损伤。
+
+### 研究组合与汇总
+
+`CompositeResult.vue/compositeResearch.js` 显示真实阶段、近似/失败、AM 输入单位、FM Hz、MSB 四阶单位、中心/收敛/ICA 秩/CVS 圈与覆盖；固定研究限定提示，不生成健康分或投票。`buildCompositeRequest` 将显式恒转频与实际 CVS 对齐 JSON 送专用 POST。
+
+Research 的单方法/all/ensemble 结果直接读顶层完整 Domain；局部结果也在顶层，不读 `.diagnosis`。`EnsembleResultPanels` 展示 evaluations/Evidence、依赖组、normal/anomaly/ignorance 支持、冲突、deductions 与 coverage，不读取旧 votes/best/confidence/probability。`researchDisplay.js` 的原始指标状态与数值格式仅用于指标，不是第二个诊断结论映射。
 
 `mechanicalGearForm/mechanicalGearPayload` 在设置流程保存结构类型与完整行星配置：sun/ring/planet/planet_count、reference_axis、fixed_member。缺失项保留空值等待用户配置，不默认太阳轴或固定齿圈；当前唯一支持的固定构件是 ring。定轴提交 input/output，行星提交完整模型；服务端继续做合法几何与物理前提门控。
 

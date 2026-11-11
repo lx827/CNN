@@ -141,6 +141,12 @@ DataView 计算、CSV 与研究分析去噪失败会得到 HTTP 422 `detail {sta
 
 诊断缓存读取、综合/全量/研究级分析、方法级分析、诊断更新与重新诊断。
 
+**#77/#84 外部响应更新**：所有诊断消费完整 `contract_version=1` Domain：evaluation_status、diagnosis_conclusion、health_score、coverage、evaluations、deductions、fault_propositions、recommendation/reason。局部对象同样保留顶层 Domain；不再读取 status、fault_likelihood、votes/best 或旧概率。展示统一交 `getDiagnosisView`，partial 必须显示未覆盖对象，null 不能 Number() 变成 0。
+
+缓存 GET 严格传当前通道与 `{denoise_method}`，不存在精确键不借其他方法/批次。旧缓存返回 unknown/null 与需重新分析原因；直接重评 POST reevaluate 只消费已有规范 Evidence，旧载荷返回 409。手工 reanalyze 返回完整批次 Domain+channels，前端选择实际通道。PUT 批次 diagnosis 只发送 `{rot_freq}`，不发送 order_analysis。
+
+生产 analyze/full-analysis 参数收敛为 denoise 与可选 rot_freq_hz，gear 另含 standard/advanced。旧策略/bearing_method/gear_method 不再作为该生产入口选择协议；研究方法选择仍在 method-analysis。`runCompositeResearch` 使用专用 POST body method/rot_freq_hz/options/alignment，研究运行不写生产缓存。
+
 | 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
 |--------|------|--------|----------|----------|
 | `getChannelDiagnosis(deviceId, batchIndex, channel, denoise_method)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`denoise_method?: string` | 诊断缓存结果 | `GET /api/data/{deviceId}/{batchIndex}/{channel}/diagnosis?denoise_method=...` | `DataView.vue`, `DiagnosisDetail.vue` |
@@ -701,7 +707,7 @@ import {
 | `rotFreq` | `number \| null` | `null` | 估计转频（Hz） |
 | `rotRpm` | `number \| null` | `null` | 估计转速（RPM） |
 
-**数据读取约定**：轴承统一读取 `bearing.evaluation.indicators`，由 `evaluation_kind` 区分包络与 SC/SCoh；频率读取相应的 `theory_hz/detected_hz` 或循环频率字段。真实 `snr`、一般 score 与 `coherence_background_ratio` 各自保留。定轴 `fault_indicators` 是规范评估兼容视图；行星交专属组件显示机械模型、原始指标与基线状态。
+**数据读取约定**：完整结果先由 getDiagnosisView/DiagnosisCoverage 显示诊断及覆盖；轴承原始指标来自 evaluation.indicators，以 evaluation_kind 区分 SC。频率、snr、score 和 coherence_background_ratio 保持原单位。齿轮/行星指标只作原始明细，不在组件重新判诊断或健康分。
 
 **Emits**
 
