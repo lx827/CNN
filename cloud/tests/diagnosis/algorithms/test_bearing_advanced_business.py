@@ -11,8 +11,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from app.algorithms.mechanics import BearingGeometry
 from app.algorithms.pipelines.bearing import BearingEnvelopePipeline
 from app.services.diagnosis.engine import DiagnosisEngine
-from app.services.diagnosis.ensemble import _bearing_confidence, _fault_label, run_research_ensemble
-from app.services.diagnosis.health_score_continuous import compute_continuous_deductions
+from app.services.diagnosis.ensemble import run_research_ensemble
+from app.services.diagnosis.adapters import adapt_method_result
+from app.services.diagnosis.domain import DiagnosisKey
 
 
 FS = 2048
@@ -31,7 +32,7 @@ class AdvancedBearingBusinessTests(unittest.TestCase):
         for options in ({}, {"comb_frequencies_hz": [25]}, {"comb_is_stable": True}):
             result = DiagnosisEngine(bearing_method="cpw", gear_teeth={"input": 18},
                                      bearing_options=options).analyze_bearing(impulses(), FS, 25)
-            self.assertEqual(result["evaluation"]["status"], "indeterminate")
+            self.assertEqual(result["evaluation"]["evaluation_status"], "indeterminate")
             self.assertIsNone(result["spectrum"])
         stable = DiagnosisEngine(bearing_method="cpw", bearing_options={
             "comb_frequencies_hz": [25], "comb_is_stable": True,
@@ -73,29 +74,31 @@ class AdvancedBearingBusinessTests(unittest.TestCase):
         self.assertNotIn("sc_scoh_indicators", result)
         self.assertGreaterEqual(min(result["cyclic_spectrum"]["carrier_frequency_hz"]), 0)
         missing = DiagnosisEngine(bearing_method="sc_scoh").analyze_bearing(signal, FS, 25)
-        self.assertEqual(missing["evaluation"]["status"], "indeterminate")
+        self.assertEqual(missing["evaluation"]["evaluation_status"], "indeterminate")
 
     def test_indeterminate_methods_do_not_vote_or_reduce_valid_vote_fraction(self):
-        features = {"rms": 1, "kurtosis": 3, "crest_factor": 3}
-        unavailable = {"analysis_status": "indeterminate", "evaluation": {"status": "indeterminate", "indicators": {}}}
-        self.assertFalse(_bearing_confidence(unavailable, features)["evaluable"])
         config = {"denoise": ["none"], "bearing": [], "gear": []}
         # 真实集成调度仅选本切片的两条无前提路径，避免用模态分解做替身。
         from app.services.diagnosis.engine import BearingMethod
         config["bearing"] = [BearingMethod.CPW, BearingMethod.SC_SCOH]
         with patch("app.services.diagnosis.ensemble._profile_config", return_value=config):
             result = run_research_ensemble(impulses(), FS, rot_freq=25, profile="runtime")
-        self.assertEqual(result["status"], "indeterminate")
+        self.assertEqual(result["evaluation_status"], "indeterminate")
+        self.assertEqual(result["diagnosis_conclusion"], "unknown")
         self.assertIsNone(result["health_score"])
-        self.assertTrue(all(not vote["evaluable"] for vote in result["ensemble"]["bearing_votes"].values()))
-        self.assertEqual(result["ensemble"]["ds_fusion"].get("method_count", 0), 0)
+        self.assertTrue(all(value["evaluation_status"] != "evaluated" for value in result["bearing_results"].values()))
+        self.assertEqual(result["evaluations"][0]["fusion"]["groups"], [])
 
-    def test_cyclic_fault_label_uses_cyclic_strength_not_absent_envelope_snr(self):
-        result = {"evaluation_kind": "sc_scoh", "evaluation": {"indicators": {
-            "BPFO": {"significant": True, "coherence_background_ratio": 4},
-            "BPFI": {"significant": True, "coherence_background_ratio": 9},
+    def test_cyclic_fault_propositions_can_coexist_without_likelihood_labels(self):
+        raw = {"evaluation": {"status": "evaluated", "indicators": {
+            "BPFO": {"significant": True, "evaluable": True},
+            "BPFI": {"significant": True, "evaluable": True},
         }}}
-        self.assertEqual(_fault_label(result, {}, .65, 0), "bearing_bpfi")
+        result = adapt_method_result(raw, key=DiagnosisKey("SC", 1, 1, "none"), object_id="bearing",
+            method="sc_scoh", signal=impulses(), physical_parameters=True)
+        self.assertEqual(result["fault_propositions"], ["bearing_inner", "bearing_outer"])
+        self.assertEqual({value["code"] for value in result["deductions"]}, {"bearing_cyclic"})
+        self.assertNotIn("fault_likelihood", result)
 
     def test_ensemble_runs_med_once_when_mckd_has_no_selected_target(self):
         from app.services.diagnosis.engine import BearingMethod
@@ -103,20 +106,23 @@ class AdvancedBearingBusinessTests(unittest.TestCase):
         with patch("app.services.diagnosis.ensemble._profile_config", return_value=config):
             result = run_research_ensemble(impulses(), FS, rot_freq=25)
         self.assertEqual(list(result["bearing_results"]), ["none:med"])
-        self.assertEqual(list(result["ensemble"]["bearing_votes"]), ["none:med"])
+        self.assertEqual(len(result["evaluations"][0]["evidence"]), 1)
 
     def test_sc_health_deduction_requires_dedicated_significance(self):
         for significant in (False, None):
             result = {"method": "sc_scoh", "evaluation_kind": "sc_scoh", "evaluation": {
                 "indicators": {"BPFO": {"evaluable": significant is not None, "scoh_peak": 0.99, "significant": significant}},
             }}
-            deductions = compute_continuous_deductions({"kurtosis": 3, "crest_factor": 3}, None, result, {})
-            self.assertNotIn("bearing_sc_scoh_evidence", {name for name, _ in deductions})
+            result["evaluation"]["status"] = "evaluated"
+            adapted = adapt_method_result(result, key=DiagnosisKey("SC", 1, 1, "none"), object_id="bearing",
+                method="sc_scoh", signal=impulses(), physical_parameters=True)
+            self.assertEqual(adapted["deductions"], [])
+            self.assertEqual(adapted["diagnosis_conclusion"], "normal" if significant is False else "unknown")
 
     def test_zero_energy_and_teo_units_are_explicit(self):
         for method in ("filter_bank_sk", "spectral_kurtosis", "cpw", "med", "mckd", "teager", "sc_scoh"):
             result = DiagnosisEngine(bearing_method=method).analyze_bearing(np.zeros(512), FS, 25)
-            self.assertEqual(result["evaluation"]["status"], "indeterminate")
+            self.assertEqual(result["evaluation"]["evaluation_status"], "indeterminate")
         teo = DiagnosisEngine(bearing_method="teager").analyze_bearing(impulses(), FS, 25)
         self.assertEqual(teo["spectrum"]["amplitude_unit"], "input_signal^2")
         self.assertEqual(teo["features"]["spectral_power_unit"], "(input_signal^2)^2")

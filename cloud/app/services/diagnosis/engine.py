@@ -28,7 +28,7 @@ from app.algorithms.order import (
 from .advanced_bearing import ADVANCED_BEARING_METHODS, analyze_advanced_bearing
 from .gear.planetary import analyze_planetary_gear, is_planetary_config
 from app.algorithms.gear.planetary.types import PlanetaryBaseline, PlanetaryMomentHistory
-from .features import compute_time_features
+from .features import compute_time_features, has_bearing_params, has_gear_params
 from .adapters import adapt_method_result, combine_method_results, unavailable_result
 from .domain import DiagnosisKey
 
@@ -195,11 +195,13 @@ class DiagnosisEngine:
 
     def analyze_bearing(self, signal, fs, rot_freq=None, preprocess=True, max_freq=1000.0, _cached_order=None):
         """对象算法与业务状态适配的唯一公共轴承入口。"""
+        if rot_freq is not None and (not np.isfinite(rot_freq) or rot_freq <= 0):
+            raise ValueError("已知转频必须是有限正数；未知转频请传 None")
         try:
             raw = self._analyze_bearing(signal, fs, rot_freq, preprocess=preprocess, max_freq=max_freq, _cached_order=_cached_order)
             return adapt_method_result(raw, key=self.diagnosis_key, object_id="bearing",
                                        method=self.bearing_method.value, signal=signal,
-                                       physical_parameters=bool(self.bearing_params))
+                                       physical_parameters=has_bearing_params(self.bearing_params))
         except Exception as exc:
             return unavailable_result(str(exc), key=self.diagnosis_key, object_id="bearing",
                                       method=self.bearing_method.value, indeterminate=True)
@@ -459,11 +461,13 @@ class DiagnosisEngine:
         return result
 
     def analyze_gear(self, signal, fs, rot_freq=None, preprocess=True, _cached_order=None):
+        if rot_freq is not None and (not np.isfinite(rot_freq) or rot_freq <= 0):
+            raise ValueError("已知转频必须是有限正数；未知转频请传 None")
         try:
             raw = self._analyze_gear(signal, fs, rot_freq, preprocess, _cached_order)
             return adapt_method_result(raw, key=self.diagnosis_key, object_id="gear",
                                        method="planetary_gear" if is_planetary_config(self.gear_teeth) else self.gear_method.value,
-                                       signal=signal, physical_parameters=bool(self.gear_teeth))
+                                       signal=signal, physical_parameters=has_gear_params(self.gear_teeth))
         except Exception as exc:
             return unavailable_result(str(exc), key=self.diagnosis_key, object_id="gear",
                                       method="planetary_gear" if is_planetary_config(self.gear_teeth) else self.gear_method.value,

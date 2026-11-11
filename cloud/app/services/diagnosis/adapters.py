@@ -73,7 +73,7 @@ def adapt_method_result(result: Mapping, *, key: DiagnosisKey, object_id: str, m
             if object_id.startswith("bearing"):
                 if str(name).casefold() in {"bpfo", "bpfi", "bsf", "ftf"}:
                     proposition = canonical_proposition(name)
-                    code = proposition.value
+                    code = "bearing_cyclic" if method == "sc_scoh" else proposition.value
                 else:
                     proposition = canonical_proposition("bearing_anomaly")
                     code = "bearing_cyclic" if method == "sc_scoh" else "bearing_statistical"
@@ -101,7 +101,8 @@ def adapt_method_result(result: Mapping, *, key: DiagnosisKey, object_id: str, m
     raw.pop("evaluation_status", None)
     raw.pop("diagnosis_conclusion", None)
     raw["evaluation"] = {"evaluation_status": evidence.evaluation_status.value, "indicators": dict(indicators), "reason": evidence.reason}
-    return {**raw, **assessment.to_dict(), "method": method, "analysis": original_analysis, "production_eligible": True}
+    return {**raw, **assessment.to_dict(), "reason": evidence.reason,
+            "method": method, "analysis": original_analysis, "production_eligible": True}
 
 
 def combine_method_results(results: Mapping[str, dict], policy: AssessmentPolicy | None = None) -> dict:
