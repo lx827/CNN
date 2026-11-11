@@ -1,6 +1,6 @@
 # 诊断计算库构建与安装
 
-根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。当前仅提供原生构建信息入口；EMD 原生筛分由后续工单实现，生产分解默认仍为 Python。技术路线见 [ADR 0006](adr/0006-native-diagnosis-compute-package.md)。
+根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。当前提供构建信息和 PCHIP/SD 单 IMF 原生筛分候选；生产分解默认仍为 Python。技术路线见 [ADR 0006](adr/0006-native-diagnosis-compute-package.md)。
 
 ## 一次同步
 
@@ -29,6 +29,16 @@ Python 由 uv 托管，构建后端、pybind11、CMake 与 Ninja 的版本在根
 cloud 与现场采集源码不因打包迁移：后端继续以 cloud 为工作目录启动，采集继续按原脚本入口运行。各目录的 uv 命令向上发现同一个根项目和 `.venv`。应用依赖使用 `uv add --group cloud` 等命令添加；计算库本身的运行依赖才使用无分组的 `uv add`。
 
 wheel 仅包含 `cnn_compute`、其原生扩展及库的分发元数据；应用、测试、数据、Eigen 头文件与构建目录不进入 wheel。NumPy/SciPy 等第三方 Python 依赖可使用官方 wheel；自有计算包从项目源码构建。运行依赖由根锁文件锁定，构建后端版本以根构建配置为准，C++ 依赖版本与哈希由 CMake 声明。
+
+## 原生筛分候选
+
+EMD 候选通过 `NativeEMDImplementation` 显式传入现有公开分解入口；该 adapter 复用 Python 外层，仅将一次完整 IMF 筛分交给原生核。当前支持 PCHIP/SD，其余配置明确报不支持，后续工单再扩展。包级筛分入口的签名与所有权见源码 docstring；合规 float64 连续输入只读借用，非连续视图最多显式连续化一次，输出由 capsule 持有独立缓冲区。计算期间释放 GIL，不新增线程池。
+
+极值差分掩码、抛物线精化、PCHIP 斜率与系数、分段多项式求值、信号更新及平方和使用 Eigen 数组表达式，索引压缩、镜像排序与区间查找保留专用流程。工作区按记录和节点数线性增长，输入只在单次筛分开始时复制为工作数组，不在每轮重复制输入或重做边界校验；数值产生非有限包络时明确抛错。
+
+PCHIP 适配保留 SciPy 的端点规则、非等距节点、小节点退化、外推与常数项到三次项的累加次序；使用 MSVC `/fp:strict` 或 GCC/Clang `-ffp-contract=off` 抑制乘加收缩，实际规则也写入构建信息。此约定保留 SIMD，避免极平残差因改写求值次序而改变后续极值拓扑；跨后端仍按冻结误差预算验收，不承诺跨平台逐位相同。
+
+候选筛选曾比较 Boost.Math 1.89 的 PCHIP：端点需覆写、原始求值不支持外推、内点加权调和均值的舍入次序也不同。受控对照显示，普通 Horner 以及该斜率次序的末位差异可放大到固定双频反例的后续模态；分别恢复 SciPy 求值及斜率次序后恢复预算内对照。需要覆写全部相关行为时，该库没有实际复用价值，因此最终以 Eigen 为计算基座，PCHIP 仅保留必要的语义适配。[SciPy BSD 归属](../native/LICENSE.scipy) 随源码与 wheel 许可证目录分发，没有额外链接无用依赖。
 
 ## 指令集与缓存
 

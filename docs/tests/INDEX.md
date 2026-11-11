@@ -34,6 +34,7 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 | 阶次 | `algorithms/test_order_pipeline.py`、`test_order_integration.py` | 解析积分、快扫频、幅值与谱轴、Engine、HTTP 与持久化 |
 | 分解 | `algorithms/test_decomposition_*.py` | 小波/EMD/VMD 数学参考、频率序、质量门控、反例与实际消费者 |
 | EMD 筛分替换 | `algorithms/test_emd_sift_contract.py` | 公开入口注入、固定随机序列、四种配置组合、冻结预算与模态伪等价负例 |
+| EMD 原生候选 | `algorithms/test_native_emd.py` | PCHIP/SD 公开差分、局部误差预算、所有权与失败边界；显式数据根下核对五条固定短向量 |
 | 复合研究 | `algorithms/test_composite_pipelines.py`、`test_composite_research_api.py` | 已知解、阶段串联、消融、五组合 HTTP 与生产隔离 |
 | 引擎回归 | `algorithms/test_engine_regressions.py` | 无参数、TSA、噪声转频和零信号不可判定，全部合成信号 |
 | 公共数值 | `cloud/tests/test_numeric_algorithms.py`、`test_numeric_routes.py` | FFT/STFT/倒谱、统计、通用包络、显示抽点与响应契约 |
@@ -56,6 +57,15 @@ uv run python -m unittest tests.diagnosis.algorithms.test_emd_sift_contract -v
 ```
 
 [冻结契约](../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json) 与 [手写对照资产](../../cloud/tests/diagnosis/algorithms/emd_reference_contract.py) 供后续 Python/原生差分复用；测试本身不生成需要提交的波形或 golden 数组，不表示已有原生性能结论。
+
+已安装计算扩展后，PCHIP/SD 原生候选在 `cloud/` 执行：
+
+```powershell
+$env:CNN_DATA_ROOT='D:/code/CNN/data'
+uv run --no-sync python -m unittest tests.diagnosis.algorithms.test_native_emd -v
+```
+
+未设置 `CNN_DATA_ROOT` 时仅跳过固定真实数据项；显式设置后缺向量或 SHA256 不符均失败。固定项复用既有性能 campaign 的四个真实来源与一条合成 4096 点输入，包含原采样率/参数身份。Windows baseline、AVX2 与 WSL Ubuntu 的对应测试分别验收；WSL 使用独立 Linux 环境和构建目录，不能代表生产 ECS 整机资源验收。完整集成分解及两倍性能目标仍由后续工单负责。
 
 ## 本地真实数据测试
 
