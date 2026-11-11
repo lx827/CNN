@@ -1,4 +1,4 @@
-"""原始记录效果实验：标准对象 Pipeline、独立采集分母与显式条件情景。"""
+"""原始记录本地试运行：复用对象 Pipeline，核对输出与显式条件情景。"""
 
 from __future__ import annotations
 
@@ -255,7 +255,12 @@ class PlanetaryExperiment:
     """每个表示键独立用N1训练；N2及故障绝不参与阈值选择。"""
 
     def __init__(self, entries, root):
-        self.entries, self.root, self.cache, self.training = entries, root, {}, []
+        self.entries, self.root, self.cache, self.reference_training = (
+            entries,
+            root,
+            {},
+            [],
+        )
 
     @staticmethod
     def pipeline(entry):
@@ -273,7 +278,7 @@ class PlanetaryExperiment:
             )
         )
 
-    def baseline(
+    def healthy_reference(
         self,
         hz,
         channel,
@@ -324,13 +329,13 @@ class PlanetaryExperiment:
             )
             warning = float(max(values) + margin)
             thresholds.append(PlanetaryThreshold(key, warning, warning + margin))
-        baseline = PlanetaryBaseline(
+        reference = PlanetaryBaseline(
             analysis.representation_key,
             tuple(thresholds),
             f"experimental_N1_{hz}_{channel}_windows_0_10_20_no_test_labels",
         )
-        self.cache[cache_key] = baseline
-        self.training.append(
+        self.cache[cache_key] = reference
+        self.reference_training.append(
             {
                 "training_sample_id": train["sample_id"],
                 "channel": channel,
@@ -339,10 +344,10 @@ class PlanetaryExperiment:
                 "methods": methods,
                 "metrics_by_window": metrics,
                 "thresholds": [asdict(t) for t in thresholds],
-                "source": baseline.source,
+                "source": reference.source,
             }
         )
-        return baseline
+        return reference
 
     def run(
         self,
@@ -389,8 +394,8 @@ class PlanetaryExperiment:
             include_tsa=True,
             methods=methods,
         )
-        baseline = self.baseline(hz, channel, duration, scale, methods)
-        evaluation = pipeline.evaluate(analysis, baseline)
+        reference = self.healthy_reference(hz, channel, duration, scale, methods)
+        evaluation = pipeline.evaluate(analysis, reference)
         return {
             "current_contract": current_result,
             "conditional_physical_parameters": _canonical(
@@ -402,8 +407,8 @@ class PlanetaryExperiment:
             "analysis_reason": analysis.reason,
             "conditional_speed_hz": hz * scale,
             "conditional_speed_source": "nominal_sun_hz_not_measured",
-            "baseline_source": baseline.source,
-            "baseline_status": "experimental_calibration_independent_installation_test_not_production_validated",
+            "healthy_reference_source": reference.source,
+            "healthy_reference_status": "trial_reference_training_not_production_validated",
             "raw_metrics": collect_planetary_metrics(analysis),
             "method_status": [
                 {
@@ -599,7 +604,7 @@ def run_experiment(entries, root, output, plan):
             ),
             encoding="utf-8",
         )
-    tests = [row for row in rows if row["evaluation_split"] != "calibration"]
+    tests = [row for row in rows if row["evaluation_split"] != "reference_training"]
     summaries = {
         scenario: grouped_summary([r for r in tests if r["scenario"] == scenario])
         for scenario in ("current_contract", "conditional_physical_parameters")
@@ -607,13 +612,13 @@ def run_experiment(entries, root, output, plan):
     report = {
         "schema_version": 1,
         "generated_at": datetime.now(UTC).isoformat(),
-        "purpose": "record_level_current_pipeline_effectiveness_with_explicit_conditional_scenarios",
+        "purpose": "local_record_pipeline_trial_and_output_check_with_explicit_conditions",
         "elapsed_seconds": time.perf_counter() - started,
         "plan": plan,
         "selected_record_count": len(entries),
         "test_record_count": len(tests) // 2,
-        "calibration_record_count": sum(
-            e.get("evaluation_split") == "calibration" for e in entries
+        "reference_training_record_count": sum(
+            e.get("evaluation_split") == "reference_training" for e in entries
         ),
         "environment": {
             "python": platform.python_version(),
@@ -628,7 +633,7 @@ def run_experiment(entries, root, output, plan):
         "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "records": rows,
         "observations": observations,
-        "training": planetary.training,
+        "reference_training": planetary.reference_training,
         "summaries": summaries,
         "sensitivity": sensitivity,
         "sensitivity_summaries": {
@@ -661,15 +666,17 @@ def render_report(report: dict, path: Path) -> None:
         "wt_planetary": "WT行星齿轮",
     }
     lines = [
-        "# 真实原始数据算法效果基线",
+        "# 四套原始数据的本地试运行与输出核对",
         "",
         "运行日期：2026-11-12。本文数字由冻结实验 JSON 生成，统计单位是原始采集记录；范围为四套公开来源。",
         "",
-        f"本轮选取 {report['selected_record_count']} 次采集，{report['calibration_record_count']} 条 WT N1 健康记录专用于阈值训练，其余 {report['test_record_count']} 条进入测试分母。训练记录中的不同窗口与同记录多通道均不增加独立样本数。异常 {len(report['errors'])} 条，失败与 unknown 全部保留在分母。",
+        f"本轮选取 {report['selected_record_count']} 次采集，{report['reference_training_record_count']} 条 WT N1 健康记录用于健康参考，其余 {report['test_record_count']} 条用于输出核对。健康参考记录中的不同窗口与同记录多通道均不增加独立样本数。异常 {len(report['errors'])} 条，失败与 unknown 全部保留在统计分母。",
+        "",
+        "本轮只检查重构后的数据对象、复用reader、本地测试机制及算法输出，不进行诊断效果目标验收。100%检出是另行处理的目标，不属于本次完成条件；本报告的统计不是该目标的验收结论。",
         "",
         "## 当前产品结果与条件结果",
         "",
-        "`current_contract` 实际执行标准 DiagnosisEngine，按现有产品接口生成 canonical 两维状态。Ottawa 使用原文 n=9、d=7.94、D=38.52，接触角沿用产品默认0°；速度来自当前振动估计器。HUSTbear 不移植另一来源的已证实节径。HUST定轴按18齿输入轮调用产品自动估计；估计量是否对应小轮轴尚无独立测速证据。WT使用28/100/36/4固定齿圈模型与太阳轮参考轴，当前前提门控和基线门控由产品决定。",
+        "`current_contract` 实际执行标准 DiagnosisEngine，按现有产品接口生成 canonical 两维状态。Ottawa 使用原文 n=9、d=7.94、D=38.52，接触角沿用产品默认0°；速度来自当前振动估计器。HUSTbear 不移植另一来源的已证实节径。HUST定轴按18齿输入轮调用产品自动估计；估计量是否对应小轮轴尚无独立测速证据。WT使用28/100/36/4固定齿圈模型与太阳轮参考轴，当前前提门控和健康参考门控由产品决定。",
         "",
         "`conditional_physical_parameters` 是明确参数假设下的实验：轴承按 ER16K 的 n9/d7.94/D38.52/α0 模型，HUST恒速使用文件名20Hz，其余保留自动估计及产品变速门控；定轴假设名义Hz为18齿输入轮转频；WT假设名义Hz为恒定太阳轮转频，另用N1训练临时界限。HUST节径与这些速度都不是已校准真值，临时界限未部署。两组结果不得混称现场检出率。",
         "",
@@ -723,11 +730,11 @@ def render_report(report: dict, path: Path) -> None:
             )
     lines += [
         "",
-        "## WT健康基线与消融",
+        "## WT健康参考与消融输出核对",
         "",
         "同速度同通道的N1健康采集在0、10、20秒取三个不重叠5秒窗，只校准每种方法太阳轮局部事件候选峰的幅值/背景比。界限为训练最大值加 `max(3×1.4826×MAD, |median|×0.25, 1e-9)`，critical再加同一余量。训练仅来自一次安装，N2是另一次拆装后的健康测试；3个窗口不构成3次独立健康试验。所有原始指标与实际界限保留在JSON。",
         "",
-        "固定代表组为20Hz的N2/B2/M2/R2/W2，共1健康、4故障。改变窗口/速度/方法时，N1训练表示同步改变以满足产品严格表示键；不会把不兼容基线强行套入新表示。速度±5%表示同一系统性速度标定偏差的敏感性，不能证明估速误差为5%。",
+        "固定代表组为20Hz的N2/B2/M2/R2/W2，共1健康、4故障。改变窗口/速度/方法时，N1健康参考表示同步改变以满足产品严格表示键；不会把不兼容健康参考强行套入新表示。速度±5%表示同一系统性速度标定偏差的敏感性，不能证明估速误差为5%。",
         "",
         "| 表示 | 检出/故障总数 | 健康误报/健康总数 | unknown/总数 |",
         "|---|---:|---:|---:|",
@@ -759,7 +766,10 @@ def render_report(report: dict, path: Path) -> None:
     for scenario in ("current_contract", "conditional_physical_parameters"):
         counts = defaultdict(int)
         for row in report["records"]:
-            if row["scenario"] == scenario and row["evaluation_split"] != "calibration":
+            if (
+                row["scenario"] == scenario
+                and row["evaluation_split"] != "reference_training"
+            ):
                 for reason in set(row["channel_reasons"].values()) - {None}:
                     counts[reason] += 1
         for reason, count in sorted(counts.items()):
@@ -773,7 +783,8 @@ def render_report(report: dict, path: Path) -> None:
         rows = [
             r
             for r in report["records"]
-            if r["scenario"] == scenario and r["evaluation_split"] != "calibration"
+            if r["scenario"] == scenario
+            and r["evaluation_split"] != "reference_training"
         ]
         fp = [
             r["sample_id"]
@@ -790,14 +801,9 @@ def render_report(report: dict, path: Path) -> None:
         )
     lines += [
         "",
-        "## 业务结论与后续策略",
+        "## 观察记录与本轮范围",
         "",
-        "本轮不能支持自动告警已有效。条件情景增加了可评估范围，也同时暴露健康误报；缺参数补齐后仍需验证阈值，不能把unknown减少直接当作准确性提高。保留当前canonical状态，缺前提继续输出unknown，不把它计成正常。",
-        "",
-        "1. 优先解决测速与连续相位消费：Ottawa的变速记录既有脊线不可判定，也有快速变速包络接口尚未迁移；HUST定轴的1.28秒合法连续块无法被当前自动入口可靠解释。窗口不能为绕过门控而跨块拼接。原始频谱、包络及估速原因保留作问题定位，本轮没有据此证明数值算法公式错误。",
-        "2. 轴承统计与定轴工程阈值应先在独立健康记录上校准，再评估故障检出。Ottawa健康误报涉及统计峰SNR及BPFI/BPFO候选；条件HUSTbear健康存在包络峰/峭度告警；条件HUST定轴健康同时有SER、边带计数及阶次统计告警。单纯提高检出率会掩盖这些假阳性，不据本轮标签调生产阈值。",
-        "3. WT暂不提升为可生产告警的通用基线。N1到N2跨拆装出现健康误报，20Hz窄带方法是该代表组误报来源；fullband/highpass单方法在这一小组不误报但仍漏检。下一次校准应纳入更多独立健康安装，再检查方法级阈值，不因为当前小样本结果删除窄带实现或选择性丢弃N2。",
-        "4. 太阳轮名义速度±5%与3/5秒窗口改变检出结果，说明当前表征和界限对这些前提敏感。补校准PPR与速度参考轴证据后，再做同一冻结清单定向复验；本轮不将名义速度或振动估计冒充实测速度。",
+        "本地试运行观察到不可判定、健康误报及故障判正常。条件参数与健康参考的输出均按原样保留，不作为诊断质量达标的声明，也不据此扩展本次工作为调参优化。100%检出目标不在本轮验收范围，本轮没有为达到该目标修改算法、阈值或样本。",
         "",
         "## 可复现运行",
         "",
