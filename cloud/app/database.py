@@ -90,6 +90,23 @@ def init_db():
             conn.commit()
 
     # create_all 不会给已存在的表补索引；必须在旧库列迁移完成后显式补齐。
+    # 旧 status 混合两种含义，无法可靠回填；新增列默认未知并清空旧评分。
+    for table in ("devices", "diagnosis"):
+        if table in inspector.get_table_names():
+            columns = {column["name"] for column in inspect(engine).get_columns(table)}
+            with engine.begin() as conn:
+                migrated = "evaluation_status" not in columns or "diagnosis_conclusion" not in columns
+                if "evaluation_status" not in columns:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN evaluation_status VARCHAR(24) NOT NULL DEFAULT 'not_evaluable'"))
+                if "diagnosis_conclusion" not in columns:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN diagnosis_conclusion VARCHAR(20) NOT NULL DEFAULT 'unknown'"))
+                if "coverage" not in columns:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN coverage VARCHAR(12) NOT NULL DEFAULT 'none'"))
+                if migrated:
+                    if engine.dialect.name == "mysql":
+                        conn.execute(text(f"ALTER TABLE {table} MODIFY COLUMN health_score FLOAT NULL"))
+                    conn.execute(text(f"UPDATE {table} SET health_score=NULL"))
+
     from app.models import Diagnosis
     for index in Diagnosis.__table__.indexes:
         if index.name.startswith("ix_diagnosis_"):

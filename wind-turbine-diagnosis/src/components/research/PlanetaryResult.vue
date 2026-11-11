@@ -1,6 +1,6 @@
 <template>
   <section class="planetary-result">
-    <el-alert :title="evaluated ? conclusion : '行星诊断不可评估'" :type="evaluated && result.diagnosis_conclusion === 'anomaly' ? 'warning' : 'info'" :closable="false" show-icon :description="planetaryReasonText(result.reason)" />
+    <el-alert :title="diagnosisView.text" :type="diagnosisView.alertType" :closable="false" show-icon :description="planetaryReasonText(result.reason)" />
     <el-descriptions :column="2" border size="small" class="details">
       <el-descriptions-item label="分析参考轴">{{ planetaryAxisText(result.mechanical_model?.reference_axis) }}</el-descriptions-item>
       <el-descriptions-item label="固定构件">{{ result.mechanical_model ? '齿圈' : '未配置' }}</el-descriptions-item>
@@ -32,10 +32,10 @@
 
 <script setup>
 import { computed } from 'vue'
+import { getDiagnosisView } from '../../utils/diagnosisStatus'
 import { planetaryAxisText, planetaryCandidateText, planetaryMetricRows, planetaryReasonText } from '../../utils/planetaryDiagnosis'
 const props = defineProps({ result: { type: Object, required: true } })
-const evaluated = computed(() => props.result.evaluation?.status === 'evaluated')
-const conclusion = computed(() => props.result.diagnosis_conclusion === 'anomaly' ? '可比基线指标异常' : '已校准指标未见异常')
+const diagnosisView = computed(() => getDiagnosisView(props.result))
 const number = value => value == null || !Number.isFinite(Number(value)) ? '-' : Number(value).toFixed(4)
 const methodNames = { narrowband: '啮合带包络', fullband: '全带包络', highpass: '高通包络', tsa_residual: 'TSA 非同步残差包络' }
 </script>
