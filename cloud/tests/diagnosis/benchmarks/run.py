@@ -733,9 +733,7 @@ def worker(output, case_id):
         "initial_rss_bytes": initial_rss,
         "peak_rss_bytes": memory.peak_wset,
         "peak_rss_method": "Windows GetProcessMemoryInfo PeakWorkingSetSize; entire fresh worker lifetime including imports/warmup/results",
-        "peak_rss_increment_from_initial_bytes": max(
-            0, memory.peak_wset - initial_rss
-        ),
+        "peak_rss_increment_from_initial_bytes": max(0, memory.peak_wset - initial_rss),
         "repeat_max_absolute_difference": max(differences),
         "metrics": metrics[0],
         "all_repeat_statuses": [metric.get("status") for metric in metrics],
