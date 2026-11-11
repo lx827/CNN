@@ -7,8 +7,8 @@
         <div class="panel-title">方法分析结果</div>
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="评估状态">
-            <el-tag :type="evaluationStatusType(result.evaluation?.status)" size="small">
-              {{ evaluationStatusText(result.evaluation?.status) }}
+            <el-tag :type="evaluationStatusType(result.evaluation_status)" size="small">
+              {{ evaluationStatusText(result.evaluation_status) }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item v-if="result.algorithm" label="实际算法">{{ result.algorithm }}</el-descriptions-item>
@@ -31,8 +31,8 @@
         <el-descriptions v-else :column="2" border size="small">
           <el-descriptions-item v-for="entry in bearingEvaluationItems" :key="entry.key" :label="entry.name">
             <template v-if="entry.info && typeof entry.info === 'object'">
-              <el-tag :type="entry.info.critical || entry.info.significant ? 'danger' : entry.info.warning ? 'warning' : 'success'" size="small">
-                {{ entry.info.critical ? '严重' : entry.info.significant ? '命中' : entry.info.warning ? '预警' : '正常' }}
+              <el-tag :type="rawIndicatorView(entry.info).type" size="small">
+                {{ rawIndicatorView(entry.info).text }}
               </el-tag>
               <span v-if="entry.info.snr != null" style="margin-left:4px">SNR={{ fmt(entry.info.snr) }}</span>
               <span v-if="entry.info.value != null" style="margin-left:4px">值={{ fmt(entry.info.value) }}</span>
@@ -46,8 +46,8 @@
         <div class="panel-title">SC/SCoh 专属指标</div>
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item v-for="entry in scScohItems" :key="entry.key" :label="entry.name">
-            <el-tag :type="entry.info.evaluable === false ? 'info' : entry.info.significant ? 'warning' : 'success'" size="small">
-              {{ entry.info.evaluable === false ? '不可评估' : entry.info.significant ? '显著' : '未显著' }}
+            <el-tag :type="rawIndicatorView(entry.info).type" size="small">
+              {{ rawIndicatorView(entry.info).text }}
             </el-tag>
             <span style="margin-left:4px">理论循环频率={{ fmt(entry.info.theory_cyclic_frequency_hz ?? entry.info.theory_hz) }}Hz</span>
             <span v-if="entry.info.detected_cyclic_frequency_hz != null" style="margin-left:4px">检出={{ fmt(entry.info.detected_cyclic_frequency_hz) }}Hz</span>
@@ -82,7 +82,7 @@
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item v-for="(val, name) in result.fault_indicators" :key="name" :label="name">
             <template v-if="val && typeof val === 'object'">
-              <el-tag :type="val.critical ? 'danger' : val.warning ? 'warning' : 'success'" size="small">{{ val.critical ? '严重' : val.warning ? '预警' : '正常' }}</el-tag>
+              <el-tag :type="rawIndicatorView(val).type" size="small">{{ rawIndicatorView(val).text }}</el-tag>
               <span v-if="val.value" style="margin-left:4px">值={{ fmt(val.value) }}</span>
             </template>
             <template v-else>{{ fmt(val) }}</template>
@@ -98,7 +98,7 @@
 import { computed } from 'vue'
 import PlanetaryResult from './PlanetaryResult.vue'
 import CompositeResult from './CompositeResult.vue'
-import { fmt, evaluationStatusType, evaluationStatusText } from '../../composables/useResearchDiagnosis'
+import { fmt, evaluationStatusType, evaluationStatusText, rawIndicatorView } from '../../utils/researchDisplay'
 import { bearingEvaluationEntries, scScohEntries, bearingReasonText } from '../../utils/bearingDiagnosis'
 const props = defineProps({
   result: { type: Object, required: true },
