@@ -49,7 +49,7 @@ uv run python tests/diagnosis/regression/test_cpw_robustness.py
 uv run python tests/diagnosis/regression/test_varying_speed_order.py
 ```
 
-扩展测试按目录选:正确性验证 `cloud/tests/diagnosis/foundation/layer1~5/`(如 `layer2/test_order_tracking_correctness.py`)、方法评估 `method_eval/`、行星箱端到端 `planetary/`、效果 `effectiveness/`、引擎回归 `algorithms/`;改 API 路由另加手动调用验证。cloud/dc24/前端测试套件及运行方式见 `docs/tests/INDEX.md`。
+扩展测试按目录选:正确性验证 `cloud/tests/diagnosis/foundation/layer1/`、`layer2/`（如 `layer2/test_order_tracking_correctness.py`）、合成调度 `foundation/layer4/`、行星箱端到端 `planetary/`、引擎与业务回归 `algorithms/`、原始数据与效果 `real_data/`;改 API 路由另加手动调用验证。cloud/dc24/前端测试套件及运行方式见 `docs/tests/INDEX.md`。
 
 ## 5. 2G 红线(违反即生产 OOM)
 
@@ -128,7 +128,7 @@ wind-turbine-diagnosis/     # Vue3 前端
 
 ## 8. 数据与数据库
 
-- 原始离线测试数据:Ottawa轴承(历史名称CW,200kHz MAT)、华中HUSTbear(25.6kHz文本)、HUSTgearbox(25.6kHz文本)、WT行星箱(48kHz MAT)。提交选样清单与独立入口在 `cloud/tests/diagnosis/real_data/`;真实采样率、分组、几何/测速前提见 **`docs/datasets.md`**,不得用其他来源参数代填。旧8192Hz一维npy为历史加工格式,旧评估脚本不能直接验收新原始数据
+- 原始离线测试数据:Ottawa轴承(历史名称CW,200kHz MAT)、华中HUSTbear(25.6kHz文本)、HUSTgearbox(25.6kHz文本)、WT行星箱(48kHz MAT)。提交选样清单与独立入口在 `cloud/tests/diagnosis/real_data/`;真实采样率、分组、几何/测速前提见 **`docs/datasets.md`**,不得用其他来源参数代填
 - 表:`devices`、`sensor_data`(batch 1~16 循环覆盖,≥101 永久保留)、`diagnosis`、`alarms`、`collection_tasks`
 - 诊断缓存键 `(device, batch, channel, denoise_method)`;重新诊断 `POST /api/data/{device_id}/{batch_index}/reanalyze`、`POST /api/data/{device_id}/reanalyze-all`(逐批串行防 OOM)。持久化语义:`docs/backend/persistence.md`
 

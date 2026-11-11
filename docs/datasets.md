@@ -63,7 +63,7 @@ manifest 顶层为 `schema_version: 1` 和非空 `samples`。条目至少含 `sa
 
 runner 逐记录、逐通道串行运行，默认 1 秒，可显式请求最多 5 秒。HUST 齿轮受块边界限制可返回更短窗口。轴承调用现有包络 Pipeline，保留统计特征及缺速度/几何的不可判定状态；WT 调用行星 Pipeline 前提门控；HUST 定轴缺小轮参考速度时报告未执行原因。没有新增阈值、估算几何或把标称速度冒充实测转速。
 
-## 运行与历史入口边界
+## 当前运行入口
 
 从 `cloud/` 执行，将示例路径替换为实际数据根：
 
@@ -75,7 +75,5 @@ uv run python -m tests.diagnosis.real_data.run --data-root /path/to/data --sampl
 默认读提交的两套清单；`--manifest` 可重复，用相对数据根或绝对路径显式覆盖。`--channel`、`--start-seconds` 可选振动通道与窗口起点。默认报告为 `DATA_ROOT/real_diagnosis/reports/latest.json`，可用 `--output` 指定。
 
 报告包括来源与标签、真实采样率、实际点数/时长、信号质量、Pipeline 是否执行、`evaluation_status`、`diagnosis_conclusion`、coverage、可空 health_score 及不可判定原因。缺源文件、缺显式样本/通道、坏格式均非零退出；未知诊断是有效报告内容，不等于算法验证通过。小样本核实不输出准确率，不声称完成 #78 跨工况效果评估，也不是 #79 性能基准。
-
-历史 `cloud/tests/diagnosis/data_paths.py` 和依赖 8192 Hz 一维数组的评估脚本仍描述旧加工数据。它们没有迁移到本 reader，不能直接验收这批原始数据。不要用旧数组时长、文件数或机械参数假设验收新来源。
 
 测试分层与集中命令见 [测试索引](tests/INDEX.md)。
