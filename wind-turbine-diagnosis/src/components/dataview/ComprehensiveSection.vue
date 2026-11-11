@@ -72,10 +72,10 @@
       <div v-if="computedStrategyAnalyze && strategyAnalyzeData && !computedFullAnalysis">
         <!-- 策略诊断简洁结果 -->
         <el-alert
-          :title="statusAlertTitle(strategyAnalyzeData.status)"
-          :type="statusAlertType(strategyAnalyzeData.status)"
+          :title="statusAlertTitle(strategyStatusView)"
+          :type="strategyStatusView.alertType"
           :description="statusAlertDescription(
-            strategyAnalyzeData.status,
+            strategyStatusView,
             strategyAnalyzeData.recommendation,
             '策略诊断未检出显著故障特征，设备运行正常。',
           )"
@@ -99,10 +99,10 @@
       <div v-if="computedFullAnalysis && fullAnalysisData">
         <!-- 综合结论 -->
         <el-alert
-          :title="statusAlertTitle(fullAnalysisData.status)"
-          :type="statusAlertType(fullAnalysisData.status)"
+          :title="statusAlertTitle(fullAnalysisStatusView)"
+          :type="fullAnalysisStatusView.alertType"
           :description="statusAlertDescription(
-            fullAnalysisData.status,
+            fullAnalysisStatusView,
             fullAnalysisData.recommendation,
             '所有诊断方法均未检出显著故障特征，设备运行正常。',
           )"
@@ -251,33 +251,27 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { bearingMethodLabel } from '../../composables/useDataView'
 import { bearingIndicatorEntries as bearingEntries } from '../../utils/bearingDiagnosis'
+import { getDiagnosisStatusView } from '../../utils/diagnosisStatus'
 
-function statusAlertTitle(status) {
-  if (status === 'normal') return '✅ 未检出显著故障特征'
-  if (status === 'warning') return '⚡ 检出预警信号'
-  if (status === 'fault' || status === 'critical') return '⚠️ 检出故障特征'
-  if (status === 'indeterminate') return '诊断不可判定'
-  if (status === 'not_evaluable') return '诊断不可评估'
-  return '诊断状态未知'
+function statusAlertTitle(view) {
+  if (view.tone === 'success') return '✅ 未检出显著故障特征'
+  if (view.tone === 'warning') return '⚡ 检出预警信号'
+  if (view.tone === 'danger') return '⚠️ 检出故障特征'
+  if (view.tone === 'info') return view.text === '未知' ? '诊断状态未知' : `诊断${view.text}`
+  return view.text
 }
 
-function statusAlertType(status) {
-  if (status === 'normal') return 'success'
-  if (status === 'warning') return 'warning'
-  if (status === 'fault' || status === 'critical') return 'error'
-  return 'info'
-}
-
-function statusAlertDescription(status, recommendation, normalDescription) {
+function statusAlertDescription(view, recommendation, normalDescription) {
   if (recommendation) return recommendation
-  if (status === 'normal') return normalDescription
-  if (status === 'warning' || status === 'fault' || status === 'critical') return ''
+  if (view.tone === 'success') return normalDescription
+  if (view.tone === 'warning' || view.tone === 'danger') return ''
   return '当前诊断不可判定或状态未知，不能据此判断设备健康。'
 }
 
-defineProps({
+const props = defineProps({
   computedStrategyAnalyze: { type: Boolean, default: false },
   loadingStrategyAnalyze: { type: Boolean, default: false },
   strategyAnalyzeData: { type: Object, default: null },
@@ -295,6 +289,9 @@ const analyzeDenoise = defineModel('analyzeDenoise', { type: String, default: 'n
 const fullAnalysisDenoise = defineModel('fullAnalysisDenoise', { type: String, default: 'none' })
 
 defineEmits(['compute-strategy', 'clear-strategy', 'compute-full', 'clear-full', 'goto-research'])
+
+const strategyStatusView = computed(() => getDiagnosisStatusView(props.strategyAnalyzeData?.status))
+const fullAnalysisStatusView = computed(() => getDiagnosisStatusView(props.fullAnalysisData?.status))
 </script>
 
 <style scoped>

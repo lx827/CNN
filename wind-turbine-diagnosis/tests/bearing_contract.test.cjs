@@ -11,6 +11,7 @@ const frontendRoot = path.resolve(__dirname, '..')
 const requireFrontend = createRequire(path.join(frontendRoot, 'package.json'))
 const { parse, compileScript } = requireFrontend('@vue/compiler-sfc')
 const bearingUtilsPromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/bearingDiagnosis.js')).href)
+const diagnosisStatusPromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/diagnosisStatus.js')).href)
 
 const stripModules = source => source
   .replace(/^import[\s\S]*?from ['"][^'"]+['"]\r?\n/gm, '')
@@ -108,11 +109,12 @@ async function loadDataView(overrides = {}) {
 
 async function loadResearch(overrides = {}) {
   const utils = await bearingUtilsPromise
+  const { getDiagnosisStatusView } = await diagnosisStatusPromise
   const source = stripModules(readFileSync(path.join(frontendRoot, 'src/composables/useResearchDiagnosis.js'), 'utf8'))
     .replace('function useResearchDiagnosis()', 'globalThis.useResearchDiagnosis = function useResearchDiagnosis()')
     + '\nglobalThis.evaluationStatusText = evaluationStatusText; globalThis.evaluationStatusType = evaluationStatusType;'
     + '\nglobalThis.statusText = statusText; globalThis.statusType = statusType;'
-  const context = composableContext({ ...utils, ...overrides })
+  const context = composableContext({ ...utils, getDiagnosisStatusView, ...overrides })
   vm.runInNewContext(source, context)
   return { state: context.useResearchDiagnosis(), context }
 }
@@ -229,73 +231,85 @@ test('研究页全方法/集成派生行区分轴承新契约与齿轮旧契约'
   assert.equal(limitedRows.find(item => item.source === '齿轮').state, '命中')
 })
 
-test('研究页不可判定与未知状态使用中性样式，不回退正常', async () => {
+test('诊断状态 adapter 显式覆盖合法状态并对非法值中性兜底', async () => {
+  const { getDiagnosisStatusView } = await diagnosisStatusPromise
+  const cases = [
+    ['normal', '正常', 'success', 'success'],
+    ['warning', '预警', 'warning', 'warning'],
+    ['fault', '故障', 'danger', 'error'],
+    ['critical', '故障', 'danger', 'error'],
+    ['indeterminate', '不可判定', 'info', 'info'],
+    ['not_evaluable', '不可评估', 'info', 'info'],
+  ]
+  for (const [status, text, tagType, alertType] of cases) {
+    assert.deepEqual(getDiagnosisStatusView(status), { text, tone: tagType, tagType, alertType })
+  }
+  for (const status of [undefined, null, '', 'unexpected_status', 'normal ', 0, {}, '__proto__']) {
+    assert.deepEqual(getDiagnosisStatusView(status), {
+      text: '未知', tone: 'info', tagType: 'info', alertType: 'info',
+    })
+  }
+})
+
+test('Research 实际消费者只使用统一诊断状态 view', async () => {
   const { context } = await loadResearch()
-  assert.equal(context.statusText('normal'), '正常')
-  assert.equal(context.statusType('normal'), 'success')
-  assert.equal(context.statusText('warning'), '预警')
-  assert.equal(context.statusType('warning'), 'warning')
-  assert.equal(context.statusText('critical'), '故障')
-  assert.equal(context.statusType('critical'), 'danger')
-  assert.equal(context.statusText('indeterminate'), '不可判定')
-  assert.equal(context.statusType('indeterminate'), 'info')
-  assert.equal(context.statusText('not_evaluable'), '不可评估')
-  assert.equal(context.statusType('not_evaluable'), 'info')
-  for (const status of [undefined, null, '', 'unexpected_status']) {
-    assert.equal(context.statusText(status), '未知')
-    assert.equal(context.statusType(status), 'info')
+  const { getDiagnosisStatusView } = await diagnosisStatusPromise
+  for (const status of [
+    'normal', 'warning', 'fault', 'critical', 'indeterminate', 'not_evaluable',
+    undefined, null, '', 'unexpected_status',
+  ]) {
+    const view = getDiagnosisStatusView(status)
+    assert.equal(context.statusText(status), view.text)
+    assert.equal(context.statusType(status), view.tagType)
   }
 })
 
-test('DiagnosisDetail 实际消费者将不可判定与未知状态显示为中性', async () => {
+test('DiagnosisDetail 实际消费者只使用统一诊断状态 view', async () => {
   const utils = await bearingUtilsPromise
-  const setup = loadSfcSetup('src/components/DiagnosisDetail.vue', 'DiagnosisDetailStatus', utils)
-  const bindings = setup({ orderAnalysis: { engine_result: {} } })
-  assert.equal(bindings.statusText('normal'), '正常')
-  assert.equal(bindings.statusTagType('normal'), 'success')
-  assert.equal(bindings.statusText('warning'), '预警')
-  assert.equal(bindings.statusTagType('warning'), 'warning')
-  for (const status of ['fault', 'critical']) {
-    assert.equal(bindings.statusText(status), '故障')
-    assert.equal(bindings.statusTagType(status), 'danger')
-  }
-  assert.equal(bindings.statusText('indeterminate'), '不可判定')
-  assert.equal(bindings.statusTagType('indeterminate'), 'info')
-  assert.equal(bindings.statusText('not_evaluable'), '不可评估')
-  assert.equal(bindings.statusTagType('not_evaluable'), 'info')
-  for (const status of [undefined, null, '', 'unexpected_status']) {
-    assert.equal(bindings.statusText(status), '未知')
-    assert.equal(bindings.statusTagType(status), 'info')
+  const { getDiagnosisStatusView } = await diagnosisStatusPromise
+  const setup = loadSfcSetup('src/components/DiagnosisDetail.vue', 'DiagnosisDetailStatus', {
+    ...utils, getDiagnosisStatusView,
+  })
+  for (const status of [
+    'normal', 'warning', 'fault', 'critical', 'indeterminate', 'not_evaluable',
+    undefined, null, '', 'unexpected_status',
+  ]) {
+    const bindings = setup({ orderAnalysis: { engine_result: { status } } })
+    assert.equal(bindings.statusView.value.text, getDiagnosisStatusView(status).text)
+    assert.equal(bindings.statusView.value.tagType, getDiagnosisStatusView(status).tagType)
   }
 })
 
-test('ComprehensiveSection 实际消费者对不可判定与未知状态使用中性 alert', async () => {
+test('ComprehensiveSection 实际消费者只使用统一诊断状态 view', async () => {
+  const { getDiagnosisStatusView } = await diagnosisStatusPromise
   const setup = loadSfcSetup(
     'src/components/dataview/ComprehensiveSection.vue',
     'ComprehensiveSectionStatus',
     {
       bearingMethodLabel: value => value,
       bearingEntries: noop,
+      getDiagnosisStatusView,
       _mergeModels: (props, models) => ({ ...props, ...models }),
       _useModel: (props, name) => ({ value: props[name] }),
     },
   )
-  const bindings = setup({})
-  assert.equal(bindings.statusAlertType('normal'), 'success')
-  assert.equal(bindings.statusAlertType('warning'), 'warning')
-  assert.equal(bindings.statusAlertType('fault'), 'error')
-  assert.equal(bindings.statusAlertType('critical'), 'error')
-  assert.equal(bindings.statusAlertTitle('indeterminate'), '诊断不可判定')
-  assert.equal(bindings.statusAlertType('indeterminate'), 'info')
-  assert.equal(bindings.statusAlertTitle('not_evaluable'), '诊断不可评估')
-  assert.equal(bindings.statusAlertType('not_evaluable'), 'info')
-  for (const status of [undefined, null, '', 'unexpected_status']) {
-    assert.equal(bindings.statusAlertTitle(status), '诊断状态未知')
-    assert.equal(bindings.statusAlertType(status), 'info')
+  for (const status of [
+    'normal', 'warning', 'fault', 'critical', 'indeterminate', 'not_evaluable',
+    undefined, null, '', 'unexpected_status',
+  ]) {
+    const bindings = setup({ strategyAnalyzeData: { status }, fullAnalysisData: { status } })
+    const expected = getDiagnosisStatusView(status)
+    assert.deepEqual(plain(bindings.strategyStatusView.value), expected)
+    assert.deepEqual(plain(bindings.fullAnalysisStatusView.value), expected)
+    assert.equal(bindings.strategyStatusView.value.alertType, expected.alertType)
   }
-  assert.equal(bindings.statusAlertDescription('normal', '', '正常说明'), '正常说明')
-  assert.equal(bindings.statusAlertDescription('warning', '', '正常说明'), '')
-  assert.match(bindings.statusAlertDescription('indeterminate', '', '正常说明'), /不能据此判断/)
+  const { statusAlertTitle, statusAlertDescription } = setup({})
+  assert.equal(statusAlertTitle(getDiagnosisStatusView('normal')), '✅ 未检出显著故障特征')
+  assert.equal(statusAlertDescription(getDiagnosisStatusView('normal'), '', '正常说明'), '正常说明')
+  assert.equal(statusAlertDescription(getDiagnosisStatusView('warning'), '', '正常说明'), '')
+  const indeterminate = getDiagnosisStatusView('indeterminate')
+  assert.equal(statusAlertTitle(indeterminate), '诊断不可判定')
+  assert.match(statusAlertDescription(indeterminate, '', '正常说明'), /不能据此判断/)
 })
 
 function loadSfcSetup(relativePath, exportName, globals) {
