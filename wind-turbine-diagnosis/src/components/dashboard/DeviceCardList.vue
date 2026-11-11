@@ -19,6 +19,7 @@
         </div>
         <div class="device-name">{{ dev.deviceName }}</div>
         <div class="device-location">{{ dev.location }}</div>
+        <el-text v-if="dev.coverage === 'partial'" type="info" size="small">仅部分对象形成有效评估</el-text>
         <div v-if="dev.is_offline" class="offline-hint">
           <el-icon><Warning /></el-icon> 已离线
         </div>

@@ -282,9 +282,6 @@ function fmtVal(v, precision = 4) {
   font-size: 12px;
 }
 
-.score-good { color: #52c41a; font-weight: 600; font-size: 18px; }
-.score-warning { color: #faad14; font-weight: 600; font-size: 18px; }
-.score-danger { color: #f5222d; font-weight: 600; font-size: 18px; }
 
 .text-danger { color: #f5222d; font-weight: bold; }
 .text-warning { color: #faad14; font-weight: 600; }

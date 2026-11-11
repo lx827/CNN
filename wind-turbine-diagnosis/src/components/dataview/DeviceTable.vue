@@ -23,6 +23,7 @@
                   <div>健康度: {{ getDiagnosisView(batch).scoreText }}</div>
                   <div v-if="batch.top_fault">主要异常: {{ batch.top_fault }}</div>
                   <div v-else>暂无明细故障</div>
+                  <div v-if="batch.coverage === 'partial'">仅部分对象形成有效评估</div>
                 </div>
               </template>
               <el-tag

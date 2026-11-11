@@ -29,6 +29,8 @@
         </div>
       </div>
       <div v-if="computedGear && gearData" class="gear-info">
+        <el-tag :type="getDiagnosisView(gearData).tagType">齿轮诊断：{{ getDiagnosisView(gearData).label }}</el-tag>
+        <DiagnosisCoverage :result="gearData" />
         <el-alert
           v-if="gearData.tsa_status === 'not_evaluable' || unavailableMetricReason"
           :title="unavailableMetricReason || gearData.tsa_reason"
@@ -97,6 +99,8 @@
 
 <script setup>
 import { computed } from 'vue'
+import { getDiagnosisView } from '../../utils/diagnosisStatus'
+import DiagnosisCoverage from '../DiagnosisCoverage.vue'
 
 const props = defineProps({
   computedGear: { type: Boolean, default: false },
@@ -111,7 +115,7 @@ const indicatorType = (name) => {
   const indicator = props.gearData?.fault_indicators?.[name]
   if (indicator?.critical) return 'danger'
   if (indicator?.warning) return 'warning'
-  return 'success'
+  return 'info'
 }
 
 const formatRaw = (value) => value == null ? '不可评估' : Number(value).toFixed(3)

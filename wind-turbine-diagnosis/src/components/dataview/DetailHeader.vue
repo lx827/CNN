@@ -13,6 +13,7 @@
         {{ getDiagnosisView(batch).label }}
         <span v-if="getDiagnosisView(batch).scoreText !== '-'">({{ getDiagnosisView(batch).scoreText }}分)</span>
       </el-tag>
+      <el-tag v-if="batch?.coverage === 'partial'" type="info" size="small">部分覆盖</el-tag>
       <el-tag type="info" size="small">采样率 {{ batch?.sample_rate || 25600 }} Hz</el-tag>
     </span>
     <div class="detail-actions">

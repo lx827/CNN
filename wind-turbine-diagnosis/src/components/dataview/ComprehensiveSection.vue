@@ -189,7 +189,7 @@
             <el-table-column prop="method" label="诊断方法" width="140" />
             <el-table-column prop="ser" label="SER" width="100">
               <template #default="{ row }">
-                <el-tag :type="row.ser > 3 ? 'danger' : row.ser > 1.5 ? 'warning' : 'success'" size="small">{{ row.ser?.toFixed(3) ?? '-' }}</el-tag>
+                <el-tag type="info" size="small">{{ row.ser?.toFixed(3) ?? '-' }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="fm0" label="FM0" width="90">
@@ -213,7 +213,7 @@
                 <el-tag v-for="(a, idx) in row.alerts" :key="idx" :type="a.level === 'critical' ? 'danger' : 'warning'" size="small" style="margin-right: 6px; margin-bottom: 4px;">
                   {{ a.indicator }}
                 </el-tag>
-                <el-text v-if="row.alerts.length === 0" type="info" size="small">无告警</el-text>
+                <el-text v-if="row.alerts.length === 0" type="info" size="small">无已报告阈值告警</el-text>
               </template>
             </el-table-column>
           </el-table>

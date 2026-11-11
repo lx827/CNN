@@ -574,6 +574,8 @@ export function useDataView() {
 
   watch(denoiseMethod, () => {
     if (!selectedDevice.value || !selectedBatch.value) return
+    showDiagnosisDetail.value = false
+    diagnosisDetailData.value = null
     timeOption.value = null
     nextTick(() => loadTimeDomain())
     if (computedFFT.value) computeFFT()
@@ -829,19 +831,11 @@ export function useDataView() {
             selectedDevice.value.device_id,
             selectedBatch.value.batch_index,
             {
-              order_analysis: {
-                rot_freq_hz: d.rot_freq,
-                rot_rpm: d.rot_rpm,
-              },
               rot_freq: d.rot_freq,
             }
           )
           // 同步更新本地数据，避免刷新前显示不一致
           selectedBatch.value.rot_freq = d.rot_freq
-          if (selectedBatch.value.order_analysis) {
-            selectedBatch.value.order_analysis.rot_freq_hz = d.rot_freq
-            selectedBatch.value.order_analysis.rot_rpm = d.rot_rpm
-          }
           ElMessage.success('诊断转频已更新为实时计算值')
         } catch (err) {
           console.error('更新诊断数据失败:', err)
