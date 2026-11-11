@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "purpose": "Frozen record-level real algorithm effectiveness experiment; raw files excluded from Git.",
+  "purpose": "Frozen local data-object trial and pipeline-output check; raw files and generated results excluded from Git; detection-quality targets outside this task.",
   "samples": [
     {
       "sample_id": "ottawa_H-A-1",
@@ -2299,7 +2299,7 @@
         "raw_sources/GEARBOX_INTAKE_20261111.txt",
         "raw_sources/WT-行星齿轮数据集/Liu_2024_Meas._Sci._Technol._35_012002.pdf"
       ],
-      "evaluation_split": "calibration",
+      "evaluation_split": "reference_training",
       "bytes": 488636912,
       "original_source_path": "raw_sources/WT-行星齿轮数据集/healthy/1/N1_20.MAT",
       "intake_note": "Source media used only for file metadata and copying; content read/hash computed on D copy."
@@ -2715,7 +2715,7 @@
         "raw_sources/GEARBOX_INTAKE_20261111.txt",
         "raw_sources/WT-行星齿轮数据集/Liu_2024_Meas._Sci._Technol._35_012002.pdf"
       ],
-      "evaluation_split": "calibration",
+      "evaluation_split": "reference_training",
       "bytes": 467141104,
       "original_source_path": "raw_sources/WT-行星齿轮数据集/healthy/1/N1_40.MAT",
       "intake_note": "Source media used only for file metadata and copying; content read/hash computed on D copy."
@@ -3149,7 +3149,7 @@
       "current_contract",
       "conditional_physical_parameters"
     ],
-    "wt_baseline_training": "N1 same speed/channel, windows at 0/10/20s; held-out N2 remains in denominator",
+    "wt_reference_training": "N1 same speed/channel, windows at 0/10/20s; held-out N2 remains in denominator",
     "wt_threshold_rule": "max training metric + max(3*1.4826*MAD, abs(median)*0.25, 1e-9), critical=warning+same margin",
     "sensitivity_records": [
       "wt_N2_20",
@@ -3172,6 +3172,7 @@
         3
       ]
     },
+    "conditional_bearing_geometry": {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0.0},
     "bearing_assumption": "ER16K n9/d7.94/D38.52/alpha0 conditional only; HUST pitch diameter unverified; Ottawa angle unverified. Scalar estimates are inferred, not independent speed ground truth.",
     "noise": "No injected noise in main evaluation; actual acquisition noise level unknown."
   }

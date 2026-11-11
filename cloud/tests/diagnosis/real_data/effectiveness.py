@@ -1,4 +1,4 @@
-"""原始记录效果实验：标准对象 Pipeline、独立采集分母与显式条件情景。"""
+"""原始记录本地试运行：复用对象 Pipeline，核对输出与显式条件情景。"""
 
 from __future__ import annotations
 
@@ -25,9 +25,6 @@ def load_record(entry, root):
     else:
         from .gear import load_record as loader
     return loader(entry, root)
-
-
-ASSUMED_BEARING = {"n": 9, "d": 7.94, "D": 38.52, "alpha": 0.0}
 
 
 def aggregate_channels(channels: dict[str, dict]) -> dict:
@@ -148,7 +145,7 @@ def _speed_summary(order):
     }
 
 
-def bearing_results(signal, fs, entry, channel_index):
+def bearing_results(signal, fs, entry, channel_index, assumed_geometry):
     from app.algorithms.order import AutomaticOrderPipeline
     from app.algorithms.pipelines.bearing import BearingEnvelopePipeline
     from app.services.diagnosis.domain import DiagnosisKey
@@ -159,9 +156,14 @@ def bearing_results(signal, fs, entry, channel_index):
     order = AutomaticOrderPipeline().run(values, fs)
     key = DiagnosisKey(entry["sample_id"], 1, channel_index, "none")
     # Ottawa原文已给n/d/D，接触角由现有产品默认0；实验不额外发明门控。
+    geometry = entry["metadata"]["bearing_geometry"]
     current_params = (
-        {k: v for k, v in ASSUMED_BEARING.items() if k != "alpha"}
-        if entry["dataset_id"] == "ottawa_bearing"
+        {
+            "n": geometry["ball_count"],
+            "d": geometry["ball_diameter_mm"],
+            "D": geometry["pitch_diameter_mm"],
+        }
+        if "pitch_diameter_mm" in geometry
         else None
     )
     current = DiagnosisEngine(
@@ -170,7 +172,7 @@ def bearing_results(signal, fs, entry, channel_index):
     # HUST恒速20Hz仅为名义情景；所有变速仍走真实估计/变速门控。
     nominal = entry.get("metadata", {}).get("nominal_rotation_hz")
     conditional = DiagnosisEngine(
-        bearing_params=ASSUMED_BEARING, diagnosis_key=key
+        bearing_params=assumed_geometry, diagnosis_key=key
     ).analyze_bearing(
         values,
         fs,
@@ -188,7 +190,7 @@ def bearing_results(signal, fs, entry, channel_index):
         "conditional_speed_source": "nominal_condition_not_measured"
         if nominal
         else "estimated_from_vibration",
-        "conditional_geometry": ASSUMED_BEARING,
+        "conditional_geometry": assumed_geometry,
         "geometry_evidence_gap": "Ottawa contact_angle_unverified"
         if entry["dataset_id"] == "ottawa_bearing"
         else "HUST pitch_diameter_and_contact_angle_unverified",
@@ -212,10 +214,16 @@ def fixed_results(signal, fs, entry, channel_index):
 
     values = prepare_signal(signal, detrend=True)
     order = AutomaticOrderPipeline().run(values, fs)
-    pipeline = FixedAxisGearPipeline(FixedAxisGearGeometry(18, 27))
+    mechanics = entry["mechanics"]
+    pipeline = FixedAxisGearPipeline(
+        FixedAxisGearGeometry(mechanics["pinion_teeth"], mechanics["gear_teeth"])
+    )
     current = _compact(
         DiagnosisEngine(
-            gear_teeth={"input": 18, "output": 27},
+            gear_teeth={
+                "input": mechanics["pinion_teeth"],
+                "output": mechanics["gear_teeth"],
+            },
             diagnosis_key=DiagnosisKey(entry["sample_id"], 1, channel_index, "none"),
         ).analyze_gear(values, fs, preprocess=False, _cached_order=order)
     )
@@ -247,16 +255,30 @@ class PlanetaryExperiment:
     """每个表示键独立用N1训练；N2及故障绝不参与阈值选择。"""
 
     def __init__(self, entries, root):
-        self.entries, self.root, self.cache, self.training = entries, root, {}, []
+        self.entries, self.root, self.cache, self.reference_training = (
+            entries,
+            root,
+            {},
+            [],
+        )
 
     @staticmethod
-    def pipeline():
+    def pipeline(entry):
         from app.algorithms.mechanics.planetary import PlanetaryGearGeometry
         from app.algorithms.pipelines.gear.planetary import PlanetaryGearPipeline
 
-        return PlanetaryGearPipeline(PlanetaryGearGeometry(28, 100, 36, 4, "sun"))
+        geometry = entry["mechanics"]
+        return PlanetaryGearPipeline(
+            PlanetaryGearGeometry(
+                geometry["sun_teeth"],
+                geometry["ring_teeth"],
+                geometry["planet_teeth"],
+                geometry["n_planets"],
+                geometry["reference_axis"],
+            )
+        )
 
-    def baseline(
+    def healthy_reference(
         self,
         hz,
         channel,
@@ -284,7 +306,7 @@ class PlanetaryExperiment:
                 },
                 self.root,
             )
-            analysis = self.pipeline().analyze(
+            analysis = self.pipeline(train).analyze(
                 record.vibration[channel],
                 record.sample_rate_hz,
                 ScalarSpeed(hz * scale, "nominal_sun_hz_not_encoder_measured"),
@@ -307,13 +329,13 @@ class PlanetaryExperiment:
             )
             warning = float(max(values) + margin)
             thresholds.append(PlanetaryThreshold(key, warning, warning + margin))
-        baseline = PlanetaryBaseline(
+        reference = PlanetaryBaseline(
             analysis.representation_key,
             tuple(thresholds),
             f"experimental_N1_{hz}_{channel}_windows_0_10_20_no_test_labels",
         )
-        self.cache[cache_key] = baseline
-        self.training.append(
+        self.cache[cache_key] = reference
+        self.reference_training.append(
             {
                 "training_sample_id": train["sample_id"],
                 "channel": channel,
@@ -322,10 +344,10 @@ class PlanetaryExperiment:
                 "methods": methods,
                 "metrics_by_window": metrics,
                 "thresholds": [asdict(t) for t in thresholds],
-                "source": baseline.source,
+                "source": reference.source,
             }
         )
-        return baseline
+        return reference
 
     def run(
         self,
@@ -343,7 +365,7 @@ class PlanetaryExperiment:
         from app.algorithms.gear.planetary.evaluation import collect_planetary_metrics
         from app.algorithms.order import ScalarSpeed
 
-        pipeline = self.pipeline()
+        pipeline = self.pipeline(entry)
         if current_result is None:
             from app.services.diagnosis.domain import DiagnosisKey
             from app.services.diagnosis.engine import DiagnosisEngine
@@ -352,11 +374,11 @@ class PlanetaryExperiment:
                 DiagnosisEngine(
                     gear_teeth={
                         "gear_type": "planetary",
-                        "sun": 28,
-                        "ring": 100,
-                        "planet": 36,
-                        "planet_count": 4,
-                        "reference_axis": "sun",
+                        "sun": entry["mechanics"]["sun_teeth"],
+                        "ring": entry["mechanics"]["ring_teeth"],
+                        "planet": entry["mechanics"]["planet_teeth"],
+                        "planet_count": entry["mechanics"]["n_planets"],
+                        "reference_axis": entry["mechanics"]["reference_axis"],
                         "fixed_member": "ring",
                     },
                     diagnosis_key=DiagnosisKey(
@@ -372,8 +394,8 @@ class PlanetaryExperiment:
             include_tsa=True,
             methods=methods,
         )
-        baseline = self.baseline(hz, channel, duration, scale, methods)
-        evaluation = pipeline.evaluate(analysis, baseline)
+        reference = self.healthy_reference(hz, channel, duration, scale, methods)
+        evaluation = pipeline.evaluate(analysis, reference)
         return {
             "current_contract": current_result,
             "conditional_physical_parameters": _canonical(
@@ -385,8 +407,8 @@ class PlanetaryExperiment:
             "analysis_reason": analysis.reason,
             "conditional_speed_hz": hz * scale,
             "conditional_speed_source": "nominal_sun_hz_not_measured",
-            "baseline_source": baseline.source,
-            "baseline_status": "experimental_calibration_independent_installation_test_not_production_validated",
+            "healthy_reference_source": reference.source,
+            "healthy_reference_status": "trial_reference_training_not_production_validated",
             "raw_metrics": collect_planetary_metrics(analysis),
             "method_status": [
                 {
@@ -440,7 +462,11 @@ def run_experiment(entries, root, output, plan):
     started = time.perf_counter()
     for position, entry in enumerate(entries, 1):
         before = time.perf_counter()
-        duration = 1.28 if entry["dataset_id"] == "hust_gearbox" else 5.0
+        duration = float(
+            plan["hust_gearbox_window_seconds"]
+            if entry["dataset_id"] == "hust_gearbox"
+            else plan["primary_window_seconds"]
+        )
         channel_results = {
             "current_contract": {},
             "conditional_physical_parameters": {},
@@ -460,7 +486,11 @@ def run_experiment(entries, root, output, plan):
             for channel_index, (name, values) in enumerate(record.vibration.items(), 1):
                 if entry["dataset_id"].endswith("bearing"):
                     result, observation = bearing_results(
-                        values, record.sample_rate_hz, entry, channel_index
+                        values,
+                        record.sample_rate_hz,
+                        entry,
+                        channel_index,
+                        plan["conditional_bearing_geometry"],
                     )
                 elif entry["dataset_id"] == "hust_gearbox":
                     result, observation = fixed_results(
@@ -574,7 +604,7 @@ def run_experiment(entries, root, output, plan):
             ),
             encoding="utf-8",
         )
-    tests = [row for row in rows if row["evaluation_split"] != "calibration"]
+    tests = [row for row in rows if row["evaluation_split"] != "reference_training"]
     summaries = {
         scenario: grouped_summary([r for r in tests if r["scenario"] == scenario])
         for scenario in ("current_contract", "conditional_physical_parameters")
@@ -582,13 +612,13 @@ def run_experiment(entries, root, output, plan):
     report = {
         "schema_version": 1,
         "generated_at": datetime.now(UTC).isoformat(),
-        "purpose": "record_level_current_pipeline_effectiveness_with_explicit_conditional_scenarios",
+        "purpose": "local_record_pipeline_trial_and_output_check_with_explicit_conditions",
         "elapsed_seconds": time.perf_counter() - started,
         "plan": plan,
         "selected_record_count": len(entries),
         "test_record_count": len(tests) // 2,
-        "calibration_record_count": sum(
-            e.get("evaluation_split") == "calibration" for e in entries
+        "reference_training_record_count": sum(
+            e.get("evaluation_split") == "reference_training" for e in entries
         ),
         "environment": {
             "python": platform.python_version(),
@@ -603,7 +633,7 @@ def run_experiment(entries, root, output, plan):
         "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "records": rows,
         "observations": observations,
-        "training": planetary.training,
+        "reference_training": planetary.reference_training,
         "summaries": summaries,
         "sensitivity": sensitivity,
         "sensitivity_summaries": {
@@ -612,7 +642,6 @@ def run_experiment(entries, root, output, plan):
         },
         "errors": errors,
         "unavailable_scope": {
-            "field_data": "User confirmed CSV unavailable on 2026-11-12 and deferred field evaluation; data/CQU is an empty receiving directory; no field effectiveness claim",
             "speed_truth": "encoder pulses_per_revolution unverified; no measured-speed accuracy claim",
         },
     }
@@ -637,15 +666,17 @@ def render_report(report: dict, path: Path) -> None:
         "wt_planetary": "WT行星齿轮",
     }
     lines = [
-        "# 真实原始数据算法效果基线",
+        "# 四套原始数据的本地试运行与输出核对",
         "",
-        "运行日期：2026-11-12。本文数字由冻结实验 JSON 生成，统计单位是原始采集记录。现场 CSV 已由用户确认本轮延期，`data/CQU` 仅为接收目录，本文不声称现场已验证。",
+        "运行日期：2026-11-12。本文数字由冻结实验 JSON 生成，统计单位是原始采集记录；范围为四套公开来源。",
         "",
-        f"本轮选取 {report['selected_record_count']} 次采集，{report['calibration_record_count']} 条 WT N1 健康记录专用于阈值训练，其余 {report['test_record_count']} 条进入测试分母。训练记录中的不同窗口与同记录多通道均不增加独立样本数。异常 {len(report['errors'])} 条，失败与 unknown 全部保留在分母。",
+        f"本轮选取 {report['selected_record_count']} 次采集，{report['reference_training_record_count']} 条 WT N1 健康记录用于健康参考，其余 {report['test_record_count']} 条用于输出核对。健康参考记录中的不同窗口与同记录多通道均不增加独立样本数。异常 {len(report['errors'])} 条，失败与 unknown 全部保留在统计分母。",
+        "",
+        "本轮只检查重构后的数据对象、复用reader、本地测试机制及算法输出，不进行诊断效果目标验收。100%检出是另行处理的目标，不属于本次完成条件；本报告的统计不是该目标的验收结论。",
         "",
         "## 当前产品结果与条件结果",
         "",
-        "`current_contract` 实际执行标准 DiagnosisEngine，按现有产品接口生成 canonical 两维状态。Ottawa 使用原文 n=9、d=7.94、D=38.52，接触角沿用产品默认0°；速度来自当前振动估计器。HUSTbear 不移植另一来源的已证实节径。HUST定轴按18齿输入轮调用产品自动估计；估计量是否对应小轮轴尚无独立测速证据。WT使用28/100/36/4固定齿圈模型与太阳轮参考轴，当前前提门控和基线门控由产品决定。",
+        "`current_contract` 实际执行标准 DiagnosisEngine，按现有产品接口生成 canonical 两维状态。Ottawa 使用原文 n=9、d=7.94、D=38.52，接触角沿用产品默认0°；速度来自当前振动估计器。HUSTbear 不移植另一来源的已证实节径。HUST定轴按18齿输入轮调用产品自动估计；估计量是否对应小轮轴尚无独立测速证据。WT使用28/100/36/4固定齿圈模型与太阳轮参考轴，当前前提门控和健康参考门控由产品决定。",
         "",
         "`conditional_physical_parameters` 是明确参数假设下的实验：轴承按 ER16K 的 n9/d7.94/D38.52/α0 模型，HUST恒速使用文件名20Hz，其余保留自动估计及产品变速门控；定轴假设名义Hz为18齿输入轮转频；WT假设名义Hz为恒定太阳轮转频，另用N1训练临时界限。HUST节径与这些速度都不是已校准真值，临时界限未部署。两组结果不得混称现场检出率。",
         "",
@@ -699,11 +730,11 @@ def render_report(report: dict, path: Path) -> None:
             )
     lines += [
         "",
-        "## WT健康基线与消融",
+        "## WT健康参考与消融输出核对",
         "",
         "同速度同通道的N1健康采集在0、10、20秒取三个不重叠5秒窗，只校准每种方法太阳轮局部事件候选峰的幅值/背景比。界限为训练最大值加 `max(3×1.4826×MAD, |median|×0.25, 1e-9)`，critical再加同一余量。训练仅来自一次安装，N2是另一次拆装后的健康测试；3个窗口不构成3次独立健康试验。所有原始指标与实际界限保留在JSON。",
         "",
-        "固定代表组为20Hz的N2/B2/M2/R2/W2，共1健康、4故障。改变窗口/速度/方法时，N1训练表示同步改变以满足产品严格表示键；不会把不兼容基线强行套入新表示。速度±5%表示同一系统性速度标定偏差的敏感性，不能证明估速误差为5%。",
+        "固定代表组为20Hz的N2/B2/M2/R2/W2，共1健康、4故障。改变窗口/速度/方法时，N1健康参考表示同步改变以满足产品严格表示键；不会把不兼容健康参考强行套入新表示。速度±5%表示同一系统性速度标定偏差的敏感性，不能证明估速误差为5%。",
         "",
         "| 表示 | 检出/故障总数 | 健康误报/健康总数 | unknown/总数 |",
         "|---|---:|---:|---:|",
@@ -735,7 +766,10 @@ def render_report(report: dict, path: Path) -> None:
     for scenario in ("current_contract", "conditional_physical_parameters"):
         counts = defaultdict(int)
         for row in report["records"]:
-            if row["scenario"] == scenario and row["evaluation_split"] != "calibration":
+            if (
+                row["scenario"] == scenario
+                and row["evaluation_split"] != "reference_training"
+            ):
                 for reason in set(row["channel_reasons"].values()) - {None}:
                     counts[reason] += 1
         for reason, count in sorted(counts.items()):
@@ -749,7 +783,8 @@ def render_report(report: dict, path: Path) -> None:
         rows = [
             r
             for r in report["records"]
-            if r["scenario"] == scenario and r["evaluation_split"] != "calibration"
+            if r["scenario"] == scenario
+            and r["evaluation_split"] != "reference_training"
         ]
         fp = [
             r["sample_id"]
@@ -766,14 +801,18 @@ def render_report(report: dict, path: Path) -> None:
         )
     lines += [
         "",
+        "## 观察记录与本轮范围",
+        "",
+        "本地试运行观察到不可判定、健康误报及故障判正常。条件参数与健康参考的输出均按原样保留，不作为诊断质量达标的声明，也不据此扩展本次工作为调参优化。100%检出目标不在本轮验收范围，本轮没有为达到该目标修改算法、阈值或样本。",
+        "",
         "## 可复现运行",
         "",
-        "冻结样本与原文件SHA256见 [effectiveness.json](../../cloud/tests/diagnosis/real_data/manifests/effectiveness.json)。完整逐记录证据见 [实验JSON](../../cloud/tests/diagnosis/real_data/results/effectiveness_20261112.json)。原始大文件不入库。",
+        "冻结样本与原文件SHA256见仓库 cloud/tests/diagnosis/real_data/manifests/effectiveness.json。完整逐记录证据、生成报告和原始大文件保留本地data目录，不入库。",
         "",
         "```powershell",
         "$env:CNN_DATA_ROOT='D:/code/CNN/data'",
         "cd cloud",
-        "uv run python -m tests.diagnosis.real_data.effectiveness --data-root $env:CNN_DATA_ROOT --output D:/code/CNN/data/real_diagnosis/effectiveness/results.json --markdown-output ../docs/benchmarks/diagnosis_effectiveness.md",
+        "uv run python -m tests.diagnosis.real_data.effectiveness --data-root $env:CNN_DATA_ROOT --output D:/code/CNN/data/real_diagnosis/effectiveness/results.json --markdown-output D:/code/CNN/data/real_diagnosis/effectiveness/diagnosis_effectiveness_report.md",
         "uv run python -m unittest tests.diagnosis.real_data.test_effectiveness",
         "```",
         "",
@@ -781,7 +820,7 @@ def render_report(report: dict, path: Path) -> None:
         "",
         "```bash",
         "cd cloud",
-        "uv run python -m tests.diagnosis.real_data.effectiveness --render-results tests/diagnosis/real_data/results/effectiveness_20261112.json --markdown-output ../docs/benchmarks/diagnosis_effectiveness.md",
+        "uv run python -m tests.diagnosis.real_data.effectiveness --render-results D:/code/CNN/data/real_diagnosis/effectiveness/results.json --markdown-output D:/code/CNN/data/real_diagnosis/effectiveness/diagnosis_effectiveness_report.md",
         "```",
         "",
         f"随机种子 `{report['plan']['seed']}`；代码修订 `{report['source_revision']}`；Python `{report['environment']['python']}`，NumPy `{report['environment']['packages']['numpy']}`，SciPy `{report['environment']['packages']['scipy']}`。运行器SHA256与完整环境记录在JSON。本轮未修改产品算法；统计测试只检查unknown分母和通道不增样本。",
