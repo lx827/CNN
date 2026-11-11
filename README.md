@@ -20,7 +20,7 @@
 
 ## 开发与部署
 
-- 开发命令（uv workspace，**uv-only**）：仓库根 `uv sync` 一次，后端 `cd cloud && uv run python -m app.main`，前端 `cd wind-turbine-diagnosis && npm install && npm run dev`；环境红线与测试命令见 [AGENTS.md](AGENTS.md)
+- 开发命令（根目录单项目，**uv-only**）：仓库根 `uv sync` 构建计算扩展并安装默认依赖组，后端 `cd cloud && uv run python -m app.main`，前端 `cd wind-turbine-diagnosis && npm install && npm run dev`；Windows 构建使用 Git Bash 的 `vsdev uv sync`。详见 [计算库构建说明](docs/native_compute.md) 与 [AGENTS.md](AGENTS.md)
 - 系统架构与目录结构：见 [系统架构](docs/系统架构.md)
 - 算法原理：见 [算法原理](docs/算法原理.md)
 - 服务器部署：`bash /opt/CNN/deploy.sh` 一键部署（`--dry-run` 演练零改动，`-s` 跳过前端构建），详见 [部署指南](docs/部署指南.md)
@@ -33,15 +33,17 @@
 
 ```
 CNN/
-├── cloud/                     # 云端 FastAPI 后端（uv workspace 成员，测试在 cloud/tests/）
+├── cloud/                     # 云端 FastAPI 后端（cloud 依赖组，测试在 cloud/tests/）
 ├── wind-turbine-diagnosis/    # Vue 3 前端（测试在 wind-turbine-diagnosis/tests/）
 ├── edge/                      # Rust 边端（开发中，目标树莓派，cargo 管理）
-├── dc24/                      # DC24 现场采集工具链（uv workspace 成员，测试在 dc24/tests/）
+├── dc24/                      # DC24 现场采集工具链（dc24 依赖组，测试在 dc24/tests/）
+├── native/                    # CMake 管理的 C++ 计算核心与 pybind11 绑定
+├── src/cnn_compute/           # 独立 Python 计算包
 ├── deploy/                    # 部署资产：cloud/CNN.service 模板、edge/ 交叉编译构建
 ├── scripts/                   # 运维调试脚本（dc24_start、export_openapi 等）
 ├── data/                      # 数据集（不提交 Git）
 ├── docs/                      # 项目文档
-├── pyproject.toml / uv.lock / .python-version   # uv workspace 根（Python 3.13）
+├── pyproject.toml / uv.lock / .python-version   # 根项目配置、锁文件与 Python 3.13
 ├── start_dc24.bat             # DC24 一键启动（start.bat 为其转发壳）
 └── deploy.sh                  # 服务器一键部署（支持 --dry-run / -s）
 ```

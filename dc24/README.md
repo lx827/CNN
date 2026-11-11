@@ -22,13 +22,14 @@ dc24/
 ├── dc24_profiles.json         # 原厂 12 档完整 B5 命令负载(云端与现场工具共用)
 ├── dc24_ffi.py                # 树莓派形态:dc24_edge_core 动态库的 ctypes 绑定(仅标准库)
 ├── dc24_edge_pi.py            # 树莓派形态:云端会话编排、五件套落盘、实时窗口与补传上传
-├── pyproject.toml             # 成员依赖(uv workspace,根目录 uv sync 统一安装)
 ├── tests/                     # 工具链测试(test_dc24_start 入口冒烟 / test_dc24_vendor DLL 回环,
 │                              #   未配置原厂 DLL 时跳过;test_dc24_edge_pi 树莓派驱动回归)
 └── .env                       # 本机配置(不入库):DC24_VENDOR_ROOT 指向原厂安装目录则走 DLL,留空走 Python TCP
 ```
 
 ## 配置(`.env`)
+
+Python 依赖在根项目 dc24 组，根目录 `uv sync` 默认安装。Windows 首次构建计算包或修改原生源码后，在 Git Bash 执行 `vsdev uv sync`；现有采集入口及工作目录保持原样，见 [计算库构建说明](../docs/native_compute.md)。
 
 | 键 | 说明 |
 |----|------|

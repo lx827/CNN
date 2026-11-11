@@ -6,7 +6,7 @@
 
 使用后端现有 `.env` 与 SQLAlchemy 连接,只新增 HUST-001～005,不覆盖 CW 或同编号冲突设备;冲突时整批回滚,重复执行无重复行。参数为 `{n:9, d:7.94, D:38.52, alpha:0}`,X/Y/Z 三轴,8192 Hz,仅轴承诊断。新设备离线创建,首次上传后上线。无需修改数据库结构或重启后端。
 
-云端 Ubuntu 运行(脚本须先上传至 `/opt/CNN/scripts/`;uv workspace 环境,禁 venv/pip):
+云端 Ubuntu 运行(脚本须先上传至 `/opt/CNN/scripts/`;根 uv 项目环境,禁手工 venv/pip):
 
 ```bash
 cd /opt/CNN/cloud
@@ -15,7 +15,7 @@ uv run python ../scripts/register_hustbear_devices.py
 
 预期输出新增 5 台,重复运行新增 0 台。`CNN_CLOUD_DIR` 可指定后端目录。
 
-本地回归(仓库根目录,uv workspace):
+本地回归(仓库根目录,uv 项目):
 
 ```bash
 cd cloud

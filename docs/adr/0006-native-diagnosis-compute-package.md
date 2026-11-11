@@ -1,6 +1,6 @@
 # ADR 0006：诊断计算库的技术路线与源码构建
 
-- 状态：设计方向与采用目标已确认；实现及目标环境验收尚未完成
+- 状态：根配置与双平台源码构建入口已实现；原生数值内核及目标环境资源验收尚未完成
 - 日期：2026-11-12
 
 ## 已确认的决策
@@ -9,7 +9,7 @@
 
 首版移植保留当前 Python 算法语义，包括极值精化、镜像规则、PCHIP/cubic、SD/Rilling、CEEMDAN 公式及收敛状态，仅接受事先约定的浮点误差。性能移植与算法改进分别验收；具体误差预算尚未确定。
 
-根目录保留一个 pyproject.toml，集中项目元数据、构建配置和 Python 依赖配置。计算库的运行依赖进入 project.dependencies；cloud、dc24、开发测试和 benchmark 依赖分别进入 dependency groups，配置日常默认安装组，benchmark 继续显式选择。生成的计算库 wheel 仅携带计算包与其运行依赖，不把整个应用及其服务依赖纳入库的分发边界。现有 cloud/dc24 源码位置及启动工作目录保留。该布局将在实现时替换当前多成员 workspace 配置，并同步更新 [ADR 0001](0001-uv-workspace-python-313.md) 所述现行布局。
+根目录保留一个 pyproject.toml，集中项目元数据、构建配置和 Python 依赖配置。计算库的运行依赖进入 project.dependencies；cloud、dc24、开发测试和 benchmark 依赖分别进入 dependency groups，配置日常默认安装组，benchmark 继续显式选择。生成的计算库 wheel 仅携带计算包与其运行依赖，不把整个应用及其服务依赖纳入库的分发边界。现有 cloud/dc24 源码位置及启动工作目录保留。该布局已替换原多成员 workspace 配置，[ADR 0001](0001-uv-workspace-python-313.md) 保留原决策语境并指向本决策。
 
 开发机和生产服务器均通过 uv sync 从项目源码按需构建诊断计算扩展，并由构建后端完成编译与安装；NumPy、SciPy 等第三方 Python 依赖允许安装官方 wheel。Eigen 及选定的 C++ 插值基座参与扩展构建。编译缓存与重建规则仍需落实，不承诺每次同步都无条件重新编译。
 
@@ -47,4 +47,4 @@ Eigen 的指令集路径由目标架构、编译参数和表达式支持共同�
 
 命令执行显式区分 Windows 与 WSL：本机默认 bash 指向 WSL；Windows Git Bash 使用确认过的可执行文件路径。Windows/MSVC 操作遵守根 AGENTS 的 vsdev 约定；WSL 构建使用 Linux 工具链及其对应环境。文档检查记录实际使用的 shell，避免将 Windows 检查结果记作 Linux 编译验收。
 
-当前文档记录已确认的方案，不表示配置迁移、原生实现或生产接入已经完成。
+根配置、CMake 源码构建与构建信息入口已实现，使用说明见 [计算库构建说明](../native_compute.md)。原生筛分和生产接入尚未完成，双平台构建检查不等于目标 ECS 资源验收。
