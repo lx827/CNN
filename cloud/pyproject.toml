@@ -26,4 +26,8 @@ package = false
 
 # 测试专用依赖(cloud/tests 的 TestClient 用),uv sync 默认安装 dev 组
 [dependency-groups]
+benchmark = [
+    "emd-signal==1.9.0",
+    "psutil==7.2.2",
+]
 dev = ["httpx>=0.27"]
