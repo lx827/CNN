@@ -34,7 +34,8 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 | 阶次 | `algorithms/test_order_pipeline.py`、`test_order_integration.py` | 解析积分、快扫频、幅值与谱轴、Engine、HTTP 与持久化 |
 | 分解 | `algorithms/test_decomposition_*.py` | 小波/EMD/VMD 数学参考、频率序、质量门控、反例与实际消费者 |
 | EMD 筛分替换 | `algorithms/test_emd_sift_contract.py` | 公开入口注入、固定随机序列、四种配置组合、冻结预算与模态伪等价负例 |
-| EMD 原生候选 | `algorithms/test_native_emd.py` | PCHIP/SD 公开差分、局部误差预算、所有权与失败边界；显式数据根下核对五条固定短向量 |
+| EMD 原生候选 | `algorithms/test_native_emd.py` | PCHIP/cubic × SD/Rilling 的 EMD/EEMD/CEEMDAN 差分、局部误差预算、所有权与失败边界；显式数据根下核对五条固定短向量 |
+| EMD 性能准入规则 | `benchmarks/test_native_performance.py` | 冻结时间边界、零容差峰值、MAD/块间噪声、漏块与重复块；不执行性能测量 |
 | 复合研究 | `algorithms/test_composite_pipelines.py`、`test_composite_research_api.py` | 已知解、阶段串联、消融、五组合 HTTP 与生产隔离 |
 | 引擎回归 | `algorithms/test_engine_regressions.py` | 无参数、TSA、噪声转频和零信号不可判定，全部合成信号 |
 | 公共数值 | `cloud/tests/test_numeric_algorithms.py`、`test_numeric_routes.py` | FFT/STFT/倒谱、统计、通用包络、显示抽点与响应契约 |
@@ -65,7 +66,7 @@ $env:CNN_DATA_ROOT='D:/code/CNN/data'
 uv run --no-sync python -m unittest tests.diagnosis.algorithms.test_native_emd -v
 ```
 
-未设置 `CNN_DATA_ROOT` 时仅跳过固定真实数据项；显式设置后缺向量或 SHA256 不符均失败。固定项复用既有性能 campaign 的四个真实来源与一条合成 4096 点输入，包含原采样率/参数身份。Windows baseline、AVX2 与 WSL Ubuntu 的对应测试分别验收；WSL 使用独立 Linux 环境和构建目录，不能代表生产 ECS 整机资源验收。完整集成分解及两倍性能目标仍由后续工单负责。
+未设置 `CNN_DATA_ROOT` 时仅跳过固定真实数据项；显式设置后缺向量或 SHA256 不符均失败。固定项复用既有性能 campaign 的四个真实来源与一条合成 4096 点输入，包含原采样率/参数身份，并覆盖四配置的三个公开算法族。Windows baseline、AVX2 与 WSL Ubuntu 的对应测试分别验收；WSL 使用独立 Linux 环境和构建目录，不能代表生产 ECS 整机资源验收。端到端成本与两倍性能目标由下述 #106 独立基准验收。
 
 ## 本地真实数据测试
 
@@ -92,7 +93,15 @@ uv run python -m tests.diagnosis.real_data.effectiveness --data-root $env:CNN_DA
 
 ## 本地性能基准
 
-在 `cloud/` 安装可选 benchmark 依赖组并执行固定配置：
+#106 的同公式 Python/原生 EMD 族入口为 `cloud/tests/diagnosis/benchmarks/native_performance.py`，冻结配置为同目录 `native_performance_config.json`。五条原 SHA256 短向量 × 两档参数 × 三个算法族共 30 项，固定 PCHIP/SD；先 `prepare`、`check`，再 `measure`、`profile`、`report`。三块顺序为 AB/BA/AB，各后端每块五次计时，独立正确性/质量与 profile worker 不混入计时或 OS 峰值门槛。Windows/WSL 全矩阵、Linux 源码构建与 ECS 资源子集的命令及采用边界见 [性能基准说明](../benchmarks/diagnosis_performance.md)。
+
+冻结准入计算可在 `cloud/` 独立验证，不运行基准：
+
+```bash
+uv run --no-sync python -m unittest tests.diagnosis.benchmarks.test_native_performance -v
+```
+
+旧 #79 `run.py` 仍是 Windows-only 的广义诊断基准，独立配置 `config.json`，其 worker 全生命周期峰值包含额外 profile；不能与 #106 在末次计时后、汇总前读取且排除独立 profile/quality 的峰口径混比。旧入口在 `cloud/` 安装可选 benchmark 依赖组并执行：
 
 ```powershell
 uv sync --group benchmark
@@ -100,7 +109,7 @@ uv run --group benchmark python -m tests.diagnosis.benchmarks.run --data-root D:
 uv run --group benchmark python -m tests.diagnosis.benchmarks.export --input D:/code/CNN/data/real_diagnosis/performance/20261112
 ```
 
-配置位于 `cloud/tests/diagnosis/benchmarks/config.json`，测量边界、正确性观察和原生内核契约见 [性能基准说明](../benchmarks/diagnosis_performance.md)。计时排除导入、加载、预热和序列化；受限本地进程的测量不等同于生产整机负载验收。
+两套入口均排除导入、加载、预热和序列化的算法计时；受限本地进程的测量不等同于生产整机负载验收。#106 要求生产档 CEEMDAN 中位耗时减半、EMD/EEMD 不超过本平台基线 1.05 倍、OS 峰值零增加，并核对噪声、质量与目标 ECS 整体服务余量；工具的本地成本结论不自动切换生产默认。
 
 所有生成的结果、JSON、CSV、日志、图表和自动实验 Markdown 保留在 `DATA_ROOT/real_diagnosis/`。仓库只保存源码、冻结清单/配置和手写运行说明。
 
