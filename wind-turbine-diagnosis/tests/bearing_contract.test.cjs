@@ -111,6 +111,7 @@ async function loadResearch(overrides = {}) {
   const source = stripModules(readFileSync(path.join(frontendRoot, 'src/composables/useResearchDiagnosis.js'), 'utf8'))
     .replace('function useResearchDiagnosis()', 'globalThis.useResearchDiagnosis = function useResearchDiagnosis()')
     + '\nglobalThis.evaluationStatusText = evaluationStatusText; globalThis.evaluationStatusType = evaluationStatusType;'
+    + '\nglobalThis.statusText = statusText; globalThis.statusType = statusType;'
   const context = composableContext({ ...utils, ...overrides })
   vm.runInNewContext(source, context)
   return { state: context.useResearchDiagnosis(), context }
@@ -226,6 +227,24 @@ test('研究页全方法/集成派生行区分轴承新契约与齿轮旧契约'
   assert.equal(limitedRows.find(item => item.name === 'BPFO').state, '不可评估')
   assert.equal(limitedRows.find(item => item.name === 'BPFO').type, 'info')
   assert.equal(limitedRows.find(item => item.source === '齿轮').state, '命中')
+})
+
+test('研究页不可判定与未知状态使用中性样式，不回退正常', async () => {
+  const { context } = await loadResearch()
+  assert.equal(context.statusText('normal'), '正常')
+  assert.equal(context.statusType('normal'), 'success')
+  assert.equal(context.statusText('warning'), '预警')
+  assert.equal(context.statusType('warning'), 'warning')
+  assert.equal(context.statusText('critical'), '故障')
+  assert.equal(context.statusType('critical'), 'danger')
+  assert.equal(context.statusText('indeterminate'), '不可判定')
+  assert.equal(context.statusType('indeterminate'), 'info')
+  assert.equal(context.statusText('not_evaluable'), '不可评估')
+  assert.equal(context.statusType('not_evaluable'), 'info')
+  for (const status of [undefined, null, '', 'unexpected_status']) {
+    assert.equal(context.statusText(status), '未知')
+    assert.equal(context.statusType(status), 'info')
+  }
 })
 
 function loadSfcSetup(relativePath, exportName, globals) {

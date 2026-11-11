@@ -9,7 +9,8 @@ D-S 融合闭环：从 fusion_bridge.py 接收 D-S 融合结果，
 将 D-S 主导故障类型纳入 fault_label。
 当 conflict > 0.8 时降低置信度并在建议中提示复核。
 """
-from typing import Dict, Optional, Tuple
+from math import isfinite
+from typing import Dict, Iterable, Optional, Tuple
 
 # 峰值因子单独作为统计证据门控的阈值。
 CREST_EVIDENCE_THRESHOLD = 10.0
@@ -50,6 +51,30 @@ DEDUCTION_WEIGHT_MAP = {
     # D-S 冲突
     "ds_conflict_penalty": "ds_conflict",
 }
+
+
+def _has_diagnosis_evidence(results: Iterable[Dict], time_features: Dict) -> bool:
+    """只有非零能量且至少一个请求结果可评估时，才允许给出健康状态。"""
+    try:
+        rms_value = float(time_features.get("rms", 0.0))
+    except (TypeError, ValueError):
+        return False
+    if not isfinite(rms_value) or rms_value <= 0.0:
+        return False
+    for result in results:
+        if not result or "error" in result:
+            continue
+        if result.get("analysis_status") == "indeterminate":
+            continue
+        if result.get("status") in {"indeterminate", "not_evaluable"}:
+            continue
+        evaluation = result.get("evaluation")
+        if isinstance(evaluation, dict) and evaluation.get("status") in {
+            "indeterminate", "not_evaluable",
+        }:
+            continue
+        return True
+    return False
 
 
 def _compute_health_score(

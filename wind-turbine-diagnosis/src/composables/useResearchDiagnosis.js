@@ -34,13 +34,17 @@ export const percent = value => {
 export const statusType = status => {
   if (status === 'fault' || status === 'critical') return 'danger'
   if (status === 'warning') return 'warning'
-  return 'success'
+  if (status === 'normal') return 'success'
+  return 'info'
 }
 
 export const statusText = status => {
   if (status === 'fault' || status === 'critical') return '故障'
   if (status === 'warning') return '预警'
-  return '正常'
+  if (status === 'normal') return '正常'
+  if (status === 'indeterminate') return '不可判定'
+  if (status === 'not_evaluable') return '不可评估'
+  return '未知'
 }
 
 export const evaluationStatusType = status => status === 'evaluated' ? 'success' : 'info'

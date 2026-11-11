@@ -48,7 +48,7 @@ from .gear.planetary_demod import (
 from .preprocessing import wavelet_denoise
 from .vmd_denoise import vmd_denoise
 from .features import compute_time_features
-from .health_score import _compute_health_score
+from .health_score import _compute_health_score, _has_diagnosis_evidence
 from .recommendation import (
     _generate_recommendation,
     _generate_recommendation_all,
@@ -851,8 +851,9 @@ class DiagnosisEngine:
             self.gear_teeth,
             time_features, bearing_result, gear_result
         )
-        if not skip_gear and gear_result.get("analysis_status") == "indeterminate":
-            # 无有效谱/全部定轴指标不可评估时，不允许时域零值合成健康 100 分。
+        if not _has_diagnosis_evidence((bearing_result, gear_result), time_features):
+            # 零能量或全部请求路径不可评估时，不允许零值特征合成健康 100 分；
+            # 非零信号中任一域的有效证据仍保留综合评分。
             health_score = None
             status = "indeterminate"
 
@@ -991,6 +992,12 @@ class DiagnosisEngine:
                     elif status == "warning":
                         status = "critical"
                         health_score = min(health_score, 59)
+
+        if not _has_diagnosis_evidence(
+            (*bearing_results.values(), *gear_results.values()), time_features,
+        ):
+            health_score = None
+            status = "indeterminate"
 
         # 生成各方法检出结论汇总
         summary = _summarize_all_methods(bearing_results, gear_results)
