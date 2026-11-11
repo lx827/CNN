@@ -73,7 +73,7 @@ DWT 约 O(N)，WP 随层数保留更多节点；VMD 为迭代数、模态数与 
 - Mallat，小波多分辨率；PyWavelets 是当前小波 adapter。
 - Huang et al. (1998)，EMD；Wu & Huang (2009)，EEMD；Torres et al. (2011)，CEEMDAN。
 - Dragomiretskiy & Zosso (2014)，VMD。
-- EMD 移植参照固定为 EMD-signal/PyEMD 1.10.0，源码 `https://github.com/laszukdawid/PyEMD`，Apache-2.0。当前仍是仓库内 NumPy/SciPy 自研实现，未安装或调用该上游。
+- 生产 EMD 族为仓库内 NumPy/SciPy 实现；原生候选以同公式 Python 实现与冻结预算对照。EMD-signal/PyEMD 1.9.0 仅作为可选 benchmark 组中的离线不同公式参照，不作为同语义替换或生产默认，区别见 [性能运行说明](../../benchmarks/diagnosis_performance.md)。
 - [理论与历史示例](../wavelet_and_modality_decomposition.md) 不承担当前签名或实现状态。
 
 ## 验证向量与验证状态
