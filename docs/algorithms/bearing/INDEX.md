@@ -1,6 +1,6 @@
 # 轴承包络与故障证据契约
 
-> 状态：当前契约（#68 已合并）；高级轴承独立算法库切片的增量语义待 #73 合并后补充。
+> 状态：当前开发契约（标准包络与 #73 高级轴承已集成）。合成向量与业务边界已验证；真实数据效果、校准和性能基线仍需独立评估。
 >
 > 实现导航：`cloud/app/algorithms/bearing/`、`cloud/app/algorithms/pipelines/bearing/`；服务层高级方法由 `cloud/app/services/diagnosis/` 调度。
 
@@ -18,7 +18,7 @@ $$e(t)=|y(t)+j\mathcal{H}\{y(t)\}|.$$
 - 已知几何时可进行物理频率匹配；未配置几何时仅输出统计异常证据，不套用默认轴承型号。
 - 快速变速连续轨迹尚未被轴承包络和物理频率评估消费，不能把轨迹中位数当作已完成角域补偿。
 - 强随机冲击、转频谐波或齿轮确定性成分不必然代表轴承故障；需要结合谱峰归属、边带与其他证据。
-- Kurtogram、CPW、MED/MCKD、TEO、谱峭度、SC/SCoh、小波和模态包络是现有高级方法族。#73 的纯数值拆分尚未合并，本页不提前声明其新函数契约。
+- 高级方法按干扰模型分别运行：滤波器组选带、稳定梳状干扰编辑、孤立/周期冲击解卷积、TEO 与循环平稳估计。方法名不替代物理前提。
 
 ## 输入、输出与单位
 
@@ -61,13 +61,18 @@ $$e(t)=|y(t)+j\mathcal{H}\{y(t)\}|.$$
 
 | 方法族 | 数学表示与单位 | 关键前提和限制 |
 |------|----------------|----------------|
-| CPW + 包络 | 倒频率为秒，编辑轴频/啮合对应梳状线后重构，重构信号保持输入单位 | 需要合理干扰频率；不是对所有噪声通用的白化器 |
-| MED/MCKD + 包络 | FIR 输出保持输入单位；MED 最大化冲击性，MCKD 还使用故障周期 | MCKD 的周期样本与采样率、目标故障频率一致；无有效目标时不能伪造周期先验 |
-| TEO/谱峭度选带 | TEO $\Psi[x_n]=x_n^2-x_{n-1}x_{n+1}$ 的量纲为输入单位平方；选带后的包络回到输入单位 | 瞬态增强也可能放大非故障干扰，必须继续验证周期性 |
-| SC/SCoh | 谱频率与循环频率均为 Hz；矩阵维数为 `(alpha, frequency)`；SCoh 无量纲并归一化到 `[0,1]` | 频率分辨率受分段长度约束；无轴承几何时不能输出确定 BPFO/BPFI 类别 |
+| 滤波器组谱峭度 | 二叉 IIR 带通族，复解析样本 $E|z|^4/(E|z|^2)^2-2$，复高斯背景为 0；带宽/中心 Hz | `filter_bank_sk` 明确不冒称 Antoni Fast Kurtogram；重加权分数与固定阈值是工程启发式 |
+| CPW + 包络 | 倒频率 s；编辑显式梳状频率对应倒谱成分后重构，信号和后续包络保持输入单位 | 调用方同时提供非空频率与稳定性声明；缺失、滑频或变速梳状干扰不可运行，不偷偷换方法并保留 CPW 名称 |
+| MED/MCKD + 包络 | FIR 输出保持输入单位；MED 最大化孤立冲击峭度，MCKD 最大化指定周期的相关峭度 | MCKD 显式提供目标故障及周期/频率或有效几何；留一乘积与延迟输入参与更新，不默认选 BPFO |
+| TEO + 包络 | $\Psi[x_n]=x_n^2-x_{n-1}x_{n+1}$；原始 TEO、截负包络输入及最终包络谱均为输入单位平方 | 先限带，保留原始负值，只对 Hilbert 包络输入截负；多分量交叉项仍存在，不构成普适变速补偿 |
+| SC/SCoh | 载波与循环频率 Hz；矩阵 `(alpha, carrier)`；复 SC 为输入单位平方/Hz，SCoh 无量纲 `[0,1]` | 专属循环频率评估，不能用通用包络 SNR 覆盖；理论候选附近局部搜索不是未知循环频率全轴发现 |
 | 小波/EMD/VMD 包络 | 分解分量保持输入单位，选择评分无量纲 | 高峭度或高相关不证明目标故障；见 [分解契约](../decomposition/INDEX.md) |
 
-SC/SCoh 通过分段复数交叉谱与 PSD 归一化观察循环频率处的相干证据。分段数、重叠和频率网格共同决定成本；阈值只适用于相应估计和背景定义，不能跨实现直接比较。
+SC 直接估计 $E[X(f-\alpha/2)X^*(f+\alpha/2)]$，全局时间复指数支持非 FFT-bin 循环频率，SCoh 以相应两侧 PSD 归一化。载波 bin 间距由段长决定，循环频率物理分辨率由覆盖时长决定；加密候选网格不会提高物理分辨率。候选中心及邻域必须在有效轴内，超带宽、粗分辨率、无可靠候选保留不可评估。
+
+MED/MCKD 用卷积矩阵的 SVD 直接求解，不通过正规方程平方条件数。数值秩标准为 `eps * max(X.shape) * sigma_max`；无 ridge 且列秩不足返回不可判定。正 ridge 可稳定求解，但正则化只是算法选择，不能把有限输出或迭代停止当作故障证据。两种方法的目标和迭代历史分别保留。
+
+增强方法生成表示后复用标准包络分析与评估；SC/SCoh 保存专属 `evaluation_kind=sc_scoh`。MCKD 缺显式目标时业务层实际调用 MED，结果标记实际方法与 `requested_method/fallback_reason`，不伪装成功的 MCKD。
 
 ### 谱峰与边带证据
 
@@ -87,30 +92,37 @@ SC/SCoh 通过分段复数交叉谱与 PSD 归一化观察循环频率处的相�
 | 可分辨目标没有局部峰且无归属冲突 | 已评估的有效阴性，显著性为假 |
 | 任一侧边带缺失 | 不对称度及相应判定未知 |
 | 无轴承几何 | 只给统计指标，不生成理论故障频率命中 |
+| CPW 缺稳定梳状先验、解卷积数值秩不足、SC 候选不可用 | 方法 `indeterminate` 并附原因；不作为健康票 |
 
 统计显著性与物理峰显著性分别保存；非 SNR 指标使用一般强度分数，不统一冒称 SNR。
 
 ## 复杂度与内存
 
-标准滤波、Hilbert 和 FFT 的主要成本为 $O(N\log N)$，额外存储为 $O(N)$。高级分解、谱相干和多方法集成会引入窗口、模态或方法数倍率。DataView 的业务截断、现有两线程池和后台串行分析是内存契约的一部分，见 [后端架构](../../backend/architecture.md)。
+标准滤波、Hilbert 和 FFT 的主要成本为 $O(N\log N)$，额外存储为 $O(N)$。滤波器组随候选频带数增长；MED/MCKD 保存约 $N\times L$ 的卷积矩阵并执行 SVD/迭代；SC 随候选循环频率、段数和载波 bin 增长。业务截断、现有两线程池和后台串行分析是内存契约的一部分，见 [后端架构](../../backend/architecture.md)。
 
 ## 参考文献
 
 - Randall & Antoni (2011), *Rolling element bearing diagnostics—a tutorial*.
 - Antoni (2006, 2007)，谱峭度与快速 Kurtogram。
 - Borghesani et al. (2013)，CPW 与变速轴承诊断。
+- Wiggins (1978)，MED；McDonald et al. (2012)，MCKD；Kaiser (1990)，离散 TEO。
 - 项目推导与更多文献：[经典算法原理](../../算法原理.md)。
 
 ## 验证向量与验证状态
 
-本工单只迁移已有验证资产，未重新执行算法测试；以下不是本次通过声明。
+本页登记实现与独立数学审查已使用的资产，文档轮次不重复执行算法测试。数学依据、手算/已知解及负对照与自动回归是不同证据；尚未建立新方法的真实数据分类效果保证。
 
 | 验证资产 | 覆盖向量 |
 |----------|----------|
 | `cloud/tests/diagnosis/algorithms/test_bearing_envelope_analysis.py` | 手工谱唯一归属、偏移真峰、有效阴性、超带宽/共享 bin、可观测边带分母、非谐波负对照、BPFI 边带融合 |
 | `cloud/tests/diagnosis/algorithms/test_bearing_envelope_pipeline.py` | 单边幅值、实际频带、分析/评估分离、展示不影响诊断、无参统计、未知转频和 Engine 集成 |
 | `cloud/tests/diagnosis/algorithms/test_bearing_envelope_api.py` | HTTP 字段与展示截断；外部字段以 API 文档为准 |
+| `test_bearing_spectral_kurtosis_advanced.py`（同目录） | 复高斯背景、双频带冲击选带、幅值缩放与纯音/噪声负对照 |
+| `test_bearing_deconvolution_advanced.py`（同目录） | MED/MCKD 不同目标、周期更新手算/有限差分、SVD 秩亏、ridge 与幅值缩放 |
+| `test_bearing_cpw_teo_advanced.py`（同目录） | 稳定/空/滑频梳状先验、TEO 负值/交叉项、零能量和平方单位 |
+| `test_bearing_cyclostationary_advanced.py`（同目录） | 已知循环频率、非 bin 频移、载波轴、有效带宽、粗分辨率与专属评估 |
+| `test_bearing_advanced_business.py`、`test_bearing_advanced_api.py`（同目录） | Engine/ensemble 方法路由、实际 MED 回退、前提失败、研究/包络 HTTP 与 JSON |
 | `cloud/tests/diagnosis/foundation/layer1/`、`layer2/` | 现有高级轴承与边带方法的合成信号正确性资产 |
 | `cloud/tests/diagnosis/method_eval/` | HUSTbear/CW 方法评估，依赖数据集，不等同于合成向量正确性 |
 
-#73 合并后需补充高级轴承新纯数值模块的验证向量、工况边界和内存倍率；在此之前不声称其 review 中结果已验证或已发布。
+当前方法标识与可传先验见 [API 契约](../../api/backend_api.md)；模态方法单独受 [分解质量门控](../decomposition/INDEX.md) 约束。

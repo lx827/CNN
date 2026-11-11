@@ -193,7 +193,8 @@
           <template #header>
             <span style="font-weight: 600;">⚙️ 齿轮诊断 — 各方法详细参数</span>
           </template>
-          <el-table :data="gearSummaryTable" size="small" border style="width: 100%">
+          <PlanetaryResult v-for="(result, key) in planetaryResults" :key="key" :result="result" />
+          <el-table v-if="!Object.keys(planetaryResults).length" :data="gearSummaryTable" size="small" border style="width: 100%">
             <template #empty>
               <el-text type="info" size="small">
                 未配置齿轮参数，请在<el-link type="primary" @click="$router.push('/devices')">设备配置</el-link>中设置齿数（input/output）
@@ -252,6 +253,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import PlanetaryResult from '../research/PlanetaryResult.vue'
 import { bearingMethodLabel } from '../../composables/useDataView'
 import { bearingIndicatorEntries as bearingEntries } from '../../utils/bearingDiagnosis'
 import { getDiagnosisStatusView } from '../../utils/diagnosisStatus'
@@ -292,6 +294,7 @@ defineEmits(['compute-strategy', 'clear-strategy', 'compute-full', 'clear-full',
 
 const strategyStatusView = computed(() => getDiagnosisStatusView(props.strategyAnalyzeData?.status))
 const fullAnalysisStatusView = computed(() => getDiagnosisStatusView(props.fullAnalysisData?.status))
+const planetaryResults = computed(() => Object.fromEntries(Object.entries(props.fullAnalysisData?.gear_results || {}).filter(([, result]) => result?.is_planetary)))
 </script>
 
 <style scoped>

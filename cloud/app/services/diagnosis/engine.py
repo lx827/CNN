@@ -11,7 +11,6 @@ from .signal_utils import prepare_signal, linear_detrend
 from app.algorithms.core import Spectrum
 from app.algorithms.mechanics import BearingGeometry, FixedAxisGearGeometry
 from app.algorithms.pipelines.gear.fixed_axis import FixedAxisGearPipeline
-from app.algorithms.gear.fixed_axis import compute_car as compute_car_metric, compute_real_cepstrum
 from app.algorithms.bearing.analysis import analyze_envelope_spectrum
 from app.algorithms.bearing.evaluation import evaluate_envelope
 from app.algorithms.pipelines.bearing import BearingEnvelopePipeline
@@ -25,19 +24,10 @@ from app.algorithms.order import (
     ScalarSpeed,
     SpeedSearchRange,
     SpeedTrajectory,
-    resample_constant_speed,
 )
 from .advanced_bearing import ADVANCED_BEARING_METHODS, analyze_advanced_bearing
-from .gear import _evaluate_gear_faults
-from .gear.planetary_demod import (
-    analyze_planetary_sidebands_order,
-    planetary_envelope_order_analysis,
-    planetary_fullband_envelope_order_analysis,
-    planetary_vmd_demod_analysis,
-    planetary_tsa_envelope_analysis,
-    planetary_hp_envelope_order_analysis,
-    evaluate_planetary_demod_results,
-)
+from .gear.planetary import analyze_planetary_gear, is_planetary_config
+from app.algorithms.gear.planetary.types import PlanetaryBaseline, PlanetaryMomentHistory
 from .preprocessing import wavelet_denoise
 from .vmd_denoise import vmd_denoise
 from .features import compute_time_features
@@ -139,6 +129,8 @@ class DiagnosisEngine:
         bearing_params: Optional[Dict] = None,
         gear_teeth: Optional[Dict] = None,
         bearing_options: Optional[Dict] = None,
+        planetary_baseline: Optional[PlanetaryBaseline] = None,
+        planetary_history: Optional[PlanetaryMomentHistory] = None,
     ):
         # 兼容字符串传入
         self.strategy = strategy if isinstance(strategy, DiagnosisStrategy) else DiagnosisStrategy(strategy)
@@ -148,6 +140,8 @@ class DiagnosisEngine:
         self.bearing_params = bearing_params or {}
         self.gear_teeth = gear_teeth or {}
         self.bearing_options = dict(bearing_options or {})
+        self.planetary_baseline = planetary_baseline
+        self.planetary_history = planetary_history
 
     def preprocess(self, signal: np.ndarray) -> np.ndarray:
         """去直流 + 线性去趋势 + 可选去噪（所有诊断路径统一入口）"""
@@ -496,285 +490,25 @@ class DiagnosisEngine:
         return result
 
     def analyze_gear(
-        self,
-        signal: np.ndarray,
-        fs: float,
-        rot_freq: Optional[float] = None,
-        preprocess: bool = True,
-        _cached_oa: Optional[np.ndarray] = None,
-        _cached_os: Optional[np.ndarray] = None,
-        _cached_order: Optional[OrderAnalysis] = None,
+        self, signal: np.ndarray, fs: float, rot_freq: Optional[float] = None,
+        preprocess: bool = True, _cached_order: Optional[OrderAnalysis] = None,
     ) -> Dict[str, Any]:
-        """
-        齿轮诊断分析
-
-        核心修改：所有频域齿轮特征（SER、边频带、FM0）均基于阶次谱计算，
-        且转频估计与阶次追踪（/order 端点）完全一致，确保诊断明细中的
-        rot_freq_hz 与阶次谱页面显示值相同。
-
-        Returns:
-            {
-                "method": str,
-                "ser": float,
-                "sidebands": List[Dict],
-                "features": Dict,
-                "fault_indicators": Dict,
-            }
-        """
-        arr = self.preprocess(signal) if preprocess else np.array(signal, dtype=np.float64)
-
-        rot_freq_used = rot_freq
-        rot_std = 0.0
-        if _cached_order is not None:
-            analysis = _cached_order
-        elif _cached_oa is None or _cached_os is None:
+        """按机械对象分派；行星结果的表示、指标和评估由同一个 Pipeline 产生。"""
+        arr = self.preprocess(signal) if preprocess else np.asarray(signal, dtype=np.float64)
+        analysis = _cached_order
+        if analysis is None:
             raw_for_speed = prepare_signal(np.asarray(signal, dtype=np.float64), detrend=True)
-            analysis = self._analyze_order(
-                arr, fs, rot_freq=rot_freq, estimation_signal=raw_for_speed,
+            analysis = self._analyze_order(arr, fs, rot_freq=rot_freq, estimation_signal=raw_for_speed)
+        if is_planetary_config(self.gear_teeth):
+            return analyze_planetary_gear(
+                arr, fs, self.gear_teeth, order_analysis=analysis,
+                include_tsa=self.gear_method == GearMethod.ADVANCED,
+                baseline=self.planetary_baseline, history=self.planetary_history,
             )
-        else:
-            # 旧数组缓存没有连续相位，只能用于频谱指标，不能据此生成 TSA。
-            if rot_freq is None or not np.isfinite(rot_freq) or rot_freq <= 0:
-                raise ValueError("旧阶次数组缓存必须同时提供有效标量转频")
-            order_axis = np.asarray(_cached_oa, dtype=np.float64)
-            order_amplitude = np.asarray(_cached_os, dtype=np.float64)
-            if len(order_axis) < 2:
-                raise ValueError("旧阶次数组缓存为空或缺少分辨率")
-            resolution = float(order_axis[1] - order_axis[0])
-            spectrum = OrderSpectrum(
-                order_bins=order_axis,
-                amplitude=order_amplitude,
-                order_resolution=resolution,
-                samples_per_revolution=1024,
-                total_revolutions=1.0 / resolution,
-            )
-            analysis = OrderAnalysis(
-                status="valid",
-                tracking_method="single_frame",
-                speed=ScalarSpeed(float(rot_freq), "legacy_scalar_cache"),
-                spectrum=spectrum,
-            )
-
         if analysis.status != "valid" or analysis.spectrum is None:
             raise ValueError(analysis.reason or "转频与阶次谱不可判定")
-        order_axis = analysis.spectrum.order_bins
-        order_spectrum = analysis.spectrum.amplitude
-        rot_freq_used, rot_std = self._order_speed_summary(analysis)
-        if rot_freq_used is None:
-            raise ValueError("齿轮诊断需要有效标量转频")
-
-        rot_freq = float(rot_freq_used)
-
         z_in = int(float(self.gear_teeth.get("input") or 0)) if self.gear_teeth else 0
-        z_sun = int(float(self.gear_teeth.get("sun") or 0)) if self.gear_teeth else 0
-        z_ring = int(float(self.gear_teeth.get("ring") or 0)) if self.gear_teeth else 0
-        z_planet = int(float(self.gear_teeth.get("planet") or 0)) if self.gear_teeth else 0
-
-        # 行星齿轮箱参数（供 _evaluate_gear_faults 使用）
-        planet_count = int(self.gear_teeth.get("planet_count") or self.gear_teeth.get("n_planets") or 0) if self.gear_teeth else 0
-
-        # 兼容：若配置了行星轮数但无 "sun" 键，将 "input" 视为太阳轮齿数
-        if planet_count >= 3 and z_sun <= 0 and z_in > 0:
-            z_sun = z_in
-
-        if planet_count < 3:
-            return self._analyze_fixed_axis_gear(arr, fs, analysis, z_in)
-
-        # 行星解调仍要求标量恒速/缓变输入，不能把快速变速轨迹摘要成恒速。
-        if analysis.tracking_method == "varying_speed":
-            raise ValueError("快速变速行星解调尚未迁移连续相位接口，请先使用 /order")
-
-        # 啮合阶次计算（相对于太阳轮输入转频，ring 固定架构）
-        # 定轴齿轮箱: mesh_order = z_in（啮合频率 = 转频 × 齿数）
-        # 行星齿轮箱(ring固定, sun输入): mesh_order = Z_ring×Z_sun/(Z_sun+Z_ring)
-        #   例: 100×28/(28+100) = 21.875 ≈ 175/8
-        if planet_count >= 3 and z_sun > 0 and z_ring > 0:
-            mesh_order = round(z_ring * z_sun / (z_sun + z_ring), 4)
-        elif z_in > 0:
-            mesh_order = float(z_in)
-        else:
-            mesh_order = None
-        mesh_freq = rot_freq * mesh_order if mesh_order else None
-
-        result = {
-            "method": self.gear_method.value,
-            "strategy": self.strategy.value,
-            "rot_freq_hz": round(rot_freq, 3) if rot_freq is not None else None,
-            "mesh_freq_hz": round(mesh_freq, 2) if mesh_freq else None,
-            "mesh_order": round(mesh_order, 4) if mesh_order else None,
-            "rot_freq_estimated_hz": round(rot_freq, 3),
-            "rot_freq_std": round(rot_std, 4),
-            "planet_count": planet_count,
-            "is_planetary": planet_count >= 3,
-        }
-
-        # 行星齿轮箱特征阶次（相对于太阳轮转频，ring固定架构）
-        if planet_count >= 3 and z_sun > 0 and z_ring > 0:
-            # carrier_order = Z_sun / (Z_sun + Z_ring)
-            carrier_order = round(z_sun / (z_sun + z_ring), 4)
-            # sun_fault_order = (Z_ring - Z_sun) × planet_count / (Z_sun + Z_ring)
-            #   例: (100-28)×4/(28+100) = 72×4/128 = 2.25
-            #   但文档给出 25/8=3.125，需确认...
-            #   实际太阳轮故障频率 = Z_ring × f_carrier × planet_count/(Z_ring)
-            #   → (Z_ring/(Z_sun+Z_ring)) × planet_count × f_sun = (100/128)×4×f_sun = 3.125 × f_sun ✅
-            sun_fault_order = round(z_ring / (z_sun + z_ring) * planet_count, 4)
-            planet_fault_order = round(z_ring / (z_sun + z_ring), 4)
-            result["carrier_order"] = carrier_order
-            result["sun_fault_order"] = sun_fault_order
-            result["planet_fault_order"] = planet_fault_order
-
-        # 基于阶次谱的边频带分析（需要齿轮参数）
-        if mesh_order and mesh_order > 0:
-            # 行星齿轮箱边频带间隔是 carrier_order，不是 1
-            sb_spacing = 1.0
-            if planet_count >= 3 and z_sun > 0 and z_ring > 0:
-                sb_spacing = round(z_sun / (z_sun + z_ring), 4)
-            sb_result = analyze_planetary_sidebands_order(order_axis, order_spectrum, mesh_order, n_sidebands=6, spacing=sb_spacing)
-            result["sidebands"] = sb_result["sidebands"]
-            result["ser"] = sb_result["ser"]
-            result["mesh_amp"] = sb_result["mesh_amp"]
-        else:
-            result["sidebands"] = []
-            result["ser"] = 0.0
-
-        # 无齿轮参数时的阶次谱统计特征（始终计算，不依赖 mesh_order）
-        if order_spectrum is not None and len(order_spectrum) > 0:
-            ospec = np.array(order_spectrum)
-            total_energy = float(np.sum(ospec ** 2)) + 1e-12
-            # 能量集中度：前 5 阶 / 总能量
-            sorted_amps = np.sort(ospec)[::-1]
-            top5_energy = float(np.sum(sorted_amps[:5] ** 2))
-            result["order_peak_concentration"] = round(top5_energy / total_energy, 4)
-            # 阶次谱峭度
-            ospec_norm = ospec / (np.mean(ospec) + 1e-12)
-            kurt = float(np.mean(ospec_norm ** 4) / (np.mean(ospec_norm ** 2) ** 2 + 1e-12) - 2)
-            result["order_kurtosis"] = round(kurt, 2)
-
-        # CAR 与 CPW 无关；这里仍服务于行星旧读模型，阈值由行星评估独占。
-        try:
-            car_result = compute_car_metric(compute_real_cepstrum(arr, fs), rot_freq)
-            result["car"] = round(car_result.value, 4) if car_result.status == "evaluated" else None
-        except Exception:
-            result["car"] = None
-
-        # 行星高级 TSA/FM 指标尚未迁移到其非整数啮合阶次表示，明确不评估；
-        # 不得套用定轴 regular/differential 或用高通信号冒充 FM4。
-        if self.gear_method == GearMethod.ADVANCED:
-            result["fm0"] = None
-            result["fm4"] = None
-            result["m6a"] = None
-            result["m8a"] = None
-            result["tsa_revolutions"] = None
-
-        # 故障指示器
-        indicators = _evaluate_gear_faults(result)
-
-        # === 小波包能量熵（齿轮频带能量重分布检测） ===
-        # 对齿轮故障引起的频带能量集中度变化敏感，
-        # 不依赖行星箱参数，始终计算作为补充频域特征
-        try:
-            from .wavelet_packet import compute_wavelet_packet_energy_entropy
-            wp_entropy = compute_wavelet_packet_energy_entropy(arr, fs, level=3, gear_mesh_freq=mesh_freq)
-            result["wavelet_packet_entropy"] = wp_entropy
-        except Exception:
-            result["wavelet_packet_entropy"] = {"energy_entropy": 0.0, "normalized_entropy": 0.0}
-
-        # === 行星齿轮箱专用解调分析 ===
-        # 行星箱频域指标(SER/CAR/sideband)无区分力，需用解调方法突破
-        if planet_count >= 3 and z_sun > 0 and z_ring > 0 and rot_freq > 0:
-            gear_teeth_dict = {
-                "sun": z_sun, "ring": z_ring, "planet": z_planet,
-                "planet_count": planet_count,
-            }
-            # Level 2a: 窄带包络阶次分析
-            try:
-                narrowband_result = planetary_envelope_order_analysis(arr, fs, rot_freq, gear_teeth_dict)
-                result["planetary_narrowband_demod"] = narrowband_result
-            except Exception:
-                narrowband_result = {"method": "planetary_envelope_order", "error": "exception"}
-                result["planetary_narrowband_demod"] = narrowband_result
-
-            # Level 2b: 全频带包络阶次分析
-            try:
-                fullband_result = planetary_fullband_envelope_order_analysis(arr, fs, rot_freq, gear_teeth_dict)
-                result["planetary_fullband_demod"] = fullband_result
-            except Exception:
-                fullband_result = {"method": "planetary_fullband_envelope_order", "error": "exception"}
-                result["planetary_fullband_demod"] = fullband_result
-
-            # Level 2c: TSA残差包络阶次分析（残差峭度区分力=3.31，最有效）
-            try:
-                tsa_env_result = planetary_tsa_envelope_analysis(arr, fs, rot_freq, gear_teeth_dict)
-                result["planetary_tsa_demod"] = tsa_env_result
-            except Exception:
-                tsa_env_result = {"method": "planetary_tsa_envelope", "error": "exception"}
-                result["planetary_tsa_demod"] = tsa_env_result
-
-            # Level 2d: 高通滤波包络阶次分析
-            try:
-                hp_env_result = planetary_hp_envelope_order_analysis(arr, fs, rot_freq, gear_teeth_dict)
-                result["planetary_hp_demod"] = hp_env_result
-            except Exception:
-                hp_env_result = {"method": "planetary_hp_envelope_order", "error": "exception"}
-                result["planetary_hp_demod"] = hp_env_result
-
-            # Level 3: VMD幅频联合解调 🔴慢（后台分析默认跳过，仅full-analysis时启用）
-            if getattr(self, '_run_slow_methods', False):
-                try:
-                    vmd_result = planetary_vmd_demod_analysis(arr, fs, rot_freq, gear_teeth_dict, max_K=5)
-                    result["planetary_vmd_demod"] = vmd_result
-                except Exception:
-                    vmd_result = {"method": "planetary_vmd_demod", "error": "exception"}
-                    result["planetary_vmd_demod"] = vmd_result
-            else:
-                vmd_result = {"method": "planetary_vmd_demod", "error": "skipped_slow_method"}
-
-            # Level 4: SC/SCoh 谱相关/谱相干（仅full-analysis时启用）
-            if getattr(self, '_run_slow_methods', False):
-                try:
-                    from .gear.planetary_demod import planetary_sc_scoh_analysis
-                    sc_scoh_result = planetary_sc_scoh_analysis(arr, fs, rot_freq, gear_teeth_dict)
-                    result["planetary_sc_scoh"] = sc_scoh_result
-                except Exception:
-                    sc_scoh_result = {"method": "planetary_sc_scoh", "error": "exception"}
-                    result["planetary_sc_scoh"] = sc_scoh_result
-
-            # Level 5: MSB 调制信号双谱（仅full-analysis时启用）
-            if getattr(self, '_run_slow_methods', False):
-                try:
-                    from .gear.planetary_demod import planetary_msb_analysis
-                    msb_result = planetary_msb_analysis(arr, fs, rot_freq, gear_teeth_dict)
-                    result["planetary_msb"] = msb_result
-                except Exception:
-                    msb_result = {"method": "planetary_msb", "error": "exception"}
-                    result["planetary_msb"] = msb_result
-
-            # 综合评估 → 融合各方法的故障指示器
-            planetary_indicators = evaluate_planetary_demod_results(
-                narrowband_result, vmd_result
-            )
-            # 合入主 indicators（行星箱专用指标以 planetary_ 前缀区分）
-            for k, v in planetary_indicators.items():
-                indicators[k] = v
-
-            # 全频带包络峭度（crack 核心区分指标）
-            # 健康 fullband_env_kurt = 6.8~20.1，crack = 1.8~4.2
-            # 方向：越低越严重（crack使包络冲击减弱），warning<5.0, critical<3.0
-            # 合理性门控：fek<1.0 时不做判定（非齿轮数据或信号异常，防止轴承数据误触发）
-            if isinstance(fullband_result, dict) and "error" not in fullband_result:
-                fek = fullband_result.get("envelope_kurtosis")
-                if fek is not None:
-                    fek_f = float(fek)
-                    valid_planetary = fek_f >= 1.0  # 最低合理值（crack下限1.8）
-                    indicators["planetary_fullband_env_kurt"] = {
-                        "value": round(fek_f, 4),
-                        "warning": valid_planetary and fek_f < 5.0,
-                        "critical": valid_planetary and fek_f < 3.0,
-                    }
-
-        result["fault_indicators"] = indicators
-
-        return result
+        return self._analyze_fixed_axis_gear(arr, fs, analysis, z_in)
 
     def analyze_comprehensive(
         self,
@@ -791,6 +525,8 @@ class DiagnosisEngine:
             skip_bearing: True=跳过轴承分析（无轴承参数时自动设置）
             skip_gear:    True=跳过齿轮分析（无齿轮参数时自动设置）
         """
+        if is_planetary_config(self.gear_teeth) and not self.bearing_params:
+            skip_bearing = True
         arr = self.preprocess(signal)
 
         cached_order: Optional[OrderAnalysis] = None
@@ -873,6 +609,8 @@ class DiagnosisEngine:
                 "recommendation": str,
             }
         """
+        if is_planetary_config(self.gear_teeth) and not self.bearing_params:
+            skip_bearing = True
         arr = np.array(signal, dtype=np.float64)
         if self.denoise_method != DenoiseMethod.NONE:
             arr = self.preprocess(arr)
@@ -901,9 +639,9 @@ class DiagnosisEngine:
 
         gear_results = {}
         if not skip_gear:
-            # full-analysis 模式：启用慢方法（VMD/SC/SCoh/MSB）
-            self._run_slow_methods = True
-            for method in GearMethod:
+            # 同一行星记录只分析一次，不把标准/高级视作独立证据。
+            gear_methods = (GearMethod.ADVANCED,) if is_planetary_config(self.gear_teeth) else GearMethod
+            for method in gear_methods:
                 self.gear_method = method
                 try:
                     gear_results[method.value] = self.analyze_gear(
@@ -911,7 +649,6 @@ class DiagnosisEngine:
                     )
                 except Exception as e:
                     gear_results[method.value] = {"error": str(e)}
-            self._run_slow_methods = False
 
         # 恢复原始配置
         self.bearing_method = original_bearing
@@ -939,7 +676,7 @@ class DiagnosisEngine:
             self.gear_teeth,
             time_features,
             bearing_results.get(BearingMethod.ENVELOPE.value, {}),
-            gear_results.get(GearMethod.STANDARD.value, {}),
+            next(iter(gear_results.values()), {}),
         )
 
         # 若其他方法检出更差结果，融合到综合评分：取 min(base, worst_other)

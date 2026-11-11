@@ -11,6 +11,23 @@ from app.algorithms.pipelines.gear.planetary import PlanetaryGearDiagnosis, Plan
 from app.algorithms.transforms.display import decimate_extrema
 
 
+def is_planetary_config(values: Mapping | None) -> bool:
+    """存在行星专属配置即走行星门控；缺参数不能误落入定轴路径。"""
+    if not isinstance(values, Mapping) or values.get("gear_type") == "fixed_axis":
+        return False
+    return values.get("gear_type") == "planetary" or any(values.get(key) is not None for key in ("sun", "ring", "planet", "planet_count", "reference_axis", "fixed_member"))
+
+
+def gear_config_for_channel(values: Mapping | None, channel: int) -> dict:
+    """设备级参数完整传递；通道级只选择当前通道，不借用第一通道几何。"""
+    if not isinstance(values, Mapping):
+        return {}
+    if any(key in values for key in ("input", "output")) or is_planetary_config(values):
+        return dict(values)
+    selected = values.get(str(channel), {})
+    return dict(selected) if isinstance(selected, Mapping) else {}
+
+
 def planetary_geometry_from_config(values: Mapping | None, *, reference_axis: str | None = None, fixed_member: str | None = None) -> PlanetaryGearGeometry:
     """完整齿数、轴和固定构件均须显式来自设备或调用契约，不按 input 猜 sun。"""
     values = values or {}

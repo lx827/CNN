@@ -1,6 +1,6 @@
 # Tests — 回归测试与评估套件
 
-> 文档链接与函数签名镜像检查不能替代本页测试。算法模块文档只登记验证向量、测试入口和实际状态；每次修改 `cloud/app/services/diagnosis/` 或 `cloud/app/algorithms/` 后仍须运行相应正确性测试。
+> 文档链接检查不能替代正确性验证。算法先核对公式、单位、物理前提、手算/解析解、独立参考与负对照，再使用自动回归保护业务与状态；测试项数不证明算法正确。每次修改 `cloud/app/services/diagnosis/` 或 `cloud/app/algorithms/` 后仍须运行相应检查。
 >
 > 2026-11 布局重构(#45 地图 T3/#48)后,测试随被测物分立各端,顶层 `tests/` 已撤销:
 >
@@ -204,6 +204,20 @@ uv run python tests/diagnosis/regression/test_none_params.py && uv run python te
 
 ## 2. 新增算法测试(`cloud/tests/diagnosis/algorithms/`)
 
+本轮对象化切片最小地图如下。在 `cloud/` 使用 `uv run python tests/diagnosis/algorithms/<文件>`；文档轮次只登记资产，不重复算法测试。以下专项除注明外使用合成信号：
+
+| 边界 | 入口 | 主要证据 |
+|------|------|----------|
+| 定轴 #71 | `test_fixed_axis_gear.py`、`test_fixed_axis_gear_api.py` | TSA 恒等式、矩/边带手算、历史缺失、重评、Engine/HTTP |
+| 高级轴承 #73 | `test_bearing_spectral_kurtosis_advanced.py`、`test_bearing_deconvolution_advanced.py`、`test_bearing_cpw_teo_advanced.py`、`test_bearing_cyclostationary_advanced.py` | 复高斯/SVD/周期目标、梳状先验、TEO 单位、SC 频移与专属评估 |
+| 高级轴承业务 | `test_bearing_advanced_business.py`、`test_bearing_advanced_api.py` | 实际 MED 回退、门控、方法隔离、JSON/API |
+| 分解 #74 | `test_decomposition_wavelet.py`、`test_decomposition_emd.py`、`test_decomposition_vmd.py`、`test_decomposition_selection.py` | 频率序/时间轴、镜像/停止、有效区间/Hz、熵/零能量 |
+| 分解质量/业务 | `test_decomposition_review_counterexamples.py`、`test_decomposition_business.py` | 未收敛选中分量、直接重评、失败状态与消费者 |
+| 行星 #72 | `../planetary/test_planetary_pipeline.py` | WT 运动学、参考轴、角域 residual、SER、基线与工况 |
+| 规则 #76 | `../regression/test_rule_pipeline_fallback.py` | 复用 Pipeline、无证据不伪健康、阈值/概率、非法嵌套参数 |
+
+不再调用已删除旧函数证明新实现兼容。真实数据分类效果和性能分别归 #78/#79。
+
 | 文件 | 用途 | 需要数据集 | 运行方式 |
 |------|------|-----------|---------|
 | `test_bearing_envelope_analysis.py` | 手工谱唯一归属、偏移真峰、有效阴性、超带宽/共享 bin、BPFI 边带融合、真实可观测边带分母、非谐波负对照、低频后缀健康/ensemble 集成、阈值与参数校验 | 无 | `uv run python tests/diagnosis/algorithms/test_bearing_envelope_analysis.py`(在 cloud 目录) |
@@ -215,20 +229,20 @@ uv run python tests/diagnosis/regression/test_none_params.py && uv run python te
 | `cloud/tests/test_numeric_routes.py` | #76 DataView/Monitor 数值归一化、响应字段与路由兼容 | 无（隔离测试环境） | `uv run python -m unittest tests.test_numeric_routes -v`(在 cloud 目录) |
 | `test_engine_regressions.py` | 诊断引擎核心回归(无参数/TSA/转频/健康区分) | HUSTbear/CW(可选) | `uv run python tests/diagnosis/algorithms/test_engine_regressions.py`(在 cloud 目录) |
 | `test_new_algorithms.py` | EMD/MCKD/小波包/SG 等新算法功能验证 | 无 | 同上 |
-| `test_emd_denoise.py` | EMD/CEEMDAN 降噪模块测试 | 无 | 同上 |
 
 ---
 
 ## 3. 行星齿轮箱专项测试(`cloud/tests/diagnosis/planetary/`)
 
-| 文件 | 用途 | 数据集 | 运行时间 |
-|------|------|--------|---------|
-| `test_planetary_e2e.py` | 端到端评估:160 文件批量诊断,统计检出率/误报率/区分力 | WTgearbox (160文件) | ~10分钟 |
-| `test_planetary_demod.py` | VMD/SC/SCoh/CVS/TSA 等解调方法单独测试 | WTgearbox | ~3分钟 |
+旧 `test_planetary_e2e.py`、`test_planetary_demod.py` 对应旧 Level 1–5 入口，不能作为新基础 Pipeline 的验收或效果证明；当前入口是 `test_planetary_pipeline.py`。历史数据批评估待参数、基线与数据齐备后按新契约重建。
+
+| 文件 | 用途 | 数据依赖 |
+|------|------|----------|
+| `test_planetary_pipeline.py` | 当前基础运动学/方法指标/基线评估 | 无，已知物理参数合成信号 |
 
 ```bash
 cd cloud
-uv run python tests/diagnosis/planetary/test_planetary_e2e.py
+uv run python tests/diagnosis/planetary/test_planetary_pipeline.py
 ```
 
 ---
@@ -300,6 +314,7 @@ uv run python tests/diagnosis/evaluation/main.py
 
 > 路径均相对仓库根目录,由 `cloud/tests/diagnosis/data_paths.py` 统一解析;可用 `CNN_DATA_ROOT` 指向仓库外数据目录。
 > P0 三件回归全部使用合成信号,无需数据集即可运行;数据集仅评估类套件(method_eval/planetary/evaluation 等)需要。
+> 2026-11-11 主仓 CW 实际有 36 个变速 `.npy`，数据不随 worktree 自动复制；其他目录须分别确认，禁止把独立 worktree 无目录写成全部数据缺失。真实效果本轮未完成验证。
 
 ---
 
@@ -308,11 +323,12 @@ uv run python tests/diagnosis/evaluation/main.py
 | 修改范围 | 最小测试集 |
 |---------|-----------|
 | `features.py`, `engine.py`, `ensemble.py` | P0回归 + algorithms/ |
-| `bearing.py`, `bearing_cyclostationary.py` | P0回归 + `test_bearing_hustbear.py` |
-| `gear/`, `planetary_demod.py` | P0回归 + `test_planetary_e2e.py` |
+| `algorithms/bearing/`、高级轴承业务适配 | P0 + 对应高级轴承专项 + 业务/API；真实效果另跑 method_eval |
+| `algorithms/gear/`、齿轮业务适配 | P0 + 定轴/行星 Pipeline 专项 + 业务/API |
 | `health_score.py` | P0回归 + `test_effectiveness.py` |
 | `algorithms/order/`, `order_tracking.py` | P0 + `test_order_pipeline.py` + `test_order_integration.py` + foundation order/signal_utils |
-| `preprocessing.py`, `vmd_denoise.py` | P0回归 + `test_cpw_robustness.py` |
+| 分解/选择与去噪消费者 | P0 + decomposition 专项 + 质量反例/业务 |
+| `rule_based.py` | P0 + `test_rule_pipeline_fallback.py` |
 | API 路由 (`data_view/`, `ingest.py` 等) | P0回归 + 手动 API 调用验证 |
 
 ---

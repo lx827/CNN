@@ -67,6 +67,8 @@ def _generate_recommendation(
     3. 传统条件分支建议
     4. 通用兜底
     """
+    if status == "indeterminate":
+        return "当前请求的诊断路径不可评估；请核对机械参数、参考轴、转速与可比健康基线。"
     if status == "normal":
         return "设备运行正常，建议按周期继续监测。"
 
@@ -132,6 +134,8 @@ def _generate_recommendation(
 
 def _generate_recommendation_all(bearing_results: Dict, gear_results: Dict, status: str) -> str:
     """基于所有方法结果生成建议"""
+    if status == "indeterminate":
+        return "当前诊断不可评估；请核对机械参数、参考轴、转速与可比健康基线。"
     if status == "normal":
         return "设备运行正常，所有诊断方法均未检出显著故障特征，建议按周期继续监测。"
 
