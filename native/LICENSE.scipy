@@ -27,7 +27,7 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 
-The PCHIP compatibility adaptation in src/emd.cpp follows the mathematics
+The PCHIP/cubic compatibility adaptation in src/emd.cpp follows the mathematics
 and floating-point expression order in SciPy 1.18.1:
 https://github.com/scipy/scipy/blob/v1.18.1/scipy/interpolate/_cubic.py
 https://github.com/scipy/scipy/blob/v1.18.1/scipy/interpolate/_ppoly.pyx

@@ -1,6 +1,7 @@
 #include <cnn_compute/emd.hpp>
+#include <cnn_compute/tridiagonal.hpp>
 
-// PCHIP 端点/斜率与逐项求值兼容 SciPy 1.18.1；BSD 归属见 ../LICENSE.scipy。
+// PCHIP/cubic 导数、系数与逐项求值兼容 SciPy 1.18.1；BSD 见 ../LICENSE.scipy。
 
 #include <algorithm>
 #include <cmath>
@@ -8,6 +9,7 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+#include <Eigen/LU>
 
 namespace cnn_compute::emd {
 namespace {
@@ -100,27 +102,12 @@ double endpoint(double h0, double h1, double m0, double m1) {
     return d;
 }
 
-Array evaluate_pchip(const Extrema& points, const Array& query) {
+Array evaluate_hermite(const Extrema& points, const Array& query, const Array& derivative) {
     const auto& x = points.locations;
     const auto& y = points.values;
     const auto n = x.size();
     const Array h = x.tail(n - 1) - x.head(n - 1);
     const Array slope = (y.tail(n - 1) - y.head(n - 1)) / h;
-    Array derivative(n);
-    if (n == 2) {
-        derivative.setConstant(slope[0]);
-    } else {
-        derivative[0] = endpoint(h[0], h[1], slope[0], slope[1]);
-        derivative[n - 1] = endpoint(h[n - 2], h[n - 3], slope[n - 2], slope[n - 3]);
-        // SciPy 兼容的加权调和均值次序，批量计算由 Eigen 提供 SIMD。
-        const Array before = slope.head(n - 2), after = slope.tail(n - 2);
-        const Array w1 = 2.0 * h.tail(n - 2) + h.head(n - 2);
-        const Array w2 = h.tail(n - 2) + 2.0 * h.head(n - 2);
-        const Array harmonic = (w1 / before + w2 / after) / (w1 + w2);
-        const auto same_sign = ((before > 0.0) == (after > 0.0))
-            && (before != 0.0) && (after != 0.0);
-        derivative.segment(1, n - 2) = same_sign.select(harmonic.inverse(), 0.0);
-    }
     // 分段系数与 SciPy CubicHermiteSpline 相同；查询重排不改变输出顺序。
     const Array t = (derivative.head(n - 1) + derivative.tail(n - 1) - 2.0 * slope) / h;
     const Array c0 = t / h;
@@ -144,7 +131,71 @@ Array evaluate_pchip(const Extrema& points, const Array& query) {
     return result;
 }
 
-std::optional<Envelopes> make_envelopes(const Array& signal, int width, Workspace& workspace) {
+Array pchip_derivatives(const Extrema& points) {
+    const auto& x = points.locations;
+    const auto& y = points.values;
+    const auto n = x.size();
+    const Array h = x.tail(n - 1) - x.head(n - 1);
+    const Array slope = (y.tail(n - 1) - y.head(n - 1)) / h;
+    Array derivative(n);
+    if (n == 2) {
+        derivative.setConstant(slope[0]);
+    } else {
+        derivative[0] = endpoint(h[0], h[1], slope[0], slope[1]);
+        derivative[n - 1] = endpoint(h[n - 2], h[n - 3], slope[n - 2], slope[n - 3]);
+        // SciPy 兼容的加权调和均值次序，批量计算由 Eigen 提供 SIMD。
+        const Array before = slope.head(n - 2), after = slope.tail(n - 2);
+        const Array w1 = 2.0 * h.tail(n - 2) + h.head(n - 2);
+        const Array w2 = h.tail(n - 2) + 2.0 * h.head(n - 2);
+        const Array harmonic = (w1 / before + w2 / after) / (w1 + w2);
+        const auto same_sign = ((before > 0.0) == (after > 0.0))
+            && (before != 0.0) && (after != 0.0);
+        derivative.segment(1, n - 2) = same_sign.select(harmonic.inverse(), 0.0);
+    }
+    return derivative;
+}
+
+Array cubic_derivatives(const Extrema& points) {
+    const auto& x = points.locations;
+    const auto& y = points.values;
+    const auto n = x.size();
+    const Array h = x.tail(n - 1) - x.head(n - 1);
+    const Array slope = (y.tail(n - 1) - y.head(n - 1)) / h;
+    if (n == 2) return Array::Constant(2, slope[0]);
+    if (n == 3) {
+        Eigen::Matrix3d matrix;
+        matrix << 1.0, 1.0, 0.0, h[1], 2.0 * (h[0] + h[1]), h[0], 0.0, 1.0, 1.0;
+        Eigen::Vector3d rhs(2.0 * slope[0],
+            3.0 * (h[0] * slope[1] + h[1] * slope[0]), 2.0 * slope[1]);
+        return matrix.partialPivLu().solve(rhs).array();
+    }
+    Array diagonal(n), upper(n - 1), lower(n - 1), rhs(n);
+    diagonal.segment(1, n - 2) = 2.0 * (h.head(n - 2) + h.tail(n - 2));
+    upper.tail(n - 2) = h.head(n - 2);
+    lower.head(n - 2) = h.tail(n - 2);
+    rhs.segment(1, n - 2) = 3.0 * (h.tail(n - 2) * slope.head(n - 2)
+        + h.head(n - 2) * slope.tail(n - 2));
+    diagonal[0] = h[1];
+    upper[0] = x[2] - x[0];
+    double length = x[2] - x[0];
+    rhs[0] = ((h[0] + 2.0 * length) * h[1] * slope[0]
+        + h[0] * h[0] * slope[1]) / length;
+    diagonal[n - 1] = h[n - 3];
+    lower[n - 2] = x[n - 1] - x[n - 3];
+    length = x[n - 1] - x[n - 3];
+    rhs[n - 1] = (h[n - 2] * h[n - 2] * slope[n - 3]
+        + (2.0 * length + h[n - 2]) * h[n - 3] * slope[n - 2]) / length;
+    return solve_tridiagonal(std::move(lower), std::move(diagonal), std::move(upper), std::move(rhs));
+}
+
+Array interpolate(const Extrema& points, const Array& query, Interpolation method) {
+    const Array derivative = method == Interpolation::pchip
+        ? pchip_derivatives(points) : cubic_derivatives(points);
+    return evaluate_hermite(points, query, derivative);
+}
+
+std::optional<Envelopes> make_envelopes(const Array& signal, int width, Workspace& workspace,
+                                     Interpolation method) {
     locate(signal, workspace);
     if (workspace.max_indices.size() < 2 || workspace.min_indices.size() < 2) return std::nullopt;
     auto maxima = refine(signal, workspace.max_indices, workspace);
@@ -157,18 +208,36 @@ std::optional<Envelopes> make_envelopes(const Array& signal, int width, Workspac
     else if (signal[signal.size() - 1] > minima.values[minima.values.size() - 1])
         right_axis = minima.locations[minima.locations.size() - 1];
     const Array query = Array::LinSpaced(signal.size(), 0.0, static_cast<double>(signal.size() - 1));
-    return Envelopes{evaluate_pchip(mirror(maxima, left_axis, right_axis, width), query),
-                     evaluate_pchip(mirror(minima, left_axis, right_axis, width), query)};
+    return Envelopes{interpolate(mirror(maxima, left_axis, right_axis, width), query, method),
+                     interpolate(mirror(minima, left_axis, right_axis, width), query, method)};
 }
 } // namespace
 
 Array pchip(std::span<const double> x, std::span<const double> y, std::span<const double> query) {
-    return evaluate_pchip({Map(x.data(), x.size()), Map(y.data(), y.size())}, Map(query.data(), query.size()));
+    return interpolate({Map(x.data(), x.size()), Map(y.data(), y.size())}, Map(query.data(), query.size()),
+                       Interpolation::pchip);
 }
 
-std::optional<Envelopes> envelopes(std::span<const double> signal, int mirror_extrema) {
+Array cubic(std::span<const double> x, std::span<const double> y, std::span<const double> query) {
+    return interpolate({Map(x.data(), x.size()), Map(y.data(), y.size())}, Map(query.data(), query.size()),
+                       Interpolation::cubic);
+}
+
+std::optional<Envelopes> envelopes(std::span<const double> signal, int mirror_extrema,
+                                 Interpolation interpolation) {
     Workspace workspace;
-    return make_envelopes(Map(signal.data(), signal.size()), mirror_extrema, workspace);
+    return make_envelopes(Map(signal.data(), signal.size()), mirror_extrema, workspace, interpolation);
+}
+
+bool rilling_stop(std::span<const double> upper, std::span<const double> lower,
+                  const std::array<double, 3>& thresholds) {
+    const Map high(upper.data(), upper.size()), low(lower.data(), lower.size());
+    const Array mean = ((high + low) / 2.0).abs();
+    const Array amplitude = (high - low).abs() / 2.0;
+    Array ratio = (amplitude > 0.0).select(mean / amplitude, std::numeric_limits<double>::infinity());
+    ratio = ((mean == 0.0) && (amplitude == 0.0)).select(0.0, ratio);
+    return static_cast<double>((ratio > thresholds[0]).count()) / ratio.size() <= thresholds[2]
+        && (ratio <= thresholds[1]).all();
 }
 
 std::optional<SiftResult> sift(std::span<const double> signal, const SiftParameters& parameters) {
@@ -176,7 +245,8 @@ std::optional<SiftResult> sift(std::span<const double> signal, const SiftParamet
     Array updated(current.size());
     Workspace workspace;
     for (int iteration = 1; iteration <= parameters.max_sifts; ++iteration) {
-        const auto envelope = make_envelopes(current, parameters.mirror_extrema, workspace);
+        const auto envelope = make_envelopes(current, parameters.mirror_extrema, workspace,
+                                             parameters.interpolation);
         if (!envelope) {
             if (iteration == 1) return std::nullopt;
             return SiftResult{std::move(current), iteration - 1, true};
@@ -185,8 +255,12 @@ std::optional<SiftResult> sift(std::span<const double> signal, const SiftParamet
         const double denominator = current.square().sum();
         const double numerator = (updated - current).square().sum();
         current.swap(updated);
-        if (denominator <= std::numeric_limits<double>::min()
-            || numerator / denominator < parameters.sd_threshold)
+        const bool stop = parameters.stopping_rule == StoppingRule::sd
+            ? numerator / denominator < parameters.sd_threshold
+            : rilling_stop({envelope->upper.data(), static_cast<std::size_t>(envelope->upper.size())},
+                           {envelope->lower.data(), static_cast<std::size_t>(envelope->lower.size())},
+                           parameters.rilling_thresholds);
+        if (denominator <= std::numeric_limits<double>::min() || stop)
             return SiftResult{std::move(current), iteration, true};
     }
     return SiftResult{std::move(current), parameters.max_sifts, false};
