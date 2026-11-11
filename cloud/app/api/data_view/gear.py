@@ -143,7 +143,7 @@ async def get_channel_analyze(
     channel: int,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
     strategy: str = Query(default="standard", description="诊断策略: standard/advanced/expert"),
-    bearing_method: str = Query(default="envelope", description="轴承方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"),
+    bearing_method: str = Query(default="envelope", description="轴承方法: envelope/filter_bank_sk/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"),
     gear_method: str = Query(default="standard", description="齿轮方法: standard/advanced"),
     denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     db: Session = Depends(get_db)
@@ -182,7 +182,7 @@ async def get_channel_analyze(
         strategy_map = {"standard": "standard", "advanced": "advanced", "expert": "expert"}
         bearing_map = {
             "envelope": BearingMethod.ENVELOPE,
-            "kurtogram": BearingMethod.KURTOGRAM,
+            "filter_bank_sk": BearingMethod.FILTER_BANK_SK,
             "cpw": BearingMethod.CPW,
             "med": BearingMethod.MED,
             "teager": BearingMethod.TEAGER,

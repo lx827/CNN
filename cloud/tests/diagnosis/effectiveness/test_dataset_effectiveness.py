@@ -112,7 +112,7 @@ def analyze_with_engine(signal, fs=FS, bearing_params=None, gear_teeth=None):
         return None
     engine = DiagnosisEngine(
         strategy="advanced",
-        bearing_method=BearingMethod.KURTOGRAM,
+        bearing_method=BearingMethod.FILTER_BANK_SK,
         bearing_params=bearing_params or {},
         gear_teeth=gear_teeth or {},
     )

@@ -13,9 +13,10 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 from app.services.diagnosis.wavelet_packet import (
-    wavelet_packet_decompose, compute_wavelet_packet_energy_entropy,
+    compute_wavelet_packet_energy_entropy,
     wavelet_packet_denoise, compute_mswpee,
 )
+from app.algorithms.decomposition.wavelet import decompose_wavelet_packet
 from tests.diagnosis.foundation.layer1.synthetic_signals import NumpyEncoder
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -28,7 +29,8 @@ def test_wp_decompose():
     results = []
 
     sig = np.sin(2 * np.pi * 100 * np.arange(512) / FS) + np.random.randn(512) * 0.1
-    nodes = wavelet_packet_decompose(sig, wavelet="db8", level=3)
+    decomposition = decompose_wavelet_packet(sig, FS, wavelet="db8", level=3)
+    nodes = {node.path: node.coefficients for node in decomposition.nodes}
 
     # level=3 → 2^3=8 个节点
     n_nodes_ok = len(nodes) == 8
@@ -124,6 +126,7 @@ def test_mswpee():
 
 
 def main():
+    np.random.seed(42)
     print("=" * 60)
     print("Layer 1: wavelet_packet — 小波包正确性")
     print("=" * 60)
@@ -147,6 +150,8 @@ def main():
     out.write_text(json.dumps(all_results, indent=2, cls=NumpyEncoder, ensure_ascii=False), encoding='utf-8')
     s = all_results["summary"]
     print(f"\n结果: {out}\n总计: {s['total']}, 通过: {s['passed']}, 失败: {s['failed']}")
+    if s["failed"]:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

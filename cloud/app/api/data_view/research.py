@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 import asyncio
 import logging
 from datetime import datetime, timezone
+from typing import Optional
+from .bearing_options import get_bearing_options
 
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
@@ -59,15 +61,15 @@ METHOD_INFO = {
         "label": "包络分析",
         "description": "标准包络谱分析：带通滤波 → Hilbert 解调 → 包络谱。检测轴承特征频率(BPFO/BPFI/BSF/FTF)谐波族，是最基础的轴承诊断方法。",
     },
-    "kurtogram": {
+    "filter_bank_sk": {
         "category": "bearing",
-        "label": "Fast Kurtogram",
-        "description": "快速谱峭度图自适应选带包络：自动搜索受噪声污染最小、冲击最显著的频带，再执行包络分析。对未知共振频带的轴承诊断特别有效。",
+        "label": "二叉滤波器组谱峭度",
+        "description": "真实 Butterworth 二叉频带滤波器组与 Hilbert 解析复谱峭度（复高斯基准减2）；达到工程阈值后选带。不称 Fast Kurtogram，无显著冲击频带时不可判定。",
     },
     "cpw": {
         "category": "bearing",
         "label": "CPW 预白化包络",
-        "description": "倒频谱预白化 + 包络分析：先通过倒频谱编辑消除齿轮啮合、轴频等确定性干扰，再对预白化信号做包络分析。齿轮箱中轴承诊断的标准流程。",
+        "description": "仅在显式提供稳定梳状频率并确认整段稳定时执行倒谱编辑，再用滤波器组选带；未确认、空频率或变速梳状干扰均不可判定。",
     },
     "med": {
         "category": "bearing",
@@ -77,22 +79,22 @@ METHOD_INFO = {
     "teager": {
         "category": "bearing",
         "label": "Teager 能量包络",
-        "description": "Teager 能量算子增强 + Kurtogram 包络：TEO 对瞬态冲击极度敏感，先增强弱冲击成分，再用谱峭度自适应选带做包络分析。适合早期微弱故障检测。",
+        "description": "先限带，再计算原始 TEO；仅对 Hilbert 包络输入截负。多分量交叉项仍存在，属于工程组合，不提供变速补偿。幅值单位为输入幅值平方。",
     },
     "spectral_kurtosis": {
         "category": "bearing",
         "label": "谱峭度重加权包络",
-        "description": "自适应谱峭度重加权包络：结合谱峭度、冲击度和局部 SNR 联合选带，对多频带冲击场景的检测率高于单一 Kurtogram。",
+        "description": "真实滤波器组复谱峭度与冲击度、局部幅值比的工程重加权选带；阈值是工程启发式，未验证真实数据集检测率。",
     },
     "sc_scoh": {
         "category": "bearing",
         "label": "谱相关/谱相干分析",
-        "description": "轴承循环平稳分析：计算谱相关密度(SC)和谱相干系数(SCoh)，在 BPFO/BPFI/BSF 等故障频率处检测循环平稳特征。适合恒速工况下的轴承诊断。",
+        "description": "复 FFT 频移交叉乘积与专属 SC/SCoh 背景评估，仅在可靠几何/转频给出的候选附近搜索。缺候选、频率不可分辨或变速时不可判定，不套用包络谱 SNR。",
     },
     "mckd": {
         "category": "bearing",
         "label": "MCKD 增强包络",
-        "description": "最大相关峭度解卷积 + 包络分析：引入故障周期约束优化周期性冲击序列检测，对轴承内圈/外圈故障更敏感。与 MED 互补，MED 最大化全局峭度，MCKD 最大化周期性冲击。",
+        "description": "显式选择 BPFO/BPFI/BSF/FTF，按目标频率/采样周期或几何与转频求周期，优化相关峭度。不选择目标时明确调用 MED 并以 MED 返回，绝不默认 BPFO。",
     },
     "wp": {
         "category": "bearing",
@@ -184,13 +186,15 @@ async def get_channel_method_analysis(
     denoise: str = Query(default="none", description="none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     detrend: bool = Query(default=False, description="是否线性去趋势"),
     db: Session = Depends(get_db),
+    bearing_options: dict = Depends(get_bearing_options),
+    rot_freq_hz: Optional[float] = Query(default=None, gt=0),
 ):
     """
     独立运行单个分析方法或全部方法。
 
     method 参数值：
     - 'all': 运行所有轴承+齿轮方法（等效 full-analysis）
-    - 轴承方法: envelope / kurtogram / cpw / med / teager / spectral_kurtosis / wp / dwt / emd_envelope / ceemdan_envelope / vmd_envelope
+    - 轴承方法: envelope / filter_bank_sk / cpw / med / teager / spectral_kurtosis / wp / dwt / emd_envelope / ceemdan_envelope / vmd_envelope
     - 齿轮方法: gear_standard / gear_advanced
     - 行星箱方法: planetary_narrowband / planetary_fullband / planetary_tsa_envelope
                   / planetary_hp_envelope / planetary_vmd_demod / planetary_sc_scoh / planetary_msb
@@ -236,13 +240,14 @@ async def get_channel_method_analysis(
         if method == "all":
             engine = DiagnosisEngine(
                 strategy=DiagnosisStrategy.EXPERT,
+                bearing_options=bearing_options,
                 denoise_method=denoise_method,
                 bearing_params=bearing_params,
                 gear_teeth=gear_teeth,
             )
             engine._run_slow_methods = True
             result = await asyncio.to_thread(
-                engine.analyze_all_methods, signal, sample_rate
+                engine.analyze_all_methods, signal, sample_rate, rot_freq_hz
             )
             response_data = {
                 "device_id": record.device_id,
@@ -261,7 +266,7 @@ async def get_channel_method_analysis(
         # ── 运行单个轴承方法 ──
         bearing_method_map = {
             "envelope": BearingMethod.ENVELOPE,
-            "kurtogram": BearingMethod.KURTOGRAM,
+            "filter_bank_sk": BearingMethod.FILTER_BANK_SK,
             "cpw": BearingMethod.CPW,
             "med": BearingMethod.MED,
             "teager": BearingMethod.TEAGER,
@@ -277,12 +282,13 @@ async def get_channel_method_analysis(
         if method in bearing_method_map:
             engine = DiagnosisEngine(
                 bearing_method=bearing_method_map[method],
+                bearing_options=bearing_options,
                 denoise_method=denoise_method,
                 bearing_params=bearing_params,
                 gear_teeth=gear_teeth,
             )
             result = await asyncio.to_thread(
-                engine.analyze_bearing, signal, sample_rate
+                engine.analyze_bearing, signal, sample_rate, rot_freq_hz
             )
             response_data = {
                 "device_id": record.device_id,
@@ -393,6 +399,8 @@ async def get_channel_method_analysis(
 
     except HTTPException:
         raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"分析参数无效: {exc}") from exc
     except Exception as exc:
         logger.error("method analysis failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f"分析方法执行失败: {exc}")
@@ -408,12 +416,14 @@ async def get_channel_research_analysis(
     denoise: str = Query(default="none", description="none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     max_seconds: float = Query(default=5.0, ge=1.0, le=10.0),
     db: Session = Depends(get_db),
+    bearing_options: dict = Depends(get_bearing_options),
+    rot_freq_hz: Optional[float] = Query(default=None, gt=0),
 ):
     """
     Run a user-triggered, multi-algorithm research diagnosis.
 
     This endpoint is intentionally separate from real-time monitoring because
-    kurtogram, MED, TEO and TSA metrics are CPU-heavy.
+    filter_bank_sk, MED, TEO and TSA metrics are CPU-heavy.
     """
     record = db.query(SensorData).filter(
         SensorData.device_id == device_id,
@@ -452,6 +462,7 @@ async def get_channel_research_analysis(
 
         engine = DiagnosisEngine(
             denoise_method=denoise_map.get(denoise, DenoiseMethod.NONE),
+            bearing_options=bearing_options,
             bearing_params=bearing_params,
             gear_teeth=gear_teeth,
         )
@@ -460,7 +471,7 @@ async def get_channel_research_analysis(
             engine.analyze_research_ensemble,
             signal,
             sample_rate,
-            None,
+            rot_freq_hz,
             profile,
             max_seconds,
         )
@@ -495,6 +506,8 @@ async def get_channel_research_analysis(
         # 写入数据库缓存，供 DataView 读取
         _save_research_diagnosis(db, device_id, batch_index, channel, denoise, result)
         return {"code": 200, "data": _sanitize_for_json(response_data)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"分析参数无效: {exc}") from exc
     except Exception as exc:
         logger.error("research analysis failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f"research analysis failed: {exc}")

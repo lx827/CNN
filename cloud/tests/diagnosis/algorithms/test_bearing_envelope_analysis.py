@@ -208,7 +208,7 @@ class BearingEnvelopeAnalysisMathTest(unittest.TestCase):
         }
         vote = _bearing_confidence(
             {"evaluation": {"indicators": vote_indicators}},
-            {"kurtosis": 8.0, "crest_factor": 12.0},
+            {"rms": 1.0, "kurtosis": 8.0, "crest_factor": 12.0},
         )
         self.assertEqual(vote["confidence"], 0.28)
 

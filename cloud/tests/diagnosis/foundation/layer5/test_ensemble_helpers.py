@@ -30,7 +30,7 @@ def test_bearing_confidence():
             "BPFI": {"significant": True, "snr": 8.0},
         }}
     }
-    tf = {"kurtosis": 12.0, "crest_factor": 15.0}
+    tf = {"rms": 1.0, "kurtosis": 12.0, "crest_factor": 15.0}
     c = _bearing_confidence(res, tf)
     high_ok = c["confidence"] >= 0.8 and c["abnormal"] is True
     results.append({"test": "bearing_high_conf", "conf": c["confidence"], "passed": high_ok})
@@ -38,7 +38,7 @@ def test_bearing_confidence():
 
     # 低置信：无显著指标
     res2 = {"evaluation": {"indicators": {}}}
-    c2 = _bearing_confidence(res2, {"kurtosis": 3.0, "crest_factor": 5.0})
+    c2 = _bearing_confidence(res2, {"rms": 1.0, "kurtosis": 3.0, "crest_factor": 5.0})
     low_ok = c2["confidence"] < 0.3 and c2["abnormal"] is False
     results.append({"test": "bearing_low_conf", "conf": c2["confidence"], "passed": low_ok})
     print(f"  [{'PASS' if low_ok else 'FAIL'}] 低置信: conf={c2['confidence']:.2f}")
@@ -49,7 +49,7 @@ def test_bearing_confidence():
             "envelope_peak_snr": {"significant": True, "snr": 15.0},
         }}
     }
-    c3 = _bearing_confidence(res3, {"kurtosis": 8.0, "crest_factor": 12.0})
+    c3 = _bearing_confidence(res3, {"rms": 1.0, "kurtosis": 8.0, "crest_factor": 12.0})
     stat_ok = c3["confidence"] > 0.3
     results.append({"test": "bearing_stat_path", "conf": c3["confidence"], "passed": stat_ok})
     print(f"  [{'PASS' if stat_ok else 'FAIL'}] 统计路径: conf={c3['confidence']:.2f}")

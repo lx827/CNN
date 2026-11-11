@@ -46,13 +46,13 @@ const envelopeResult = () => ({
 
 const scScohResult = () => ({
   method: 'sc_scoh',
+  evaluation_kind: 'sc_scoh',
   spectrum: null,
   band: null,
   features: { spectral_power_proxy: 0 },
-  evaluation: { status: 'indeterminate', indicators: {} },
-  sc_scoh_indicators: {
-    BPFI: { theory_hz: 90, scoh_peak: 0.62, scoh_snr: 6.4, significant: true, warning: true, critical: true },
-  },
+  evaluation: { status: 'evaluated', indicators: {
+    BPFI: { theory_cyclic_frequency_hz: 90, scoh_peak: 0.62, coherence_background_ratio: 6.4, significant: true, evaluable: true },
+  } },
 })
 
 const gearResult = () => ({
@@ -164,8 +164,8 @@ test('DataView 轴承汇总使用新指标，齿轮汇总继续使用旧 fault_i
   assert.deepEqual(bearingRows[0].faults.map(item => item.fault_type), ['BPFO'])
   assert.equal(bearingRows[0].params.includes('1800~2200Hz'), true)
   assert.deepEqual(bearingRows[1].faults.map(item => item.fault_type), ['BPFI'])
-  assert.equal(bearingRows[1].faults[0].snr, 6.4)
-  assert.equal(bearingRows[1].evaluationStatus, 'indeterminate')
+  assert.equal(bearingRows[1].faults[0].coherence_background_ratio, 6.4)
+  assert.equal(bearingRows[1].evaluationStatus, 'evaluated')
   assert.equal(bearingRows.flatMap(row => row.faults).some(item => item.fault_type === 'OLD_BEARING'), false)
   assert.deepEqual(plain(state.gearSummaryTable.value[0].alerts), [{ indicator: 'ser', level: 'critical' }])
 })
@@ -329,7 +329,7 @@ test('DiagnosisDetail 实际 setup 分别派生包络评估、SC/SCoh 与齿轮�
   const bindings = setup({
     orderAnalysis: {
       engine_result: {
-        bearing: { ...envelopeResult(), ...scScohResult(), evaluation: envelopeResult().evaluation },
+        bearing: scScohResult(),
         gear: gearResult(),
       },
     },
@@ -337,10 +337,10 @@ test('DiagnosisDetail 实际 setup 分别派生包络评估、SC/SCoh 与齿轮�
     rotRpm: 1500,
   })
 
-  assert.deepEqual(plain(bindings.bearingIndicators.value.map(item => item.key)), ['BPFO', 'envelope_peak_snr_stat'])
-  assert.deepEqual(plain(bindings.bearingFreqItems.value), [{ key: 'BPFO', label: '外圈(BPFO)', value: 100 }])
+  assert.deepEqual(plain(bindings.bearingIndicators.value), [])
+  assert.deepEqual(plain(bindings.bearingFreqItems.value), [])
   assert.equal(bindings.scScohItems.value[0].value, 0.62)
-  assert.equal(bindings.scScohItems.value[0].snr, 6.4)
+  assert.equal(bindings.scScohItems.value[0].coherenceRatio, 6.4)
   assert.deepEqual(plain(bindings.gearIndicators.value.map(item => item.key)), ['ser'])
   assert.equal(bindings.bearingIndicators.value.some(item => item.key === 'OLD_BEARING'), false)
 })
@@ -353,10 +353,56 @@ test('SingleResultPanels 实际 setup 分离 evaluation 与 SC/SCoh 条目', asy
     evaluationStatusType: status => status === 'evaluated' ? 'success' : 'info',
     evaluationStatusText: status => status === 'evaluated' ? '已评估' : '不可判定',
   })
-  const result = { ...scScohResult(), evaluation: envelopeResult().evaluation }
+  const result = scScohResult()
   const bindings = setup({ result, selectedMethodInfo: { category: 'bearing' }, filterPlanetaryResult: {} })
 
-  assert.deepEqual(plain(bindings.bearingEvaluationItems.value.map(item => item.name)), ['BPFO', 'envelope_peak_snr_stat'])
+  assert.deepEqual(plain(bindings.bearingEvaluationItems.value), [])
   assert.deepEqual(plain(bindings.scScohItems.value.map(item => item.name)), ['BPFI'])
   assert.equal(bindings.scScohItems.value[0].info.scoh_peak, 0.62)
+})
+
+test('研究页将显式MCKD目标、CPW稳定性和已知转频传给实际请求', async () => {
+  const requests = []
+  const { state } = await loadResearch({
+    getChannelMethodAnalysis: async (...args) => { requests.push(args); return { data: scScohResult() } },
+    getChannelResearchAnalysis: async (...args) => { requests.push(args); return { data: {} } },
+  })
+  state.selectedDeviceId.value = 'D1'
+  state.selectedBatchIndex.value = 1
+  state.selectedChannel.value = 1
+  state.selectedMethod.value = 'mckd'
+  state.targetFault.value = 'BPFI'
+  state.combFrequencies.value = '25, 50'
+  state.combIsStable.value = true
+  state.rotFrequency.value = 25
+  await state.runAnalysis()
+  assert.equal(requests[0][3], 'mckd')
+  assert.deepEqual(plain(requests[0][4]), {
+    denoise: 'none', target_fault: 'BPFI', comb_frequencies_hz: [25, 50], comb_is_stable: true, rot_freq_hz: 25,
+  })
+  state.runMode.value = 'ensemble'
+  await state.runAnalysis()
+  assert.equal(requests[1][3].target_fault, 'BPFI')
+  assert.equal(requests[1][3].comb_is_stable, true)
+  state.combFrequencies.value = 'invalid'
+  await state.runAnalysis()
+  assert.equal(requests.length, 2)
+})
+
+test('诊断API封装传递方法前提并以重复查询键序列化多梳状频率', async () => {
+  const requests = []
+  const source = stripModules(readFileSync(path.join(frontendRoot, 'src/api/diagnosis.js'), 'utf8'))
+    + '\nglobalThis.methods = { getChannelMethodAnalysis, getChannelResearchAnalysis };'
+  const context = { request: { get: async (...args) => { requests.push(args); return { data: {} } } } }
+  vm.runInNewContext(source, context)
+  const config = { target_fault: 'BPFI', rot_freq_hz: 25, comb_frequencies_hz: [25, 50], comb_is_stable: true }
+  await context.methods.getChannelMethodAnalysis('D1', 1, 1, 'mckd', config)
+  await context.methods.getChannelResearchAnalysis('D1', 1, 1, config)
+  for (const [, options] of requests) {
+    assert.equal(options.params.target_fault, 'BPFI')
+    assert.equal(options.params.rot_freq_hz, 25)
+    assert.deepEqual(plain(options.params.comb_frequencies_hz), [25, 50])
+    assert.equal(options.params.comb_is_stable, true)
+    assert.equal(options.paramsSerializer.indexes, null)
+  }
 })

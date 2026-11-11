@@ -46,6 +46,17 @@
         <el-option label="均衡" value="balanced" />
         <el-option label="全量" value="exhaustive" />
       </el-select>
+      <el-input-number :model-value="rotFrequency" :min="0.001" :precision="3" placeholder="已知转频 Hz" controls-position="right" @update:model-value="$emit('update:rotFrequency', $event)" />
+      <span>已知恒定转频 Hz（留空自动估计）</span>
+      <template v-if="runMode !== 'single' || selectedMethod === 'mckd'">
+        <el-select :model-value="targetFault" clearable class="select" placeholder="MCKD 目标（空则 MED）" @update:model-value="$emit('update:targetFault', $event)">
+          <el-option v-for="fault in ['BPFO', 'BPFI', 'BSF', 'FTF']" :key="fault" :value="fault" :label="fault" />
+        </el-select>
+      </template>
+      <template v-if="runMode !== 'single' || selectedMethod === 'cpw'">
+        <el-input :model-value="combFrequencies" class="select" placeholder="稳定梳状基频 Hz，逗号分隔" @update:model-value="$emit('update:combFrequencies', $event)" />
+        <el-checkbox :model-value="combIsStable" @update:model-value="$emit('update:combIsStable', $event)">确认整段梳状频率稳定</el-checkbox>
+      </template>
     </div>
 
     <el-button type="primary" :loading="loading" :disabled="!canRun" @click="$emit('run')">
@@ -71,6 +82,10 @@ defineProps({
   selectedChannel: { type: Number, default: 1 },
   runMode: { type: String, default: 'single' },
   selectedMethod: { type: String, default: 'envelope' },
+  targetFault: { type: String, default: '' },
+  combFrequencies: { type: String, default: '' },
+  combIsStable: { type: Boolean, default: false },
+  rotFrequency: { type: Number, default: null },
   denoise: { type: String, default: 'none' },
   profile: { type: String, default: 'balanced' },
   bearingMethodGroup: { type: Array, default: () => [] },
@@ -80,7 +95,7 @@ defineProps({
   canRun: { type: Boolean, default: false },
 })
 
-defineEmits(['update:selectedDeviceId', 'update:selectedBatchIndex', 'update:selectedChannel', 'update:runMode', 'update:selectedMethod', 'update:denoise', 'update:profile', 'run', 'goto-data'])
+defineEmits(['update:selectedDeviceId', 'update:selectedBatchIndex', 'update:selectedChannel', 'update:runMode', 'update:selectedMethod', 'update:denoise', 'update:profile', 'update:targetFault', 'update:combFrequencies', 'update:combIsStable', 'update:rotFrequency', 'run', 'goto-data'])
 </script>
 
 <style scoped>
