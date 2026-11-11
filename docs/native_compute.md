@@ -41,7 +41,9 @@ CNN_COMPUTE_ARCH=avx2 uv sync       # Linux
 
 固定目标只允许 baseline 或 avx2。这里不将 native 字符串映射成未经探测的 AVX2，也不构建运行时多 ISA 派发。后端报告编译器、目标、编译选项、Eigen 版本和实际启用的 SIMD；具体数值函数的向量化仍需优化报告与基准验证。
 
-uv 缓存键覆盖根配置、CMake 文件、原生源码、Python 包及影响目标/编译器的环境变量。切换 `CNN_COMPUTE_ARCH`、编译器或编译选项，以及修改源码/头文件后会重新构建；未变化时复用兼容产物。构建目录按 Python wheel tag 和 Ninja 隔离，Windows 和 Linux 不共用二进制。
+uv 缓存键覆盖根配置、CMake 文件、原生源码、Python 源文件及影响目标/编译器的环境变量，不包含导入产生的 Python 字节码。切换 `CNN_COMPUTE_ARCH`、编译选项，以及修改源码/头文件后会重新构建；未变化时复用兼容产物。构建目录按 Python wheel tag 和 Ninja 隔离，Windows 和 Linux 不共用二进制。
+
+更换编译器或工具链版本时，CMake 已缓存的编译器不会仅靠修改环境变量替换。使用新的忽略构建目录并强制重装计算包，例如 `uv sync --reinstall-package cnn-compute --config-setting build-dir=build/new-toolchain`；Windows 仍经 `vsdev`。新目录名应标识实际工具链，确认 `build_info()` 后再采用产物。
 
 ## 验证
 
