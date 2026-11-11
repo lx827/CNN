@@ -141,10 +141,18 @@ function scoreClass(hs) {
   return 'score-danger'
 }
 function statusTagType(s) {
-  return s === 'normal' ? 'success' : s === 'warning' ? 'warning' : 'danger'
+  if (s === 'normal') return 'success'
+  if (s === 'warning') return 'warning'
+  if (s === 'fault' || s === 'critical') return 'danger'
+  return 'info'
 }
 function statusText(s) {
-  return s === 'normal' ? '正常' : s === 'warning' ? '预警' : '故障'
+  if (s === 'normal') return '正常'
+  if (s === 'warning') return '预警'
+  if (s === 'fault' || s === 'critical') return '故障'
+  if (s === 'indeterminate') return '不可判定'
+  if (s === 'not_evaluable') return '不可评估'
+  return '未知'
 }
 function faultLabelText(label) {
   if (!label || label === 'unknown') return '未检出异常'

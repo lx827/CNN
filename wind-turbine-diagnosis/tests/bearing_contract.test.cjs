@@ -247,6 +247,57 @@ test('研究页不可判定与未知状态使用中性样式，不回退正常',
   }
 })
 
+test('DiagnosisDetail 实际消费者将不可判定与未知状态显示为中性', async () => {
+  const utils = await bearingUtilsPromise
+  const setup = loadSfcSetup('src/components/DiagnosisDetail.vue', 'DiagnosisDetailStatus', utils)
+  const bindings = setup({ orderAnalysis: { engine_result: {} } })
+  assert.equal(bindings.statusText('normal'), '正常')
+  assert.equal(bindings.statusTagType('normal'), 'success')
+  assert.equal(bindings.statusText('warning'), '预警')
+  assert.equal(bindings.statusTagType('warning'), 'warning')
+  for (const status of ['fault', 'critical']) {
+    assert.equal(bindings.statusText(status), '故障')
+    assert.equal(bindings.statusTagType(status), 'danger')
+  }
+  assert.equal(bindings.statusText('indeterminate'), '不可判定')
+  assert.equal(bindings.statusTagType('indeterminate'), 'info')
+  assert.equal(bindings.statusText('not_evaluable'), '不可评估')
+  assert.equal(bindings.statusTagType('not_evaluable'), 'info')
+  for (const status of [undefined, null, '', 'unexpected_status']) {
+    assert.equal(bindings.statusText(status), '未知')
+    assert.equal(bindings.statusTagType(status), 'info')
+  }
+})
+
+test('ComprehensiveSection 实际消费者对不可判定与未知状态使用中性 alert', async () => {
+  const setup = loadSfcSetup(
+    'src/components/dataview/ComprehensiveSection.vue',
+    'ComprehensiveSectionStatus',
+    {
+      bearingMethodLabel: value => value,
+      bearingEntries: noop,
+      _mergeModels: (props, models) => ({ ...props, ...models }),
+      _useModel: (props, name) => ({ value: props[name] }),
+    },
+  )
+  const bindings = setup({})
+  assert.equal(bindings.statusAlertType('normal'), 'success')
+  assert.equal(bindings.statusAlertType('warning'), 'warning')
+  assert.equal(bindings.statusAlertType('fault'), 'error')
+  assert.equal(bindings.statusAlertType('critical'), 'error')
+  assert.equal(bindings.statusAlertTitle('indeterminate'), '诊断不可判定')
+  assert.equal(bindings.statusAlertType('indeterminate'), 'info')
+  assert.equal(bindings.statusAlertTitle('not_evaluable'), '诊断不可评估')
+  assert.equal(bindings.statusAlertType('not_evaluable'), 'info')
+  for (const status of [undefined, null, '', 'unexpected_status']) {
+    assert.equal(bindings.statusAlertTitle(status), '诊断状态未知')
+    assert.equal(bindings.statusAlertType(status), 'info')
+  }
+  assert.equal(bindings.statusAlertDescription('normal', '', '正常说明'), '正常说明')
+  assert.equal(bindings.statusAlertDescription('warning', '', '正常说明'), '')
+  assert.match(bindings.statusAlertDescription('indeterminate', '', '正常说明'), /不能据此判断/)
+})
+
 function loadSfcSetup(relativePath, exportName, globals) {
   const filename = path.join(frontendRoot, relativePath)
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })

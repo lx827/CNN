@@ -72,19 +72,13 @@
       <div v-if="computedStrategyAnalyze && strategyAnalyzeData && !computedFullAnalysis">
         <!-- 策略诊断简洁结果 -->
         <el-alert
-          v-if="strategyAnalyzeData.status !== 'normal'"
-          :title="strategyAnalyzeData.status === 'critical' || strategyAnalyzeData.status === 'fault' ? '⚠️ 检出故障特征' : '⚡ 检出预警信号'"
-          :type="strategyAnalyzeData.status === 'critical' || strategyAnalyzeData.status === 'fault' ? 'error' : 'warning'"
-          :description="strategyAnalyzeData.recommendation"
-          show-icon
-          :closable="false"
-          style="margin-bottom: 12px"
-        />
-        <el-alert
-          v-else
-          title="✅ 未检出显著故障特征"
-          type="success"
-          :description="strategyAnalyzeData.recommendation || '策略诊断未检出显著故障特征，设备运行正常。'"
+          :title="statusAlertTitle(strategyAnalyzeData.status)"
+          :type="statusAlertType(strategyAnalyzeData.status)"
+          :description="statusAlertDescription(
+            strategyAnalyzeData.status,
+            strategyAnalyzeData.recommendation,
+            '策略诊断未检出显著故障特征，设备运行正常。',
+          )"
           show-icon
           :closable="false"
           style="margin-bottom: 12px"
@@ -105,19 +99,13 @@
       <div v-if="computedFullAnalysis && fullAnalysisData">
         <!-- 综合结论 -->
         <el-alert
-          v-if="fullAnalysisData.status !== 'normal'"
-          :title="fullAnalysisData.status === 'fault' ? '⚠️ 检出故障特征' : '⚡ 检出预警信号'"
-          :type="fullAnalysisData.status === 'fault' ? 'error' : 'warning'"
-          :description="fullAnalysisData.recommendation"
-          show-icon
-          :closable="false"
-          style="margin-bottom: 12px"
-        />
-        <el-alert
-          v-else
-          title="✅ 未检出显著故障特征"
-          type="success"
-          :description="fullAnalysisData.recommendation || '所有诊断方法均未检出显著故障特征，设备运行正常。'"
+          :title="statusAlertTitle(fullAnalysisData.status)"
+          :type="statusAlertType(fullAnalysisData.status)"
+          :description="statusAlertDescription(
+            fullAnalysisData.status,
+            fullAnalysisData.recommendation,
+            '所有诊断方法均未检出显著故障特征，设备运行正常。',
+          )"
           show-icon
           :closable="false"
           style="margin-bottom: 12px"
@@ -265,6 +253,29 @@
 <script setup>
 import { bearingMethodLabel } from '../../composables/useDataView'
 import { bearingIndicatorEntries as bearingEntries } from '../../utils/bearingDiagnosis'
+
+function statusAlertTitle(status) {
+  if (status === 'normal') return '✅ 未检出显著故障特征'
+  if (status === 'warning') return '⚡ 检出预警信号'
+  if (status === 'fault' || status === 'critical') return '⚠️ 检出故障特征'
+  if (status === 'indeterminate') return '诊断不可判定'
+  if (status === 'not_evaluable') return '诊断不可评估'
+  return '诊断状态未知'
+}
+
+function statusAlertType(status) {
+  if (status === 'normal') return 'success'
+  if (status === 'warning') return 'warning'
+  if (status === 'fault' || status === 'critical') return 'error'
+  return 'info'
+}
+
+function statusAlertDescription(status, recommendation, normalDescription) {
+  if (recommendation) return recommendation
+  if (status === 'normal') return normalDescription
+  if (status === 'warning' || status === 'fault' || status === 'critical') return ''
+  return '当前诊断不可判定或状态未知，不能据此判断设备健康。'
+}
 
 defineProps({
   computedStrategyAnalyze: { type: Boolean, default: false },
