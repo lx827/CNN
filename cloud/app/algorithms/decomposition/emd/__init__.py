@@ -9,6 +9,7 @@ from .core import (
     decompose_eemd,
     decompose_emd,
 )
+from .native_adapter import NativeEMDImplementation
 from .python_adapter import PythonEMDImplementation
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "EMDParameters",
     "EMDResult",
     "EnsembleParameters",
+    "NativeEMDImplementation",
     "PythonEMDImplementation",
     "decompose_ceemdan",
     "decompose_eemd",
