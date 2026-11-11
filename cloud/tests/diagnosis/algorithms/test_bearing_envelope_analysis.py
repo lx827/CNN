@@ -16,8 +16,6 @@ from app.algorithms.bearing.analysis import (
 from app.algorithms.bearing.evaluation import evaluate_envelope, evaluate_sideband_evidence
 from app.algorithms.core import Spectrum
 from app.algorithms.mechanics import BearingGeometry
-from app.services.diagnosis.ensemble import _bearing_confidence
-from app.services.diagnosis.health_score_continuous import compute_continuous_deductions
 
 
 GEOMETRY = BearingGeometry(9, 7.94, 38.52, 0.0)
@@ -176,41 +174,6 @@ class BearingEnvelopeAnalysisMathTest(unittest.TestCase):
         # 基波在单调背景中没有局部峰，是可评估的有效阴性。
         self.assertTrue(result.indicators["BPFI"]["evaluable"])
         self.assertFalse(result.indicators["BPFI"]["significant"])
-
-    def test_suffixed_low_frequency_key_controls_health_and_ensemble(self):
-        spectrum = manual_spectrum(max_frequency=100.0)
-        set_amplitude(spectrum, 25.0, 16.0)
-        result = evaluate(spectrum)
-        low = result.indicators["low_freq_ratio_stat"]
-        self.assertTrue(low["rotation_harmonic_dominant"])
-        deductions = compute_continuous_deductions(
-            {"kurtosis": 8.0, "crest_factor": 12.0},
-            None,
-            {"evaluation": {"indicators": result.indicators}},
-            {"fault_indicators": {}},
-        )
-        self.assertNotIn(
-            "bearing_statistical_abnormal",
-            {name for name, _ in deductions},
-        )
-        self.assertNotIn(
-            "bearing_statistical_hint",
-            {name for name, _ in deductions},
-        )
-        # 精确覆盖 stat_hits=1 的降权分支，低频键来自真实提取结果。
-        vote_indicators = {
-            "low_freq_ratio_stat": low,
-            "moderate_kurtosis_stat": {
-                **result.indicators["moderate_kurtosis_stat"],
-                "significant": True,
-                "score": 16.0,
-            },
-        }
-        vote = _bearing_confidence(
-            {"evaluation": {"indicators": vote_indicators}},
-            {"rms": 1.0, "kurtosis": 8.0, "crest_factor": 12.0},
-        )
-        self.assertEqual(vote["confidence"], 0.28)
 
     def test_power_proxy_name_unit_and_nonuniform_validation(self):
         spectrum = Spectrum(

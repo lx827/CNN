@@ -55,11 +55,10 @@ def test_engine_indeterminate_and_fast_downstream_boundaries():
             preprocess=False, _cached_order=order_analysis,
         ),
     ):
-        try:
-            call()
-            raise AssertionError("快速变速不应被标量轴承下游静默接受")
-        except ValueError as exc:
-            assert "快速变速" in str(exc)
+        result = call()
+        assert result["evaluation_status"] == "indeterminate"
+        assert result["diagnosis_conclusion"] == "unknown"
+        assert "快速变速" in result["reason"]
 
     # 定轴新契约：SER 可以消费连续相位补偿谱，但 TSA/CAR 不得使用轨迹中位数。
     gear_engine = DiagnosisEngine(gear_method=GearMethod.ADVANCED, gear_teeth={"input": 18})
@@ -85,10 +84,10 @@ def test_ensemble_fast_speed_never_becomes_bearing_constant_input():
     )
     assert result["bearing_results"]
     for method_result in result["bearing_results"].values():
-        assert "快速变速" in method_result.get("error", "")
-        assert "evaluation" not in method_result
-    assert result["bearing"] == {}
-    assert result["ensemble"]["best_bearing"] is None
+        assert "快速变速" in method_result.get("reason", "")
+        assert method_result["diagnosis_conclusion"] == "unknown"
+        assert method_result["evaluation_status"] == "indeterminate"
+    assert result["bearing"]["diagnosis_conclusion"] == "unknown"
 
 
 def test_order_api_constant_axis_amplitude_and_persistence():
@@ -102,12 +101,12 @@ def test_order_api_constant_axis_amplitude_and_persistence():
         ))
         db.add(Diagnosis(
             device_id="ORDER", batch_index=1, channel=0, denoise_method="none",
-            health_score=77, status="warning", rot_freq=10.0,
+            health_score=77, evaluation_status="evaluated", diagnosis_conclusion="warning", coverage="complete", rot_freq=10.0,
             order_analysis={"keep": "batch"},
         ))
         db.add(Diagnosis(
             device_id="ORDER", batch_index=1, channel=1, denoise_method="wavelet",
-            health_score=42, status="critical", rot_freq=33.0,
+            health_score=42, evaluation_status="evaluated", diagnosis_conclusion="fault", coverage="complete", rot_freq=33.0,
             order_analysis={"keep": "channel"},
         ))
         db.commit()
@@ -128,11 +127,11 @@ def test_order_api_constant_axis_amplitude_and_persistence():
         diagnosis = db.query(Diagnosis).filter(Diagnosis.channel == 0).one()
         assert diagnosis.rot_freq == 20.0
         assert diagnosis.order_analysis == {"keep": "batch", "rot_freq_hz": 20.0, "rot_rpm": 1200.0}
-        assert diagnosis.health_score == 77 and diagnosis.status == "warning"
+        assert diagnosis.health_score == 77 and diagnosis.diagnosis_conclusion == "warning"
         channel_cache = db.query(Diagnosis).filter(Diagnosis.channel == 1).one()
         assert channel_cache.rot_freq == 33.0
         assert channel_cache.order_analysis == {"keep": "channel"}
-        assert channel_cache.health_score == 42 and channel_cache.status == "critical"
+        assert channel_cache.health_score == 42 and channel_cache.diagnosis_conclusion == "fault"
         assert db.query(Diagnosis).count() == 2
     engine.dispose()
 

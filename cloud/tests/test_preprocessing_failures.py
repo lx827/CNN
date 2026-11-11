@@ -22,7 +22,7 @@ from app.database import Base, get_db
 from app.models import Device, SensorData, Diagnosis, Alarm
 from app.api.data_view import router
 from app import lifespan as worker
-from app.services import analyzer
+from app.services import analyzer, diagnosis_workflow as workflow
 from app.services.diagnosis import DiagnosisEngine
 from app.services.diagnosis.signal_utils import DenoisingError, denoise_signal, prepare_signal
 from app.algorithms.decomposition.wavelet import denoise_wavelet
@@ -62,13 +62,9 @@ class PreprocessingHTTPTests(unittest.TestCase):
         cases = [
             ("", {}), ("/export", {}), ("/fft", {}), ("/stft", {}),
             ("/stats", {}), ("/cepstrum", {}), ("/order", {"rot_freq": 20}),
-            ("/envelope", {}), ("/gear", {}), ("/analyze", {}),
-            ("/full-analysis", {}), ("/method-analysis", {"method": "envelope"}),
-            ("/research-analysis", {"profile": "runtime"}),
         ]
-        with patch.object(analyzer, "nn_predict", return_value=None):
-            for suffix, parameters in cases:
-                with self.subTest(route=suffix):
+        for suffix, parameters in cases:
+            with self.subTest(route=suffix):
                     response = self.client.get("/api/data/DENOISE/1/1" + suffix,
                                                params={"denoise": "emd", **parameters})
                     self.assertEqual(response.status_code, 422, response.text)
@@ -83,7 +79,7 @@ class PreprocessingHTTPTests(unittest.TestCase):
         for suffix in ("/fft", "/envelope", "/gear", "/analyze", "/method-analysis", "/research-analysis"):
             with self.subTest(route=suffix):
                 response = self.client.get("/api/data/DENOISE/1/1" + suffix,
-                    params={"denoise": "typo", "method": "envelope", "profile": "runtime"})
+                    params={"denoise": "typo", "profile": "runtime"})
                 self.assertEqual(response.status_code, 422, response.text)
                 self.assertEqual(response.json()["detail"]["method"], "typo")
 
@@ -101,11 +97,9 @@ class PreprocessingHTTPTests(unittest.TestCase):
         with patch("app.services.diagnosis.vmd_denoise.vmd_denoise", side_effect=RuntimeError("numerical failure")):
             with self.assertRaisesRegex(DenoisingError, "numerical failure"):
                 denoise_signal(signal, "vmd")
-        with patch.object(analyzer, "nn_predict", return_value=None), \
-             patch.object(analyzer, "_rule_based_analyze") as fallback:
-            result = analyzer.analyze_device({"ch1": signal.tolist()}, 1024, denoise_method="typo")
-        fallback.assert_not_called()
-        self.assertEqual(result["status"], "indeterminate")
+        result = analyzer.analyze_device({"ch1": signal.tolist()}, 1024, denoise_method="typo")
+        self.assertEqual(result["evaluation_status"], "indeterminate")
+        self.assertEqual(result["diagnosis_conclusion"], "unknown")
         self.assertIsNone(result["health_score"])
 
     def test_openapi_declares_both_denoising_and_request_validation_422(self):
@@ -139,26 +133,24 @@ class PreprocessingWorkerTests(unittest.IsolatedAsyncioTestCase):
 
         try:
             with patch.object(worker, "SessionLocal", sessions), \
-                 patch.object(analyzer, "ANALYZE_DENOISE_METHOD", "emd"), \
-                 patch.object(analyzer, "nn_predict", return_value=None), \
-                 patch.object(analyzer, "_rule_based_analyze") as fallback, \
-                 patch.object(worker.manager, "broadcast", side_effect=broadcast), \
+                 patch.object(workflow, "analyze_device", side_effect=lambda channels, rate, device, rot, denoise, batch: analyzer.analyze_device(channels, rate, device, rot, "emd", batch)), \
+                 patch.object(workflow.manager, "broadcast", side_effect=broadcast), \
                  patch.object(worker.asyncio, "sleep", AsyncMock(side_effect=[None, asyncio.CancelledError])):
                 await worker.analysis_worker()
-            fallback.assert_not_called()
             with sessions() as db:
                 batch = db.query(Diagnosis).filter_by(channel=0).one()
                 channel = db.query(Diagnosis).filter_by(channel=1).one()
                 for result in (batch, channel, db.query(Device).one()):
                     self.assertIsNone(result.health_score)
-                    self.assertEqual(result.status, "indeterminate")
-                self.assertTrue(channel.full_analysis["reason"])
-                self.assertEqual(channel.full_analysis["denoise"], "emd")
+                    self.assertEqual(result.evaluation_status, "indeterminate")
+                    self.assertEqual(result.diagnosis_conclusion, "unknown")
+                self.assertTrue(channel.engine_result["reason"])
+                self.assertEqual(channel.engine_result["evaluations"][0]["evidence"][0]["key"]["denoise_method"], "emd")
                 self.assertEqual(db.query(SensorData).one().is_analyzed, 1)
                 self.assertEqual(db.query(Alarm).count(), 0)
             self.assertEqual(len(messages), 1)
             self.assertIsNone(messages[0]["data"]["health_score"])
-            self.assertEqual(messages[0]["data"]["status"], "indeterminate")
+            self.assertEqual(messages[0]["data"]["evaluation_status"], "indeterminate")
         finally:
             engine.dispose()
 

@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 
 from app.core.websocket import manager
+from app.core.json_utils import sanitize_for_json
 from app.models import SensorData
 from app.services.analyzer import analyze_device
 from app.services.alarms import generate_alarms
@@ -40,11 +41,11 @@ async def process_batch(db, device, batch_index, *, denoise="none", rot_freq=Non
                 record.analyzed_at = datetime.now(timezone.utc)
             alarms = generate_alarms(db, device.device_id, result, batch_index=batch_index)
             db.commit()
-            events = [{"type": "diagnosis_update", "data": {
+            events = sanitize_for_json([{"type": "diagnosis_update", "data": {
                 "device_id": device.device_id, "batch_index": batch_index, **result,
             }}] + [{"type": "new_alarm", "data": {
                 "id": alarm.id, "title": alarm.title, "level": alarm.level, "channel": alarm.channel,
-            }} for alarm in alarms]
+            }} for alarm in alarms])
         except Exception:
             db.rollback()
             raise
