@@ -4,7 +4,8 @@ from sqlalchemy import func, desc
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
 from . import router, _get_channel_name, prepare_signal
-from app.services.diagnosis.signal_utils import denoise_signal
+from app.services.diagnosis.signal_utils import denoise_signal, DenoisingError
+from .errors import denoising_http_error
 from app.services.diagnosis_queries import latest_diagnosis_summaries
 from datetime import datetime
 import logging
@@ -167,7 +168,10 @@ def get_channel_data(
 
     # 时域波形返回去均值后的数据，便于观察
     dc_removed = prepare_signal(record.data, detrend=detrend)
-    dc_removed = denoise_signal(dc_removed, denoise).tolist()
+    try:
+        dc_removed = denoise_signal(dc_removed, denoise).tolist()
+    except DenoisingError as e:
+        raise denoising_http_error(e) from e
 
     return {
         "code": 200,

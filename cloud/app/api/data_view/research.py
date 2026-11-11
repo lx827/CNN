@@ -5,6 +5,9 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 from .bearing_options import get_bearing_options
+from app.services.diagnosis.signal_utils import DenoisingError
+from .errors import denoising_http_error, configured_denoise
+from app.services.diagnosis.gear.planetary import analyze_planetary_gear, gear_config_for_channel
 
 from app.database import get_db
 from app.models import SensorData, Device, Diagnosis
@@ -132,41 +135,21 @@ METHOD_INFO = {
         "label": "齿轮高级指标",
         "description": "FM0/FM4/M6A/M8A/SER/CAR 全指标：基于 TSA 残差/差分信号的完整齿轮指标体系。FM0 粗故障检测、FM4 局部故障检测、M6A/M8A 表面损伤检测、SER 边频带能量比、CAR 倒频谱幅值比。",
     },
-    # 行星齿轮箱专用方法（仅在行星箱参数配置时可用）
     "planetary_narrowband": {
-        "category": "planetary",
-        "label": "窄带包络阶次分析",
-        "description": "行星齿轮箱 Level 2a：对 mesh_order 频带做窄带滤波 → Hilbert 包络 → 阶次谱，搜索 sun/planet/carrier 故障阶次峰值。",
+        "category": "planetary", "label": "行星啮合带包络",
+        "description": "固定齿圈、明确参考轴与完整齿数的恒速行星排；啮合带包络及局部事件候选不直接定位断齿或裂纹，无健康基线时不可评估。",
     },
     "planetary_fullband": {
-        "category": "planetary",
-        "label": "全频带包络阶次分析",
-        "description": "行星齿轮箱 Level 2b：对全频带信号做包络后计算阶次谱，不依赖窄带滤波参数选择。",
+        "category": "planetary", "label": "行星全带包络",
+        "description": "全带 Hilbert 包络及事件候选阶次；多分量交叉项可能存在。无可比健康基线时只保留原始证据。",
     },
-    "planetary_tsa_envelope": {
-        "category": "planetary",
-        "label": "TSA 残差包络阶次分析",
-        "description": "行星齿轮箱 Level 2c：先做 TSA 提取同步啮合成分，再对残差做包络阶次分析。实测区分力最强(3.31×)，是最有效的行星箱诊断方法。",
+    "planetary_tsa_residual": {
+        "category": "planetary", "label": "行星架 TSA 非同步残差包络",
+        "description": "按行星架角域完整转周期平均，再对非同步残差计算包络阶次。同架同步事件进入 TSA 并从残差抑制，不代表所有故障都在残差。",
     },
-    "planetary_hp_envelope": {
-        "category": "planetary",
-        "label": "高通滤波包络阶次分析",
-        "description": "行星齿轮箱 Level 2d：高通滤波去除低频旋转成分后做包络阶次分析，适合低速行星箱。",
-    },
-    "planetary_vmd_demod": {
-        "category": "planetary",
-        "label": "VMD 幅频联合解调",
-        "description": "行星齿轮箱 Level 3：VMD 分解 → 选择围绕 mesh_freq 的敏感 IMF → 幅值解调谱 + 频率解调谱。计算较慢，仅在 full-analysis 模式启用。",
-    },
-    "planetary_sc_scoh": {
-        "category": "planetary",
-        "label": "谱相关/谱相干解调",
-        "description": "行星齿轮箱 Level 4：基于 AM-FM 模型的谱相关密度分析，在二维谱面上识别离散故障特征点群。计算较慢。",
-    },
-    "planetary_msb": {
-        "category": "planetary",
-        "label": "MSB 残余边频带分析",
-        "description": "行星齿轮箱 Level 5：调制信号双谱(MSB)提取残余边频带信息，不受制造误差干扰，故障时 MSB 幅值单调增长。计算较慢。",
+    "planetary_highpass": {
+        "category": "planetary", "label": "行星高通包络",
+        "description": "明确高通频带后做宽带包络，检查谱覆盖与事件分辨率。未校准指标不进入告警。",
     },
 }
 
@@ -196,8 +179,7 @@ async def get_channel_method_analysis(
     - 'all': 运行所有轴承+齿轮方法（等效 full-analysis）
     - 轴承方法: envelope / filter_bank_sk / cpw / med / teager / spectral_kurtosis / wp / dwt / emd_envelope / ceemdan_envelope / vmd_envelope
     - 齿轮方法: gear_standard / gear_advanced
-    - 行星箱方法: planetary_narrowband / planetary_fullband / planetary_tsa_envelope
-                  / planetary_hp_envelope / planetary_vmd_demod / planetary_sc_scoh / planetary_msb
+    - 行星箱方法: planetary_narrowband / planetary_fullband / planetary_tsa_residual / planetary_highpass
     """
     record = db.query(SensorData).filter(
         SensorData.device_id == device_id,
@@ -222,19 +204,9 @@ async def get_channel_method_analysis(
         gear_teeth = {}
         if device:
             bearing_params = _extract_device_param(device.bearing_params or {}, ("n", "d", "D", "alpha"))
-            gear_teeth = _extract_device_param(device.gear_teeth or {}, ("input", "output"))
+            gear_teeth = gear_config_for_channel(device.gear_teeth, channel)
 
-        denoise_map = {
-            "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,
-            "vmd": DenoiseMethod.VMD, "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
-            "wavelet_lms": DenoiseMethod.WAVELET_LMS,
-            "emd": DenoiseMethod.EMD, "ceemdan": DenoiseMethod.CEEMDAN,
-            "savgol": DenoiseMethod.SAVGOL,
-            "wavelet_packet": DenoiseMethod.WAVELET_PACKET,
-            "ceemdan_wp": DenoiseMethod.CEEMDAN_WP,
-            "eemd": DenoiseMethod.EEMD,
-        }
-        denoise_method = denoise_map.get(denoise, DenoiseMethod.NONE)
+        denoise_method = configured_denoise(denoise)
 
         # ── 运行全部方法 ──
         if method == "all":
@@ -245,7 +217,6 @@ async def get_channel_method_analysis(
                 bearing_params=bearing_params,
                 gear_teeth=gear_teeth,
             )
-            engine._run_slow_methods = True
             result = await asyncio.to_thread(
                 engine.analyze_all_methods, signal, sample_rate, rot_freq_hz
             )
@@ -316,7 +287,7 @@ async def get_channel_method_analysis(
                 gear_teeth=gear_teeth,
             )
             result = await asyncio.to_thread(
-                engine.analyze_gear, signal, sample_rate
+                engine.analyze_gear, signal, sample_rate, rot_freq_hz
             )
             response_data = {
                 "device_id": record.device_id,
@@ -331,74 +302,32 @@ async def get_channel_method_analysis(
             }
             return {"code": 200, "data": _sanitize_for_json(response_data)}
 
-        # ── 运行单个行星齿轮箱方法 ──
-        planetary_method_map = {
-            "planetary_narrowband": "planetary_envelope_order_analysis",
-            "planetary_fullband": "planetary_fullband_envelope_order_analysis",
-            "planetary_tsa_envelope": "planetary_tsa_envelope_analysis",
-            "planetary_hp_envelope": "planetary_hp_envelope_order_analysis",
-            "planetary_vmd_demod": "planetary_vmd_demod_analysis",
-            "planetary_sc_scoh": "planetary_sc_scoh_analysis",
-            "planetary_msb": "planetary_msb_analysis",
+        planetary_methods = {
+            "planetary_narrowband": "narrowband", "planetary_fullband": "fullband",
+            "planetary_tsa_residual": "tsa_residual", "planetary_highpass": "highpass",
         }
-        if method in planetary_method_map:
-            from app.services.diagnosis.gear.planetary_demod import (
-                planetary_envelope_order_analysis,
-                planetary_fullband_envelope_order_analysis,
-                planetary_tsa_envelope_analysis,
-                planetary_hp_envelope_order_analysis,
-                planetary_vmd_demod_analysis,
-                planetary_sc_scoh_analysis,
-                planetary_msb_analysis,
-            )
-            func_name = planetary_method_map[method]
-            func_map = {
-                "planetary_envelope_order_analysis": planetary_envelope_order_analysis,
-                "planetary_fullband_envelope_order_analysis": planetary_fullband_envelope_order_analysis,
-                "planetary_tsa_envelope_analysis": planetary_tsa_envelope_analysis,
-                "planetary_hp_envelope_order_analysis": planetary_hp_envelope_order_analysis,
-                "planetary_vmd_demod_analysis": planetary_vmd_demod_analysis,
-                "planetary_sc_scoh_analysis": planetary_sc_scoh_analysis,
-                "planetary_msb_analysis": planetary_msb_analysis,
-            }
-            func = func_map[func_name]
-
-            # 行星解调仍要求标量恒速/缓变输入，不能把快速变速轨迹摘要成恒速。
-            engine = DiagnosisEngine(
-                denoise_method=denoise_method,
-                bearing_params=bearing_params,
-                gear_teeth=gear_teeth,
-            )
+        if method in planetary_methods:
+            engine = DiagnosisEngine(denoise_method=denoise_method, gear_teeth=gear_teeth)
             arr = engine.preprocess(signal)
-            raw_for_speed = prepare_signal(signal, detrend=True)
-            order_analysis = engine._analyze_order(
-                arr, sample_rate, estimation_signal=raw_for_speed,
+            order_analysis = engine._analyze_order(arr, sample_rate, rot_freq=rot_freq_hz, estimation_signal=signal)
+            selected = planetary_methods[method]
+            result = await asyncio.to_thread(
+                analyze_planetary_gear, arr, sample_rate, gear_teeth,
+                order_analysis=order_analysis, include_tsa=selected == "tsa_residual", methods=(selected,),
             )
-            if order_analysis.status != "valid":
-                raise ValueError(order_analysis.reason or "行星解调转频不可判定")
-            if order_analysis.tracking_method == "varying_speed":
-                raise ValueError("快速变速行星解调尚未迁移连续相位接口，请先使用 /order 查看补偿阶次谱")
-            rot_freq, _ = engine._order_speed_summary(order_analysis)
-
-            result = await asyncio.to_thread(func, arr, sample_rate, rot_freq, gear_teeth)
-            response_data = {
-                "device_id": record.device_id,
-                "batch_index": record.batch_index,
-                "channel": record.channel,
-                "channel_name": _get_channel_name(device, record.channel),
-                "sample_rate": sample_rate,
-                "method": method,
-                "method_info": METHOD_INFO.get(method, {}),
-                "rot_freq_hz": round(float(rot_freq), 3),
-                "denoise": denoise,
-                **result,
-            }
-            return {"code": 200, "data": _sanitize_for_json(response_data)}
+            return {"code": 200, "data": _sanitize_for_json({
+                "device_id": record.device_id, "batch_index": record.batch_index,
+                "channel": record.channel, "channel_name": _get_channel_name(device, record.channel),
+                "sample_rate": sample_rate, "analysis_method": method,
+                "method_info": METHOD_INFO[method], "denoise": denoise, **result,
+            })}
 
         raise HTTPException(status_code=400, detail=f"未知分析方法: {method}")
 
     except HTTPException:
         raise
+    except DenoisingError as exc:
+        raise denoising_http_error(exc) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"分析参数无效: {exc}") from exc
     except Exception as exc:
@@ -436,19 +365,6 @@ async def get_channel_research_analysis(
     device = db.query(Device).filter(Device.device_id == device_id).first()
 
     profile = profile if profile in {"runtime", "balanced", "exhaustive"} else "balanced"
-    denoise_map = {
-        "none": DenoiseMethod.NONE,
-        "wavelet": DenoiseMethod.WAVELET,
-        "vmd": DenoiseMethod.VMD,
-        "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
-        "wavelet_lms": DenoiseMethod.WAVELET_LMS,
-        "emd": DenoiseMethod.EMD,
-        "ceemdan": DenoiseMethod.CEEMDAN,
-        "savgol": DenoiseMethod.SAVGOL,
-        "wavelet_packet": DenoiseMethod.WAVELET_PACKET,
-        "ceemdan_wp": DenoiseMethod.CEEMDAN_WP,
-        "eemd": DenoiseMethod.EEMD,
-    }
 
     try:
         sample_rate = record.sample_rate or 25600
@@ -458,10 +374,10 @@ async def get_channel_research_analysis(
         gear_teeth = {}
         if device:
             bearing_params = _extract_device_param(device.bearing_params or {}, ("n", "d", "D", "alpha"))
-            gear_teeth = _extract_device_param(device.gear_teeth or {}, ("input", "output"))
+            gear_teeth = gear_config_for_channel(device.gear_teeth, channel)
 
         engine = DiagnosisEngine(
-            denoise_method=denoise_map.get(denoise, DenoiseMethod.NONE),
+            denoise_method=configured_denoise(denoise),
             bearing_options=bearing_options,
             bearing_params=bearing_params,
             gear_teeth=gear_teeth,
@@ -506,6 +422,8 @@ async def get_channel_research_analysis(
         # 写入数据库缓存，供 DataView 读取
         _save_research_diagnosis(db, device_id, batch_index, channel, denoise, result)
         return {"code": 200, "data": _sanitize_for_json(response_data)}
+    except DenoisingError as exc:
+        raise denoising_http_error(exc) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"分析参数无效: {exc}") from exc
     except Exception as exc:

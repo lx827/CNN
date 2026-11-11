@@ -5,6 +5,7 @@
  *       告警阈值的保存与同步,采集间隔的数值+单位双向解析。
  */
 import { ref, computed, onMounted } from 'vue'
+import { mechanicalGearForm, mechanicalGearPayload } from '../utils/planetaryDiagnosis'
 import { ElMessage } from 'element-plus'
 import {
   getDevices, getDeviceConfig, updateDeviceConfig, updateBatchDeviceConfig,
@@ -118,16 +119,16 @@ export function useSettings() {
       const bp = d.bearing_params || {}
 
       // 判断是否为旧格式（顶层含业务字段）
-      const isOldGear = 'input' in gt || 'output' in gt
+      const isOldGear = 'input' in gt || 'output' in gt || 'sun' in gt || 'ring' in gt
       const isOldBearing = 'n' in bp || 'd' in bp || 'D' in bp || 'alpha' in bp
 
       for (let i = 1; i <= chCount; i++) {
         const ch = String(i)
         if (isOldGear) {
-          form.value.gear_teeth[ch] = { input: gt.input ?? null, output: gt.output ?? null }
+          form.value.gear_teeth[ch] = mechanicalGearForm(gt)
         } else {
           const chGt = gt[ch] || {}
-          form.value.gear_teeth[ch] = { input: chGt.input ?? null, output: chGt.output ?? null }
+          form.value.gear_teeth[ch] = mechanicalGearForm(chGt)
         }
         if (isOldBearing) {
           form.value.bearing_params[ch] = { n: bp.n ?? null, d: bp.d ?? null, D: bp.D ?? null, alpha: bp.alpha ?? null }
@@ -215,7 +216,7 @@ export function useSettings() {
     savingMechanical.value = true
     try {
       const payload = {
-        gear_teeth: form.value.gear_teeth,
+        gear_teeth: Object.fromEntries(Object.entries(form.value.gear_teeth).map(([channel, config]) => [channel, mechanicalGearPayload(config)])),
         bearing_params: form.value.bearing_params,
       }
       await updateDeviceConfig(form.value.device_id, payload)

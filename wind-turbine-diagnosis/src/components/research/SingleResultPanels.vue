@@ -59,8 +59,10 @@
       </section>
     </template>
 
+    <PlanetaryResult v-if="result.is_planetary" class="panel wide" :result="result" />
+
     <!-- 齿轮方法 -->
-    <template v-if="selectedMethodInfo?.category === 'gear'">
+    <template v-if="selectedMethodInfo?.category === 'gear' && !result.is_planetary">
       <section class="panel">
         <div class="panel-title">齿轮指标</div>
         <el-descriptions :column="2" border size="small">
@@ -88,70 +90,26 @@
       </section>
     </template>
 
-    <!-- 行星箱方法 -->
-    <template v-if="selectedMethodInfo?.category === 'planetary'">
-      <section class="panel">
-        <div class="panel-title">{{ selectedMethodInfo.label }} 结果</div>
-        <el-descriptions :column="2" border size="small">
-          <el-descriptions-item v-for="(val, name) in filterPlanetaryResult" :key="name" :label="name">{{ fmt(val) }}</el-descriptions-item>
-        </el-descriptions>
-      </section>
-      <section v-if="result.fault_indicators" class="panel">
-        <div class="panel-title">故障指示器</div>
-        <el-descriptions :column="2" border size="small">
-          <el-descriptions-item v-for="(val, name) in result.fault_indicators" :key="name" :label="name">
-            <template v-if="val && typeof val === 'object'">
-              <el-tag :type="val.critical ? 'danger' : val.significant ? 'warning' : 'success'" size="small">{{ val.critical ? '严重' : val.significant ? '显著' : '正常' }}</el-tag>
-            </template>
-            <template v-else>{{ fmt(val) }}</template>
-          </el-descriptions-item>
-        </el-descriptions>
-      </section>
-    </template>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import PlanetaryResult from './PlanetaryResult.vue'
 import { fmt, evaluationStatusType, evaluationStatusText } from '../../composables/useResearchDiagnosis'
 import { bearingEvaluationEntries, scScohEntries, bearingReasonText } from '../../utils/bearingDiagnosis'
-
 const props = defineProps({
   result: { type: Object, required: true },
   selectedMethodInfo: { type: Object, default: null },
-  filterPlanetaryResult: { type: Object, default: () => ({}) },
 })
-
 const bearingEvaluationItems = computed(() => bearingEvaluationEntries(props.result))
 const scScohItems = computed(() => scScohEntries(props.result))
 </script>
 
 <style scoped>
-.result-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.panel {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 16px;
-  min-width: 0;
-}
-
+.result-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; min-width: 0; }
 .panel.wide { grid-column: 1 / -1; }
-
-.panel-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-weight: 600;
-  margin-bottom: 12px;
-}
-
-@media (max-width: 1100px) {
-  .result-grid { grid-template-columns: 1fr; }
-}
+.panel-title { display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 12px; }
+@media (max-width: 1100px) { .result-grid { grid-template-columns: 1fr; } }
 </style>

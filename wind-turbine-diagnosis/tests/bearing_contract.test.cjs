@@ -12,6 +12,7 @@ const requireFrontend = createRequire(path.join(frontendRoot, 'package.json'))
 const { parse, compileScript } = requireFrontend('@vue/compiler-sfc')
 const bearingUtilsPromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/bearingDiagnosis.js')).href)
 const diagnosisStatusPromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/diagnosisStatus.js')).href)
+const errorMessagePromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/errorMessage.js')).href)
 
 const stripModules = source => source
   .replace(/^import[\s\S]*?from ['"][^'"]+['"]\r?\n/gm, '')
@@ -100,21 +101,23 @@ function composableContext(extra = {}) {
 
 async function loadDataView(overrides = {}) {
   const utils = await bearingUtilsPromise
+  const errors = await errorMessagePromise
   const source = stripModules(readFileSync(path.join(frontendRoot, 'src/composables/useDataView.js'), 'utf8'))
     .replace('function useDataView()', 'globalThis.useDataView = function useDataView()')
-  const context = composableContext({ ...utils, ...overrides })
+  const context = composableContext({ ...utils, ...errors, ...overrides })
   vm.runInNewContext(source, context)
   return context.useDataView()
 }
 
 async function loadResearch(overrides = {}) {
   const utils = await bearingUtilsPromise
+  const errors = await errorMessagePromise
   const { getDiagnosisStatusView } = await diagnosisStatusPromise
   const source = stripModules(readFileSync(path.join(frontendRoot, 'src/composables/useResearchDiagnosis.js'), 'utf8'))
     .replace('function useResearchDiagnosis()', 'globalThis.useResearchDiagnosis = function useResearchDiagnosis()')
     + '\nglobalThis.evaluationStatusText = evaluationStatusText; globalThis.evaluationStatusType = evaluationStatusType;'
     + '\nglobalThis.statusText = statusText; globalThis.statusType = statusType;'
-  const context = composableContext({ ...utils, getDiagnosisStatusView, ...overrides })
+  const context = composableContext({ ...utils, ...errors, getDiagnosisStatusView, ...overrides })
   vm.runInNewContext(source, context)
   return { state: context.useResearchDiagnosis(), context }
 }
@@ -124,6 +127,26 @@ function selectBatch(state) {
   state.selectedBatch.value = { batch_index: 1 }
   state.selectedChannel.value = 1
 }
+
+test('DataView和研究页实际失败分支显示422方法及原因', async () => {
+  const messages = []
+  const reject = async () => { throw { response: { data: { detail: {
+    status: 'not_evaluable', method: 'vmd', reason: 'maximum_iterations_reached',
+  } } } } }
+  const extra = { ElMessage: { error: message => messages.push(message), warning: noop, success: noop, info: noop } }
+  const view = await loadDataView({ ...extra, getChannelEnvelope: reject })
+  selectBatch(view)
+  await view.computeEnvelope()
+  assert.match(messages[0], /vmd.*maximum_iterations_reached/)
+  assert.equal(view.computedEnvelope.value, false)
+  const { state } = await loadResearch({ ...extra, getChannelMethodAnalysis: reject })
+  state.selectedDeviceId.value = 'D1'
+  state.selectedBatchIndex.value = 1
+  state.selectedChannel.value = 1
+  await state.runAnalysis()
+  assert.match(messages[1], /vmd.*maximum_iterations_reached/)
+  assert.equal(messages.some(message => message.includes('[object Object]')), false)
+})
 
 test('DataView 包络图读取结构化 spectrum，并从 evaluation 生成标注', async () => {
   const state = await loadDataView({ getChannelEnvelope: async () => ({ data: envelopeResult() }) })
@@ -318,7 +341,8 @@ function loadSfcSetup(relativePath, exportName, globals) {
   const compiled = compileScript(descriptor, { id: exportName }).content
     .replace('export default', `globalThis.${exportName} =`)
   const source = stripModules(compiled)
-  const context = { console, computed, ...globals }
+  // 子组件模板由独立契约覆盖；SFC setup 仍需持有真实导入对应的绑定名。
+  const context = { console, computed, PlanetaryResult: {}, ...globals }
   vm.runInNewContext(source, context)
   return (props) => context[exportName].setup(props, { expose: noop })
 }

@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from app.algorithms.cepstrum import analyze_cepstrum, compute_cepstrum
 from app.database import get_db
 from app.models import SensorData, Device
-from app.services.diagnosis.signal_utils import denoise_signal
+from app.services.diagnosis.signal_utils import denoise_signal, DenoisingError
+from .errors import denoising_http_error
 from . import router, prepare_signal, _get_channel_name
 
 import asyncio
@@ -71,6 +72,8 @@ async def get_channel_cepstrum(
                 ],
             }
         }
+    except DenoisingError as e:
+        raise denoising_http_error(e) from e
     except Exception as e:
         logger.error(f"倒谱计算失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"倒谱计算失败: {e}")

@@ -19,20 +19,22 @@ from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, D
 from app.services.diagnosis.signal_utils import (
     estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum,
     _order_band_energy,
+    DenoisingError,
 )
 from app.services.diagnosis.rule_based import _rule_based_analyze
 from app.services.diagnosis.features import _get_channel_params, has_bearing_params, has_gear_params
 from app.services.diagnosis.channel_consensus import cross_channel_consensus
 from app.core.config import DIAGNOSIS_WEIGHTS, ANALYZE_DENOISE_METHOD
 from app.services.diagnosis.probability_calibration import calibrate_fault_probabilities
+from app.services.diagnosis.gear.planetary import gear_config_for_channel
 
 
-def _safe_result(msg="分析失败", health=100):
+def _safe_result(msg="分析失败"):
     """崩溃安全默认结果"""
     return {
-        "health_score": health, "status": "normal",
-        "fault_probabilities": {"正常运行": 1.0},
-        "imf_energy": {}, "order_analysis": None, "rot_freq": None,
+        "health_score": None, "status": "indeterminate",
+        "fault_probabilities": {},
+        "imf_energy": {}, "order_analysis": {"channels": {}}, "rot_freq": None,
         "_error": msg,
     }
 
@@ -82,6 +84,10 @@ def analyze_device(
             denoise = device.denoise_method
         else:
             denoise = ANALYZE_DENOISE_METHOD
+        try:
+            DenoiseMethod(denoise)
+        except ValueError as exc:
+            raise DenoisingError(str(denoise), "未知去噪方法") from exc
 
         channel_results = []
         for ch_idx, (ch_name, signal) in enumerate(channels_data.items(), start=1):
@@ -91,7 +97,7 @@ def analyze_device(
                 continue
 
             ch_bp = _get_channel_params(device, ch_idx, "bearing_params")
-            ch_gt = _get_channel_params(device, ch_idx, "gear_teeth")
+            ch_gt = gear_config_for_channel(getattr(device, "gear_teeth", None), ch_idx)
 
             # 判断该通道有效配置
             has_bearing = has_bearing_params(ch_bp)
@@ -102,21 +108,40 @@ def analyze_device(
                 gear_method=gear_method, denoise_method=denoise,
                 bearing_params=ch_bp, gear_teeth=ch_gt,
             )
-            result = engine.analyze_research_ensemble(
-                sig_arr, sample_rate, rot_freq=rot_freq,
-                profile="runtime",
-            )
+            try:
+                result = engine.analyze_research_ensemble(
+                    sig_arr, sample_rate, rot_freq=rot_freq,
+                    profile="runtime",
+                )
+            except DenoisingError as exc:
+                # 请求的前处理未完成，不能用未经该处理的规则回退假装成功。
+                # 保留失败通道，同时允许其他有效通道形成自己的诊断。
+                result = {"health_score": None, "status": "indeterminate",
+                          "rot_freq_hz": None, "denoise": exc.method,
+                          "reason": exc.reason, "error": str(exc),
+                          "bearing": {}, "gear": {}}
             channel_results.append((ch_name, result))
 
         if not channel_results:
-            return _safe_result("所有通道数据格式异常", 90)
+            return _safe_result("所有通道数据格式异常")
 
-        health_values = [int(r["health_score"]) for _, r in channel_results]
+        evaluable_channels = [(name, result) for name, result in channel_results
+                              if result.get("health_score") is not None and result.get("status") != "indeterminate"]
+        if not evaluable_channels:
+            return {
+                "health_score": None, "status": "indeterminate", "fault_probabilities": {},
+                "imf_energy": {}, "rot_freq": channel_results[0][1].get("rot_freq_hz"),
+                "order_analysis": {
+                    "engine_result": channel_results[0][1], "channels": dict(channel_results),
+                    "aggregation": {"method": "no_evaluable_channels", "evaluable_channel_count": 0},
+                },
+            }
+        health_values = [int(r["health_score"]) for _, r in evaluable_channels]
         worst_health = min(health_values)
         avg_health = sum(health_values) / len(health_values)
 
         # 多通道一致性投票
-        consensus = cross_channel_consensus([r for _, r in channel_results])
+        consensus = cross_channel_consensus([r for _, r in evaluable_channels])
 
         # 通道可弱融合，但不假设远距离传感器一定强相关。
         # 一致性投票调整融合权重：一致时最差通道权重更高，不一致时降低最差通道权重
@@ -131,7 +156,7 @@ def analyze_device(
             device_health = min(100, device_health + penalty_reduction)
 
         worst_status = max(
-            ([r["status"] for _, r in channel_results]),
+            ([r["status"] for _, r in evaluable_channels]),
             key=lambda s: {"normal": 0, "warning": 1, "fault": 2, "critical": 3}.get(s, 0)
         )
         if worst_status in ("fault", "critical") and avg_health >= 75:
@@ -169,36 +194,13 @@ def analyze_device(
                 # 齿轮指标统一归入"齿轮磨损"
                 severity = 0.6 if prob.get("critical") else 0.3 if prob.get("warning") else 0
                 if severity > 0:
-                    merged["齿轮磨损"] = max(merged.get("齿轮磨损", 0), severity)
-
-            # 时域峭度证据：齿轮设备 kurt>12 时归入"齿轮磨损"
-            # 行星齿轮箱的频域指标(SER/CAR/sideband)无区分力，时域峭度是唯一检出手段
-            # 当 kurt>12 时即使频域指标不触发，也应标记故障概率
-            tf = r.get("time_features", {})
-            kurt = tf.get("kurtosis", 3.0)
-            # 仅对有齿轮参数的设备做此映射（轴承设备已有轴承指标覆盖）
-            has_gear = r.get("ensemble", {}).get("has_gear_params", False)
-            if has_gear and kurt > 12.0:
-                # 峭度越高概率越大：kurt=12→0.3, kurt=20→0.6, kurt>30→0.8
-                kurt_prob = min(0.8, max(0.3, (kurt - 12.0) / 20.0 + 0.3))
-                merged["齿轮磨损"] = max(merged.get("齿轮磨损", 0), kurt_prob)
-
-            # TSA 残差峭度证据：行星齿轮箱最有效的补充指标（区分力=3.31）
-            # TSA 消除同步啮合后残差峭度 > 2.5 时增加齿轮故障概率
-            # 这捕捉了 kurt 与健康重叠(8~10)但 TSA 残差显著的故障
-            # 阈值从2.5提升至5.0：2.5时健康误报34.4%，5.0时误报9.4%
-            tsa_env = r.get("gear", {}).get("planetary_tsa_demod") or {}
-            if isinstance(tsa_env, dict) and "error" not in tsa_env:
-                tsa_rk = float(tsa_env.get("residual_kurtosis", 0.0))
-                if has_gear and tsa_rk > 5.0:
-                    tsa_prob = min(0.6, max(0.2, (tsa_rk - 5.0) / 5.0 + 0.2))
-                    merged["齿轮磨损"] = max(merged.get("齿轮磨损", 0), tsa_prob)
+                    merged["齿轮异常"] = max(merged.get("齿轮异常", 0), severity)
 
         # 概率校准：将原始 SNR/值映射的概率转换为更真实的故障似然
         fault_probs = calibrate_fault_probabilities(merged)
 
         first_result = channel_results[0][1]
-        rf = first_result.get("bearing", {}).get("rot_freq_hz")
+        rf = first_result.get("rot_freq_hz")
         if rf is not None:
             rf = round(float(rf), 3)
 
@@ -218,6 +220,8 @@ def analyze_device(
                     "method": "weak_channel_fusion_with_consensus",
                     "worst_health": worst_health,
                     "average_health": round(avg_health, 2),
+                    "evaluable_channel_count": len(evaluable_channels),
+                    "unavailable_channels": [name for name, result in channel_results if result.get("health_score") is None],
                     "worst_status": worst_status,
                     "consensus": consensus,
                 },
@@ -226,6 +230,8 @@ def analyze_device(
             "consensus_hint": consensus.get("recommendation_hint", ""),
         }
 
+    except DenoisingError as e:
+        return _safe_result(str(e))
     except Exception as e:
         logger.error(f"[分析] 新诊断引擎异常: {e}\n{_tb.format_exc()}")
 
@@ -235,4 +241,4 @@ def analyze_device(
     except Exception as e2:
         logger.error(f"[分析] 规则算法也失败: {e2}\n{_tb.format_exc()}")
 
-    return _safe_result(f"所有诊断算法均失败", 85)
+    return _safe_result("所有诊断算法均失败")
