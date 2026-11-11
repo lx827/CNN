@@ -12,6 +12,7 @@ from app.algorithms.decomposition.vmd import VMDParameters
 from app.algorithms.mechanics.planetary import PlanetaryGearGeometry
 from app.algorithms.order import ScalarSpeed
 from app.algorithms.transforms import decimate_extrema
+from app.services.diagnosis.domain import Diagnosis as DomainDiagnosis, EvaluationStatus, DiagnosisConclusion
 from app.algorithms.pipelines.composite import (
     CompositeAnalysis, CompositeDiagnosis, ResearchCompositePipeline, VMDAMFMPipeline,
     ModulationBispectrumPipeline, CVSMEDMSBPipeline, VMDICAPipeline, MSWPEEPipeline,
@@ -161,9 +162,10 @@ def composite_to_dict(diagnosis: CompositeDiagnosis) -> dict:
         if isinstance(value, (np.integer, np.bool_)):
             return value.item()
         return value
-    return {"contract_version": 1, "method": diagnosis.analysis.method,
-            "evaluation_status": diagnosis.evaluation.status,
-            "diagnosis_conclusion": diagnosis.evaluation.diagnosis_conclusion,
+    domain = DomainDiagnosis(EvaluationStatus.NOT_EVALUABLE, DiagnosisConclusion.UNKNOWN, None, (), (),
+        "研究组合缺少已验证故障阈值，仅供查看原始计算；不参与生产融合、评分或告警。",
+        reason=diagnosis.evaluation.reason)
+    return {**domain.to_dict(), "method": diagnosis.analysis.method,
             "analysis": convert(diagnosis.analysis), "evaluation": convert(diagnosis.evaluation),
             "research_only": True, "production_eligible": False,
             "evidence_family": diagnosis.analysis.evidence_family,

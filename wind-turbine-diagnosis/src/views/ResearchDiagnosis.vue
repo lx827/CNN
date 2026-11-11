@@ -37,12 +37,11 @@
     <div v-if="result && runMode !== 'single'" class="summary-band">
       <div class="metric">
         <span class="label">状态</span>
-        <el-tag :type="statusType(result.status)" size="large">{{ statusText(result.status) }}</el-tag>
+        <el-tag :type="getDiagnosisView(result).tagType" size="large">{{ getDiagnosisView(result).text }}</el-tag>
       </div>
-      <div class="metric"><span class="label">健康度</span><strong>{{ result.health_score }}</strong></div>
-      <div class="metric"><span class="label">故障概率</span><strong>{{ percent(result.fault_likelihood) }}</strong></div>
+      <div class="metric"><span class="label">健康度</span><strong>{{ getDiagnosisView(result).scoreText }}</strong></div>
+      <div class="metric"><span class="label">评估覆盖</span><strong>{{ coverageText(result.coverage) }}</strong></div>
       <div class="metric"><span class="label">转频</span><strong>{{ result.rot_freq_hz ?? '-' }} Hz</strong></div>
-      <div class="metric fault-label-metric"><span class="label">故障标签</span><strong class="fault-label-text">{{ result.fault_label || '-' }}</strong></div>
     </div>
 
     <!-- 单方法结果摘要 -->
@@ -52,7 +51,7 @@
         <el-tag :type="methodCategoryTag" size="large">{{ result.requested_method ? result.method.toUpperCase() + '（' + result.requested_method.toUpperCase() + ' 未指定目标）' : selectedMethodInfo?.label || selectedMethod }}</el-tag>
       </div>
       <div class="metric"><span class="label">转频</span><strong>{{ result.rot_freq_hz ?? '-' }} Hz</strong></div>
-      <div class="metric" v-if="result.health_score"><span class="label">健康度</span><strong>{{ result.health_score }}</strong></div>
+      <div class="metric" v-if="result.health_score != null"><span class="label">健康度</span><strong>{{ getDiagnosisView(result.diagnosis || result).scoreText }}</strong></div>
       <div class="metric" v-if="selectedMethodInfo?.category === 'composite'">
         <span class="label">诊断结论</span><el-tag type="info">未知 · 仅供研究</el-tag>
       </div>
@@ -62,7 +61,7 @@
           {{ evaluationStatusText(result.evaluation?.status) }}
         </el-tag>
       </div>
-      <div class="metric" v-else-if="result.status"><span class="label">状态</span><el-tag :type="statusType(result.status)">{{ statusText(result.status) }}</el-tag></div>
+      <div class="metric" v-else-if="result.diagnosis || result.evaluation_status"><span class="label">诊断结论</span><el-tag :type="getDiagnosisView(result.diagnosis || result).tagType">{{ getDiagnosisView(result.diagnosis || result).text }}</el-tag></div>
     </div>
 
     <el-empty v-if="!result && !loading" :description="runMode === 'single' ? '请选择分析方法后运行' : '请点击运行开始诊断'" />
@@ -78,14 +77,6 @@
     <EnsembleResultPanels
       v-if="result && runMode !== 'single'"
       :result="result"
-      :has-all-results="hasAllResults"
-      :bearing-vote-rows="bearingVoteRows"
-      :gear-vote-rows="gearVoteRows"
-      :best-indicator-rows="bestIndicatorRows"
-      :ds-fault-prob-rows="dsFaultProbRows"
-      :all-bearing-rows="allBearingRows"
-      :all-gear-rows="allGearRows"
-      :all-best-indicator-rows="allBestIndicatorRows"
     />
   </div>
 </template>
@@ -94,7 +85,10 @@
 import ResearchToolbar from '../components/research/ResearchToolbar.vue'
 import SingleResultPanels from '../components/research/SingleResultPanels.vue'
 import EnsembleResultPanels from '../components/research/EnsembleResultPanels.vue'
-import { useResearchDiagnosis, percent, statusType, statusText, evaluationStatusType, evaluationStatusText } from '../composables/useResearchDiagnosis'
+import { useResearchDiagnosis } from '../composables/useResearchDiagnosis'
+import { evaluationStatusType, evaluationStatusText } from '../utils/researchDisplay'
+import { getDiagnosisView } from '../utils/diagnosisStatus'
+const coverageText = value => ({ complete: '完整', partial: '部分', none: '无有效证据' })[value] || '未知'
 
 const {
   devices, selectedDeviceId, selectedBatchIndex, selectedChannel,
@@ -103,8 +97,6 @@ const {
   currentBatches, currentChannels, canRun,
   bearingMethodGroup, gearMethodGroup, planetaryMethodGroup, compositeMethodGroup,
   selectedMethodInfo, methodCategoryTag,
-  bearingVoteRows, gearVoteRows, bestIndicatorRows, dsFaultProbRows,
-  hasAllResults, allBearingRows, allGearRows, allBestIndicatorRows,
   runAnalysis, gotoDataView,
 } = useResearchDiagnosis()
 </script>
