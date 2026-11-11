@@ -6,13 +6,15 @@
 
 | 算法族 | 权威入口 | 当前范围 | 验证入口 |
 |------|----------|----------|----------|
-| 轴承包络与故障证据 | [bearing/INDEX.md](bearing/INDEX.md) | #68 标准包络 Pipeline；现有高级轴承方法的统一边界 | [测试指南](../tests/INDEX.md) |
+| 轴承包络与故障证据 | [bearing/INDEX.md](bearing/INDEX.md) | 标准包络与 #73 滤波器组谱峭度、CPW、MED/MCKD、TEO、SC/SCoh | [测试指南](../tests/INDEX.md) |
 | 转速、相位与阶次 | [order/INDEX.md](order/INDEX.md) | #69 标量/局部/连续转速、等角采样、三种 Pipeline | [测试指南](../tests/INDEX.md) |
-| 齿轮与行星箱 | [gear/INDEX.md](gear/INDEX.md) | 当前服务层 TSA、指标、边带和行星解调；#71 独立算法库切片待定稿 | [测试指南](../tests/INDEX.md) |
-| 小波与模态分解 | [decomposition/INDEX.md](decomposition/INDEX.md) | 当前降噪与敏感分量组合；#74 独立算法库切片待定稿 | [测试指南](../tests/INDEX.md) |
+| 齿轮与行星箱 | [gear/INDEX.md](gear/INDEX.md) | #71 定轴 Pipeline；#72 固定齿圈行星运动学、方法指标与可比基线评估 | [测试指南](../tests/INDEX.md) |
+| 小波与模态分解 | [decomposition/INDEX.md](decomposition/INDEX.md) | #74 DWT/WP、EMD 族、VMD，独立分量指标、选择与质量门控 | [测试指南](../tests/INDEX.md) |
 | 基础数值表示 | [numeric/INDEX.md](numeric/INDEX.md) | #76 / PR #81 FFT/STFT/倒谱、统计、通用包络和显示抽点 | [测试指南](../tests/INDEX.md) |
 
 ## 理论与系统组合
+
+稳定分层为：**算法生成表示 → 分析 Pipeline 提取指标 → 诊断 Pipeline 调用分析并评估 → 业务编排负责设备配置、资源、缓存与响应**。已有分析对象可以直接重评，不重复滤波、分解、FFT 或 TSA。计算完成、指标可评估与机械故障结论是不同状态。
 
 - [经典算法原理](../算法原理.md)：公式推导、物理意义和参考文献，不承担函数签名同步。
 - [诊断算法体系全景](../诊断算法体系全景.md)：业务诊断的组合与评分背景；算法族的单位和不可判定语义以本目录为准。

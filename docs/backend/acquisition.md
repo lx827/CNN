@@ -12,6 +12,7 @@
 - 完整 NumPy 分析数组用于 `analysis_arrays.npz`，JSON 摘要用于 `analysis.json`；两者不得因显示点数不同而混淆。
 - 包络频带必须满足 `0 < low < high < sample_rate/2`；非法频带明确失败。
 - counts 不是加速度等物理标定量，响应与落盘单位必须保留这一事实。
+- 分段 RMS 每段独立去均值，末段使用实际长度，时间为段中心秒；通用显示包络不追加轴承诊断低通或故障评估。完整谱长为 `N//2+1`，显示抽点发生在其后。
 
 独立 transforms/statistics 数值路径已随 #76 / PR #81 合并；频谱、分段统计、通用包络和显示抽点的数学语义统一见 [基础数值表示](../algorithms/numeric/INDEX.md)。
 
