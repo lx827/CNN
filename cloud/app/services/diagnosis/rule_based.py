@@ -1,5 +1,6 @@
 """标准对象 Pipeline 的轻量业务回退；不另建频谱、包络或阶次算法。"""
 import logging
+from collections.abc import Mapping
 from dataclasses import asdict
 from typing import Dict, List
 
@@ -57,12 +58,14 @@ def _rule_based_analyze(
         channel_index = int(str(first_name).removeprefix("ch"))
         gear_config = getattr(device, "gear_teeth", None) if device else None
         if gear_config is not None:
-            if not isinstance(gear_config, dict):
+            if not isinstance(gear_config, Mapping):
                 return _indeterminate("invalid_gear_configuration")
             if str(channel_index) in gear_config:
                 gear_config = gear_config[str(channel_index)]
             elif any(str(key).isdigit() for key in gear_config):
                 gear_config = None
+            if gear_config is not None and not isinstance(gear_config, Mapping):
+                return _indeterminate("invalid_gear_configuration")
         bearing_config = _get_channel_params(device, channel_index, "bearing_params")
         if gear_config and any(gear_config.get(key) for key in ("sun", "ring", "planet_count", "n_planets")):
             return _indeterminate("planetary_fallback_requires_planetary_pipeline")
@@ -127,18 +130,28 @@ def _rule_based_analyze(
         }
         if not _has_diagnosis_evidence((bearing_result, gear_result), averaged):
             return _indeterminate("no_evaluable_diagnosis_evidence")
-        health_score, status, _ = _compute_health_score(
+        health_score, status, deductions = _compute_health_score(
             gear_config, averaged, bearing_result, gear_result,
         )
+        deduction_names = {name for name, value in deductions if value > 0}
         fault_scores = {}
         labels = {"BPFO": "轴承外圈故障", "BPFI": "轴承内圈故障", "BSF": "滚动体故障"}
-        for name, indicator in bearing_result["evaluation"]["indicators"].items():
-            if name in labels and indicator.get("significant"):
-                fault_scores[labels[name]] = min(1.0, float(indicator.get("snr") or 0.0) / 10.0)
-        for indicator in gear_result.get("fault_indicators", {}).values():
-            severity = 0.6 if indicator.get("critical") else 0.3 if indicator.get("warning") else 0.0
-            if severity:
-                fault_scores["齿轮磨损"] = max(fault_scores.get("齿轮磨损", 0.0), severity)
+        # 局部原始阈值不能绕过中央时域/旋转谐波证据门控，正常结论不附带故障概率。
+        if status != "normal":
+            if deduction_names & {"bearing_multi_freq", "bearing_single_freq"}:
+                for name, indicator in bearing_result["evaluation"]["indicators"].items():
+                    if name in labels and indicator.get("significant"):
+                        fault_scores[labels[name]] = min(1.0, float(indicator.get("snr") or 0.0) / 10.0)
+            # 标准边带只支持齿轮异常；通用阶次统计不确定磨损等具体故障类型。
+            for name, prefix in (("ser", "gear_ser_"), ("sideband_count", "gear_sb_")):
+                if not any(deduction.startswith(prefix) for deduction in deduction_names):
+                    continue
+                indicator = gear_result.get("fault_indicators", {}).get(name, {})
+                if indicator.get("evaluable") is not True:
+                    continue
+                severity = 0.6 if indicator.get("critical") else 0.3 if indicator.get("warning") else 0.0
+                if severity:
+                    fault_scores["齿轮异常"] = max(fault_scores.get("齿轮异常", 0.0), severity)
 
         fourier = compute_spectrum(arr, sample_rate)
         # 五等宽频带用于既有能量图；复用同一带单位功率表示，包含 Nyquist。
@@ -152,7 +165,11 @@ def _rule_based_analyze(
         }
         return {
             "health_score": health_score,
-            "fault_probabilities": calibrate_fault_probabilities(fault_scores),
+            # 只有通用统计异常且无法分类时保留未知，不伪造“正常运行=1”。
+            "fault_probabilities": (
+                calibrate_fault_probabilities(fault_scores)
+                if status == "normal" or fault_scores else {}
+            ),
             "imf_energy": energy,
             "imf_energy_kind": "five_equal_frequency_bands_power_percent",
             "status": status,
@@ -160,6 +177,7 @@ def _rule_based_analyze(
                 "rot_freq_hz": round(rot_freq, 3), "rot_rpm": round(rot_freq * 60.0, 1),
                 "tracking_method": order.tracking_method, "channel": channel_index,
                 "time_features": averaged, "bearing": bearing_result, "gear": gear_result,
+                "deductions": deductions,
             },
             "rot_freq": rot_freq,
         }
