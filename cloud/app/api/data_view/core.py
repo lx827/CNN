@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from app.database import get_db
+from app.services.diagnosis_store import summary_state
 from app.models import SensorData, Device, Diagnosis
 from . import router, _get_channel_name, prepare_signal
 from app.services.diagnosis.signal_utils import denoise_signal, DenoisingError
@@ -63,11 +64,6 @@ def get_all_device_data(
         batches = []
         for r in batch_map.get(dev.device_id, []):
             diag = diag_map.get((dev.device_id, r.batch_index))
-            top_fault = None
-            if diag and diag.fault_probabilities:
-                top = max(diag.fault_probabilities.items(), key=lambda x: x[1])
-                if top[1] > 0.3:
-                    top_fault = f"{top[0]} ({top[1]*100:.0f}%)"
 
             batches.append({
                 "batch_index": r.batch_index,
@@ -75,9 +71,7 @@ def get_all_device_data(
                 "is_special": bool(r.is_special),
                 "channel_count": r.channel_count,
                 "sample_rate": r.sample_rate or 25600,
-                "diagnosis_status": diag.status if diag else None,
-                "health_score": diag.health_score if diag else None,
-                "top_fault": top_fault,
+                **summary_state(diag),
                 "analyzed_at": diag.analyzed_at.isoformat() if diag and diag.analyzed_at else None,
             })
 
@@ -134,8 +128,7 @@ def get_device_batches(
             "is_special": bool(is_special),
             "channel_count": ch_count,
             "sample_rate": sr or 25600,
-            "diagnosis_status": diag.status if diag else None,
-            "health_score": diag.health_score if diag else None,
+            **summary_state(diag),
             "analyzed_at": diag.analyzed_at.isoformat() if diag and diag.analyzed_at else None,
         })
 

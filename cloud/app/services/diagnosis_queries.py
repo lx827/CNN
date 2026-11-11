@@ -14,7 +14,7 @@ def latest_diagnosis_summaries(db: Session, device_ids, *, per_batch: bool = Fal
     if not device_ids:
         return []
     newer = aliased(Diagnosis)
-    same_group = [newer.device_id == Diagnosis.device_id]
+    same_group = [newer.device_id == Diagnosis.device_id, newer.channel == 0, newer.denoise_method == Diagnosis.denoise_method]
     if per_batch:
         same_group.append(newer.batch_index == Diagnosis.batch_index)
     newer_timestamp = or_(
@@ -31,5 +31,5 @@ def latest_diagnosis_summaries(db: Session, device_ids, *, per_batch: bool = Fal
     ).correlate(Diagnosis).exists()
     return db.query(
         Diagnosis.device_id, Diagnosis.batch_index, Diagnosis.health_score,
-        Diagnosis.status, Diagnosis.fault_probabilities, Diagnosis.analyzed_at,
-    ).filter(Diagnosis.device_id.in_(device_ids), ~has_newer).all()
+        Diagnosis.evaluation_status, Diagnosis.diagnosis_conclusion, Diagnosis.coverage, Diagnosis.analyzed_at,
+    ).filter(Diagnosis.device_id.in_(device_ids), Diagnosis.channel == 0, Diagnosis.denoise_method == "none", ~has_newer).all()

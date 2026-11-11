@@ -1,19 +1,10 @@
-"""
-告警生成服务包
-统一导出 generate_alarms 入口和公共工具函数
-"""
-import asyncio
-import logging
+"""告警只消费统一诊断结论，不对原始指标另套第二份阈值。"""
 from datetime import datetime, timezone, timedelta
-
 from sqlalchemy.orm import Session
 from app.models import Alarm, Device
-from app.core.websocket import manager
 from app.core.thresholds import ALARM_THRESHOLDS
-logger = logging.getLogger(__name__)
 
 DEFAULT_THRESHOLDS = ALARM_THRESHOLDS
-
 
 def _get_threshold(device: Device, metric: str, level: str) -> float:
     """读取设备的阈值配置，未配置则使用默认值；显式置空(null)则禁用该级别告警"""
@@ -26,6 +17,7 @@ def _get_threshold(device: Device, metric: str, level: str) -> float:
         # 用户配置了该指标但此级别为 null，返回极大值（不触发此级别告警）
         return 99999
     return ALARM_THRESHOLDS.get(metric, {}).get(level, 99999)
+
 
 
 def _has_recent_unresolved_alarm(
@@ -51,88 +43,29 @@ def _has_recent_unresolved_alarm(
     return query.first() is not None
 
 
-def generate_alarms(
-    db: Session,
-    device_id: str,
-    health_score: int,
-    fault_probabilities: dict,
-    channel_features: dict = None,
-    batch_index: int = None,
-    order_analysis: dict = None,
-    channel_diagnosis: dict = None,
-):
-    """
-    综合告警生成入口
 
-    参数：
-      device_id: 设备ID
-      health_score: 健康度
-      fault_probabilities: 故障概率字典
-      channel_features: 通道级特征，格式 {ch_name: {rms:..., peak:..., ...}}
-      batch_index: 关联的数据批次号
-      order_analysis: 阶次分析结果
-      channel_diagnosis: 通道级诊断结果，格式 {ch_name: {gear: {...}, bearing: {...}}}
-    """
+def generate_alarms(db, device_id, diagnosis, *, batch_index=None):
+    from app.services.diagnosis_store import validate_payload
+    validate_payload(diagnosis)
     device = db.query(Device).filter(Device.device_id == device_id).first()
-    if not device:
+    if device is None or device.is_online == 0:
         return []
-
-    # 离线设备禁止产生新的监测告警，避免旧数据触发异常告警
-    # is_online 为 NULL（旧数据）时视为在线，与 models.py 的 default=1 保持一致
-    if device.is_online is not None and not device.is_online:
-        return []
-
-    new_alarms = []
-
-    # 1. 通道级振动特征阈值告警
-    if channel_features:
-        from .channel import _check_feature_alarms
-        channel_names = device.channel_names or {}
-        for ch_key, features in channel_features.items():
-            # ch_key 可能是 "ch1", "ch2"...
-            ch_num = int(ch_key.replace("ch", "")) if ch_key.startswith("ch") else 1
-            ch_name = channel_names.get(str(ch_num), f"通道{ch_num}")
-            alarms = _check_feature_alarms(db, device, ch_num, ch_name, features, batch_index)
-            new_alarms.extend(alarms)
-
-    # 2. 通道级齿轮诊断告警
-    if channel_diagnosis:
-        from .channel import _check_gear_alarms
-        gear_alarms = _check_gear_alarms(db, device, channel_diagnosis, batch_index)
-        new_alarms.extend(gear_alarms)
-
-    # 3. 设备级综合健康度告警
-    from .device import _check_device_alarms
-    device_alarms = _check_device_alarms(
-        db, device, health_score, fault_probabilities, batch_index, order_analysis
-    )
-    new_alarms.extend(device_alarms)
-
-    # 4. 诊断结果（故障概率）告警
-    from .diagnosis import _check_diagnosis_alarms
-    diag_alarms = _check_diagnosis_alarms(db, device, fault_probabilities, batch_index)
-    new_alarms.extend(diag_alarms)
-
-    if new_alarms:
-        db.commit()
-        # WebSocket 推送
-        for alarm in new_alarms:
-            msg = {
-                "type": "new_alarm",
-                "data": {
-                    "id": alarm.id,
-                    "title": alarm.title,
-                    "level": alarm.level,
-                    "channel": alarm.channel,
-                    "channel_name": alarm.channel_name,
-                    "created_at": alarm.created_at.isoformat() if alarm.created_at else None,
-                }
-            }
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    loop.create_task(manager.broadcast(msg))
-            except Exception:
-                pass
-
-    return new_alarms
+    results = [(None, diagnosis)] + [(int(key.removeprefix("ch")), value) for key, value in diagnosis.get("channels", {}).items()]
+    alarms = []
+    for channel, result in results:
+        validate_payload(result)
+        if result.get("evaluation_status") != "evaluated" or result.get("diagnosis_conclusion") not in {"warning", "fault"}:
+            continue
+        level = "critical" if result["diagnosis_conclusion"] == "fault" else "warning"
+        category = "设备诊断" if channel is None else "通道诊断"
+        if _has_recent_unresolved_alarm(db, device_id, category, level, channel):
+            continue
+        channel_name = (device.channel_names or {}).get(str(channel), f"通道{channel}") if channel is not None else device.name
+        alarm = Alarm(device_id=device_id, level=level, category=category,
+                      channel=channel, channel_name=channel_name, batch_index=batch_index,
+                      title=f"{channel_name}诊断{'故障' if level == 'critical' else '预警'}",
+                      description=f"评估结论：{result['diagnosis_conclusion']}；覆盖：{result.get('coverage', 'unknown')}。原始指标不单独重新触发告警。",
+                      suggestion=result["recommendation"])
+        db.add(alarm)
+        alarms.append(alarm)
+    return alarms

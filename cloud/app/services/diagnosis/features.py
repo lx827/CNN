@@ -37,7 +37,8 @@ def compute_time_features(signal: np.ndarray) -> Dict[str, float]:
     kurt = kurtosis(arr, fisher=False)
     skew = skewness(arr)
 
-    margin = peak / rms_val if rms_val > 1e-12 else 0.0
+    mean_sqrt = float(np.mean(np.sqrt(np.abs(arr))))
+    margin = peak / (mean_sqrt ** 2) if mean_sqrt > 1e-12 else 0.0
     shape_factor = rms_val / mean_abs if mean_abs > 1e-12 else 0.0
     impulse_factor = peak / mean_abs if mean_abs > 1e-12 else 0.0
     crest = crest_factor(arr)
