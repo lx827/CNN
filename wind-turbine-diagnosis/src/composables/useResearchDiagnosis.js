@@ -2,7 +2,7 @@
  * ResearchDiagnosis 高级诊断页数据与运行逻辑
  *
  * 职责:设备/批次/通道选择、方法元信息加载、单方法/全方法/集成三种模式
- *       的分析与结果派生(投票行、D-S 融合行、全方法摘要行)、路由联动。
+ *       的请求分发、方法元数据与路由联动。
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
