@@ -128,7 +128,7 @@ wind-turbine-diagnosis/     # Vue3 前端
 
 ## 8. 数据与数据库
 
-- 数据集 4 套(8192Hz,`.npy`):HUSTbear、CW(轴承)、WTgearbox(行星箱)、HUSTgearbox(定轴箱)。路径、命名规则、机械参数见 **`docs/datasets.md`** — 配置诊断参数、写测试、边端回放都以它为准,不得用其他数据集参数代填
+- 原始离线测试数据:Ottawa轴承(历史名称CW,200kHz MAT)、华中HUSTbear(25.6kHz文本)、HUSTgearbox(25.6kHz文本)、WT行星箱(48kHz MAT)。提交选样清单与独立入口在 `cloud/tests/diagnosis/real_data/`;真实采样率、分组、几何/测速前提见 **`docs/datasets.md`**,不得用其他来源参数代填。旧8192Hz一维npy为历史加工格式,旧评估脚本不能直接验收新原始数据
 - 表:`devices`、`sensor_data`(batch 1~16 循环覆盖,≥101 永久保留)、`diagnosis`、`alarms`、`collection_tasks`
 - 诊断缓存键 `(device, batch, channel, denoise_method)`;重新诊断 `POST /api/data/{device_id}/{batch_index}/reanalyze`、`POST /api/data/{device_id}/reanalyze-all`(逐批串行防 OOM)。持久化语义:`docs/backend/persistence.md`
 
