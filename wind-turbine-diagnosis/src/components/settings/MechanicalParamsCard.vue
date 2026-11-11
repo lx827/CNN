@@ -24,7 +24,26 @@
           :name="String(i)"
         >
           <el-divider content-position="left">齿轮参数</el-divider>
-          <el-row :gutter="16">
+          <el-form-item label="齿轮结构">
+            <el-select v-model="form.gear_teeth[String(i)].gear_type">
+              <el-option label="定轴齿轮" value="fixed_axis" /><el-option label="简单行星排" value="planetary" />
+            </el-select>
+          </el-form-item>
+          <template v-if="form.gear_teeth[String(i)].gear_type === 'planetary'">
+            <el-form-item v-for="(label, key) in { sun: '太阳轮齿数', ring: '齿圈齿数', planet: '行星轮齿数', planet_count: '行星轮数量' }" :key="key" :label="label">
+              <el-input-number v-model="form.gear_teeth[String(i)][key]" :min="key === 'planet_count' ? 1 : 2" :max="500" :step="1" :precision="0" />
+            </el-form-item>
+            <el-form-item label="转速参考轴">
+              <el-select v-model="form.gear_teeth[String(i)].reference_axis" placeholder="明确选择">
+                <el-option label="太阳轴" value="sun" /><el-option label="行星架" value="carrier" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="固定构件">
+              <el-select v-model="form.gear_teeth[String(i)].fixed_member" placeholder="明确选择"><el-option label="固定齿圈" value="ring" /></el-select>
+            </el-form-item>
+            <el-text type="info" size="small">齿圈齿数 = 太阳轮齿数 + 2 × 行星轮齿数；转速为所选参考轴 Hz。无健康基线时仅展示证据。</el-text>
+          </template>
+          <el-row v-else :gutter="16">
             <el-col :span="12">
               <el-form-item label="输入轴齿数">
                 <el-input-number

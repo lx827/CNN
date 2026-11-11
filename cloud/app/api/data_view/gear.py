@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.services.diagnosis.gear.planetary import gear_config_for_channel
 from app.models import SensorData, Device, Diagnosis
 from datetime import datetime, timezone
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod, DiagnosisStrategy
@@ -68,7 +69,7 @@ async def get_channel_gear(
         if device:
             gear_teeth = device.gear_teeth or {}
         # 兼容前端通道级格式 {"1":{input:18}} → 设备级 {input:18}
-        gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
+        gear_teeth = gear_config_for_channel(gear_teeth, channel)
 
         # 未配置齿轮参数时不再注入默认齿数；
         # 诊断引擎只返回阶次谱/倒谱等统计异常指标。
@@ -176,7 +177,7 @@ async def get_channel_analyze(
             gear_teeth = device.gear_teeth or {}
         # 兼容前端通道级格式
         bearing_params = _extract_device_param(bearing_params, ("n", "d", "D", "alpha"))
-        gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
+        gear_teeth = gear_config_for_channel(gear_teeth, channel)
 
         # 映射前端参数到枚举
         strategy_map = {"standard": "standard", "advanced": "advanced", "expert": "expert"}
@@ -335,7 +336,7 @@ async def get_channel_full_analysis(
             gear_teeth = device.gear_teeth or {}
         # 兼容前端通道级格式
         bearing_params = _extract_device_param(bearing_params, ("n", "d", "D", "alpha"))
-        gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
+        gear_teeth = gear_config_for_channel(gear_teeth, channel)
 
         denoise_map = {
             "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,

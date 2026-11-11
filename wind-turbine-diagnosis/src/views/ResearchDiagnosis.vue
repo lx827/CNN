@@ -51,7 +51,7 @@
       </div>
       <div class="metric"><span class="label">转频</span><strong>{{ result.rot_freq_hz ?? '-' }} Hz</strong></div>
       <div class="metric" v-if="result.health_score"><span class="label">健康度</span><strong>{{ result.health_score }}</strong></div>
-      <div class="metric" v-if="selectedMethodInfo?.category === 'bearing'">
+      <div class="metric" v-if="selectedMethodInfo?.category === 'bearing' || result.is_planetary">
         <span class="label">方法评估</span>
         <el-tag :type="evaluationStatusType(result.evaluation?.status)">
           {{ evaluationStatusText(result.evaluation?.status) }}
@@ -98,7 +98,7 @@ const {
   targetFault, combFrequencies, combIsStable, rotFrequency,
   currentBatches, currentChannels, canRun,
   bearingMethodGroup, gearMethodGroup, planetaryMethodGroup,
-  selectedMethodInfo, methodCategoryTag, filterPlanetaryResult,
+  selectedMethodInfo, methodCategoryTag,
   bearingVoteRows, gearVoteRows, bestIndicatorRows, dsFaultProbRows,
   hasAllResults, allBearingRows, allGearRows, allBestIndicatorRows,
   runAnalysis, gotoDataView,
