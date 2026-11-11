@@ -131,6 +131,8 @@ const data = await getRealtimeVibrationData('WTG-001', true);
 
 高级方法选项使用 `filter_bank_sk` 的真实名称，不保留旧 `kurtogram`；CPW 需要重复 query 的 `comb_frequencies_hz` 与稳定性声明；MCKD 可传 `target_fault/target_frequency_hz/period_samples`。研究 API 封装通过 config 对象传递这些先验并使用重复 query 序列化，具体签名以源码为准。结果存在 `requested_method/fallback_reason` 时显示实际 MED 回退；`analysis_status/reason` 与评估状态分开显示。
 
+行星结果以 `is_planetary` 与 `method=planetary_gear` 进入专属组件。读取 `mechanical_model/sideband_analysis/metrics/planetary_methods/tsa/evaluation`；计算状态、`evaluation_status` 和 `diagnosis_conclusion` 分开。缺可比基线的 HTTP 200 不是健康，原始值可继续展示。公开方法只从 method-info 读取四个基础路径，旧复合标识不保留兼容调用。设置保存每通道 `sun/ring/planet/planet_count/reference_axis/fixed_member`，转频单位为所选轴 Hz；不从另一通道借参数。
+
 ### 2.6 api/diagnosis.js — 诊断
 
 **文件路径**：`src/api/diagnosis.js`

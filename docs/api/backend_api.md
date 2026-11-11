@@ -562,6 +562,24 @@ GET /api/data/{device_id}/{batch_index}/{channel}/gear?detrend={detrend}&method=
 
 **注意**：该端点为 `async def`
 
+**齿轮对象契约（2026-11-11）**：定轴结果的规范指标来自 `evaluation.indicators`，`fault_indicators` 是兼容视图；TSA 采样率是点/转，缺历史的 NA4/NB4 保留未知。设备或当前通道含行星专属配置时进入同一行星入口，不因缺某项几何退回定轴。行星配置须显式含 `gear_type=planetary`、`sun/ring/planet/planet_count`、`reference_axis=sun|carrier`、`fixed_member=ring`；不按其他通道或 input 齿数推断。
+
+行星响应 `method=planetary_gear`、`is_planetary=true`，稳定字段如下：
+
+| 字段 | 含义 |
+|------|------|
+| `analysis_status` | 方法表示/指标计算是否完成 |
+| `evaluation_status`、`diagnosis_conclusion` | 评估状态与结论分开；缺可比基线为 not_evaluable/unknown |
+| `mechanical_model` | 固定齿圈模型、参考轴、齿数、carrier/mesh/相对自转及事件候选 |
+| `sideband_analysis` | carrier 间隔 SER、网格观测和可评估原因 |
+| `metrics` | 原始 FM0/矩/CAR/历史指标，含值、单位、状态、原因 |
+| `planetary_methods` | narrowband/fullband/highpass/tsa_residual 的谱、峰、指标、细节与状态 |
+| `tsa` | 同步轴、完整转数、每转点数；不足时为空 |
+| `evaluation` | 基线评估、原因与未消费指标；不以运动学候选命名具体损伤 |
+| `validation` | 合成物理向量与真实效果未验证的边界 |
+
+方法谱 `points` 是 `[order,amplitude]` 绘图摘要，保留 `order_resolution/total_revolutions/amplitude_scaling/samples_per_revolution`；只在响应边界抽点。原始矩和 SER 无已验证可比基线时不进入健康票或告警。当前 HTTP 不接收任意健康基线 JSON；Python 业务入口可显式传结构化 baseline/history，不能把保存过一次诊断等同于已有健康标定。
+
 #### 6.4.2 综合故障诊断分析（统一入口）
 
 ```
@@ -608,6 +626,8 @@ GET /api/data/{device_id}/{batch_index}/{channel}/method-analysis?method={method
 | `method` | `str` | `"all"` | 方法标识或 `"all"` |
 
 **注意**：该端点为 `async def`
+
+`method-analysis` 开放 `planetary_narrowband`、`planetary_fullband`、`planetary_tsa_residual`、`planetary_highpass` 四条基础行星路径，可传正 `rot_freq_hz` 声明所选参考轴恒转频；`gear_advanced` 对行星配置运行同一对象 Pipeline。缺基线可正常返回 HTTP 200 的原始证据与 unknown；非法旧方法标识返回 HTTP 400。旧 `planetary_tsa_envelope/planetary_hp_envelope/planetary_vmd_demod/planetary_sc_scoh/planetary_msb` 不作为当前可用方法，完整复合流程归 #75。
 
 #### 6.5.3 研究级多算法集成诊断
 

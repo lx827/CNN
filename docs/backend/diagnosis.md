@@ -32,6 +32,8 @@
 
 定轴由 `FixedAxisGearPipeline` 统一产生分析与评估，原始矩、边带和 CAR 不在服务层重复计算；没有历史的 NA4/NB4 保留不可评估。行星使用独立运动学、carrier 间隔和可比基线，不能把定轴阈值、边带票或 SER 覆盖到行星结果。当前基础行星方法未消费的 VMD/SC/MSB/CVS 不参与融合。
 
+行星当前公共入口 `analyze_planetary_gear` 被 Engine、后台、研究 API 与 ensemble 共同调用。齿轮配置按当前通道完整传递，不借第一通道；存在行星字段但缺项仍进入行星门控。standard/advanced 不作为同一记录的两份独立行星证据。未校准行星评估不进入故障扣分/融合与告警，也不填补为正常；当前 HTTP 没有健康基线上传端点，Python 调用方显式传入可比结构化 baseline/history。
+
 高级轴承由统一业务适配调用族专属 Pipeline：`filter_bank_sk`、`spectral_kurtosis`、`cpw`、`med`、`mckd`、`teager`、`sc_scoh`。CPW 需要显式稳定梳状先验；MCKD 缺目标实际回退 MED 并保存请求/回退原因。SC/SCoh 保留循环频率专属评估，不能被包络指标覆盖。快速变速限制继续有效。
 
 模态去噪/敏感包络消费分解的有效区间和收敛质量。空选择、选中模态未收敛、非法频带与计算异常都属于方法失败或不可判定；不能返回原信号却仍声称去噪成功。单方法失败由编排隔离，合法方法可继续。数学单位与质量细节见 [轴承](../algorithms/bearing/INDEX.md)、[分解](../algorithms/decomposition/INDEX.md) 与 [齿轮](../algorithms/gear/INDEX.md) 契约。

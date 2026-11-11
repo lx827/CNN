@@ -217,6 +217,12 @@ view.connect();
 
 ## 3. 通用组件 (Components)
 
+### 行星对象结果与机械表单
+
+`PlanetaryResult.vue` 在研究单方法、集成、DataView 综合与诊断详情复用。`planetaryDiagnosis.js` 只读派生原始指标、参考轴、候选事件与失败原因；SER 明确标为行星架间隔。`analysis_status=computed` 不等于诊断完成，只有 `evaluation.status=evaluated` 才显示基线结论；没有基线显示不可评估/unknown，空值显示 `-`。矩、边带和事件峰不直接命名断齿/裂纹/磨损，TSA 残差无峰不能排除同步损伤。
+
+`mechanicalGearForm/mechanicalGearPayload` 在设置流程保存结构类型与完整行星配置：sun/ring/planet/planet_count、reference_axis、fixed_member。缺失项保留空值等待用户配置，不默认太阳轴或固定齿圈；当前唯一支持的固定构件是 ring。定轴提交 input/output，行星提交完整模型；服务端继续做合法几何与物理前提门控。
+
 ### 3.1 Layout.vue
 
 **文件路径**：`src/components/Layout.vue`

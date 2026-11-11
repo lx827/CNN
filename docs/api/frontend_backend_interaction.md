@@ -99,6 +99,8 @@
 
 **高级先验传递**：`useResearchDiagnosis` → `api/diagnosis.js` 的 config → method/research-analysis 公共轴承选项依赖 → `advanced_bearing` → 族专属 Pipeline。MCKD 目标/周期与 CPW 频率/稳定性必须由调用方确认；重复梳状频率使用 `paramsSerializer.indexes=null`，不能编码成带方括号的另一参数名。`filter_bank_sk` 使用真实滤波器组名称；实际 MED 回退、未满足前提和分解质量不足均由状态/原因显示。SC 专属评估不与包络评估合票覆盖。
 
+**行星接入（2026-11-11）**：设置页按通道保存完整几何、`reference_axis` 与 `fixed_member`，研究页从 method-info 只显示当前四条基础方法；method-analysis/gear_advanced、Engine、后台与 ensemble 共用行星业务入口。`PlanetaryResult.vue` 配合 `planetaryDiagnosis.js` 展示机械模型、同步轴、原始指标、事件候选与 `diagnosis_conclusion`，各综合/单方法结果区复用该组件。基线不足显示“不可评估”，不从 SER/矩或候选峰推导具体损伤；未校准结果不作为正常票或告警。旧行星散列字段和旧 Level 1–5 展示已退役。
+
 ---
 
 ## 5. 实时监测 (Monitor)
