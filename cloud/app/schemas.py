@@ -2,9 +2,44 @@
 Pydantic 数据模型
 用于：API 请求校验、响应序列化
 """
-from pydantic import BaseModel
-from typing import List, Optional, Dict
+from pydantic import BaseModel, ConfigDict, model_validator
+from typing import List, Optional, Dict, Literal
 from datetime import datetime
+from app.services.diagnosis.domain import EvaluationStatus, DiagnosisConclusion, validate_state
+
+
+class DiagnosisState(BaseModel):
+    """业务两轴及评分不变量；不能把缺少评估编码为健康。"""
+    evaluation_status: EvaluationStatus
+    diagnosis_conclusion: DiagnosisConclusion
+    health_score: Optional[float]
+    coverage: Literal["none", "partial", "complete"]
+
+    @model_validator(mode="after")
+    def coherent_state(self):
+        validate_state(self.evaluation_status, self.diagnosis_conclusion, self.health_score, require_score=True)
+        return self
+
+
+class DiagnosisSnapshot(DiagnosisState):
+    model_config = ConfigDict(extra="allow")
+    contract_version: Literal[1]
+    evaluations: List[dict]
+    deductions: List[dict]
+    fault_propositions: List[str]
+    recommendation: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_legacy_status(cls, value):
+        if isinstance(value, dict) and "status" in value:
+            raise ValueError("legacy_diagnosis_status_is_not_supported")
+        return value
+
+
+class DiagnosisResponse(BaseModel):
+    code: int = 200
+    data: DiagnosisSnapshot
 
 
 # ==================== 通用 ====================
@@ -25,12 +60,10 @@ class TokenResponse(BaseModel):
 
 
 # ==================== 设备 ====================
-class DeviceOut(BaseModel):
+class DeviceOut(DiagnosisState):
     device_id: str
     name: str
     location: str
-    health_score: int
-    status: str
     runtime_hours: int
 
     class Config:
@@ -56,12 +89,8 @@ class MonitorData(BaseModel):
 
 
 # ==================== 诊断 ====================
-class DiagnosisOut(BaseModel):
+class DiagnosisOut(DiagnosisState):
     device_id: str
-    health_score: int
-    fault_probabilities: Dict[str, float]
-    imf_energy: Dict[str, float]
-    status: str
     analyzed_at: datetime
 
     class Config:

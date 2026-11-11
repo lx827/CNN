@@ -32,7 +32,7 @@
 
 2026-10-21：经过 DataView 公共转换器的算法结果，NumPy 类型递归转为 JSON 原生类型，NaN/Infinity 使用 `null` 表示缺失值，避免严格 JSON 编码失败。
 
-所有 REST API 统一返回：
+成功的 REST API 使用以下业务响应；HTTP 错误使用 FastAPI 的 `detail`，不能按成功体解读：
 
 ```json
 {
@@ -44,6 +44,10 @@
 
 - `code=200` 表示成功，非 200 时前端会 `ElMessage.error` 提示
 - `code=401` 表示登录过期，前端会清除 token 并跳转登录页
+
+**诊断去噪错误（2026-11-11）**：DataView 时域、CSV 导出、FFT/STFT/stats/cepstrum/order、包络、gear/analyze/full-analysis/method-analysis/research-analysis 的去噪失败返回 HTTP **422**，响应 `detail` 为对象，含 `status=not_evaluable`、实际去噪 `method` 与失败 `reason`。无合法分量、选中分量质量不足和未知去噪方法都明确拒绝，不返回原信号假装成功。该 422 不表示设备故障；结果对象内的算法前提状态与 HTTP 去噪执行错误须分开处理。其他端点既有认证/数据不存在/非法分析方法错误仍服从各自 HTTP 语义。
+
+同一 HTTP 422 也可表示 FastAPI 请求参数校验失败，此时 `detail` 是问题数组（位置/消息/类型）。OpenAPI 使用 `DataViewUnprocessableResponse` 的 `anyOf` 如实声明对象与数组两种形状。前端共享 `formatErrorMessage` 处理结构化原因、旧字符串、参数校验数组及网络错误。
 
 ### 认证方式
 
@@ -495,6 +499,8 @@ GET /api/data/{device_id}/{batch_index}/{channel}/envelope?max_freq={max_freq}&d
 | `method` | `str` | `"envelope"` | 包络方法 |
 | `denoise` | `str` | `"none"` | 去噪方法 |
 
+高级轴承补充参数：`rot_freq_hz` 为可选正值恒转频 Hz；`target_fault` 为 BPFO/BPFI/BSF/FTF，`target_frequency_hz` 或 `period_samples` 给 MCKD 显式周期；`comb_frequencies_hz` 使用重复 query 参数传多个正频率，`comb_is_stable=true` 表示调用方确认整段梳状干扰稳定。完整约束以 OpenAPI 为准。
+
 **注意**：该端点为 `async def`。`max_freq` 只截断展示频谱，不改变完整分析范围或诊断结果。
 
 **响应 data（新契约）**：
@@ -504,6 +510,8 @@ GET /api/data/{device_id}/{batch_index}/{channel}/envelope?max_freq={max_freq}&d
 - `features`：`spectral_power_proxy`（幅值平方和）、`spectral_power_unit`、故障频率及谐波能量比。
 - `evaluation`：`{status, indicators}`；单项 `not_evaluable` 带 `reason`、`significant=None`，不表示未检出或健康。
 - 另含 `method/strategy/rot_freq_hz/envelope_low_pass_hz` 和方法元数据；不再返回 `envelope_freq`、`envelope_amp` 或顶层 `fault_indicators`。
+
+当前高级方法标识为 `filter_bank_sk/spectral_kurtosis/cpw/med/mckd/teager/sc_scoh`，不接受旧 `kurtogram` 冒名。`analysis_status/reason` 说明计算/前提状态，与 `evaluation.status` 分开；无稳定梳状先验的 CPW 不生成谱，MCKD 缺显式目标实际执行 MED 并保存 `requested_method/fallback_reason`。SC/SCoh 使用 `evaluation_kind=sc_scoh` 和规范 `evaluation.indicators`，二维 `cyclic_spectrum` 含循环/载波 Hz、SC 幅值（输入单位平方/Hz）、无量纲 SCoh 和循环分辨率；可以没有普通 `spectrum`。TEO 最终包络谱单位为 `input_signal^2`。
 
 #### 6.3.2 阶次跟踪
 
@@ -558,6 +566,24 @@ GET /api/data/{device_id}/{batch_index}/{channel}/gear?detrend={detrend}&method=
 
 **注意**：该端点为 `async def`
 
+**齿轮对象契约（2026-11-11）**：定轴结果的规范指标来自 `evaluation.indicators`，`fault_indicators` 是兼容视图；TSA 采样率是点/转，缺历史的 NA4/NB4 保留未知。设备或当前通道含行星专属配置时进入同一行星入口，不因缺某项几何退回定轴。行星配置须显式含 `gear_type=planetary`、`sun/ring/planet/planet_count`、`reference_axis=sun|carrier`、`fixed_member=ring`；不按其他通道或 input 齿数推断。
+
+行星响应 `method=planetary_gear`、`is_planetary=true`，稳定字段如下：
+
+| 字段 | 含义 |
+|------|------|
+| `analysis_status` | 方法表示/指标计算是否完成 |
+| `evaluation_status`、`diagnosis_conclusion` | 评估状态与结论分开；缺可比基线为 not_evaluable/unknown |
+| `mechanical_model` | 固定齿圈模型、参考轴、齿数、carrier/mesh/相对自转及事件候选 |
+| `sideband_analysis` | carrier 间隔 SER、网格观测和可评估原因 |
+| `metrics` | 原始 FM0/矩/CAR/历史指标，含值、单位、状态、原因 |
+| `planetary_methods` | narrowband/fullband/highpass/tsa_residual 的谱、峰、指标、细节与状态 |
+| `tsa` | 同步轴、完整转数、每转点数；不足时为空 |
+| `evaluation` | 基线评估、原因与未消费指标；不以运动学候选命名具体损伤 |
+| `validation` | 合成物理向量与真实效果未验证的边界 |
+
+方法谱 `points` 是 `[order,amplitude]` 绘图摘要，保留 `order_resolution/total_revolutions/amplitude_scaling/samples_per_revolution`；只在响应边界抽点。原始矩和 SER 无已验证可比基线时不进入健康票或告警。当前 HTTP 不接收任意健康基线 JSON；Python 业务入口可显式传结构化 baseline/history，不能把保存过一次诊断等同于已有健康标定。
+
 #### 6.4.2 综合故障诊断分析（统一入口）
 
 ```
@@ -591,7 +617,7 @@ GET /api/data/{device_id}/{batch_index}/{channel}/full-analysis?detrend={detrend
 GET /api/data/method-info
 ```
 
-**响应**：15 种分析方法的分类、名称和详细说明
+**响应**：当前源码所开放方法的分类、名称、前提与状态；前端据此动态渲染，不固定方法总数。未迁移的复合研究流程不得显示为已接入融合。
 
 #### 6.5.2 独立运行单个/全部分析方法
 
@@ -604,6 +630,8 @@ GET /api/data/{device_id}/{batch_index}/{channel}/method-analysis?method={method
 | `method` | `str` | `"all"` | 方法标识或 `"all"` |
 
 **注意**：该端点为 `async def`
+
+`method-analysis` 开放 `planetary_narrowband`、`planetary_fullband`、`planetary_tsa_residual`、`planetary_highpass` 四条基础行星路径，可传正 `rot_freq_hz` 声明所选参考轴恒转频；`gear_advanced` 对行星配置运行同一对象 Pipeline。缺基线可正常返回 HTTP 200 的原始证据与 unknown；非法旧方法标识返回 HTTP 400。旧 `planetary_tsa_envelope/planetary_hp_envelope/planetary_vmd_demod/planetary_sc_scoh/planetary_msb` 不作为当前可用方法，完整复合流程归 #75。
 
 #### 6.5.3 研究级多算法集成诊断
 
@@ -643,8 +671,8 @@ GET /api/data/{device_id}/{batch_index}/{channel}/diagnosis?denoise_method={deno
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `health_score` | `int` | 健康度 0-100 |
-| `status` | `str` | normal/warning/critical |
+| `health_score` | `int/null` | 有证据时健康度 0-100；不可判定允许空值 |
+| `status` | `str` | normal/warning/critical；缺可评估证据可为 indeterminate，不能映射正常 |
 | `fault_likelihood` | `float` | 故障似然度 |
 | `fault_label` | `str` | 故障标签 |
 | `rot_freq_hz` | `float` | 估计转频 |

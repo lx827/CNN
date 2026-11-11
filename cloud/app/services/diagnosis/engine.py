@@ -29,12 +29,8 @@ from .advanced_bearing import ADVANCED_BEARING_METHODS, analyze_advanced_bearing
 from .gear.planetary import analyze_planetary_gear, is_planetary_config
 from app.algorithms.gear.planetary.types import PlanetaryBaseline, PlanetaryMomentHistory
 from .features import compute_time_features
-from .health_score import _compute_health_score, _has_diagnosis_evidence
-from .recommendation import (
-    _generate_recommendation,
-    _generate_recommendation_all,
-    _summarize_all_methods,
-)
+from .adapters import adapt_method_result, combine_method_results, unavailable_result
+from .domain import DiagnosisKey
 
 
 def bearing_geometry_from_config(values: Optional[Mapping]) -> Optional[BearingGeometry]:
@@ -129,6 +125,7 @@ class DiagnosisEngine:
         bearing_options: Optional[Dict] = None,
         planetary_baseline: Optional[PlanetaryBaseline] = None,
         planetary_history: Optional[PlanetaryMomentHistory] = None,
+        diagnosis_key: Optional[DiagnosisKey] = None,
     ):
         # 兼容字符串传入
         self.strategy = strategy if isinstance(strategy, DiagnosisStrategy) else DiagnosisStrategy(strategy)
@@ -140,6 +137,7 @@ class DiagnosisEngine:
         self.bearing_options = dict(bearing_options or {})
         self.planetary_baseline = planetary_baseline
         self.planetary_history = planetary_history
+        self.diagnosis_key = diagnosis_key or DiagnosisKey("interactive", 1, 1, self.denoise_method.value)
 
     def preprocess(self, signal: np.ndarray) -> np.ndarray:
         """去趋势后由唯一业务入口执行去噪；失败显式向上游传播。"""
@@ -195,7 +193,18 @@ class DiagnosisEngine:
             rot_std,
         )
 
-    def analyze_bearing(
+    def analyze_bearing(self, signal, fs, rot_freq=None, preprocess=True, max_freq=1000.0, _cached_order=None):
+        """对象算法与业务状态适配的唯一公共轴承入口。"""
+        try:
+            raw = self._analyze_bearing(signal, fs, rot_freq, preprocess=preprocess, max_freq=max_freq, _cached_order=_cached_order)
+            return adapt_method_result(raw, key=self.diagnosis_key, object_id="bearing",
+                                       method=self.bearing_method.value, signal=signal,
+                                       physical_parameters=bool(self.bearing_params))
+        except Exception as exc:
+            return unavailable_result(str(exc), key=self.diagnosis_key, object_id="bearing",
+                                      method=self.bearing_method.value, indeterminate=True)
+
+    def _analyze_bearing(
         self,
         signal: np.ndarray,
         fs: float,
@@ -449,7 +458,18 @@ class DiagnosisEngine:
             result["wavelet_packet_entropy"] = {"energy_entropy": 0.0, "normalized_entropy": 0.0}
         return result
 
-    def analyze_gear(
+    def analyze_gear(self, signal, fs, rot_freq=None, preprocess=True, _cached_order=None):
+        try:
+            raw = self._analyze_gear(signal, fs, rot_freq, preprocess, _cached_order)
+            return adapt_method_result(raw, key=self.diagnosis_key, object_id="gear",
+                                       method="planetary_gear" if is_planetary_config(self.gear_teeth) else self.gear_method.value,
+                                       signal=signal, physical_parameters=bool(self.gear_teeth))
+        except Exception as exc:
+            return unavailable_result(str(exc), key=self.diagnosis_key, object_id="gear",
+                                      method="planetary_gear" if is_planetary_config(self.gear_teeth) else self.gear_method.value,
+                                      indeterminate=True)
+
+    def _analyze_gear(
         self, signal: np.ndarray, fs: float, rot_freq: Optional[float] = None,
         preprocess: bool = True, _cached_order: Optional[OrderAnalysis] = None,
     ) -> Dict[str, Any]:
@@ -470,208 +490,28 @@ class DiagnosisEngine:
         z_in = int(float(self.gear_teeth.get("input") or 0)) if self.gear_teeth else 0
         return self._analyze_fixed_axis_gear(arr, fs, analysis, z_in)
 
-    def analyze_comprehensive(
-        self,
-        signal: np.ndarray,
-        fs: float,
-        rot_freq: Optional[float] = None,
-        skip_bearing: bool = False,
-        skip_gear: bool = False,
-    ) -> Dict[str, Any]:
-        """
-        综合分析
+    def analyze_comprehensive(self, signal, fs, rot_freq=None, skip_bearing=False, skip_gear=False):
+        """与全方法和后台入口共用同一证据组合与状态生成器。"""
+        bearing = self.analyze_bearing(signal, fs, rot_freq) if not skip_bearing and (self.bearing_params or not self.gear_teeth) else {}
+        gear = self.analyze_gear(signal, fs, rot_freq) if not skip_gear and (self.gear_teeth or not self.bearing_params) else {}
+        results = {name: value for name, value in (("bearing", bearing), ("gear", gear)) if value}
+        return {**combine_method_results(results), "bearing": bearing, "gear": gear,
+                "time_features": compute_time_features(np.asarray(signal)), "rot_freq_hz": rot_freq}
 
-        Args:
-            skip_bearing: True=跳过轴承分析（无轴承参数时自动设置）
-            skip_gear:    True=跳过齿轮分析（无齿轮参数时自动设置）
-        """
-        if is_planetary_config(self.gear_teeth) and not self.bearing_params:
-            skip_bearing = True
-        arr = self.preprocess(signal)
-
-        cached_order: Optional[OrderAnalysis] = None
-        if rot_freq is None:
-            raw_for_speed = prepare_signal(np.asarray(signal, dtype=np.float64), detrend=True)
-            cached_order = self._analyze_order(arr, fs, estimation_signal=raw_for_speed)
-            rot_freq, rot_std = self._order_speed_summary(cached_order)
-
-        time_features = compute_time_features(arr)
-
-        # 轴承分析
-        bearing_result = self.analyze_bearing(
-            arr, fs, rot_freq, preprocess=False, _cached_order=cached_order,
-        ) if not skip_bearing else {}
-
-        # 齿轮分析
-        gear_result = self.analyze_gear(arr, fs, rot_freq, preprocess=False,
-                                        _cached_order=cached_order) if not skip_gear else {}
-
-        health_score, status, _ = _compute_health_score(
-            self.gear_teeth,
-            time_features, bearing_result, gear_result
-        )
-        if not _has_diagnosis_evidence((bearing_result, gear_result), time_features):
-            # 零能量或全部请求路径不可评估时，不允许零值特征合成健康 100 分；
-            # 非零信号中任一域的有效证据仍保留综合评分。
-            health_score = None
-            status = "indeterminate"
-
-        return {
-            "health_score": health_score, "status": status,
-            "bearing": bearing_result, "gear": gear_result,
-            "time_features": time_features,
-            "recommendation": _generate_recommendation(bearing_result, gear_result, status),
-        }
-
-    def analyze_research_ensemble(
-        self,
-        signal: np.ndarray,
-        fs: float,
-        rot_freq: Optional[float] = None,
-        profile: str = "runtime",
-        max_seconds: float = 5.0,
-    ) -> Dict[str, Any]:
-        """运行多算法集成诊断。runtime 用于后台自动诊断，exhaustive 用于网页手动重算法。"""
+    def analyze_research_ensemble(self, signal, fs, rot_freq=None, profile="runtime", max_seconds=5.0):
         from .ensemble import run_research_ensemble
-
         return run_research_ensemble(
-            signal,
-            fs,
-            bearing_params=self.bearing_params,
-            gear_teeth=self.gear_teeth,
-            denoise_method=self.denoise_method.value,
-            rot_freq=rot_freq,
-            profile=profile,
-            max_seconds=max_seconds,
-            bearing_options=self.bearing_options,
+            signal, fs, bearing_params=self.bearing_params, gear_teeth=self.gear_teeth,
+            denoise_method=self.denoise_method.value, rot_freq=rot_freq,
+            profile=profile, max_seconds=max_seconds, bearing_options=self.bearing_options,
+            diagnosis_key=self.diagnosis_key,
         )
 
-    def analyze_all_methods(
-        self,
-        signal: np.ndarray,
-        fs: float,
-        rot_freq: Optional[float] = None,
-        skip_bearing: bool = False,
-        skip_gear: bool = False,
-    ) -> Dict[str, Any]:
-        """
-        全算法对比分析（运行所有轴承方法和所有齿轮方法）
-
-        Returns:
-            {
-                "health_score": int,
-                "status": str,
-                "rot_freq_hz": float,
-                "time_features": Dict,
-                "bearing_results": Dict[str, Dict],   # key: method name
-                "gear_results": Dict[str, Dict],      # key: method name
-                "summary": Dict,                       # 各方法检出结论汇总
-                "recommendation": str,
-            }
-        """
-        if is_planetary_config(self.gear_teeth) and not self.bearing_params:
-            skip_bearing = True
-        arr = np.array(signal, dtype=np.float64)
-        if self.denoise_method != DenoiseMethod.NONE:
-            arr = self.preprocess(arr)
-
-        order_analysis: Optional[OrderAnalysis] = None
-        if rot_freq is None:
-            raw_for_speed = prepare_signal(np.asarray(signal, dtype=np.float64), detrend=True)
-            order_analysis = self._analyze_order(arr, fs, estimation_signal=raw_for_speed)
-            rot_freq, _ = self._order_speed_summary(order_analysis)
-
-        original_bearing = self.bearing_method
-        original_gear = self.gear_method
-
-        bearing_results = {}
-        if not skip_bearing:
-            for method in BearingMethod:
-                if method == BearingMethod.MCKD and not self.bearing_options.get("target_fault"):
-                    continue  # 无目标时本次运行的 MED 已覆盖，不能再挂 MCKD 标签。
-                self.bearing_method = method
-                try:
-                    bearing_results[method.value] = self.analyze_bearing(
-                        arr, fs, rot_freq, _cached_order=order_analysis,
-                    )
-                except Exception as e:
-                    bearing_results[method.value] = {"error": str(e)}
-
-        gear_results = {}
-        if not skip_gear:
-            # 同一行星记录只分析一次，不把标准/高级视作独立证据。
-            gear_methods = (GearMethod.ADVANCED,) if is_planetary_config(self.gear_teeth) else GearMethod
-            for method in gear_methods:
-                self.gear_method = method
-                try:
-                    gear_results[method.value] = self.analyze_gear(
-                        arr, fs, rot_freq, _cached_order=order_analysis,
-                    )
-                except Exception as e:
-                    gear_results[method.value] = {"error": str(e)}
-
-        # 恢复原始配置
-        self.bearing_method = original_bearing
-        self.gear_method = original_gear
-
-        # 时域特征
-        time_features = compute_time_features(arr)
-
-        # 综合评估：取所有方法中最差的健康状态
-        all_health_scores = []
-        all_statuses = []
-        for br in bearing_results.values():
-            if "health_score" in br:
-                all_health_scores.append(br["health_score"])
-            if "status" in br:
-                all_statuses.append(br["status"])
-        for gr in gear_results.values():
-            if "health_score" in gr:
-                all_health_scores.append(gr["health_score"])
-            if "status" in gr:
-                all_statuses.append(gr["status"])
-
-        # 用默认的 bearing=包络, gear=标准 计算综合健康度
-        base_health_score, status, _ = _compute_health_score(
-            self.gear_teeth,
-            time_features,
-            bearing_results.get(BearingMethod.ENVELOPE.value, {}),
-            next(iter(gear_results.values()), {}),
+    def analyze_all_methods(self, signal, fs, rot_freq=None, skip_bearing=False, skip_gear=False):
+        from .ensemble import run_research_ensemble
+        return run_research_ensemble(
+            signal, fs, bearing_params={} if skip_bearing else self.bearing_params,
+            gear_teeth={} if skip_gear else self.gear_teeth, denoise_method=self.denoise_method.value,
+            rot_freq=rot_freq, profile="exhaustive", bearing_options=self.bearing_options,
+            diagnosis_key=self.diagnosis_key,
         )
-
-        # 若其他方法检出更差结果，融合到综合评分：取 min(base, worst_other)
-        # 避免其他方法检出故障但综合评分被单一方法掩盖
-        health_score = base_health_score
-        if all_health_scores:
-            worst_other = min(all_health_scores)
-            if worst_other < base_health_score:
-                health_score = int(round((base_health_score + worst_other) / 2))
-                # worst_other 比 base 低 20 分以上 → 状态升级
-                # 同步调整 health_score 以保持一致性（status=warning→hs<85, critical→hs<60）
-                if worst_other < base_health_score - 20:
-                    if status == "normal":
-                        status = "warning"
-                        health_score = min(health_score, 84)
-                    elif status == "warning":
-                        status = "critical"
-                        health_score = min(health_score, 59)
-
-        if not _has_diagnosis_evidence(
-            (*bearing_results.values(), *gear_results.values()), time_features,
-        ):
-            health_score = None
-            status = "indeterminate"
-
-        # 生成各方法检出结论汇总
-        summary = _summarize_all_methods(bearing_results, gear_results)
-
-        return {
-            "health_score": health_score,
-            "status": status,
-            "rot_freq_hz": round(rot_freq, 3) if rot_freq is not None else None,
-            "time_features": time_features,
-            "bearing_results": bearing_results,
-            "gear_results": gear_results,
-            "summary": summary,
-            "recommendation": _generate_recommendation_all(bearing_results, gear_results, status),
-        }

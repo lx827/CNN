@@ -1001,38 +1001,16 @@ $$\text{Confidence}(F) = \frac{\text{Vote}(F)}{\sum_{F'} \text{Vote}(F')}$$
 
 ---
 
-## 十五、重构前实现地图（历史）
+## 十五、当前模块契约入口
 
-> 下表保留 2026-11 重构前的实现和命名语境，路径/状态列已不作为当前导航。尤其 STFT 近似不是真 Fast Kurtogram，无历史 NA4/NB4 不应退化冒称趋势，旧行星方法不表示已进入当前融合。当前唯一契约与导航见 [算法索引](INDEX.md)，不要按此表恢复已删除函数或兼容实现。
+2026-11 对象化重构后，本节不再复制旧函数路径与实现状态。理论与历史示例保留；实际工况、质量门控、单位和接入边界统一查阅：
 
-| 算法/特征 | 当前实现位置 | 实现状态 | 备注 |
-|----------|------------|---------|------|
-| 小波阈值去噪 | `diagnosis/preprocessing.py::wavelet_denoise` | ✅ 已实现 | db8默认，支持soft/hard/improved阈值 |
-| 小波+VMD级联 | `diagnosis/preprocessing.py::cascade_wavelet_vmd` | ✅ 已实现 | 两阶段级联降噪 |
-| 小波+LMS级联 | `diagnosis/preprocessing.py::cascade_wavelet_lms` | ✅ 已实现 | 小波→LMS自适应滤波 |
-| 联合降噪入口 | `diagnosis/preprocessing.py::joint_denoise` | ✅ 已实现 | WAVELET_VMD/WAVELET_LMS统一接口 |
-| VMD分解 | `diagnosis/vmd_denoise.py::_vmd_core` | ✅ 已实现 | 内存优化版ADMM，O(T·K)内存 |
-| VMD降噪 | `diagnosis/vmd_denoise.py::vmd_denoise` | ✅ 已实现 | IMF筛选（相关+峭度）重构 |
-| VMD敏感模态选择 | `diagnosis/vmd_denoise.py::vmd_select_impact_mode` | ✅ 已实现 | 基于峭度+包络熵选择 |
-| EMD分解 | `diagnosis/emd_denoise.py::emd_decompose` | ✅ 已实现 | Rilling边界+Pchip插值+抛物线极值精化 |
-| CEEMDAN分解 | `diagnosis/emd_denoise.py::ceemdan_decompose` | ✅ 已实现 | Torres 2011标准算法，噪声IMF分层 |
-| EMD/CEEMDAN降噪 | `diagnosis/emd_denoise.py::emd_denoise` | ✅ 已实现 | 相关/峭度筛选+回退策略 |
-| 小波包分解 | `diagnosis/wavelet_packet.py::wavelet_packet_decompose` | ✅ 已实现 | PyWavelets WaveletPacket |
-| 小波包能量熵 | `diagnosis/wavelet_packet.py::compute_wavelet_packet_energy_entropy` | ✅ 已实现 | Shannon熵+归一化+啮合频带集中度 |
-| 小波包降噪 | `diagnosis/wavelet_packet.py::wavelet_packet_denoise` | ✅ 已实现 | 能量阈值节点筛选 |
-| Savitzky-Golay平滑 | `diagnosis/savgol_denoise.py::sg_denoise` | ✅ 已实现 | 与wavelet互补，O(N)复杂度 |
-| VMD+ICA盲源分离 | `diagnosis/bss.py::vmd_ica_separation` | ✅ 已实现 | 单通道扩展为多通道，峭度最大选故障分量 |
-| 轴承包络谱分析 | `algorithms/bearing/envelope.py::compute_envelope`；`algorithms/bearing/analysis.py`；`algorithms/pipelines/bearing/` | ✅ 已迁移 | 带通+Hilbert+低通+单边幅值谱；指标与阈值评估分离，BPFO/BPFI/BSF匹配 |
-| 轴承快速Kurtogram | `diagnosis/bearing.py::fast_kurtogram` | ✅ 已实现 | 多尺度STFT近似Antoni滤波器组 |
-| 轴承CPW分析 | `diagnosis/preprocessing.py::cepstrum_pre_whitening` | ✅ 已实现 | 倒频谱编辑+包络分析 |
-| 轴承MED分析 | `diagnosis/preprocessing.py::med_filter` | ✅ 已实现 | 最小熵解卷积+包络 |
-| 齿轮FM0/FM4/M6A/M8A | `diagnosis/gear/metrics.py` | ✅ 已实现 | 基于TSA/残差/差分信号 |
-| 齿轮SER | `diagnosis/gear/metrics.py::compute_ser_order` | ✅ 已实现 | 基于阶次谱的边频带能量比 |
-| 齿轮NA4/NB4 | `diagnosis/gear/metrics.py` | ✅ 已实现 | 历史方差归一化，无历史退化为FM4 |
-| 齿轮小波包能量熵 | `diagnosis/wavelet_packet.py` | ✅ 已实现 | 行星箱与定轴箱不同阈值 |
-| 行星箱VMD解调 | `diagnosis/gear/planetary_demod.py::planetary_vmd_demod_analysis` | ✅ 已实现 | 幅频联合解调，K≤5，exhaustive模式 |
-| 行星箱窄带包络阶次 | `diagnosis/gear/planetary_demod.py::planetary_envelope_order_analysis` | ✅ 已实现 | mesh_order附近窄带滤波+Hilbert+阶次谱 |
-| 多算法集成诊断 | `diagnosis/ensemble.py::run_research_ensemble` | ✅ 已实现 | 多去噪+多方法投票，D-S证据融合 |
+- [分解族](decomposition/INDEX.md)：DWT/WP、EMD 族、VMD、有效区间、选择和收敛质量。
+- [轴承族](bearing/INDEX.md)：标准包络、真实命名滤波器组、CPW、MED/MCKD、TEO、SC/SCoh。
+- [齿轮对象](gear/INDEX.md)：定轴/行星运动学、同步表示、SER、历史基线与 unknown。
+- [业务编排](../backend/diagnosis.md)：Engine/ensemble、规则回退、评分、缓存和失败传播。
+
+旧 STFT 近似不是真 Fast Kurtogram，缺历史 NA4/NB4 不退化冒称趋势，未接入的复合研究方法不宣称参与融合。
 
 ---
 
