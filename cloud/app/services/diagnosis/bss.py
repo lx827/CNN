@@ -177,7 +177,7 @@ def vmd_ica_separation(
             "info": Dict,
         }
     """
-    from .vmd_denoise import _vmd_core
+    from app.algorithms.decomposition.vmd import VMDParameters, decompose_vmd
 
     arr = np.array(signal, dtype=np.float64)
     N = len(arr)
@@ -190,8 +190,13 @@ def vmd_ica_separation(
 
     # Step 1: VMD 分解
     try:
-        u, u_hat, omega = _vmd_core(arr, alpha=alpha, tau=0.0, K=K, DC=0,
-                                      init=1, tol=1e-6, max_iter=200)
+        decomposition = decompose_vmd(arr, fs, VMDParameters(
+            modes=K, alpha=alpha, tolerance=1e-6, max_samples=51200))
+        if decomposition.status != "valid":
+            raise ValueError(decomposition.reason or "vmd_not_evaluable")
+        arr = arr[:decomposition.valid_interval.stop_index]
+        N = len(arr)
+        u = decomposition.modes
     except Exception as exc:
         return {
             "denoised_signal": arr.copy(),
