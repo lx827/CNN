@@ -2,13 +2,15 @@
 
 > 最后更新: 2026-11-08 | 详见 AGENTS.md §14
 
-## 未修复 (3)
+## 未修复 (5)
 
 | # | 文件 | 描述 |
 |---|------|------|
 | 11d | `ensemble.py`, `health_score.py` | D-S 证据融合未生效（0/30 样本被覆盖）|
 | 13d | `ensemble.py` | **WTG 五分类断齿检出 0%** — gear_abnormal 标签映射缺失 |
 | 25 | `Settings.vue`(现 `components/settings/MechanicalParamsCard.vue`) | **设置页首渲染即崩、整页空白** — `form.gear_teeth` 初始为 {},模板无守卫直接访问 `form.gear_teeth[String(i)].input`;挂载中止致 onMounted 不执行、无法自愈(396cf64 引入)。T5 拆分按视觉零变化要求保留该行为 |
+| 34 | `deploy.sh` | **一键部署在 venv 时代旧 ECS 上两处失效** — ① 服务单元未按模板更新(仍指 `cloud/venv/bin/python`,需人工 cp 模板);② `uv sync --frozen` 执行后根 `.venv` 未生成(原因未定位,重装后正常)。2026-11-11 生产重装绕过,待复现修复 |
+| 35 | 生产 `cloud/.env` | **ECS 仍用默认 `ADMIN_PASSWORD=admin123` 与默认 JWT `SECRET_KEY`** — 旧 `.env` 缺键;历史 `EDGE_API_KEY` 为 63 字节非 ASCII 值(HTTP header 无法可靠传输,2026-11-11 已轮换为随机 hex 并同步树莓派)。待补强值 |
 
 ## 已修复 (35)
 
