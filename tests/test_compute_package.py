@@ -1,7 +1,7 @@
 """安装后的包行为：构建信息来自真实原生模块，分发依赖保持独立。"""
 
-from importlib.metadata import distribution
 import unittest
+from importlib.metadata import distribution
 
 from cnn_compute import build_info
 
