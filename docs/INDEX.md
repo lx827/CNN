@@ -20,6 +20,7 @@
 | 外部 API | [后端 API](api/backend_api.md) | REST/WS 请求响应、认证、错误与 OpenAPI |
 | 前后端交互 | [交互映射](api/frontend_backend_interaction.md) | 前端调用点与后端端点的影响关系 |
 | 后端业务 | [后端索引](backend/INDEX.md) | 架构运行时、业务服务、诊断编排、持久化和 DC24 云端服务 |
+| 诊断证据与状态核心 | [证据、评估与诊断](backend/assessment.md) | #77/#84 的依赖融合、两维状态、覆盖和单源评分；公开接入状态在文内标注 |
 | 前端 | [前端索引](frontend/INDEX.md) | 前端模块导航、API 封装与组件/服务说明 |
 | 测试 | [测试索引](tests/INDEX.md) | 测试分层、运行方式、数据依赖和验证边界 |
 | 架构决策 | [ADR 0001](adr/0001-uv-workspace-python-313.md)、[ADR 0002](adr/0002-edge-crossbuild-cloud-systemd.md)、[ADR 0003](adr/0003-module-contract-documentation.md) | uv workspace、边端/云端部署、模块契约文档体系 |
@@ -30,6 +31,7 @@
 - [经典算法原理](算法原理.md)：公式推导、物理意义和参考文献。
 - [诊断算法体系全景](诊断算法体系全景.md)：诊断业务组合、评分与集成背景。
 - [小波与模态分解理论](algorithms/wavelet_and_modality_decomposition.md)：保留的理论资料。
+- [复合研究流程](algorithms/composite/INDEX.md)：#75 核心阶段、四阶 MSB、相位前提与研究限定；公开接入实施中。
 - [数据集说明](datasets.md)：路径、命名、采样率和机械参数。
 - [行星齿轮箱诊断进展](行星齿轮箱诊断进展.md)：阶段性评估与限制。
 
