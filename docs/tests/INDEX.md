@@ -58,7 +58,7 @@ uv run python -m unittest tests.diagnosis.algorithms.test_emd_sift_contract -v
 
 [冻结契约](../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json) 与 [手写对照资产](../../cloud/tests/diagnosis/algorithms/emd_reference_contract.py) 供后续 Python/原生差分复用；测试本身不生成需要提交的波形或 golden 数组，不表示已有原生性能结论。
 
-已安装计算扩展后，PCHIP/SD 原生候选在 `cloud/` 执行：
+已安装计算扩展后，四种插值/停止组合的 EMD 族原生候选在 `cloud/` 执行：
 
 ```powershell
 $env:CNN_DATA_ROOT='D:/code/CNN/data'
