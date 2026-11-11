@@ -11,6 +11,7 @@ from app.algorithms.bearing.deconvolution import MEDParameters
 from app.algorithms.decomposition.vmd import VMDParameters
 from app.algorithms.mechanics.planetary import PlanetaryGearGeometry
 from app.algorithms.order import ScalarSpeed
+from app.algorithms.transforms import decimate_extrema
 from app.algorithms.pipelines.composite import (
     CompositeAnalysis, CompositeDiagnosis, ResearchCompositePipeline, VMDAMFMPipeline,
     ModulationBispectrumPipeline, CVSMEDMSBPipeline, VMDICAPipeline, MSWPEEPipeline,
@@ -39,6 +40,14 @@ def analyze_composite_research(method, signal, sample_rate_hz, *, geometry=None,
     options = options or {}
     if not isinstance(options, Mapping):
         raise ValueError("research options must be a mapping")
+    # 研究入口仍共用2核2G实例，不接受任意迭代/矩阵维数放大请求。
+    limits = {"modes": (1, 5), "vmd_iterations": (1, 500), "ica_iterations": (1, 500),
+              "filter_length": (2, 128), "med_iterations": (1, 60),
+              "segment_length": (32, 4096), "level": (1, 6), "max_scale": (1, 16), "top_n": (1, 5)}
+    for key, (lower, upper) in limits.items():
+        if key in options and (isinstance(options[key], bool) or not isinstance(options[key], int)
+                               or not lower <= options[key] <= upper):
+            raise ValueError(f"research_{key}_must_be_integer_between_{lower}_and_{upper}")
     if method == "mswpee":
         return MSWPEEPipeline(options.get("wavelet", "db8"), options.get("level", 3),
                               options.get("max_scale", 5)).run(values, sample_rate_hz)
@@ -91,8 +100,52 @@ def analyze_composite_research(method, signal, sample_rate_hz, *, geometry=None,
 
 
 def composite_to_dict(diagnosis: CompositeDiagnosis) -> dict:
-    """只有HTTP/持久化边界调用；不使用asdict深拷贝大型NumPy表示。"""
+    """研究HTTP边界只输出摘要和绘图抽点，完整数值数组留在Pipeline。"""
+    def curve(axis, amplitude, unit, x_unit="Hz"):
+        return {"points": decimate_extrema(np.asarray(axis), np.asarray(amplitude), maximum=800).tolist(),
+                "amplitude_unit": unit, "axis_unit": x_unit}
+
     def convert(value):
+        from app.algorithms.composite.amfm import AMFMRepresentation
+        from app.algorithms.composite.cvs import CVSRepresentation
+        from app.algorithms.composite.ica import FastICAResult
+        from app.algorithms.composite.msb import ModulationBispectrum
+        from app.algorithms.decomposition.vmd import VMDResult
+        from app.algorithms.bearing.deconvolution import DeconvolutionResult
+        from app.algorithms.pipelines.decomposition import ComponentSelection
+        if isinstance(value, AMFMRepresentation):
+            return {"sample_rate_hz": value.sample_rate_hz,
+                    "amplitude_spectrum": curve(value.amplitude_spectrum.frequency_hz,
+                                                value.amplitude_spectrum.amplitude, value.input_unit),
+                    "frequency_spectrum": curve(value.frequency_spectrum.frequency_hz,
+                                                value.frequency_spectrum.amplitude, "Hz")}
+        if isinstance(value, VMDResult):
+            return {"status": value.status, "reason": value.reason, "converged": value.converged,
+                    "iterations": value.iterations, "center_frequencies_hz": convert(value.center_frequencies_hz),
+                    "valid_interval": convert(value.valid_interval)}
+        if isinstance(value, FastICAResult):
+            return {"status": value.status, "reason": value.reason, "converged": value.converged,
+                    "iterations": value.iterations, "numerical_rank": value.numerical_rank,
+                    "component_count": value.components.shape[1] if value.components is not None else 0}
+        if isinstance(value, CVSRepresentation):
+            return {"status": value.status, "reason": value.reason, "sample_rate_hz": value.sample_rate_hz,
+                    "selected_planet": value.selected_planet, "cycles": value.cycles,
+                    "coverage_fraction": value.coverage_fraction, "source_window_intervals": value.source_window_intervals,
+                    "sample_count": len(value.signal) if value.signal is not None else 0}
+        if isinstance(value, DeconvolutionResult):
+            return {"converged": value.converged, "iterations": value.iterations,
+                    "objective_history": convert(value.objective_history), "sample_count": len(value.signal)}
+        if isinstance(value, ModulationBispectrum):
+            return {"carrier_frequency_hz": convert(value.carrier_frequency_hz),
+                    "modulation_frequency_hz": convert(value.modulation_frequency_hz),
+                    "magnitude": convert(value.magnitude), "phase_coherence": convert(value.coherence),
+                    "valid": convert(value.valid), "segments": value.segments,
+                    "frequency_resolution_hz": value.frequency_resolution_hz,
+                    "amplitude_unit": value.amplitude_unit, "definition": value.definition}
+        if isinstance(value, ComponentSelection):
+            return {"status": value.status, "reason": value.reason, "quality_status": value.quality_status,
+                    "selected_indices": value.selected_indices, "scores": convert(value.scores),
+                    "sample_count": len(value.representation) if value.representation is not None else 0}
         if is_dataclass(value):
             return {item.name: convert(getattr(value, item.name)) for item in fields(value)}
         if isinstance(value, np.ndarray):
@@ -100,7 +153,7 @@ def composite_to_dict(diagnosis: CompositeDiagnosis) -> dict:
                 return {"real": convert(value.real), "imag": convert(value.imag)}
             return convert(value.tolist())
         if isinstance(value, Mapping):
-            return {str(key): convert(item) for key, item in value.items()}
+            return {str(key): convert(item) for key, item in value.items() if key != "source_contributions"}
         if isinstance(value, (list, tuple)):
             return [convert(item) for item in value]
         if isinstance(value, (float, np.floating)):
@@ -108,7 +161,9 @@ def composite_to_dict(diagnosis: CompositeDiagnosis) -> dict:
         if isinstance(value, (np.integer, np.bool_)):
             return value.item()
         return value
-    return {"method": diagnosis.analysis.method, "status": diagnosis.analysis.status,
+    return {"contract_version": 1, "method": diagnosis.analysis.method,
+            "evaluation_status": diagnosis.evaluation.status,
+            "diagnosis_conclusion": diagnosis.evaluation.diagnosis_conclusion,
             "analysis": convert(diagnosis.analysis), "evaluation": convert(diagnosis.evaluation),
             "research_only": True, "production_eligible": False,
             "evidence_family": diagnosis.analysis.evidence_family,

@@ -1,5 +1,6 @@
 <template>
   <div class="result-grid">
+    <CompositeResult v-if="selectedMethodInfo?.category === 'composite'" class="wide" :result="result" />
     <!-- 轴承方法 -->
     <template v-if="selectedMethodInfo?.category === 'bearing'">
       <section class="panel">
@@ -96,6 +97,7 @@
 <script setup>
 import { computed } from 'vue'
 import PlanetaryResult from './PlanetaryResult.vue'
+import CompositeResult from './CompositeResult.vue'
 import { fmt, evaluationStatusType, evaluationStatusText } from '../../composables/useResearchDiagnosis'
 import { bearingEvaluationEntries, scScohEntries, bearingReasonText } from '../../utils/bearingDiagnosis'
 const props = defineProps({
@@ -110,6 +112,7 @@ const scScohItems = computed(() => scScohEntries(props.result))
 .result-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; min-width: 0; }
 .panel.wide { grid-column: 1 / -1; }
+.wide { grid-column: 1 / -1; }
 .panel-title { display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 12px; }
 @media (max-width: 1100px) { .result-grid { grid-template-columns: 1fr; } }
 </style>
