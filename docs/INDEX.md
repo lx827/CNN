@@ -38,6 +38,7 @@
 - [DC24 采集操作与实现](DC24_ACQUISITION.md)
 - [从传感器到 CSV](DC24_SIGNAL_TO_CSV.md)
 - [DC24 实测协议](DC24_PROTOCOL.md)
+- [树莓派直连配置](树莓派直连配置.md)
 - [Rust 边端 README](../edge/README.md) 与 [FFI 契约](../edge/FFI.md)
 - [部署指南](部署指南.md)、[操作手册](操作手册.md)、[服务器命令速查](服务器命令速查.md)
 - [边端交叉编译构建](../deploy/edge/README.md)
