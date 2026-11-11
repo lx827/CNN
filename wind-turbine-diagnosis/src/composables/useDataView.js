@@ -6,6 +6,7 @@
  *       诊断缓存读写、删除与重新诊断、路由联动。
  */
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { formatErrorMessage } from '../utils/errorMessage'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getAllDeviceData,
@@ -309,7 +310,7 @@ export function useDataView() {
       deviceTableData.value = data
     } catch (e) {
       console.error('加载设备数据失败:', e)
-      ElMessage.error('加载数据失败')
+      ElMessage.error(formatErrorMessage(e, '加载数据失败'))
     } finally {
       loading.value = false
     }
@@ -678,7 +679,7 @@ export function useDataView() {
       addFreqAnnotationsToOption(fftOption.value, d.fft_freq)
     } catch (e) {
       console.error('FFT 计算失败:', e)
-      ElMessage.error('FFT 计算失败')
+      ElMessage.error(formatErrorMessage(e, 'FFT 计算失败'))
       computedFFT.value = false
     } finally {
       loadingFFT.value = false
@@ -751,7 +752,7 @@ export function useDataView() {
       }
     } catch (e) {
       console.error('STFT 计算失败:', e)
-      ElMessage.error('STFT 计算失败')
+      ElMessage.error(formatErrorMessage(e, 'STFT 计算失败'))
       computedSTFT.value = false
     } finally {
       loadingSTFT.value = false
@@ -810,7 +811,7 @@ export function useDataView() {
       }
     } catch (e) {
       console.error('包络谱计算失败:', e)
-      ElMessage.error('包络谱计算失败: ' + (e.response?.data?.detail || e.message))
+      ElMessage.error('包络谱计算失败: ' + formatErrorMessage(e))
       computedEnvelope.value = false
     } finally {
       loadingEnvelope.value = false
@@ -905,7 +906,7 @@ export function useDataView() {
       }
     } catch (e) {
       console.error('阶次谱计算失败:', e)
-      ElMessage.error('阶次谱计算失败: ' + (e.response?.data?.detail || e.message))
+      ElMessage.error('阶次谱计算失败: ' + formatErrorMessage(e))
       computedOrder.value = false
     } finally {
       loadingOrder.value = false
@@ -967,7 +968,7 @@ export function useDataView() {
       }
     } catch (e) {
       console.error('倒谱计算失败:', e)
-      ElMessage.error('倒谱计算失败: ' + (e.response?.data?.detail || e.message))
+      ElMessage.error('倒谱计算失败: ' + formatErrorMessage(e))
       computedCepstrum.value = false
     } finally {
       loadingCepstrum.value = false
@@ -999,7 +1000,7 @@ export function useDataView() {
       computedGear.value = true
     } catch (e) {
       console.error('齿轮诊断失败:', e)
-      ElMessage.error('齿轮诊断失败: ' + (e.response?.data?.detail || e.message))
+      ElMessage.error('齿轮诊断失败: ' + formatErrorMessage(e))
       computedGear.value = false
     } finally {
       loadingGear.value = false
@@ -1055,7 +1056,7 @@ export function useDataView() {
       extractFaultFreqAnnotations(d)
     } catch (e) {
       console.error('全算法诊断失败:', e)
-      ElMessage.error('全算法诊断失败: ' + (e.response?.data?.detail || e.message))
+      ElMessage.error('全算法诊断失败: ' + formatErrorMessage(e))
       computedFullAnalysis.value = false
     } finally {
       loadingFullAnalysis.value = false
@@ -1092,7 +1093,7 @@ export function useDataView() {
       extractFaultFreqAnnotations(d)
     } catch (e) {
       console.error('策略诊断失败:', e)
-      ElMessage.error('策略诊断失败: ' + (e.response?.data?.detail || e.message))
+      ElMessage.error('策略诊断失败: ' + formatErrorMessage(e))
       computedStrategyAnalyze.value = false
     } finally {
       loadingStrategyAnalyze.value = false
@@ -1123,7 +1124,7 @@ export function useDataView() {
       initWindowedChart()
     } catch (e) {
       console.error('统计指标计算失败:', e)
-      ElMessage.error('统计指标计算失败')
+      ElMessage.error(formatErrorMessage(e, '统计指标计算失败'))
       computedStats.value = false
     } finally {
       loadingStats.value = false
@@ -1252,7 +1253,7 @@ export function useDataView() {
       await loadAllDevices()
     } catch (e) {
       console.error('重新诊断失败:', e)
-      ElMessage.error('重新诊断失败: ' + (e.response?.data?.detail || e.message))
+      ElMessage.error('重新诊断失败: ' + formatErrorMessage(e))
     } finally {
       reanalyzing.value = false
     }
@@ -1280,7 +1281,7 @@ export function useDataView() {
       await loadAllDevices()
     } catch (e) {
       console.error('全部重新诊断失败:', e)
-      ElMessage.error('全部重新诊断失败: ' + (e.response?.data?.detail || e.message))
+      ElMessage.error('全部重新诊断失败: ' + formatErrorMessage(e))
     } finally {
       reanalyzingAll.value = false
     }
