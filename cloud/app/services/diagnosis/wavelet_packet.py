@@ -36,32 +36,18 @@ def wavelet_packet_denoise(signal, wavelet="db8", level=3, energy_threshold_rati
         "selected_nodes": list(paths), "valid_interval": [0, len(representation)]}
 
 
-def _coarse_grain(signal, scale):
-    """既有 MSWPEE 业务组合前处理，本工单不扩展该实验流程。"""
-    arr = np.asarray(signal, dtype=float)
-    if scale <= 1:
-        return arr
-    count = len(arr) // scale
-    if count < 4:
-        raise ValueError("粗粒化后记录过短")
-    return np.mean(arr[:count * scale].reshape(count, scale), axis=1)
-
-
 def compute_mswpee(signal, fs, wavelet="db8", level=3, max_scale=5, gear_mesh_freq=None):
-    """既有多尺度组合改用唯一 WP Pipeline；不新增效果或生产可用性声明。"""
-    if isinstance(max_scale, bool) or not isinstance(max_scale, int) or max_scale <= 0:
-        raise ValueError("max_scale 必须为正整数")
-    results = {}
-    for scale in range(1, max_scale + 1):
-        coarse = _coarse_grain(signal, scale)
-        # 啮合频率超出该粗粒化序列 Nyquist 时没有对应可观测节点。
-        observable_mesh = gear_mesh_freq if gear_mesh_freq is not None and 0 <= gear_mesh_freq <= fs / (2 * scale) else None
-        results[f"scale_{scale}"] = compute_wavelet_packet_energy_entropy(
-            coarse, fs / scale, wavelet, level, observable_mesh)
-    vector = [item["normalized_entropy"] for item in results.values()]
-    raw = [item["energy_entropy"] for item in results.values()]
-    valid = all(value is not None for value in vector)
-    return {"status": "computed" if valid else "indeterminate", "mswpee_vector": vector,
-            "mswpee_raw_vector": raw, "scales": list(range(1, max_scale + 1)),
-            "single_scale_results": results, "mswpee_mean": float(np.mean(vector)) if valid else None,
-            "mswpee_std": float(np.std(vector)) if valid else None, "wavelet": wavelet, "level": level}
+    """多尺度研究边界；不把粗粒化后的mesh混叠峰解释为原始物理频率。"""
+    from .composite import analyze_composite_research
+    result = analyze_composite_research("mswpee", signal, fs, options={
+        "wavelet": wavelet, "level": level, "max_scale": max_scale})
+    scales = result.analysis.data["scales"]
+    vector = result.analysis.data["normalized_entropy_vector"]
+    valid = result.analysis.status == "computed"
+    return {"status": result.analysis.status, "reason": result.analysis.reason,
+            "mswpee_vector": vector, "mswpee_raw_vector": tuple(item["entropy_bits"] for item in scales),
+            "scales": tuple(item["scale"] for item in scales),
+            "single_scale_results": {f"scale_{item['scale']}": item for item in scales},
+            "mswpee_mean": float(np.mean(vector)) if valid else None,
+            "mswpee_std": float(np.std(vector)) if valid else None,
+            "research_only": True, "production_eligible": False, "wavelet": wavelet, "level": level}
