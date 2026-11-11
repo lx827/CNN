@@ -11,10 +11,11 @@ def envelope_response(analysis, method, max_freq, **metadata):
         raise ValueError("展示最大频率必须为有限正数")
     selection = analysis.selection
     common = {"method": method, "status": selection.status, "reason": selection.reason,
+              "quality_status": selection.quality_status,
               "valid_interval": [selection.valid_interval.start_index, selection.valid_interval.stop_index],
               "amplitude_unit": "input_signal", "amplitude_scaling": "single_sided_peak_amplitude", **metadata}
-    if analysis.spectrum is None:
-        return {**common, "envelope_freq": [], "envelope_amp": [],
+    if analysis.spectrum is None or selection.quality_status != "accepted":
+        return {**common, "status": "indeterminate", "envelope_freq": [], "envelope_amp": [],
                 "error": selection.reason or "no_eligible_components"}
     mask = analysis.spectrum.frequency_hz <= max_freq
     return {**common, "envelope_freq": analysis.spectrum.frequency_hz[mask].tolist(),
@@ -29,7 +30,7 @@ def emd_bearing_analysis(signal, fs, max_imfs=8, max_sifts=50, top_n=1,
     result = decompose_emd(arr, fs, EMDParameters(max_imfs=max_imfs, max_sifts=max_sifts,
         stopping_rule="rilling" if use_rilling else "sd"))
     analysis = SensitiveComponentEnvelopePipeline().analyze(result.imfs, arr, fs, top_n=top_n,
-                                                            envelope_low_pass_hz=f_low_pass)
+                                                            envelope_low_pass_hz=f_low_pass, decomposition=result)
     return envelope_response(analysis, "EMD Sensitive IMF Envelope", max_freq,
         n_imfs=len(result.imfs), selected_imfs=list(analysis.selection.selected_indices),
         imf_scores=list(analysis.selection.scores), decomposition_reason=result.reason)
@@ -43,7 +44,7 @@ def ceemdan_bearing_analysis(signal, fs, max_imfs=8, ensemble_size=30, noise_std
     result = decompose_ceemdan(arr, fs, seed=seed,
         parameters=EnsembleParameters(EMDParameters(max_imfs=max_imfs), ensemble_size, noise_std))
     analysis = SensitiveComponentEnvelopePipeline().analyze(result.imfs, arr, fs, top_n=top_n,
-                                                            envelope_low_pass_hz=f_low_pass)
+                                                            envelope_low_pass_hz=f_low_pass, decomposition=result)
     return envelope_response(analysis, "CEEMDAN Sensitive IMF Envelope", max_freq,
         n_imfs=len(result.imfs), selected_imfs=list(analysis.selection.selected_indices),
         imf_scores=list(analysis.selection.scores), ensemble_size=ensemble_size, seed=seed,
@@ -59,7 +60,7 @@ def vmd_bearing_analysis(signal, fs, K=5, alpha=2000, top_n=1,
     interval = result.valid_interval
     analysis = SensitiveComponentEnvelopePipeline().analyze(result.modes,
         arr[interval.start_index:interval.stop_index], fs, top_n=top_n,
-        center_frequencies_hz=result.center_frequencies_hz, envelope_low_pass_hz=f_low_pass)
+        center_frequencies_hz=result.center_frequencies_hz, envelope_low_pass_hz=f_low_pass, decomposition=result)
     return envelope_response(analysis, "VMD Sensitive Mode Envelope", max_freq,
         K=K, selected_modes=list(analysis.selection.selected_indices),
         mode_scores=list(analysis.selection.scores), mode_center_freqs=result.center_frequencies_hz.tolist(),
