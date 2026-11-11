@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from app.api.data_view import research
 from app.database import Base, get_db
 from app.models import Device, SensorData, Diagnosis, Alarm
+from app.services.diagnosis.adapters import unavailable_result
 
 
 class CompositeResearchHTTPTests(unittest.TestCase):
@@ -46,14 +47,16 @@ class CompositeResearchHTTPTests(unittest.TestCase):
             "samples_per_planet_revolution": 512,
         }
         with self.factory() as session:
-            session.add(Device(device_id="COMPOSITE", name="研究", health_score=42, status="warning",
+            session.add(Device(device_id="COMPOSITE", name="研究", health_score=42,
+                evaluation_status="evaluated", diagnosis_conclusion="warning", coverage="complete",
                 gear_teeth={"1": {"input": 32}, "2": {"sun": 20, "ring": 54, "planet": 17,
                     "planet_count": 2, "reference_axis": "carrier", "fixed_member": "ring"}}))
             for channel, signal in ((1, fixed), (2, planetary)):
                 session.add(SensorData(device_id="COMPOSITE", batch_index=1, channel=channel,
                     sample_rate=fs, data=signal.tolist()))
             session.add(Diagnosis(device_id="COMPOSITE", batch_index=1, channel=1, denoise_method="none",
-                                  health_score=42, status="warning", full_analysis={"production_sentinel": True}))
+                                  health_score=42, evaluation_status="evaluated", diagnosis_conclusion="warning",
+                                  coverage="complete", full_analysis={"production_sentinel": True}))
             session.commit()
 
     def tearDown(self):
@@ -85,8 +88,7 @@ class CompositeResearchHTTPTests(unittest.TestCase):
                     self.assertNotIn("status", payload)
                     self.assertFalse(payload["production_eligible"])
                     self.assertFalse(payload["validation"]["independent_vote"])
-                    self.assertEqual(payload["fault_probabilities"], {})
-                    self.assertEqual(payload["fault_indicators"], {})
+                    self.assertNotIn("fault_probabilities", payload)
                     self.assertEqual(payload["evidence_family"], "shared_signal_decomposition_demodulation")
                     self.assertTrue(payload["analysis"]["stages"])
                     json.dumps(payload, allow_nan=False)
@@ -99,9 +101,43 @@ class CompositeResearchHTTPTests(unittest.TestCase):
             self.assertEqual(session.query(Diagnosis).count(), 1)
             original = session.query(Diagnosis).one()
             self.assertEqual(original.full_analysis, {"production_sentinel": True})
-            self.assertEqual((original.health_score, original.status), (42, "warning"))
+            self.assertEqual((original.health_score, original.evaluation_status, original.diagnosis_conclusion),
+                             (42, "evaluated", "warning"))
             device = session.query(Device).one()
-            self.assertEqual((device.health_score, device.status), (42, "warning"))
+            self.assertEqual((device.health_score, device.evaluation_status, device.diagnosis_conclusion),
+                             (42, "evaluated", "warning"))
+            self.assertEqual(session.query(Alarm).count(), 0)
+
+    def test_domain_research_summary_uses_record_identity_and_bounded_worker_input(self):
+        with self.factory() as session:
+            record = session.query(SensorData).filter(SensorData.channel == 1).one()
+            record.data = record.data * 4
+            session.commit()
+        calls = []
+        request_thread = threading.get_ident()
+        def unavailable(engine, signal, fs, *args):
+            calls.append((engine.diagnosis_key, len(signal), threading.get_ident()))
+            return unavailable_result("missing_test_baseline", key=engine.diagnosis_key,
+                                      object_id="gear", method="standard")
+        with TestClient(self.app) as client, \
+             patch.object(research.DiagnosisEngine, "analyze_all_methods", unavailable), \
+             patch.object(research.DiagnosisEngine, "analyze_research_ensemble", unavailable):
+            for endpoint, params in (("method-analysis", {"method": "all"}), ("research-analysis", {})):
+                response = client.get(f"/api/data/COMPOSITE/1/1/{endpoint}", params=params)
+                self.assertEqual(response.status_code, 200, response.text)
+                payload = response.json()["data"]
+                self.assertEqual((payload["evaluation_status"], payload["diagnosis_conclusion"], payload["health_score"]),
+                                 ("not_evaluable", "unknown", None))
+                self.assertNotIn("status", payload)
+                self.assertEqual(payload["evaluations"][0]["evidence"][0]["key"], {
+                    "device_id": "COMPOSITE", "batch_index": 1, "channel": 1, "denoise_method": "none"})
+        self.assertEqual(len(calls), 2)
+        for key, length, thread in calls:
+            self.assertEqual(key.record_id, "COMPOSITE:1:ch1")
+            self.assertEqual(length, 2048 * 5)
+            self.assertNotEqual(thread, request_thread)
+        with self.factory() as session:
+            self.assertEqual(session.query(Diagnosis).one().full_analysis, {"production_sentinel": True})
             self.assertEqual(session.query(Alarm).count(), 0)
 
     def test_missing_phase_stage_failures_and_removed_methods_remain_explicit(self):

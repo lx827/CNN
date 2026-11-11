@@ -13,20 +13,17 @@ const advancedBearingParams = config => ({
   ...(config.comb_is_stable === true ? { comb_is_stable: true } : {}),
 })
 
-export const getChannelDiagnosis = async (deviceId, batchIndex, channel, denoiseMethod = null) => {
+export const getChannelDiagnosis = async (deviceId, batchIndex, channel, config = {}) => {
   const params = {}
-  if (denoiseMethod) params.denoise_method = denoiseMethod
+  if (config.denoise_method) params.denoise_method = config.denoise_method
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/diagnosis`, { params })
   return res
 }
 
 export const getChannelAnalyze = async (deviceId, batchIndex, channel, config = {}) => {
   const params = {
-    detrend: config.detrend ?? false,
-    strategy: config.strategy || 'standard',
-    bearing_method: config.bearing_method || 'envelope',
-    gear_method: config.gear_method || 'standard',
     denoise: config.denoise || 'none',
+    ...(config.rot_freq_hz > 0 ? { rot_freq_hz: config.rot_freq_hz } : {}),
   }
   const res = await request.get(`/api/data/${deviceId}/${batchIndex}/${channel}/analyze`, { params })
   return res

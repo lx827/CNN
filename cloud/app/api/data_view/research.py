@@ -15,11 +15,13 @@ from app.algorithms.order import ScalarSpeed
 from app.algorithms.composite.cvs import CVSAlignment
 from app.algorithms.pipelines.composite import CompositeAnalysis, CompositeDiagnosis, ResearchCompositePipeline
 from app.services.diagnosis.composite import analyze_composite_research, composite_to_dict
+from app.services.diagnosis.adapters import adapt_method_result
+from app.services.diagnosis.domain import DiagnosisKey
 
 from app.database import get_db
 from app.models import SensorData, Device
 from app.services.diagnosis import (
-    DiagnosisEngine, DenoiseMethod, DiagnosisStrategy,
+    DiagnosisEngine, DiagnosisStrategy,
     BearingMethod, GearMethod,
 )
 from . import router, prepare_signal, _get_channel_name, _extract_device_param, _sanitize_for_json
@@ -249,12 +251,7 @@ async def get_channel_method_analysis(
 
     try:
         sample_rate = record.sample_rate or 25600
-        signal = prepare_signal(record.data, detrend=detrend)
-
-        # 限制信号长度（最多 5 秒）
-        max_samples = sample_rate * 5
-        if len(signal) > max_samples:
-            signal = signal[:max_samples]
+        signal = prepare_signal(record.data[:int(sample_rate * 5)], detrend=detrend)
 
         bearing_params = {}
         gear_teeth = {}
@@ -263,6 +260,7 @@ async def get_channel_method_analysis(
             gear_teeth = gear_config_for_channel(device.gear_teeth, channel)
 
         denoise_method = configured_denoise(denoise)
+        diagnosis_key = DiagnosisKey(device_id, batch_index, channel, denoise_method.value)
 
         # ── 运行全部方法 ──
         if method == "all":
@@ -272,6 +270,7 @@ async def get_channel_method_analysis(
                 denoise_method=denoise_method,
                 bearing_params=bearing_params,
                 gear_teeth=gear_teeth,
+                diagnosis_key=diagnosis_key,
             )
             result = await asyncio.to_thread(
                 engine.analyze_all_methods, signal, sample_rate, rot_freq_hz
@@ -311,6 +310,7 @@ async def get_channel_method_analysis(
                 denoise_method=denoise_method,
                 bearing_params=bearing_params,
                 gear_teeth=gear_teeth,
+                diagnosis_key=diagnosis_key,
             )
             result = await asyncio.to_thread(
                 engine.analyze_bearing, signal, sample_rate, rot_freq_hz
@@ -339,6 +339,7 @@ async def get_channel_method_analysis(
                 denoise_method=denoise_method,
                 bearing_params=bearing_params,
                 gear_teeth=gear_teeth,
+                diagnosis_key=diagnosis_key,
             )
             result = await asyncio.to_thread(
                 engine.analyze_gear, signal, sample_rate, rot_freq_hz
@@ -361,14 +362,17 @@ async def get_channel_method_analysis(
             "planetary_tsa_residual": "tsa_residual", "planetary_highpass": "highpass",
         }
         if method in planetary_methods:
-            engine = DiagnosisEngine(denoise_method=denoise_method, gear_teeth=gear_teeth)
-            arr = engine.preprocess(signal)
-            order_analysis = engine._analyze_order(arr, sample_rate, rot_freq=rot_freq_hz, estimation_signal=signal)
+            engine = DiagnosisEngine(denoise_method=denoise_method, gear_teeth=gear_teeth,
+                                     diagnosis_key=diagnosis_key)
             selected = planetary_methods[method]
-            result = await asyncio.to_thread(
-                analyze_planetary_gear, arr, sample_rate, gear_teeth,
-                order_analysis=order_analysis, include_tsa=selected == "tsa_residual", methods=(selected,),
-            )
+            def analyze_selected_planetary():
+                arr = engine.preprocess(signal)
+                order_analysis = engine._analyze_order(arr, sample_rate, rot_freq=rot_freq_hz, estimation_signal=signal)
+                raw = analyze_planetary_gear(arr, sample_rate, gear_teeth,
+                    order_analysis=order_analysis, include_tsa=selected == "tsa_residual", methods=(selected,))
+                return adapt_method_result(raw, key=diagnosis_key, object_id="gear", method="planetary_gear",
+                    signal=signal, physical_parameters=bool(gear_teeth))
+            result = await asyncio.to_thread(analyze_selected_planetary)
             return {"code": 200, "data": _sanitize_for_json({
                 "device_id": record.device_id, "batch_index": record.batch_index,
                 "channel": record.channel, "channel_name": _get_channel_name(device, record.channel),
@@ -422,7 +426,7 @@ async def get_channel_research_analysis(
 
     try:
         sample_rate = record.sample_rate or 25600
-        signal = prepare_signal(record.data, detrend=detrend)
+        signal = prepare_signal(record.data[:int(sample_rate * min(max_seconds, 5.0))], detrend=detrend)
 
         bearing_params = {}
         gear_teeth = {}
@@ -435,6 +439,7 @@ async def get_channel_research_analysis(
             bearing_options=bearing_options,
             bearing_params=bearing_params,
             gear_teeth=gear_teeth,
+            diagnosis_key=DiagnosisKey(device_id, batch_index, channel, denoise),
         )
 
         result = await asyncio.to_thread(
@@ -446,20 +451,12 @@ async def get_channel_research_analysis(
             max_seconds,
         )
 
-        # 诊断日志：检查 ensemble 数据完整性
-        ensemble = result.get("ensemble", {})
         logger.info(
-            "[research-analysis] device=%s batch=%s ch=%s profile=%s | "
-            "ensemble_keys=%s bearing_votes=%d gear_votes=%d "
-            "bearing_fi=%d gear_fi=%d best_bearing=%s best_gear=%s",
+            "[research-analysis] device=%s batch=%s ch=%s profile=%s "
+            "evaluation_status=%s conclusion=%s coverage=%s objects=%d",
             device_id, batch_index, channel, profile,
-            list(ensemble.keys()) if ensemble else "MISSING",
-            len(ensemble.get("bearing_votes", {})),
-            len(ensemble.get("gear_votes", {})),
-            len(result.get("bearing", {}).get("evaluation", {}).get("indicators", {})),
-            len(result.get("gear", {}).get("fault_indicators", {})),
-            ensemble.get("best_bearing", "N/A"),
-            ensemble.get("best_gear", "N/A"),
+            result["evaluation_status"], result["diagnosis_conclusion"], result["coverage"],
+            len(result["evaluations"]),
         )
 
         response_data = {
