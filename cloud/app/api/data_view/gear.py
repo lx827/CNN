@@ -1,398 +1,71 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+"""对象诊断 API；所有请求共用领域序列化与精确通道缓存。"""
+import asyncio
+from fastapi import Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.models import Device, SensorData
+from app.schemas import DiagnosisResponse
+from app.services.diagnosis import DiagnosisEngine, DiagnosisKey
 from app.services.diagnosis.gear.planetary import gear_config_for_channel
-from app.models import SensorData, Device, Diagnosis
-from datetime import datetime, timezone
-from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod, DiagnosisStrategy
-from app.services.diagnosis.features import has_bearing_params as _service_has_bearing, has_gear_params as _service_has_gear
-from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum, DenoisingError
-from .errors import denoising_http_error, configured_denoise
-from . import router, prepare_signal, _get_channel_name, _extract_device_param, _sanitize_for_json
-import logging
-import numpy as np
-import asyncio
+from app.services.diagnosis_store import save_diagnosis
+from . import router, _sanitize_for_json
+from .errors import configured_denoise, denoising_http_error
+from app.services.diagnosis.signal_utils import DenoisingError
 
-logger = logging.getLogger(__name__)
+def _channel_params(values, channel):
+    if not isinstance(values, dict):
+        return {}
+    return values if any(key in values for key in ("n", "d", "D")) else values.get(str(channel), {})
 
-
-def _has_valid_bearing(bp):
-    """
-    判断轴承参数是否有效（支持设备级和通道级格式）。
-    先转换通道级格式，再委托 service 层统一校验。
-    """
-    if not bp or not isinstance(bp, dict):
-        return False
-    bp = _extract_device_param(bp, ("n", "d", "D", "alpha"))
-    return _service_has_bearing(bp)
-
-
-def _has_valid_gear(gt):
-    """
-    判断齿轮参数是否有效（支持设备级和通道级格式）。
-    先转换通道级格式，再委托 service 层统一校验。
-    """
-    if not gt or not isinstance(gt, dict):
-        return False
-    gt = _extract_device_param(gt, ("input", "output"))
-    return _service_has_gear(gt)
-
-@router.get("/{device_id}/{batch_index}/{channel}/gear")
-async def get_channel_gear(
-    device_id: str,
-    batch_index: int,
-    channel: int,
-    detrend: bool = Query(default=False, description="是否线性去趋势"),
-    method: str = Query(default="standard", description="齿轮诊断方法: standard/advanced"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
-    db: Session = Depends(get_db)
-):
-    """
-    实时计算某批次某通道的齿轮诊断分析
-    支持标准边频带分析和高级时域指标。
-    """
-    record = db.query(SensorData).filter(
-        SensorData.device_id == device_id,
-        SensorData.batch_index == batch_index,
-        SensorData.channel == channel
-    ).first()
-
-    if not record or not record.data:
-        raise HTTPException(status_code=404, detail="数据不存在")
-
+async def _run(db, device_id, batch_index, channel, denoise, mode, method="standard", rot_freq_hz=None):
+    record = db.query(SensorData).filter(SensorData.device_id == device_id, SensorData.batch_index == batch_index, SensorData.channel == channel).first()
+    if record is None:
+        raise HTTPException(404, detail="通道数据不存在")
+    device = db.query(Device).filter(Device.device_id == device_id).first()
     try:
-        sample_rate = record.sample_rate or 25600
-        signal = prepare_signal(record.data, detrend=detrend)
-
-        device = db.query(Device).filter(Device.device_id == device_id).first()
-
-        gear_teeth = {}
-        if device:
-            gear_teeth = device.gear_teeth or {}
-        # 兼容前端通道级格式 {"1":{input:18}} → 设备级 {input:18}
-        gear_teeth = gear_config_for_channel(gear_teeth, channel)
-
-        # 未配置齿轮参数时不再注入默认齿数；
-        # 诊断引擎只返回阶次谱/倒谱等统计异常指标。
-
-        method_map = {
-            "standard": GearMethod.STANDARD,
-            "advanced": GearMethod.ADVANCED,
-        }
-        gear_method = method_map.get(method, GearMethod.STANDARD)
-        denoise_method = configured_denoise(denoise)
-
+        key = DiagnosisKey(device_id, batch_index, channel, denoise)
         engine = DiagnosisEngine(
-            gear_method=gear_method,
-            denoise_method=denoise_method,
-            gear_teeth=gear_teeth,
+            bearing_params=_channel_params(getattr(device, "bearing_params", None), channel),
+            gear_teeth=gear_config_for_channel(getattr(device, "gear_teeth", None), channel),
+            denoise_method=configured_denoise(denoise), gear_method=method, diagnosis_key=key,
         )
+        rate = record.sample_rate or getattr(device, "sample_rate", None)
+        if not rate:
+            raise ValueError("missing_sample_rate")
+        signal = (record.data or [])[:int(rate * 5)]
+        if mode == "gear":
+            result = await asyncio.to_thread(engine.analyze_gear, signal, rate, rot_freq_hz)
+        else:
+            result = await asyncio.to_thread(engine.analyze_research_ensemble, signal, rate, rot_freq_hz,
+                                             "exhaustive" if mode == "all" else "runtime")
+        payload = {"device_id": device_id, "batch_index": batch_index, "channel": channel,
+                   "channel_name": (getattr(device, "channel_names", None) or {}).get(str(channel), f"通道{channel}"),
+                   "denoise": denoise, **result}
+        save_diagnosis(db, key, payload)
+        db.commit()
+        return {"code": 200, "data": _sanitize_for_json(payload)}
+    except DenoisingError as exc:
+        db.rollback()
+        raise denoising_http_error(exc) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(422, detail=str(exc)) from exc
 
-        # CPU 密集型齿轮分析放入线程池
-        result = await asyncio.to_thread(engine.analyze_gear, signal, sample_rate)
+@router.get("/{device_id}/{batch_index}/{channel}/gear", response_model=DiagnosisResponse)
+async def get_channel_gear(device_id: str, batch_index: int, channel: int,
+                           method: str = Query("standard", pattern="^(standard|advanced)$"),
+                           denoise: str = "none", rot_freq_hz: float | None = Query(None, gt=0),
+                           db: Session = Depends(get_db)):
+    return await _run(db, device_id, batch_index, channel, denoise, "gear", method, rot_freq_hz)
 
-        return _sanitize_for_json({
-            "code": 200,
-            "data": {
-                "device_id": record.device_id,
-                "batch_index": record.batch_index,
-                "channel": record.channel,
-                "channel_name": _get_channel_name(device, record.channel),
-                "sample_rate": sample_rate,
-                "is_special": bool(record.is_special),
-                "method": result.get("method", method),
-                "rot_freq_hz": result.get("rot_freq_hz"),
-                "mesh_freq_hz": result.get("mesh_freq_hz"),
-                "mesh_order": result.get("mesh_order"),
-                "ser": result.get("ser"),
-                "sidebands": result.get("sidebands", []),
-                "fm0": result.get("fm0"),
-                "fm4": result.get("fm4"),
-                "car": result.get("car"),
-                "m6a": result.get("m6a"),
-                "m8a": result.get("m8a"),
-                "na4": result.get("na4"),
-                "nb4": result.get("nb4"),
-                "metrics": result.get("metrics", {}),
-                "analysis_status": result.get("analysis_status", "indeterminate"),
-                "evaluation": result.get("evaluation", {}),
-                "tracking_method": result.get("tracking_method"),
-                "tsa_status": result.get("tsa_status"),
-                "tsa_reason": result.get("tsa_reason"),
-                "tsa_revolutions": result.get("tsa_revolutions"),
-                "fault_indicators": result.get("fault_indicators", {}),
-            }
-        })
-    except DenoisingError as e:
-        raise denoising_http_error(e) from e
-    except Exception as e:
-        logger.error(f"齿轮诊断失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"齿轮诊断失败: {e}")
+@router.get("/{device_id}/{batch_index}/{channel}/analyze", response_model=DiagnosisResponse)
+async def get_channel_analyze(device_id: str, batch_index: int, channel: int,
+                              denoise: str = "none", rot_freq_hz: float | None = Query(None, gt=0),
+                              db: Session = Depends(get_db)):
+    return await _run(db, device_id, batch_index, channel, denoise, "runtime", rot_freq_hz=rot_freq_hz)
 
-
-@router.get("/{device_id}/{batch_index}/{channel}/analyze")
-async def get_channel_analyze(
-    device_id: str,
-    batch_index: int,
-    channel: int,
-    detrend: bool = Query(default=False, description="是否线性去趋势"),
-    strategy: str = Query(default="standard", description="诊断策略: standard/advanced/expert"),
-    bearing_method: str = Query(default="envelope", description="轴承方法: envelope/filter_bank_sk/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"),
-    gear_method: str = Query(default="standard", description="齿轮方法: standard/advanced"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
-    db: Session = Depends(get_db)
-):
-    """
-    综合故障诊断分析（新诊断引擎统一入口）
-
-    支持前端配置选择诊断策略、轴承方法、齿轮方法和预处理方法。
-    返回轴承诊断、齿轮诊断、时域特征和综合健康度评分。
-    """
-    record = db.query(SensorData).filter(
-        SensorData.device_id == device_id,
-        SensorData.batch_index == batch_index,
-        SensorData.channel == channel
-    ).first()
-
-    if not record or not record.data:
-        raise HTTPException(status_code=404, detail="数据不存在")
-
-    try:
-        sample_rate = record.sample_rate or 25600
-        signal = prepare_signal(record.data, detrend=detrend)
-
-        device = db.query(Device).filter(Device.device_id == device_id).first()
-
-        bearing_params = {}
-        gear_teeth = {}
-        if device:
-            bearing_params = device.bearing_params or {}
-            gear_teeth = device.gear_teeth or {}
-        # 兼容前端通道级格式
-        bearing_params = _extract_device_param(bearing_params, ("n", "d", "D", "alpha"))
-        gear_teeth = gear_config_for_channel(gear_teeth, channel)
-
-        # 映射前端参数到枚举
-        strategy_map = {"standard": "standard", "advanced": "advanced", "expert": "expert"}
-        bearing_map = {
-            "envelope": BearingMethod.ENVELOPE,
-            "filter_bank_sk": BearingMethod.FILTER_BANK_SK,
-            "cpw": BearingMethod.CPW,
-            "med": BearingMethod.MED,
-            "teager": BearingMethod.TEAGER,
-            "spectral_kurtosis": BearingMethod.SPECTRAL_KURTOSIS,
-            "sc_scoh": BearingMethod.SC_SCOH,
-            "mckd": BearingMethod.MCKD,
-            "wp": BearingMethod.WP,
-            "dwt": BearingMethod.DWT,
-            "emd_envelope": BearingMethod.EMD_ENVELOPE,
-            "ceemdan_envelope": BearingMethod.CEEMDAN_ENVELOPE,
-            "vmd_envelope": BearingMethod.VMD_ENVELOPE,
-        }
-        gear_map = {"standard": GearMethod.STANDARD, "advanced": GearMethod.ADVANCED}
-
-        engine = DiagnosisEngine(
-            strategy=strategy_map.get(strategy, "standard"),
-            bearing_method=bearing_map.get(bearing_method, BearingMethod.ENVELOPE),
-            gear_method=gear_map.get(gear_method, GearMethod.STANDARD),
-            denoise_method=configured_denoise(denoise),
-            bearing_params=bearing_params,
-            gear_teeth=gear_teeth,
-        )
-
-        # 根据通道参数决定跳过哪些分析
-        has_bp = _has_valid_bearing(bearing_params)
-        has_gt = _has_valid_gear(gear_teeth)
-
-        # 未配置机械参数时不注入默认参数，改走统计诊断路径。
-
-        # strategy → profile 映射：expert→exhaustive(全算法), advanced→balanced, standard→runtime
-        strategy_to_profile = {
-            "standard": "runtime",
-            "advanced": "balanced",
-            "expert": "exhaustive",
-        }
-        profile = strategy_to_profile.get(strategy, "runtime")
-
-        # CPU 密集型综合分析放入线程池
-        result = await asyncio.to_thread(
-            engine.analyze_research_ensemble, signal, sample_rate,
-            profile=profile
-        )
-
-        response_data = {
-            "device_id": record.device_id,
-            "batch_index": record.batch_index,
-            "channel": record.channel,
-            "channel_name": _get_channel_name(device, record.channel),
-            "sample_rate": sample_rate,
-            "is_special": bool(record.is_special),
-            "strategy": strategy,
-            "bearing_method": bearing_method,
-            "gear_method": gear_method,
-            "denoise": denoise,
-            **result,
-        }
-
-        # 写入/更新数据库（实时计算覆盖数据库）
-        try:
-            safe_data = _sanitize_for_json(response_data)
-            diag = db.query(Diagnosis).filter(
-                Diagnosis.device_id == device_id,
-                Diagnosis.batch_index == batch_index,
-                Diagnosis.channel == channel,
-                Diagnosis.denoise_method == denoise,
-            ).first()
-            if diag:
-                diag.health_score = result.get("health_score", 100)
-                diag.status = result.get("status", "normal")
-                diag.engine_result = safe_data
-                diag.analyzed_at = datetime.now(timezone.utc)
-            else:
-                db.add(Diagnosis(
-                    device_id=device_id,
-                    batch_index=batch_index,
-                    channel=channel,
-                    health_score=result.get("health_score", 100),
-                    status=result.get("status", "normal"),
-                    engine_result=safe_data,
-                    denoise_method=denoise,
-                    analyzed_at=datetime.now(timezone.utc),
-                ))
-            db.commit()
-        except Exception as db_err:
-            logger.warning(f"诊断结果写入数据库失败: {db_err}")
-            db.rollback()
-
-        return _sanitize_for_json({
-            "code": 200,
-            "data": response_data,
-        })
-    except DenoisingError as e:
-        raise denoising_http_error(e) from e
-    except Exception as e:
-        logger.error(f"综合分析失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"综合分析失败: {e}")
-
-
-
-
-@router.get("/{device_id}/{batch_index}/{channel}/full-analysis")
-async def get_channel_full_analysis(
-    device_id: str,
-    batch_index: int,
-    channel: int,
-    detrend: bool = Query(default=False, description="是否线性去趋势"),
-    denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
-    db: Session = Depends(get_db)
-):
-    """
-    全算法对比分析（运行所有轴承方法和所有齿轮方法）
-
-    返回所有诊断方法的详细结果和检出结论对比，便于前端展示：
-    - 各轴承方法（包络 / Kurtogram / CPW / MED）分别检出了什么故障
-    - 各齿轮方法（标准边频带 / 高级指标）的详细参数和阈值判定
-    - 综合结论和建议
-    """
-    record = db.query(SensorData).filter(
-        SensorData.device_id == device_id,
-        SensorData.batch_index == batch_index,
-        SensorData.channel == channel
-    ).first()
-
-    if not record or not record.data:
-        raise HTTPException(status_code=404, detail="数据不存在")
-
-    try:
-        sample_rate = record.sample_rate or 25600
-        signal = prepare_signal(record.data, detrend=detrend)
-
-        # 限制信号长度（最多 5 秒）
-        max_samples = sample_rate * 5
-        if len(signal) > max_samples:
-            signal = signal[:max_samples]
-
-        device = db.query(Device).filter(Device.device_id == device_id).first()
-
-        bearing_params = {}
-        gear_teeth = {}
-        if device:
-            bearing_params = device.bearing_params or {}
-            gear_teeth = device.gear_teeth or {}
-        # 兼容前端通道级格式
-        bearing_params = _extract_device_param(bearing_params, ("n", "d", "D", "alpha"))
-        gear_teeth = gear_config_for_channel(gear_teeth, channel)
-
-
-        engine = DiagnosisEngine(
-            strategy=DiagnosisStrategy.EXPERT,
-            bearing_method=BearingMethod.ENVELOPE,
-            gear_method=GearMethod.STANDARD,
-            denoise_method=configured_denoise(denoise),
-            bearing_params=bearing_params,
-            gear_teeth=gear_teeth,
-        )
-
-        # CPU 密集型全算法分析放入线程池
-        has_bearing = _has_valid_bearing(bearing_params)
-        has_gear = _has_valid_gear(gear_teeth)
-
-        # 未配置机械参数时不注入默认参数，保留统计诊断与无参数齿轮指标。
-
-        result = await asyncio.to_thread(
-            engine.analyze_all_methods, signal, sample_rate,
-            skip_bearing=False, skip_gear=False
-        )
-
-        response_data = {
-            "device_id": record.device_id,
-            "batch_index": record.batch_index,
-            "channel": record.channel,
-            "channel_name": _get_channel_name(device, record.channel),
-            "sample_rate": sample_rate,
-            "is_special": bool(record.is_special),
-            "denoise": denoise,
-            **result,
-        }
-
-        # 写入/更新数据库（实时计算覆盖数据库）
-        try:
-            safe_data = _sanitize_for_json(response_data)
-            diag = db.query(Diagnosis).filter(
-                Diagnosis.device_id == device_id,
-                Diagnosis.batch_index == batch_index,
-                Diagnosis.channel == channel,
-                Diagnosis.denoise_method == denoise,
-            ).first()
-            if diag:
-                diag.health_score = result.get("health_score", 100)
-                diag.status = result.get("status", "normal")
-                diag.full_analysis = safe_data
-                diag.analyzed_at = datetime.now(timezone.utc)
-            else:
-                db.add(Diagnosis(
-                    device_id=device_id,
-                    batch_index=batch_index,
-                    channel=channel,
-                    health_score=result.get("health_score", 100),
-                    status=result.get("status", "normal"),
-                    full_analysis=safe_data,
-                    denoise_method=denoise,
-                    analyzed_at=datetime.now(timezone.utc),
-                ))
-            db.commit()
-        except Exception as db_err:
-            logger.warning(f"全算法分析结果写入数据库失败: {db_err}")
-            db.rollback()
-
-        return _sanitize_for_json({
-            "code": 200,
-            "data": response_data,
-        })
-    except DenoisingError as e:
-        raise denoising_http_error(e) from e
-    except Exception as e:
-        import traceback
-        tb = traceback.format_exc()
-        logger.error(f"全算法分析失败: {e}\n{tb}")
-        raise HTTPException(status_code=500, detail=f"全算法分析失败: {e}\n{tb}")
+@router.get("/{device_id}/{batch_index}/{channel}/full-analysis", response_model=DiagnosisResponse)
+async def get_channel_full_analysis(device_id: str, batch_index: int, channel: int,
+                                    denoise: str = "none", rot_freq_hz: float | None = Query(None, gt=0),
+                                    db: Session = Depends(get_db)):
+    return await _run(db, device_id, batch_index, channel, denoise, "all", rot_freq_hz=rot_freq_hz)

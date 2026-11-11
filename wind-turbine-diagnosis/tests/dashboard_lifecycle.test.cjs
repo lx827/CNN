@@ -5,6 +5,8 @@ const { createRequire } = require('node:module')
 const path = require('node:path')
 const test = require('node:test')
 const vm = require('node:vm')
+let getDiagnosisView
+test.before(async () => { ({ getDiagnosisView } = await import('../src/utils/diagnosisStatus.js')) })
 const requireFrontend = createRequire(path.resolve(__dirname, '../package.json'))
 const vue = requireFrontend('vue')
 const { parse, compileScript } = requireFrontend('@vue/compiler-sfc')
@@ -27,7 +29,7 @@ const flush = async () => { await new Promise(resolve => setImmediate(resolve));
 function harness(fetchData) {
   const timers = new Set(), listeners = new Map(), resize = new Set(), charts = []
   const context = {
-    ...vue, console,
+    ...vue, console, getDiagnosisView,
     getDeviceInfo: fetchData,
     // 视图拆分后 __returned__ 引用子组件标识符(import 已剥离),提供空壳桩
     SummaryCards: {}, DeviceCardList: {},
@@ -55,7 +57,7 @@ function harness(fetchData) {
   const page = app.mount({ children: [] })
   return { app, state: page.$.setupState, timers, listeners, resize, charts }
 }
-const result = score => ({ data: { devices: [{ deviceId: 'TEST', status: 'normal', healthScore: score }], alarmStats: {} } })
+const result = score => ({ data: { devices: [{ deviceId: 'TEST', evaluation_status: 'evaluated', diagnosis_conclusion: 'normal', health_score: score }], alarmStats: {} } })
 
 test('离开总览页清理轮询、图表和订阅', async () => {
   const h = harness(async () => result(80))
@@ -79,11 +81,11 @@ test('请求未完成时离开，不在卸载后建立轮询和图表', async ()
   assert.equal(h.charts.length, 0)
 })
 
-test('刷新时更新选中的设备，后端 critical 正确计入故障', async t => {
+test('刷新时更新选中的设备，明确有效结论正确计入故障', async t => {
   let score = 80
   const h = harness(async () => {
     const value = result(score)
-    value.data.devices[0].status = 'critical'
+    value.data.devices[0].diagnosis_conclusion = 'fault'
     return value
   })
   t.after(() => h.app.unmount())
@@ -91,9 +93,9 @@ test('刷新时更新选中的设备，后端 critical 正确计入故障', asyn
   score = 40
   await h.state.loadData()
   await flush()
-  assert.equal(h.state.selectedDevice.healthScore, 40)
+  assert.equal(h.state.selectedDevice.health_score, 40)
   assert.equal(h.state.faultCount, 1)
-  assert.equal(h.state.getStatusText('critical'), '故障')
+  assert.equal(h.state.unknownCount, 0)
 })
 
 test('总览推送和轮询共享在途请求，保留一次后续刷新', async t => {
@@ -115,7 +117,7 @@ test('总览推送和轮询共享在途请求，保留一次后续刷新', async
   assert.equal(pending.length, 2, '在途推送不能被丢弃，也不能逐事件排队')
   pending[1].resolve(result(40))
   await finished
-  assert.equal(h.state.selectedDevice.healthScore, 40)
+  assert.equal(h.state.selectedDevice.health_score, 40)
 })
 
 test('总览卸载后丢弃在途响应和待刷新事件', async () => {
@@ -133,7 +135,7 @@ test('总览卸载后丢弃在途响应和待刷新事件', async () => {
   pending.forEach(resolve => resolve(result(40)))
   await finished
   assert.equal(calls, 2)
-  assert.equal(h.state.selectedDevice.healthScore, 80)
+  assert.equal(h.state.selectedDevice.health_score, 80)
 })
 
 test('总览请求失败仍处理后续推送，失败后可以再次刷新', async t => {
@@ -149,7 +151,7 @@ test('总览请求失败仍处理后续推送，失败后可以再次刷新', as
   h.listeners.get('device_online')()
   reject(new Error('受控网络失败'))
   assert.equal(await finished, undefined, '已收到新推送时必须继续刷新')
-  assert.equal(h.state.selectedDevice.healthScore, 40)
+  assert.equal(h.state.selectedDevice.health_score, 40)
   const failed = h.state.loadData()
   const rejected = assert.rejects(failed, /独立请求失败/)
   reject(new Error('独立请求失败'))

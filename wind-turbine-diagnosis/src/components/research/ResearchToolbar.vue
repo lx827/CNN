@@ -25,9 +25,12 @@
         <el-option-group v-if="planetaryMethodGroup.length" label="行星箱专用">
           <el-option v-for="m in planetaryMethodGroup" :key="m.key" :value="m.key" :label="m.label" />
         </el-option-group>
+        <el-option-group v-if="compositeMethodGroup.length" label="研究组合（不参与生产诊断）">
+          <el-option v-for="m in compositeMethodGroup" :key="m.key" :value="m.key" :label="m.label" />
+        </el-option-group>
       </el-select>
 
-      <el-select :model-value="denoise" class="select small" @update:model-value="$emit('update:denoise', $event)">
+      <el-select v-if="!isComposite" :model-value="denoise" class="select small" @update:model-value="$emit('update:denoise', $event)">
         <el-option label="不去噪" value="none" />
         <el-option label="小波" value="wavelet" />
         <el-option label="VMD" value="vmd" />
@@ -47,7 +50,9 @@
         <el-option label="全量" value="exhaustive" />
       </el-select>
       <el-input-number :model-value="rotFrequency" :min="0.001" :precision="3" placeholder="已知转频 Hz" controls-position="right" @update:model-value="$emit('update:rotFrequency', $event)" />
-      <span>已知恒定转频 Hz（留空自动估计）</span>
+      <span>{{ isComposite ? '机械组合需已知恒定参考轴转频 Hz' : '已知恒定转频 Hz（留空自动估计）' }}</span>
+      <el-input v-if="selectedMethod === 'composite_cvs_med_msb' && runMode === 'single'" :model-value="compositeAlignment" type="textarea" :rows="3"
+        class="alignment-input" placeholder="CVS采集对齐记录 JSON（可留空查看缺失前提）" @update:model-value="$emit('update:compositeAlignment', $event)" />
       <template v-if="runMode !== 'single' || selectedMethod === 'mckd'">
         <el-select :model-value="targetFault" clearable class="select" placeholder="MCKD 目标（空则 MED）" @update:model-value="$emit('update:targetFault', $event)">
           <el-option v-for="fault in ['BPFO', 'BPFI', 'BSF', 'FTF']" :key="fault" :value="fault" :label="fault" />
@@ -70,10 +75,11 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { Cpu, DataLine } from '@element-plus/icons-vue'
 import { runModeOptions } from '../../composables/useResearchDiagnosis'
 
-defineProps({
+const props = defineProps({
   devices: { type: Array, default: () => [] },
   batches: { type: Array, default: () => [] },
   channels: { type: Array, default: () => [] },
@@ -91,11 +97,14 @@ defineProps({
   bearingMethodGroup: { type: Array, default: () => [] },
   gearMethodGroup: { type: Array, default: () => [] },
   planetaryMethodGroup: { type: Array, default: () => [] },
+  compositeMethodGroup: { type: Array, default: () => [] },
+  compositeAlignment: { type: String, default: '' },
   loading: { type: Boolean, default: false },
   canRun: { type: Boolean, default: false },
 })
+const isComposite = computed(() => props.runMode === 'single' && props.selectedMethod.startsWith('composite_'))
 
-defineEmits(['update:selectedDeviceId', 'update:selectedBatchIndex', 'update:selectedChannel', 'update:runMode', 'update:selectedMethod', 'update:denoise', 'update:profile', 'update:targetFault', 'update:combFrequencies', 'update:combIsStable', 'update:rotFrequency', 'run', 'goto-data'])
+defineEmits(['update:selectedDeviceId', 'update:selectedBatchIndex', 'update:selectedChannel', 'update:runMode', 'update:selectedMethod', 'update:denoise', 'update:profile', 'update:targetFault', 'update:combFrequencies', 'update:combIsStable', 'update:rotFrequency', 'update:compositeAlignment', 'run', 'goto-data'])
 </script>
 
 <style scoped>
@@ -120,6 +129,7 @@ defineEmits(['update:selectedDeviceId', 'update:selectedBatchIndex', 'update:sel
 .select { width: 190px; }
 .select.small { width: 130px; }
 .method-select { width: 220px; }
+.alignment-input { width: 100%; min-width: 280px; }
 
 @media (max-width: 1100px) {
   .toolbar { align-items: stretch; flex-direction: column; }

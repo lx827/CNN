@@ -41,7 +41,7 @@ class AdvancedBearingApiTests(unittest.TestCase):
             params = {"rot_freq_hz": 25}
             missing = client.get(url, params={**params, "method": "cpw"})
             self.assertEqual(missing.status_code, 200, missing.text)
-            self.assertEqual(missing.json()["data"]["evaluation"]["status"], "indeterminate")
+            self.assertEqual(missing.json()["data"]["evaluation"]["evaluation_status"], "indeterminate")
             mckd = client.get(url, params={**params, "method": "mckd", "target_fault": "BPFI"})
             self.assertEqual(mckd.status_code, 200, mckd.text)
             data = mckd.json()["data"]

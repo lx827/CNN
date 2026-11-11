@@ -1,9 +1,9 @@
 <template>
-  <el-row v-if="status === 'fault' || status === 'warning'" :gutter="16">
+  <el-row v-if="diagnosis" :gutter="16">
     <el-col :span="24">
       <el-alert
-        :title="status === 'fault' ? '⚠️ 该批次被诊断为故障状态' : '⚡ 该批次被诊断为预警状态'"
-        :type="status === 'fault' ? 'error' : 'warning'"
+        :title="`批次诊断：${view.label}`"
+        :type="view.alertType"
         :description="description"
         show-icon
         :closable="false"
@@ -14,8 +14,11 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { getDiagnosisView } from '../../utils/diagnosisStatus'
 const props = defineProps({
-  status: { type: String, default: '' },
+  diagnosis: { type: Object, default: null },
   description: { type: String, default: '' },
 })
+const view = computed(() => getDiagnosisView(props.diagnosis))
 </script>

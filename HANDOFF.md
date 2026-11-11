@@ -1,63 +1,33 @@
-# 诊断对象化重构交接（2026-11-11）
+# 诊断业务与研究流程交接（2026-11-11）
 
-## 当前交付边界
+## 当前批次
 
-本轮集中收口 #72/#73/#74/#76/#80，开发分支为 `codex/diagnosis-development`，工作区 `C:/Users/25619/.codex/worktrees/diagnosis-development/CNN`，草稿 PR 为 **#89**。本交接不声明 PR 已合并或生产已部署；合并状态与最终提交以 GitHub/Git 为准。
+上批 PR #89 已合 main `752d4045df439199129838b6c6e397229bde481a`，#72/#73/#74/#76/#80 已关闭。本批 **草稿 PR #90** 收口 #75/#77/#84，最终开发源码为 `fc93117a129e9e580ccb3e7135effb7cf13a5741`。本交接不声明 PR #90 已合并或生产已部署。
 
-最后公开源码基线为开发提交 `99d5aa7de501c1efe29ee53d3bc8c5f92629df84`（#74 最终实现 `de2c821218553e82e3a1611787761bc9aced4bd5`）。随后开发 `cce59929b6f18aded0086759c52cb515bd11fe75` 仅合入 SFC 测试夹具修复 `5941f08`，API 未变。本轮在公开源码上只真实导出一次 OpenAPI，共 69 路径。
+开发主控分支 `codex/diagnosis-development`，工作区 `C:/Users/25619/.codex/worktrees/diagnosis-development/CNN`；本批文档分支 `codex/diagnosis-business-docs`，工作区 `D:/code/CNN/.claude/worktrees/diagnosis-business-docs`。旧完成 worktree 保留，不在本轮清理。主控串行合并，文档/代码/测试按逻辑提交；不重复开 review、算法验证或 Issue 评论。
 
-早前要求在 #73 秩亏提交处暂停、保留共享 integration 的交接状态已被用户后续指令替代。旧 integration 已安全删除，不要按旧记录恢复它或重复开始已经完成的审查。主控负责串行集成，文档由独立实施分支集中维护。
+## 已形成的交付
 
-## 已形成的稳定结构
+- #75 复用正常算法族建立 VMD AM/FM、四阶 MSB、真实 CVS→MED→MSB、VMD→ICA 与 MSWPEE；AM 输入单位、FM Hz、MSB 输入四次方、先复平均后幅值。CVS 真实相位/空间/独立圈不足无信号输出，不能回退原信号或 TSA。五组合 POST/GET/元数据与真实 Vue 展示已接；research_only/production_eligible=false，顶层 Domain 未知/空分，不进生产缓存、评分、投票、告警。旧 BSS/VMD demod/MSB 重复实现删除。
+- #77/#84 使用 Evidence→对象 Evaluation→总体 Diagnosis，evaluation_status 与 diagnosis_conclusion 分开；coverage 保留 complete/partial/none，局部未知不隐藏，总体只覆盖合法证据。共同依赖连通去重、二元 normal/anomaly 融合、精确扣分与单次权重，assessment 单源评分/建议，已有规范 Evidence 可直接重评。
+- 精确四元键追加历史缓存；channel=0/denoise=none 唯一设备/批次摘要，手动通道与转频更新不覆盖它的诊断状态。旧 JSON 返回 unknown/null 和需重分析原因，重评409、无精确缓存404。PUT batch diagnosis 只收 JSON `{rot_freq}`。worker/手工共用 process_batch，缓存、原始标记、告警同 commit，失败整体 rollback，commit 后 WS。
+- 旧库新增两维状态与 coverage，health_score nullable Float；旧状态不可可信回填，首次加两维列清旧分，后续启动不重复清分。旧物理 status/JSON 保留但不按旧协议读写；旧 NULL 通道/去噪不补身份。SQLite 实测，MySQL SQL 无实际服务验证。
+- 前端 getDiagnosisView 唯一接完整对象，非法/未来/空状态和分值中性，null 不变0；DiagnosisCoverage 显示 partial 与局部原因。Dashboard/Monitor/详情/综合/谱/齿轮/Research 已接，不补87分、不造部件偏移分、不以RMS判健康、不读旧status/votes/best/概率。
 
-| 层次 | 责任 |
-|------|------|
-| 纯算法 | 表示、变换、运动学及原始数学量；无 HTTP/ORM/设备缓存 |
-| 分析 Pipeline | 按机械对象组合表示与指标，保留单位、有效区间和物理前提 |
-| 诊断 Pipeline/评估器 | 调分析并评估；已有分析可以直接重评，不重做分解/FFT/TSA |
-| 业务编排 | 设备配置、方法与工况门控、统一评分/建议、资源、缓存、持久化和响应 |
+权威入口：[复合算法](docs/algorithms/composite/INDEX.md)、[证据与状态](docs/backend/assessment.md)、[业务编排](docs/backend/diagnosis.md)、[持久化迁移](docs/backend/persistence.md)、[API](docs/api/backend_api.md)、[前后端交互](docs/api/frontend_backend_interaction.md)、[测试](docs/tests/INDEX.md)、[ADR0004](docs/adr/0004-evidence-and-diagnosis-state.md)。
 
-- #71 定轴已随 PR #85 合并。regular/residual/differential 与 nonsynchronous 各有明确含义；无历史 NA4/NB4 不可评估，原始无阈值指标不制造故障票。
-- #73 高级轴承数学与业务审查已通过：真实命名二叉滤波器组、复高斯谱峭度；MED/MCKD 目标分离、SVD 数值秩与 ridge；CPW 显式稳定梳状先验；TEO 平方单位与负值策略；SC/SCoh 频移交叉乘积、正确轴与专属评估。MCKD 无目标实际运行 MED 并报告回退。
-- #74 分解族使用专属 adapter。WP 频率序/原时间轴、EMD 镜像/停止、VMD Hz/有效区间已修；选择评分、去噪门槛、分解收敛质量和故障阈值分开，未收敛选中模态不能诊断。EMD-signal/PyEMD 1.10.0 只是 Apache-2.0 移植参照，当前仍是仓库自研实现。
-  去噪失败以 DenoisingError 传播，HTTP 为 422 的结构化 detail，未知方法拒绝；后台失败通道健康分为空、状态 indeterminate，跳过健康阈值告警，不走规则回退。runtime 使用真实配置的去噪方法。旧 preprocessing MED/CPW 与重复小波导出删除，错误边界收口不代表 #77/#84 已完成。
-- #72 行星固定齿圈运动学、sun/carrier 参考轴、carrier 间隔 SER、基础包络与角域 TSA 专属指标；可比基线缺失时保留 unknown，不借定轴阈值命名损伤。
-  Engine/后台/研究四方法与 gear_advanced 已接同一入口，前端专属结果和设置完整几何已接通；原始差分高阶矩有明确数学定义，不声称外部文献已逐项复现。旧行星重复实现与三件旧测试已删除。
-- #76 基础数值表示已随 PR #81 合并；规则回退现复用对象 Pipeline，方法失败/未知不成为健康票。规则阈值和概率保持一致，嵌套机械参数先做 Mapping 门控。
-- #80 按算法族/对象、业务、API、前端和测试边界维护。函数签名只在源码 docstring，不恢复逐文件镜像或已删除的兼容入口。
+## 验证证据与限制
 
-当前权威入口：[算法](docs/algorithms/INDEX.md)、[业务](docs/backend/diagnosis.md)、[API](docs/api/backend_api.md)、[前后端交互](docs/api/frontend_backend_interaction.md)、[测试](docs/tests/INDEX.md)、[Bug](docs/Bug登记表.md)。
+实现方记录：P0 None7/CPW5/order17 通过。后端集中首次 Ran79，3 FAIL+2 ERROR 子项（一个测试方法含两route）；修复后只复验四失败方法+分解10共14通过，另 order4、真实PUT1、权重/直接重评1通过。没有声称重新全跑79或P0。新的 domain/workflow 实际 HTTP/SQLite/缓存/worker/事务/告警替代旧规则、评分、校准和投票 helper 协议测试。
 
-## 验证结论的范围
+前端最终 `node --test tests/*.test.cjs` **52/52**、生产构建通过，2307 modules。此前 SSR 单失败源于纯展示 helper 间接加载浏览器 request，修复后最终全套已过。#75 沿用核心13、早期HTTP3/SSR3/build，以及末次参数3/summary HTTP1/SSR1，不因文档重复算法检查。
 
-数学/物理依据、手算已知解、独立参考、物理真值合成信号和反例优先；自动测试主要保护业务编排、状态、API 和回归。测试通过不证明真实设备检出效果，不用测试数量替代算法论证。已完成的独立审查和定向返修不再重开重复 review。
+数学公式、单位、前提、已知解、负对照和实际消融是算法证据；业务测试保护状态与副作用，不证明真实设备检出效果。历史 dataset 实验脚本尚未按新 Domain 重建，不作为当前可直接执行效果验收。主仓 CW 有36个变速npy，独立 worktree 无数据不代表全缺；其余数据等用户后给。#78 重建真实效果/基线，#79 性能后置；本批未做真实数据效果、性能、生产部署或 MySQL 服务实测。
 
-实现方确认最终 P0 三件退出均为 0，分别为 None 7、CPW 5、order 17 项，日志实际 `[FAIL]` 为 0。集中受影响业务 66 项全过，含数值真实 HTTP/事件循环/读路径/worker JSON、去噪 422 schema/真实 worker、定轴/行星/高级轴承业务 API、分解业务与已知反例；行星物理合成 19 项的既有证据沿用。前端首次 42/46 通过，4 失败仅为测试夹具缺 PlanetaryResult stub；`5941f08` 修复后定向 bearing_contract 14/14 通过，其他 32 项沿用首次通过证据，没有冒称重跑全部 46；最终 build 退出 0，8.86 秒。
+生产仍 **2C2G**：两线程、ANALYSIS_SEM=1、逐批串行、业务窗口先于慢算法，研究同样受限。DC24 counts 仍只是显示/数组产物，不进设备物理诊断。
 
-实现日志目录为 `C:/Users/25619/AppData/Local/Temp/cnn-final-de2c821/`，含 P0 日志、`business-unified.log`、`frontend-bearing.log`、`frontend-build.log`。文档实施未重复算法/业务/前端测试。
+## 收口与后续
 
-文档检查：首次系统 `bash` 因找不到 uv 未进入检查器；改用 Git Bash 并加入 uv PATH 后，集中检查退出 0：53 个 Markdown、219 个相对链接、5 算法族各 9 必需章节，链接/结构/镜像清理全部 PASS。该文档检查不替代正确性验证。
+#75/#77/#84 可按本批结构和实际业务验收随 PR #90 关闭，不能据此宣称研究组合生产就绪或真实效果完成。#78/#79 保持开放，等用户数据和后续性能任务。权重只在 assessment 消费规范 DIAGNOSIS_WEIGHTS；旧 sideband/na4_nb4/wp_entropy/worst_channel/avg_channel 五键无兼容别名。
 
-生产仍为 **2C2G**：现有线程池 `max_workers=2`，后台分析 `Semaphore(1)`，逐批串行；DataView 数值入口在慢去噪前执行业务窗口限制。DC24 的未标定 counts 仅用于显示与完整分析数组保存，不进入设备诊断、评分或告警。
-
-本轮不宣称真实数据分类效果、阈值校准、性能达标或生产部署。主仓 CW 实际有 36 个变速 `.npy`；worktree 不自带数据不代表所有数据集缺失。用户后续提供其余数据后，按 `docs/datasets.md` 和 `CNN_DATA_ROOT` 分别验证，不代填其他数据集的机械参数。
-
-## 后续任务
-
-| Issue | 后续范围 |
-|------|----------|
-| #75 | VMD AM-FM 与完整复合实验流程；独立切片开发，不混入尚未完成的本批交付 |
-| #77 | 多方法集成、统一业务评估与不可判定传播 |
-| #78 | 各真实数据集与现场数据的分类效果、阈值/基线与负对照 |
-| #79 | 2G 性能基准与后续 Rust/C++ 移植准备 |
-| #84 | 评估状态、证据质量与诊断结论的领域状态进一步分离 |
-
-#80 可随 #89 中本轮文档与链接检查完成关闭；#72/#73/#74/#76 按整批最终源码/API/验证验收决定。#75/#77/#78/#79/#84 保持开放。
-
-## 工作区与提交约束
-
-文档分支 `codex/diagnosis-contract-docs` 位于 `D:/code/CNN/.claude/worktrees/diagnosis-contract-docs`，稳定族契约首提交 `7ea21cd`。API/OpenAPI/前端与最终交接另按逻辑提交，由主控串行集成；不单独开重复 PR 或 GitHub 评论。
-
-旧 `refactor-diagnosis-cloud-numeric` 中的 5 个已修改和 9 个未跟踪 Markdown 已只读盘点：其中有效的幅值归一化、STFT 轴、倒谱秒/ms、先截断后慢去噪、counts 与完整数组语义已收敛到现有模块契约。原工作区文件完整保留；`refactor-docs-module-contracts` 也不清理。
-
-Python 仅用 uv。MSVC 命令遵守 `vsdev`。本轮文档只运行集中 Markdown 链接/结构检查，不重复算法/业务测试；源码最终集成仍按任务验证证据交付。
+本批在最终公开源码上只真实导出一次 OpenAPI，**71 路径**。Git Bash 执行一次集中文档检查退出0：**56 个 Markdown、252 个相对链接、6 算法族各9必需章节**，链接/结构/镜像清理全部 PASS；git diff --check 通过。没有重复运行算法/业务/前端测试。旧 #89 文档与原 cloud-numeric 草稿工作区均保留，不恢复镜像文档或已删除兼容入口。

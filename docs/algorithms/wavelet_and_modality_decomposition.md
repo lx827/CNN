@@ -672,7 +672,7 @@ $$d(t) = x_{TSA}(t) - R(t)$$
 
 ### 12.4 行星齿轮箱VMD幅频联合解调
 
-行星齿轮箱的振动信号具有复杂的多重AM-FM调制结构，传统FFT边频带分析失效。VMD幅频联合解调是本项目的核心高级方法（参见 `docs/算法原理.md` 2.7.3）。
+行星齿轮箱可能具有多重 AM-FM 调制，单一边频带阈值未必具有故障区分力；不能据此宣称所有传统 FFT 分析失效。当前 VMD AM/FM 是研究限定组合，搜索调制频率/阶次，真实效果和生产阈值未验证，见 [复合契约](composite/INDEX.md)。
 
 **行星齿轮箱特征阶次**（WTgearbox参数：sun=28, ring=100, planet=36, $N_p=4$）：
 
@@ -681,7 +681,9 @@ $$d(t) = x_{TSA}(t) - R(t)$$
 | mesh_order | $Z_{ring} \cdot Z_{sun} / (Z_{sun} + Z_{ring})$ | 21.875 |
 | carrier_order | $Z_{sun} / (Z_{sun} + Z_{ring})$ | 0.21875 |
 | sun_fault_order | $Z_{ring} / (Z_{sun} + Z_{ring}) \cdot N_p$ | 3.125 |
-| planet_fault_order | $Z_{ring} / (Z_{sun} + Z_{ring})$ | 0.78125 |
+| planet_single_mesh_event_order | $mesh\_order/Z_{planet}$ | 0.6076389 |
+
+表中为太阳轴参考；行星轮单次/双次啮合分别是运动学候选，不直接命名任意局部损伤，参考轴和固定构件必须明确。旧式 `Zring/(Zsun+Zring)` 只是 sun 相对 carrier 转速比，不是行星轮自转事件阶次。
 
 **VMD幅频联合解调流程**：
 

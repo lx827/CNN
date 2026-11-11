@@ -115,13 +115,13 @@ class FixedAxisGearApiTest(unittest.TestCase):
             best_gear = data["gear"]
             self.assertIsNone(best_gear["na4"])
             self.assertIsNone(best_gear["fault_indicators"]["na4"]["warning"])
-            self.assertIsInstance(data["fault_label"], str)
+            self.assertIn(data["diagnosis_conclusion"], {"normal", "warning", "fault"})
 
             zero_response = client.get("/api/data/TEST-FIXED-ENSEMBLE/2/1/analyze")
             self.assertEqual(zero_response.status_code, 200, zero_response.text)
             zero_data = zero_response.json()["data"]
             self.assertIsNone(zero_data["health_score"])
-            self.assertEqual(zero_data["status"], "indeterminate")
+            self.assertEqual(zero_data["evaluation_status"], "indeterminate")
         finally:
             app.dependency_overrides.pop(get_db, None)
             app.dependency_overrides.pop(optional_auth, None)

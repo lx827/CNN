@@ -33,7 +33,7 @@
           <div class="indicator" :class="sensor.status"></div>
           <div class="sensor-info">
             <div class="sensor-name">{{ sensor.name }}</div>
-            <div class="sensor-status">{{ sensor.statusText }}</div>
+            <div class="sensor-status">诊断：{{ sensor.statusText }}<span v-if="sensor.is_offline"> · 设备离线</span></div>
           </div>
         </div>
       </el-col>
@@ -87,8 +87,11 @@ defineEmits(['update:selectedDevice', 'collect'])
   width: 12px;
   height: 12px;
   border-radius: 50%;
+  background: #909399;
+}
+
+.indicator.success {
   background: #52C41A;
-  box-shadow: 0 0 8px rgba(82, 196, 26, 0.5);
 }
 
 .indicator.warning {

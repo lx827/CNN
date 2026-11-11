@@ -7,6 +7,7 @@
       :warning="warningCount"
       :fault="faultCount"
       :offline="offlineCount"
+      :unknown="unknownCount"
     />
 
     <!-- 设备健康度卡片列表 -->
@@ -33,7 +34,7 @@
           <el-card>
             <template #header>
               <div class="card-header">
-                <span>{{ selectedDevice.deviceName }} — 故障类型分布</span>
+                <span>{{ selectedDevice.deviceName }} — 故障证据分布</span>
               </div>
             </template>
             <div ref="pieChart" class="chart"></div>
@@ -54,20 +55,20 @@
               <el-table-column prop="name" label="部件名称" />
               <el-table-column label="状态" width="120">
                 <template #default="{ row }">
-                  <el-tag :type="getStatusType(row.status)">
-                    {{ getStatusText(row.status) }}
+                  <el-tag :type="getDiagnosisView(row).tagType">
+                    {{ getDiagnosisView(row).label }}
                   </el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="健康度" width="300">
                 <template #default="{ row }">
-                  <span v-if="row.status === 'offline'" class="offline-health">
-                    <el-icon><Warning /></el-icon> 离线，暂无数据
+                  <span v-if="getDiagnosisView(row).scoreText === '-'" class="offline-health">
+                    暂无独立通道评分
                   </span>
                   <el-progress
                     v-else
-                    :percentage="row.health || 0"
-                    :color="getHealthColor(row.health || 0)"
+                    :percentage="row.health_score"
+                    :status="getDiagnosisView(row).tone === 'danger' ? 'exception' : getDiagnosisView(row).tone"
                     :stroke-width="18"
                   />
                 </template>
@@ -84,10 +85,11 @@
 import SummaryCards from '../components/dashboard/SummaryCards.vue'
 import DeviceCardList from '../components/dashboard/DeviceCardList.vue'
 import { useDashboard } from '../composables/useDashboard'
+import { getDiagnosisView } from '../utils/diagnosisStatus'
 
 const {
-  devices, selectedDevice, normalCount, warningCount, faultCount, offlineCount,
-  gaugeChart, pieChart, loadData, selectDevice, getStatusType, getStatusText, getHealthColor,
+  devices, selectedDevice, normalCount, warningCount, faultCount, offlineCount, unknownCount,
+  gaugeChart, pieChart, loadData, selectDevice,
 } = useDashboard()
 </script>
 

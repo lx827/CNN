@@ -35,63 +35,17 @@ def get_dashboard(db: Session = Depends(get_db)):
     """
     返回设备总览所需的所有数据
     """
-    # 1. 设备列表（含离线判断）
-    now = datetime.now(timezone.utc)
+    from app.services.diagnosis_store import summary_state
     devices = db.query(Device).all()
-    device_list = []
-    for d in devices:
-        is_offline = not d.is_online
-        effective_status = "offline" if is_offline else d.status
-        device_list.append({
-            "device_id": d.device_id,
-            "name": d.name,
-            "health_score": d.health_score,
-            "status": effective_status,
-            "original_status": d.status,
-            "is_offline": is_offline,
-            "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
-            "runtime_hours": d.runtime_hours,
-            "channel_count": d.channel_count,
-            "channel_names": d.channel_names,
-        })
-
-    # 2. 最新诊断结果（取每个设备最新一条）
-    latest_diag = {}
-    summaries = latest_diagnosis_summaries(db, [d.device_id for d in devices])
-    diag_map = {diag.device_id: diag for diag in summaries}
-    for d in devices:
-        is_offline = not d.is_online
-        diag = diag_map.get(d.device_id)
-        if diag:
-            fault_probs = diag.fault_probabilities or {}
-            # 将频率指示器（BPFO/BPFI/BSF）映射为标准中文故障名，合并同名概率
-            mapped = {}
-            for k, v in fault_probs.items():
-                k_mapped = BEARING_FAULT_MAP.get(k, k)  # BPFO→外圈, BPFI→内圈, BSF→滚动体
-                if k_mapped in VALID_FAULT_TYPES:
-                    mapped[k_mapped] = max(mapped.get(k_mapped, 0), v)
-            # 加上故障类型外的通用项
-            if "正常运行" in fault_probs and "正常运行" not in mapped:
-                mapped["正常运行"] = fault_probs["正常运行"]
-            latest_diag[d.device_id] = {
-                "health_score": diag.health_score,
-                "fault_probabilities": mapped,
-                "status": diag.status,
-            }
-        elif is_offline:
-            # 离线设备不给默认值，标记为无数据
-            latest_diag[d.device_id] = {
-                "health_score": None,
-                "fault_probabilities": {},
-                "status": "offline",
-            }
-        else:
-            # 还没有分析过，给默认值
-            latest_diag[d.device_id] = {
-                "health_score": 87,
-                "fault_probabilities": {"齿轮磨损": 0.15, "轴承内圈故障": 0.05, "正常运行": 0.80},
-                "status": "normal",
-            }
+    device_list = [{
+        "device_id": device.device_id, "name": device.name, **summary_state(device),
+        "is_offline": device.is_online == 0, "last_seen_at": device.last_seen_at,
+        "runtime_hours": device.runtime_hours, "channel_count": device.channel_count,
+        "channel_names": device.channel_names,
+    } for device in devices]
+    summaries = latest_diagnosis_summaries(db, [device.device_id for device in devices])
+    by_device = {value.device_id: value for value in summaries}
+    latest_diag = {device.device_id: summary_state(by_device.get(device.device_id)) for device in devices}
 
     # 3. 告警统计
     counts = db.query(

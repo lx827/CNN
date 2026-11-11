@@ -11,6 +11,7 @@
 | 齿轮与行星箱 | [gear/INDEX.md](gear/INDEX.md) | #71 定轴 Pipeline；#72 固定齿圈行星运动学、方法指标与可比基线评估 | [测试指南](../tests/INDEX.md) |
 | 小波与模态分解 | [decomposition/INDEX.md](decomposition/INDEX.md) | #74 DWT/WP、EMD 族、VMD，独立分量指标、选择与质量门控 | [测试指南](../tests/INDEX.md) |
 | 基础数值表示 | [numeric/INDEX.md](numeric/INDEX.md) | #76 / PR #81 FFT/STFT/倒谱、统计、通用包络和显示抽点 | [测试指南](../tests/INDEX.md) |
+| 复合研究流程 | [composite/INDEX.md](composite/INDEX.md) | #75 VMD AM/FM、四阶 MSB、CVS→MED→MSB、VMD→ICA、MSWPEE；专用研究入口，不进生产融合 | [测试指南](../tests/INDEX.md) |
 
 ## 理论与系统组合
 

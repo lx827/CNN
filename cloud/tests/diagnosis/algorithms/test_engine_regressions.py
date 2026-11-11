@@ -16,7 +16,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.services.diagnosis import DiagnosisEngine, GearMethod
 from app.services.diagnosis.ensemble import run_research_ensemble
-from app.services.diagnosis.health_score import _has_diagnosis_evidence
 from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum
 from data_paths import HUSTBEAR_DIR, CW_DIR
 
@@ -45,7 +44,8 @@ def test_no_params_uses_statistical_fault_indicators():
     assert "BPFO" not in indicators
     assert "envelope_peak_snr" in indicators
     assert "order_kurtosis" in result["gear"]["fault_indicators"]
-    assert result["health_score"] < 100
+    assert result["health_score"] is None
+    assert result["diagnosis_conclusion"] == "unknown"
 
 
 def test_advanced_gear_uses_tsa_residual():
@@ -95,7 +95,7 @@ def test_dataset_sample_fault_scores_when_available():
     healthy_result = engine.analyze_comprehensive(healthy, FS)
     fault_result = engine.analyze_comprehensive(fault, FS)
 
-    assert fault_result["health_score"] <= healthy_result["health_score"] + 10
+    assert fault_result["health_score"] is None and healthy_result["health_score"] is None
 
 
 def test_cw_dataset_can_be_loaded_when_available():
@@ -112,11 +112,11 @@ def test_cw_dataset_can_be_loaded_when_available():
 def test_zero_signal_comprehensive_is_indeterminate_not_healthy():
     engine = DiagnosisEngine(gear_teeth={"input": 18})
     result = engine.analyze_comprehensive(np.zeros(FS), FS, rot_freq=20.0, skip_bearing=True)
-    assert result["gear"]["analysis_status"] == "indeterminate"
+    assert result["gear"]["analysis"]["status"] == "indeterminate"
     assert result["gear"]["order_peak_concentration"] is None
     assert result["gear"]["fault_indicators"]["order_kurtosis"]["status"] == "not_evaluable"
     assert result["health_score"] is None
-    assert result["status"] == "indeterminate"
+    assert result["evaluation_status"] == "indeterminate"
 
 
 def test_zero_signal_ensemble_paths_are_indeterminate_not_healthy():
@@ -131,7 +131,7 @@ def test_zero_signal_ensemble_paths_are_indeterminate_not_healthy():
             signal, 2048, rot_freq=16, profile="runtime", **kwargs,
         )
         assert result["health_score"] is None, name
-        assert result["status"] == "indeterminate", name
+        assert result["evaluation_status"] == "indeterminate", name
 
 
 def test_zero_signal_all_methods_paths_are_indeterminate_not_healthy():
@@ -150,18 +150,7 @@ def test_zero_signal_all_methods_paths_are_indeterminate_not_healthy():
             signal, 2048, rot_freq=16, skip_bearing=skip_bearing,
         )
         assert result["health_score"] is None, name
-        assert result["status"] == "indeterminate", name
-
-
-def test_indeterminate_path_does_not_erase_other_valid_evidence():
-    valid_bearing = {"evaluation": {"status": "evaluated"}}
-    indeterminate_gear = {
-        "analysis_status": "indeterminate",
-        "evaluation": {"status": "indeterminate"},
-    }
-    assert _has_diagnosis_evidence((valid_bearing, indeterminate_gear), {"rms": 1.0})
-    assert not _has_diagnosis_evidence((indeterminate_gear,), {"rms": 1.0})
-    assert not _has_diagnosis_evidence((valid_bearing,), {"rms": 0.0})
+        assert result["evaluation_status"] == "indeterminate", name
 
 
 if __name__ == "__main__":
@@ -173,5 +162,4 @@ if __name__ == "__main__":
     test_zero_signal_comprehensive_is_indeterminate_not_healthy()
     test_zero_signal_ensemble_paths_are_indeterminate_not_healthy()
     test_zero_signal_all_methods_paths_are_indeterminate_not_healthy()
-    test_indeterminate_path_does_not_erase_other_valid_evidence()
     print("test_engine_regressions: OK")

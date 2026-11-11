@@ -1631,7 +1631,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosisResponse"
+                }
               }
             }
           },
@@ -1920,7 +1922,6 @@
           "振动数据查看"
         ],
         "summary": "Get Channel Gear",
-        "description": "实时计算某批次某通道的齿轮诊断分析\n支持标准边频带分析和高级时域指标。",
         "operationId": "get_channel_gear_api_data__device_id___batch_index___channel__gear_get",
         "security": [
           {
@@ -1956,28 +1957,15 @@
             }
           },
           {
-            "name": "detrend",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "是否线性去趋势",
-              "default": false,
-              "title": "Detrend"
-            },
-            "description": "是否线性去趋势"
-          },
-          {
             "name": "method",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string",
-              "description": "齿轮诊断方法: standard/advanced",
+              "pattern": "^(standard|advanced)$",
               "default": "standard",
               "title": "Method"
-            },
-            "description": "齿轮诊断方法: standard/advanced"
+            }
           },
           {
             "name": "denoise",
@@ -1985,11 +1973,26 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
               "default": "none",
               "title": "Denoise"
-            },
-            "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+            }
+          },
+          {
+            "name": "rot_freq_hz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rot Freq Hz"
+            }
           }
         ],
         "responses": {
@@ -1997,7 +2000,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosisResponse"
+                }
               }
             }
           },
@@ -2020,7 +2025,6 @@
           "振动数据查看"
         ],
         "summary": "Get Channel Analyze",
-        "description": "综合故障诊断分析（新诊断引擎统一入口）\n\n支持前端配置选择诊断策略、轴承方法、齿轮方法和预处理方法。\n返回轴承诊断、齿轮诊断、时域特征和综合健康度评分。",
         "operationId": "get_channel_analyze_api_data__device_id___batch_index___channel__analyze_get",
         "security": [
           {
@@ -2056,64 +2060,31 @@
             }
           },
           {
-            "name": "detrend",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "是否线性去趋势",
-              "default": false,
-              "title": "Detrend"
-            },
-            "description": "是否线性去趋势"
-          },
-          {
-            "name": "strategy",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "诊断策略: standard/advanced/expert",
-              "default": "standard",
-              "title": "Strategy"
-            },
-            "description": "诊断策略: standard/advanced/expert"
-          },
-          {
-            "name": "bearing_method",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "轴承方法: envelope/filter_bank_sk/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope",
-              "default": "envelope",
-              "title": "Bearing Method"
-            },
-            "description": "轴承方法: envelope/filter_bank_sk/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"
-          },
-          {
-            "name": "gear_method",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "齿轮方法: standard/advanced",
-              "default": "standard",
-              "title": "Gear Method"
-            },
-            "description": "齿轮方法: standard/advanced"
-          },
-          {
             "name": "denoise",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string",
-              "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
               "default": "none",
               "title": "Denoise"
-            },
-            "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+            }
+          },
+          {
+            "name": "rot_freq_hz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rot Freq Hz"
+            }
           }
         ],
         "responses": {
@@ -2121,7 +2092,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosisResponse"
+                }
               }
             }
           },
@@ -2144,7 +2117,6 @@
           "振动数据查看"
         ],
         "summary": "Get Channel Full Analysis",
-        "description": "全算法对比分析（运行所有轴承方法和所有齿轮方法）\n\n返回所有诊断方法的详细结果和检出结论对比，便于前端展示：\n- 各轴承方法（包络 / Kurtogram / CPW / MED）分别检出了什么故障\n- 各齿轮方法（标准边频带 / 高级指标）的详细参数和阈值判定\n- 综合结论和建议",
         "operationId": "get_channel_full_analysis_api_data__device_id___batch_index___channel__full_analysis_get",
         "security": [
           {
@@ -2180,30 +2152,109 @@
             }
           },
           {
-            "name": "detrend",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "是否线性去趋势",
-              "default": false,
-              "title": "Detrend"
-            },
-            "description": "是否线性去趋势"
-          },
-          {
             "name": "denoise",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string",
-              "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
               "default": "none",
               "title": "Denoise"
-            },
-            "description": "预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+            }
+          },
+          {
+            "name": "rot_freq_hz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rot Freq Hz"
+            }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosisResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/composite-analysis": {
+      "post": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Post Channel Composite Analysis",
+        "description": "显式研究组合；CVS相位记录放请求体，既不猜空间零位也不存诊断缓存。",
+        "operationId": "post_channel_composite_analysis_api_data__device_id___batch_index___channel__composite_analysis_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompositeResearchRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2759,7 +2810,7 @@
           "振动数据查看"
         ],
         "summary": "Update Batch Diagnosis",
-        "description": "更新批次诊断结果（order_analysis / rot_freq）。\n用于阶次追踪重新计算后，把新的转频写回数据库覆盖原始数据。",
+        "description": "只更新准确 batch/none 转频缓存；不创建诊断或修改通道缓存。",
         "operationId": "update_batch_diagnosis_api_data__device_id___batch_index__diagnosis_put",
         "security": [
           {
@@ -2823,7 +2874,6 @@
           "振动数据查看"
         ],
         "summary": "Get Channel Diagnosis",
-        "description": "查询指定批次通道的诊断结果。\n优先返回通道级 engine_result，如果没有则返回批次级诊断记录。\n若指定 denoise_method，优先匹配该去噪方法的结果。",
         "operationId": "get_channel_diagnosis_api_data__device_id___batch_index___channel__diagnosis_get",
         "security": [
           {
@@ -2863,18 +2913,10 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "去噪方法过滤: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd",
+              "type": "string",
+              "default": "none",
               "title": "Denoise Method"
-            },
-            "description": "去噪方法过滤: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"
+            }
           }
         ],
         "responses": {
@@ -2882,7 +2924,84 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosisResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数不合法，或指定去噪未产生有效表示（not_evaluable、method、reason）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataViewUnprocessableResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data/{device_id}/{batch_index}/{channel}/reevaluate": {
+      "post": {
+        "tags": [
+          "振动数据查看"
+        ],
+        "summary": "Reevaluate Channel",
+        "operationId": "reevaluate_channel_api_data__device_id___batch_index___channel__reevaluate_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "batch_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Index"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "denoise_method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "none",
+              "title": "Denoise Method"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosisResponse"
+                }
               }
             }
           },
@@ -2905,7 +3024,6 @@
           "振动数据查看"
         ],
         "summary": "Reanalyze Batch",
-        "description": "重新分析指定批次的所有通道数据",
         "operationId": "reanalyze_batch_api_data__device_id___batch_index__reanalyze_post",
         "security": [
           {
@@ -2937,7 +3055,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosisResponse"
+                }
               }
             }
           },
@@ -2960,7 +3080,6 @@
           "振动数据查看"
         ],
         "summary": "Reanalyze All Batches",
-        "description": "重新分析指定设备的所有批次数据，逐批次串行执行以避免 OOM",
         "operationId": "reanalyze_all_batches_api_data__device_id__reanalyze_all_post",
         "security": [
           {
@@ -4833,18 +4952,6 @@
       },
       "Body_update_batch_diagnosis_api_data__device_id___batch_index__diagnosis_put": {
         "properties": {
-          "order_analysis": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Order Analysis"
-          },
           "rot_freq": {
             "anyOf": [
               {
@@ -4859,6 +4966,55 @@
         },
         "type": "object",
         "title": "Body_update_batch_diagnosis_api_data__device_id___batch_index__diagnosis_put"
+      },
+      "CompositeResearchRequest": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "composite_vmd_amfm",
+              "composite_msb",
+              "composite_cvs_med_msb",
+              "composite_vmd_ica",
+              "composite_mswpee"
+            ],
+            "title": "Method"
+          },
+          "rot_freq_hz": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rot Freq Hz"
+          },
+          "options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Options"
+          },
+          "alignment": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alignment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method"
+        ],
+        "title": "CompositeResearchRequest"
       },
       "CreateJob": {
         "properties": {
@@ -4936,6 +5092,109 @@
         ],
         "title": "DenoisingFailureDetail"
       },
+      "DiagnosisConclusion": {
+        "type": "string",
+        "enum": [
+          "normal",
+          "warning",
+          "fault",
+          "unknown"
+        ],
+        "title": "DiagnosisConclusion"
+      },
+      "DiagnosisResponse": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "title": "Code",
+            "default": 200
+          },
+          "data": {
+            "$ref": "#/components/schemas/DiagnosisSnapshot"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "DiagnosisResponse"
+      },
+      "DiagnosisSnapshot": {
+        "properties": {
+          "evaluation_status": {
+            "$ref": "#/components/schemas/EvaluationStatus"
+          },
+          "diagnosis_conclusion": {
+            "$ref": "#/components/schemas/DiagnosisConclusion"
+          },
+          "health_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Score"
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "none",
+              "partial",
+              "complete"
+            ],
+            "title": "Coverage"
+          },
+          "contract_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Contract Version"
+          },
+          "evaluations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Evaluations"
+          },
+          "deductions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Deductions"
+          },
+          "fault_propositions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fault Propositions"
+          },
+          "recommendation": {
+            "type": "string",
+            "title": "Recommendation"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "evaluation_status",
+          "diagnosis_conclusion",
+          "health_score",
+          "coverage",
+          "contract_version",
+          "evaluations",
+          "deductions",
+          "fault_propositions",
+          "recommendation"
+        ],
+        "title": "DiagnosisSnapshot"
+      },
       "DirectoryResult": {
         "properties": {
           "id": {
@@ -4970,6 +5229,15 @@
           "id"
         ],
         "title": "DirectoryResult"
+      },
+      "EvaluationStatus": {
+        "type": "string",
+        "enum": [
+          "evaluated",
+          "indeterminate",
+          "not_evaluable"
+        ],
+        "title": "EvaluationStatus"
       },
       "HTTPValidationError": {
         "properties": {

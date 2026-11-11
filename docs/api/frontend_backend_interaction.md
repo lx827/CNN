@@ -87,13 +87,13 @@
 | `ResearchDiagnosis.vue::loadDevices()` | `api/data.js::getAllDeviceData()` | `GET /api/data/devices` | `data_view/core.py::get_all_device_data` | 加载设备列表（复用 DataView API） |
 | `ResearchDiagnosis.vue::loadMethodInfo()` | `api/diagnosis.js::getMethodInfo()` | `GET /api/data/method-info` | `data_view/research.py::get_method_info` | 获取可用分析方法列表 |
 | `ResearchDiagnosis.vue::runAnalysis()` | `api/diagnosis.js::getChannelMethodAnalysis()` | `GET /api/data/{id}/{batch}/{ch}/method-analysis` | `data_view/research.py` | ⏳ async：指定方法单分析 |
-| `ResearchDiagnosis.vue::runAnalysis()` | `api/diagnosis.js::getChannelResearchAnalysis()` | `GET /api/data/{id}/{batch}/{ch}/research-analysis` | `data_view/research.py` | ⏳ async：集成诊断（返回 ensemble 投票/置信度/D-S 融合） |
+| `ResearchDiagnosis.vue::runAnalysis()` | `api/diagnosis.js::getChannelResearchAnalysis()` | `GET /api/data/{id}/{batch}/{ch}/research-analysis` | `data_view/research.py` | async：顶层 Domain、对象 Evidence/依赖融合，不写生产缓存 |
 
 **数据流说明**：
 
-- **实时分析**：`ResearchDiagnosis.vue` 点击"运行" → `GET /research-analysis` → `run_research_ensemble()` → 返回完整 ensemble 数据（含 bearing_votes/gear_votes/ds_fusion 等）
-- **缓存读取**：`DataView.vue` 查看诊断 → `GET /diagnosis` → 从 `diagnosis.full_analysis` 列读取（后台分析时 lifespan.py 已保存通道级 full_analysis），返回与 `/research-analysis` 相同结构的数据
-- **旧数据兼容**：若 `full_analysis` 为空，回退到 `order_analysis.channels` 或 `order_analysis.engine_result` 提取
+- **实时分析**：Research 运行 → research-analysis → 对象 Pipeline 与统一 assessment → 顶层 Domain、局部完整结果与依赖融合；不返回旧 votes/best 协议。
+- **缓存读取**：DataView 使用真实 channel+denoise_method → GET diagnosis → 精确四元键最新 engine_result；没有缓存 404，旧 JSON 返回规范 unknown/null 与需重新分析原因，不跨方法/通道回退。
+- **两种重新计算**：POST reevaluate 只重评已有规范 Evidence，旧 JSON 为 409；POST reanalyze 运行统一批次事务并返回 Domain+channels，随后前端选择实际通道。PUT diagnosis 只发 `{rot_freq}`，不写旧 order_analysis。
 
 > **⚠️ 影响前端**：`ResearchDiagnosis.vue` 依赖 `method-info` 返回的方法元数据来动态渲染分析选项，修改方法列表结构需同步前端。
 
@@ -101,7 +101,13 @@
 
 **行星接入（2026-11-11）**：设置页按通道保存完整几何、`reference_axis` 与 `fixed_member`，研究页从 method-info 只显示当前四条基础方法；method-analysis/gear_advanced、Engine、后台与 ensemble 共用行星业务入口。`PlanetaryResult.vue` 配合 `planetaryDiagnosis.js` 展示机械模型、同步轴、原始指标、事件候选与 `diagnosis_conclusion`，各综合/单方法结果区复用该组件。基线不足显示“不可评估”，不从 SER/矩或候选峰推导具体损伤；未校准结果不作为正常票或告警。旧行星散列字段和旧 Level 1–5 展示已退役。
 
-**去噪失败链路（2026-11-11）**：DataView 所有计算/导出与研究入口消费结构化 HTTP 422 `detail {status:not_evaluable,method,reason}`。失败后不绘制替代原信号并标成功，不用旧缓存充当本次成功结果；未知方法也拒绝。后台失败通道传播 `health_score=null/status=indeterminate` 与原因，不走规则回退，健康阈值告警跳过未知。runtime profile 实际执行配置的去噪方法，不能继续把首个 none 当作设备配置。完整集成/领域状态模型仍由 #77/#84 后续收敛。
+**失败链路（2026-11-11）**：去噪执行错误可返回结构化 HTTP 422 detail，其他业务参数错误可为字符串/参数校验数组，由共享 formatErrorMessage 处理。合法前提不足也可能是 HTTP 200 的 unknown/null Domain，不能与执行失败混为成功正常。后台保留局部未知与原因、总体 coverage；不转规则备用成功，告警只消费有效统一结论。runtime 使用实际配置去噪。
+
+**复合研究（#75）**：method-info 的 category=composite 五方法在单方法模式下，经 `buildCompositeRequest` → `api/diagnosis.js::runCompositeResearch` → POST `composite-analysis`。工具栏采集显式恒转频和 CVS 对齐 JSON；GET method-analysis 仍可查看无相位时的明确缺前提。`CompositeResult.vue` 显示阶段、近似/失败原因、实际单位、模态中心/ICA 秩/CVS 圈数与 AM/FM/MSB/熵曲线，固定提示研究限定和未知结论；没有生产分数或投票条目。研究运行不写生产缓存；all/ensemble 不隐式纳入这些组合。
+
+**#77/#84 一次性状态迁移**：生产与研究各局部结果顶层直接是完整 Domain，evaluation_status 与 diagnosis_conclusion 分开，health_score 允许 null，coverage/局部 evaluations 保留。getDiagnosisView 是唯一诊断颜色/文字/分数适配，DiagnosisCoverage 显示 partial 与局部 unknown/reason；不读旧 status/votes/best/probability，也不从健康分或 RMS 重判状态。Dashboard/Monitor/详情/综合/谱/齿轮/研究汇总均使用此入口；在线、任务和告警处理状态单独保留。
+
+Research EnsembleResultPanels 展示对象 Evidence/依赖组/支持量/冲突/扣分与覆盖，不再将多个同源包络变体计作独立票。研究 all/ensemble 只计算返回，不写生产缓存；生产 gear/analyze/full-analysis 则成功追加精确通道缓存，批次摘要仅由统一 process_batch 保存。
 
 ---
 

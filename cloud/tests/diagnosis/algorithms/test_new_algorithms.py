@@ -69,20 +69,8 @@ print(f"  健康信号LMS: kurt_before={info_h_lms['kurtosis_before']}, kurt_aft
 
 print("  ✓ LMS 滤波完成")
 
-# ── 2. BSS/FastICA 盲源分离 ──
-print("\n── 2. BSS/FastICA 盲源分离 ──")
-from app.services.diagnosis.bss import vmd_ica_separation
-
-bss_result = vmd_ica_separation(ir_signal, FS, K=3, alpha=2000)
-print(f"  VMD modes: {bss_result.get('n_modes', 0)}")
-print(f"  VMD kurtoses: {bss_result.get('vmd_kurtoses', [])}")
-print(f"  ICA kurtoses: {bss_result.get('ica_kurtoses', [])}")
-print(f"  Selected component index: {bss_result.get('selected_component_index', -1)}")
-if "error" not in bss_result:
-    fc = bss_result.get("fault_component", np.zeros(10))
-    fc_kurt = float(np.mean(fc**4) / (np.var(fc)**2 + 1e-12))
-    print(f"  Fault component kurtosis: {fc_kurt:.2f}")
-print("  ✓ BSS 分离完成")
+# BSS/FastICA 的已知独立源、SVD数值秩、物理尺度逆映射及VMD真实串联
+# 已迁至 test_composite_pipelines.py；不以打印字段/默认零数组冒充故障分离验证。
 
 # SC/SCoh 数学与业务验证已迁至 test_bearing_cyclostationary_advanced.py 和
 # test_bearing_advanced_business.py；不使用替代型号或把 CW 变速数据当恒速证据。

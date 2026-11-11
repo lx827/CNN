@@ -1,6 +1,5 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 from app.database import get_db
@@ -101,14 +100,11 @@ async def get_channel_order(
 
         # 仅更新明确的批次级记录；不创建“正常”诊断，也不触碰通道/去噪缓存。
         try:
-            batch_record_scope = or_(
-                and_(Diagnosis.channel == 0, Diagnosis.denoise_method == "none"),
-                and_(Diagnosis.channel.is_(None), Diagnosis.denoise_method.is_(None)),
-            )
             diag = db.query(Diagnosis).filter(
                 Diagnosis.device_id == device_id,
                 Diagnosis.batch_index == batch_index,
-                batch_record_scope,
+                Diagnosis.channel == 0,
+                Diagnosis.denoise_method == "none",
             ).order_by(Diagnosis.analyzed_at.desc(), Diagnosis.id.desc()).first()
             if diag is not None:
                 existing_order = diag.order_analysis or {}
@@ -117,7 +113,6 @@ async def get_channel_order(
                 diag.order_analysis = existing_order
                 flag_modified(diag, "order_analysis")
                 diag.rot_freq = round(rot_freq_val, 3)
-                diag.analyzed_at = datetime.now(timezone.utc)
                 db.commit()
         except Exception as db_err:
             logger.warning(f"阶次追踪转频写入数据库失败: {db_err}")

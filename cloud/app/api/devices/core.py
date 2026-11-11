@@ -4,6 +4,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.services.diagnosis_store import summary_state
 from app.models import Device
 
 router = APIRouter()
@@ -27,8 +28,7 @@ def get_devices(db: Session = Depends(get_db)):
                 "channel_names": d.channel_names,
                 "sample_rate": d.sample_rate,
                 "window_seconds": d.window_seconds,
-                "health_score": d.health_score,
-                "status": d.status,
+                **summary_state(d),
                 "runtime_hours": d.runtime_hours,
                 "upload_interval": d.upload_interval,
                 "task_poll_interval": d.task_poll_interval,

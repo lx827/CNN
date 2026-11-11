@@ -91,7 +91,7 @@
         </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">
+            <el-tag :type="getProcessingTagType(row.status)">
               {{ row.status }}
             </el-tag>
           </template>
@@ -170,7 +170,7 @@
           <div style="white-space: pre-wrap; line-height: 1.6;">{{ selectedAlarm.suggestion }}</div>
         </el-descriptions-item>
         <el-descriptions-item label="处理状态">
-          <el-tag :type="getStatusType(selectedAlarm.status)">
+          <el-tag :type="getProcessingTagType(selectedAlarm.status)">
             {{ selectedAlarm.status }}
           </el-tag>
         </el-descriptions-item>
@@ -230,7 +230,7 @@ const getLevelText = (level) => {
   return map[level] || '未知'
 }
 
-const getStatusType = (status) => {
+const getProcessingTagType = (status) => {
   const map = { 待处理: 'warning', 已处理: 'success' }
   return map[status] || 'info'
 }
