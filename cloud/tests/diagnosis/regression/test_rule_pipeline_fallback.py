@@ -32,6 +32,49 @@ def carrier_signal():
 
 
 class RulePipelineFallbackTests(unittest.TestCase):
+    def test_real_auto_speed_healthy_tones_do_not_become_gear_wear(self):
+        time = np.arange(FS * 2) / FS
+        signal = np.sin(2 * np.pi * 25 * time) + 0.2 * np.sin(2 * np.pi * 2500 * time)
+        device = SimpleNamespace(gear_teeth={"input": 18}, bearing_params=None)
+        result = rule_based._rule_based_analyze({"ch1": signal}, FS, device)
+        self.assertEqual((result["status"], result["health_score"]), ("normal", 100))
+        self.assertEqual(result["fault_probabilities"], {"正常运行": 1.0})
+        # 保留原始谱统计阈值；修复发生在中央门控后的业务分类。
+        indicators = result["order_analysis"]["gear"]["fault_indicators"]
+        self.assertTrue(indicators["order_peak_concentration"]["critical"])
+        self.assertTrue(indicators["order_kurtosis"]["critical"])
+        self.assertEqual(result["order_analysis"]["deductions"], [])
+
+    def test_gear_classification_uses_central_domain_evidence(self):
+        time = np.arange(FS * 2) / FS
+        signal = np.sin(2 * np.pi * 25 * time) + 0.2 * np.sin(2 * np.pi * 2500 * time)
+        device = SimpleNamespace(gear_teeth={"input": 18}, bearing_params=None)
+        # 中央评分门控是此测试的业务边界：只改变其输出，保持原始指标相同。
+        for deduction, expected_label in (("gear_order_stat_critical", None),
+                                           ("gear_ser_critical", "齿轮异常"),
+                                           ("gear_sb_critical", "齿轮异常")):
+            with self.subTest(deduction=deduction), patch.object(
+                rule_based, "_compute_health_score", return_value=(70, "warning", [(deduction, 8.0)]),
+            ):
+                result = rule_based._rule_based_analyze({"ch1": signal}, FS, device)
+            self.assertEqual(result["status"], "warning")
+            self.assertNotIn("齿轮磨损", result["fault_probabilities"])
+            if expected_label:
+                self.assertGreater(result["fault_probabilities"][expected_label], 0.0)
+            else:
+                self.assertEqual(result["fault_probabilities"], {})
+
+    def test_nested_gear_configuration_requires_mapping_after_channel_selection(self):
+        signal = carrier_signal()
+        for value in ([18], [], False, "18"):
+            with self.subTest(value=value):
+                device = SimpleNamespace(gear_teeth={"1": value}, bearing_params=None)
+                result = rule_based._rule_based_analyze({"ch1": signal}, FS, device)
+                self.assertEqual(result["status"], "indeterminate")
+                self.assertIsNone(result["health_score"])
+                self.assertEqual(result["fault_probabilities"], {})
+                self.assertEqual(result["order_analysis"]["reason"], "invalid_gear_configuration")
+
     def test_bearing_consumes_actual_channel_geometry_and_central_score(self):
         signal = carrier_signal()
         device = SimpleNamespace(
