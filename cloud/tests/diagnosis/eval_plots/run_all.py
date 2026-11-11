@@ -212,7 +212,7 @@ def run_42_hust_binary():
     # 跳过CEEMDAN（太慢）——用"-"标注
     METHODS = [
         ("标准包络", BearingMethod.ENVELOPE, None),
-        ("Kurtogram", BearingMethod.KURTOGRAM, None),
+        ("Kurtogram", BearingMethod.FILTER_BANK_SK, None),
         ("CPW预白化", BearingMethod.CPW, None),
         ("MED增强", BearingMethod.MED, None),
         ("MCKD", BearingMethod.MCKD, None),
@@ -377,7 +377,7 @@ def run_43_ottawa_binary():
 
     METHODS = [
         ("标准包络", BearingMethod.ENVELOPE),
-        ("Kurtogram", BearingMethod.KURTOGRAM),
+        ("Kurtogram", BearingMethod.FILTER_BANK_SK),
         ("CPW预白化", BearingMethod.CPW),
         ("MED增强", BearingMethod.MED),
         ("MCKD", BearingMethod.MCKD),
@@ -728,7 +728,7 @@ def run_46_robustness():
     results = {"snr_levels": snr_levels, "methods": {}}
 
     for name_cn, method_val in [
-        ("包络", BearingMethod.ENVELOPE), ("Kurtogram", BearingMethod.KURTOGRAM),
+        ("包络", BearingMethod.ENVELOPE), ("Kurtogram", BearingMethod.FILTER_BANK_SK),
         ("MED", BearingMethod.MED), ("MCKD", BearingMethod.MCKD),
     ]:
         curve = []

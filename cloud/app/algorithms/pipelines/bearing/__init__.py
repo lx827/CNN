@@ -54,6 +54,17 @@ class BearingEnvelopePipeline:
         if not isfinite(rot_frequency_std_hz) or rot_frequency_std_hz < 0:
             raise ValueError("转频标准差必须是有限非负数")
         representation = compute_envelope(signal, sample_rate_hz, self.parameters)
+        return self.analyze_representation(
+            representation, rot_frequency_hz, rot_frequency_std_hz,
+        )
+
+    def analyze_representation(
+        self,
+        representation: EnvelopeRepresentation,
+        rot_frequency_hz: Optional[float] = None,
+        rot_frequency_std_hz: float = 0.0,
+    ) -> BearingEnvelopeAnalysis:
+        """分析已由高级方法生成的包络表示，不重复滤波、解调或 FFT。"""
         analysis = analyze_envelope_spectrum(
             representation.spectrum,
             geometry=self.geometry,

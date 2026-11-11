@@ -38,7 +38,7 @@ def test_analyzer_single_channel():
     sig, _, _ = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=15)
     device = MockDevice(
         diagnosis_strategy="advanced",
-        bearing_method="kurtogram",
+        bearing_method="filter_bank_sk",
         gear_method="standard",
         bearing_params={"n": 9, "d": 7.94, "D": 38.52, "alpha": 0},
         gear_teeth=None,
@@ -74,7 +74,7 @@ def test_analyzer_multi_channel():
 
     device = MockDevice(
         diagnosis_strategy="advanced",
-        bearing_method="kurtogram",
+        bearing_method="filter_bank_sk",
         gear_method="standard",
         bearing_params={"n": 9, "d": 7.94, "D": 38.52, "alpha": 0},
         gear_teeth={"input": 18},
@@ -108,7 +108,7 @@ def test_analyzer_no_params():
     sig, _, _ = bearing_outer_race(bpfo=90.0, rot_freq=25.0, duration=3.0, fs=FS, snr_db=15)
     device = MockDevice(
         diagnosis_strategy="advanced",
-        bearing_method="kurtogram",
+        bearing_method="filter_bank_sk",
         gear_method="standard",
         bearing_params=None,
         gear_teeth=None,

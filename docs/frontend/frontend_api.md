@@ -127,7 +127,13 @@ const data = await getRealtimeVibrationData('WTG-001', true);
 | `deleteSpecialBatches(deviceId)` | `deviceId: string` | 删除结果 | `DELETE /api/data/{deviceId}/special` | `DataView.vue`, `DeviceTable.vue` |
 | `exportChannelCSV(deviceId, batchIndex, channel, detrend, denoise)` | `deviceId: string`<br>`batchIndex: number`<br>`channel: number`<br>`detrend?: bool`<br>`denoise?: string` | 无（`window.open` 触发下载） | `GET /api/data/{deviceId}/{batchIndex}/{channel}/export` | `DataView.vue` |
 
-> **轴承包络响应契约（2026-11-08）**：上一节 `/envelope` 返回的 `data.spectrum` 为 `{frequency_hz, amplitude, amplitude_unit, scaling}`，图表横纵轴分别读取 `frequency_hz/amplitude`，幅值轴同时展示单位与缩放方式；`data.band` 为实际频带 `{low_hz, high_hz, center_hz, width_hz}`；`data.features` 为包络能量及故障频率能量比；`data.evaluation` 为 `{status, indicators}`。`status=indeterminate` 表示输入不足、不可判定，不能渲染成“正常”。SC/SCoh 的循环频率指标只从 `data.sc_scoh_indicators` 读取，此时可能 `spectrum=null`，页面展示专属指标而不创建空图表。前端不再读取 `envelope_freq`、`envelope_amp` 或轴承顶层 `fault_indicators`；齿轮及行星箱结果仍使用各自的 `fault_indicators`。
+> **轴承响应契约（2026-11-11）**：`data.spectrum` 为 `{frequency_hz, amplitude, amplitude_unit, scaling}`，图表读取实际单位与缩放；TEO 的幅值单位为输入单位平方。`band` 是实际频带，`features` 为指标，`evaluation {status,indicators}` 是独立评估。`indeterminate/not_evaluable` 不渲染为正常。SC/SCoh 通过 `evaluation_kind=sc_scoh` 读取同一规范 `evaluation.indicators`，没有普通谱时不创建空图；专属二维谱读取 `cyclic_spectrum` 的循环/载波 Hz、SC 和 SCoh。前端不回读旧 `sc_scoh_indicators`、`envelope_freq/envelope_amp` 或轴承顶层 `fault_indicators`。齿轮按自己的规范评估与兼容字段展示。
+
+高级方法选项使用 `filter_bank_sk` 的真实名称，不保留旧 `kurtogram`；CPW 需要重复 query 的 `comb_frequencies_hz` 与稳定性声明；MCKD 可传 `target_fault/target_frequency_hz/period_samples`。研究 API 封装通过 config 对象传递这些先验并使用重复 query 序列化，具体签名以源码为准。结果存在 `requested_method/fallback_reason` 时显示实际 MED 回退；`analysis_status/reason` 与评估状态分开显示。
+
+行星结果以 `is_planetary` 与 `method=planetary_gear` 进入专属组件。读取 `mechanical_model/sideband_analysis/metrics/planetary_methods/tsa/evaluation`；计算状态、`evaluation_status` 和 `diagnosis_conclusion` 分开。缺可比基线的 HTTP 200 不是健康，原始值可继续展示。公开方法只从 method-info 读取四个基础路径，旧复合标识不保留兼容调用。设置保存每通道 `sun/ring/planet/planet_count/reference_axis/fixed_member`，转频单位为所选轴 Hz；不从另一通道借参数。
+
+DataView 计算、CSV 与研究分析去噪失败会得到 HTTP 422 `detail {status:not_evaluable,method,reason}`；前端显示失败原因，不读取为成功 data、不将原信号当作去噪输出。健康分 `null` 与 `indeterminate` 显示未知；完整错误结构见 [后端 API](../api/backend_api.md)。
 
 ### 2.6 api/diagnosis.js — 诊断
 
@@ -695,7 +701,7 @@ import {
 | `rotFreq` | `number \| null` | `null` | 估计转频（Hz） |
 | `rotRpm` | `number \| null` | `null` | 估计转速（RPM） |
 
-**数据读取约定**：轴承评估行与特征频率分别读取 `bearing.evaluation.indicators` 的 `value/score/snr/significant` 和 `theory_hz/detected_hz`；只有真实峰值/背景比显示为 SNR，其他强度显示为 score。SC/SCoh 独立读取 `bearing.sc_scoh_indicators` 的 `theory_hz/scoh_peak/scoh_snr/significant/warning/critical`。齿轮仍读取 `gear.fault_indicators`，两套契约不得互相替换。
+**数据读取约定**：轴承统一读取 `bearing.evaluation.indicators`，由 `evaluation_kind` 区分包络与 SC/SCoh；频率读取相应的 `theory_hz/detected_hz` 或循环频率字段。真实 `snr`、一般 score 与 `coherence_background_ratio` 各自保留。定轴 `fault_indicators` 是规范评估兼容视图；行星交专属组件显示机械模型、原始指标与基线状态。
 
 **Emits**
 
@@ -800,7 +806,7 @@ import {
 | `useDashboard.js` | `Dashboard.vue` | `devices/selectedDevice` 等状态、`loadData()`(推送+轮询共享串行刷新)、`selectDevice()`、图表 ref(`gaugeChart/pieChart`)、状态映射工具 | `getStatusType/getStatusText/getHealthColor`(Dashboard 专属口径:critical 计故障、85/60 分档,勿与 utils/status.js 混用) |
 | `useMonitor.js` | `Monitor.vue` | `channels/params/sensors/collectDevices`、`requestCollect()`、`startPolling(taskId)`、`refreshLatestData()`(推送合并串行)、`onMonitorDeviceChange()`、图表 ref | — |
 | `useSettings.js` | `Settings.vue` | `form/channelNames/thresholds/thresholdEnabled`、三级加载、`onSaveEdgeConfig/onSaveMechanical/onSaveThresholds/onSyncMechanical`、`intervalValue/intervalUnit` 与 `computedSeconds` | `unitOptions`(采集间隔单位)、`thresholdItems`(阈值指标定义) |
-| `useResearchDiagnosis.js` | `ResearchDiagnosis.vue` | 三级选择器、`runAnalysis()`(single/all/ensemble)、`gotoDataView()`、投票行/D-S 融合行/全方法摘要行等派生 computed；轴承行读取 `evaluation/sc_scoh_indicators`，齿轮行保留 `fault_indicators` | `runModeOptions`、`fmt/percent/statusType/statusText`、`evaluationStatusType/evaluationStatusText` |
+| `useResearchDiagnosis.js` | `ResearchDiagnosis.vue` | 三级选择、运行与结果派生；轴承按 `evaluation_kind` 读规范评估，行星交专属组件，未校准不当作正常票 | `runModeOptions`、`fmt/percent/statusType/statusText`、`evaluationStatusType/evaluationStatusText` |
 | `useDataView.js` | `DataView.vue` | 设备批次表格数据与选择、时域自动加载、FFT/STFT/结构化包络谱/阶次/倒谱/统计/齿轮 `computeX/clearX`、轴承与齿轮特征频率标注、综合/策略诊断、删除/重新诊断/导出、路由联动 | `bearingMethodLabel`、`statsGroups`、`statsDisplay`(预留) |
 
 **配套子组件目录**：`src/components/dashboard/`(SummaryCards、DeviceCardList)、`src/components/monitor/`(SensorStatusCard、RunParamsCard、CollectionProgress)、`src/components/settings/`(EdgeConfigCard、MechanicalParamsCard、ThresholdsCard、ConfigNotesCard)、`src/components/research/`(ResearchToolbar、SingleResultPanels、EnsembleResultPanels)、`src/components/dataview/`(StatsSection、FftEnvelopeSection、GearSection、ComprehensiveSection、OrderSection、CepstrumSection、StftSection、DiagnosisDetailSection)。

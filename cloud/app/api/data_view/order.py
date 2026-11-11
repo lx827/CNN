@@ -15,7 +15,8 @@ from app.algorithms.order import (
     SpeedTrajectory,
 )
 from . import router, prepare_signal, _get_channel_name
-from app.services.diagnosis.signal_utils import denoise_signal
+from app.services.diagnosis.signal_utils import denoise_signal, DenoisingError
+from .errors import denoising_http_error
 from datetime import datetime, timezone
 import logging
 import numpy as np
@@ -53,17 +54,12 @@ async def get_channel_order(
         raise HTTPException(status_code=404, detail="数据不存在")
 
     try:
-        raw_sig = prepare_signal(record.data, detrend=detrend)
+        sample_rate = record.sample_rate or 25600
+        # 五秒限制先于去趋势和慢去噪，自动估计与重采样使用同一个时间窗口。
+        max_samples = int(sample_rate * 5)
+        raw_sig = prepare_signal(record.data[:max_samples], detrend=detrend)
         # VMD 等去噪可能耗时较长，不能直接占用事件循环。
         sig = await asyncio.to_thread(denoise_signal, raw_sig, denoise)
-        sample_rate = record.sample_rate or 25600
-
-        # 限制信号长度，防止超长数据导致计算超时（最多取 5 秒）
-        max_samples = sample_rate * 5
-        if len(sig) > max_samples:
-            sig = sig[:max_samples]
-            raw_sig = raw_sig[:max_samples]
-
         # 参数校验
         if freq_min >= freq_max:
             raise ValueError("freq_min 必须小于 freq_max")
@@ -145,6 +141,8 @@ async def get_channel_order(
                 "spectrum": [round(float(a), 6) for a in spectrum.tolist()],
             }
         }
+    except DenoisingError as e:
+        raise denoising_http_error(e) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

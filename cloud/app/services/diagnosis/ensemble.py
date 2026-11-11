@@ -27,6 +27,7 @@ from .health_score import (
     is_ds_conflict_high,
 )
 from .recommendation import _generate_recommendation
+from .signal_utils import DenoisingError
 
 
 def _as_float(value: Any, default: float = 0.0) -> float:
@@ -39,8 +40,8 @@ def _as_float(value: Any, default: float = 0.0) -> float:
 def _safe_denoise(value: str) -> DenoiseMethod:
     try:
         return DenoiseMethod(value)
-    except ValueError:
-        return DenoiseMethod.NONE
+    except ValueError as exc:
+        raise DenoisingError(str(value), "未知去噪方法") from exc
 
 
 def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
@@ -54,7 +55,7 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
             "denoise": list(dict.fromkeys(denoise_methods + ["wavelet", "vmd", "wavelet_vmd", "wavelet_lms", "emd", "ceemdan", "savgol", "wavelet_packet", "eemd"])),
             "bearing": [
                 BearingMethod.ENVELOPE,
-                BearingMethod.KURTOGRAM,
+                BearingMethod.FILTER_BANK_SK,
                 BearingMethod.CPW,
                 BearingMethod.TEAGER,
                 BearingMethod.SPECTRAL_KURTOSIS,
@@ -75,7 +76,7 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
             "denoise": denoise_methods,
             "bearing": [
                 BearingMethod.ENVELOPE,
-                BearingMethod.KURTOGRAM,
+                BearingMethod.FILTER_BANK_SK,
                 BearingMethod.CPW,
                 BearingMethod.TEAGER,
                 BearingMethod.SPECTRAL_KURTOSIS,
@@ -87,10 +88,10 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
         }
 
     return {
-        "denoise": denoise_methods[:1],
+        "denoise": [configured_denoise],
         "bearing": [
             BearingMethod.ENVELOPE,
-            BearingMethod.KURTOGRAM,
+            BearingMethod.FILTER_BANK_SK,
             BearingMethod.CPW,
             BearingMethod.TEAGER,
         ],
@@ -99,6 +100,16 @@ def _profile_config(profile: str, denoise_method: str) -> Dict[str, list]:
 
 
 def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
+    if not _has_diagnosis_evidence((result,), time_features):
+        return {"confidence": 0.0, "abnormal": False, "evaluable": False,
+                "reason": result.get("reason") or result.get("fallback_reason") or "not_evaluable", "hits": []}
+    if result.get("evaluation_kind") == "sc_scoh":
+        # SC/SCoh 显著性已联合检查复相关与相干的离目标背景，不套用包络 SNR。
+        hits = [name for name, item in result["evaluation"]["indicators"].items()
+                if item.get("evaluable") and item.get("significant")]
+        return {"confidence": 0.85 if len(hits) >= 2 else 0.65 if hits else 0.0,
+                "abnormal": bool(hits), "evaluable": True, "param_hits": len(hits),
+                "stat_hits": 0, "hits": hits, "metric_kind": "sc_scoh"}
     indicators = result.get("evaluation", {}).get("indicators", {}) or {}
     param_hits = 0
     stat_hits = 0
@@ -183,126 +194,47 @@ def _bearing_confidence(result: Dict, time_features: Dict) -> Dict[str, Any]:
 
 def _gear_confidence(result: Dict, has_gear_params: bool, time_features: Optional[Dict] = None) -> Dict[str, Any]:
     indicators = result.get("fault_indicators", {}) or {}
-    warning_hits = 0
-    critical_hits = 0
-    hit_names = []
-
-    for name, item in indicators.items():
-        if not isinstance(item, dict):
-            continue
-        if item.get("critical"):
-            critical_hits += 1
-            hit_names.append(name)
-        elif item.get("warning"):
-            warning_hits += 1
-            hit_names.append(name)
-
-    # 齿轮专用证据阈值
+    warning_hits = sum(1 for value in indicators.values() if isinstance(value, dict) and value.get("warning") and not value.get("critical"))
+    critical_hits = sum(1 for value in indicators.values() if isinstance(value, dict) and value.get("critical"))
+    hit_names = [name for name, value in indicators.items() if isinstance(value, dict) and (value.get("warning") or value.get("critical"))]
+    if result.get("is_planetary"):
+        # 行星只有对象评估器返回的已校准证据才可投票，不另用时域或残差补票。
+        evaluation = result.get("evaluation", {})
+        evaluable = evaluation.get("status") == "evaluated"
+        return {
+            "confidence": .6 if evaluable and critical_hits else .35 if evaluable and warning_hits else 0.0,
+            "evaluable": evaluable, "abnormal": evaluable and evaluation.get("conclusion") == "anomaly",
+            "reason": evaluation.get("reason"), "warning_hits": warning_hits,
+            "critical_hits": critical_hits, "hits": hit_names, "evidence_source": "planetary_record",
+        }
     kurt = _as_float(time_features.get("kurtosis") if time_features else None, 3.0)
     crest = _as_float(time_features.get("crest_factor") if time_features else None, 5.0)
-
-    # 行星齿轮箱时域特征与健康/故障严重重叠，需单独处理
-    is_planetary = bool(result.get("planet_count", 0) >= 3)
-    if is_planetary:
-        # 行星箱健康 kurt=7~13, crest=7~11；故障分布极宽
-        # crack 时 kurt 显著降低（3.9~5.5），双向门控：高峭度 + 低峭度
-        # 降低至 6.0：WTG 故障样本 kurt 多在 5.5~10，原 10.0 导致全部截断（Bug #13b）
-        GEAR_KURT_THRESHOLD = 6.0
-        GEAR_CREST_THRESHOLD = 8.0
-        impulse_context = kurt > GEAR_KURT_THRESHOLD or crest > GEAR_CREST_THRESHOLD or kurt < 5.5
-    else:
-        # 定轴齿轮箱：齿轮故障主要表现为频域调制边带，时域冲击不一定明显
-        # 降低阈值 + 频域指标强时放宽门控
-        GEAR_KURT_THRESHOLD = 8.0
-        GEAR_CREST_THRESHOLD = 8.0
-        impulse_context = kurt > GEAR_KURT_THRESHOLD or crest > GEAR_CREST_THRESHOLD
-        # 频域指标强时即使时域证据弱也打开门控
-        if not impulse_context:
-            critical_count = sum(1 for v in indicators.values() if isinstance(v, dict) and v.get("critical"))
-            warning_count = sum(1 for v in indicators.values() if isinstance(v, dict) and v.get("warning"))
-            if critical_count >= 2 or (critical_count >= 1 and warning_count >= 2):
-                impulse_context = True
-
-    # TSA 残差峭度证据：区分力=3.31，行星箱最有效的补充指标
-    # TSA 消除同步啮合成分后残差峭度 > 2.5 时增加齿轮置信度
-    tsa_residual_kurt = 0.0
-    tsa_env_result = result.get("planetary_tsa_demod") or {}
-    if isinstance(tsa_env_result, dict) and "error" not in tsa_env_result:
-        tsa_residual_kurt = _as_float(tsa_env_result.get("residual_kurtosis"), 0.0)
-    TSA_RESIDUAL_KURT_THRESHOLD = 5.0  # 阈值2.5时健康误报34.4%(N1子集tsa_rk偏高)，提升至5.0(误报9.4%)
-    tsa_evidence = tsa_residual_kurt > TSA_RESIDUAL_KURT_THRESHOLD
-
-    # 检查低频优势（旋转谐波主导时齿轮指标无效）
-    rotation_dominant = False
-    low_freq_ind = indicators.get("low_freq_ratio")
-    if isinstance(low_freq_ind, dict):
-        lf_value = _as_float(low_freq_ind.get("value"), 0.0)
-        if lf_value > 0.55:
-            rotation_dominant = True
-
+    impulse_context = kurt > 8.0 or crest > 8.0 or critical_hits >= 2 or (critical_hits >= 1 and warning_hits >= 2)
+    low_frequency = indicators.get("low_freq_ratio", {})
+    rotation_dominant = isinstance(low_frequency, dict) and _as_float(low_frequency.get("value")) > .55
     confidence = 0.0
     if has_gear_params:
-        # 有齿轮参数时：SER/sideband 是频率匹配指标，更有区分力
-        # 但仍需要时域冲击证据来排除旋转谐波导致的假阳性
         if impulse_context and not rotation_dominant:
-            if critical_hits >= 1 and (warning_hits + critical_hits) >= 2:
-                confidence = 0.8
+            if critical_hits >= 1 and warning_hits + critical_hits >= 2:
+                confidence = .8
             elif critical_hits >= 1 or warning_hits >= 2:
-                confidence = 0.6
+                confidence = .6
             elif warning_hits == 1:
-                confidence = 0.35
-            elif tsa_evidence:
-                # kurt>12 但无频域指标时，TSA 残差峭度可作为补充证据
-                confidence = 0.35
-        elif tsa_evidence and not rotation_dominant:
-            # 无传统时域证据(kurt<12) 但 TSA 残差峭度 > 5.0
-            # 这捕捉了 kurt 与健康重叠(8~10)但 TSA 残差显著(>5.0)的故障
-            confidence = 0.35
-        else:
-            # 无时域冲击证据或旋转谐波主导：齿轮指标降权
-            if is_planetary:
-                # 行星箱频域指标有独立区分力，warning hits 也给予弱置信度
-                if critical_hits >= 1 and warning_hits >= 1:
-                    confidence = 0.35
-                elif critical_hits >= 1:
-                    confidence = 0.3
-                elif warning_hits >= 2:
-                    confidence = 0.25
-                elif warning_hits == 1:
-                    confidence = 0.15
-                else:
-                    confidence = 0.0
-            else:
-                # 旋转谐波的边频带/SER/CAR 都会触发指标，但不是真实齿轮故障
-                if critical_hits >= 3 and warning_hits >= 1:
-                    confidence = 0.35  # 仅弱证据
-                elif critical_hits >= 2:
-                    confidence = 0.25
-                else:
-                    confidence = 0.0
-    else:
-        # Without gear geometry, CAR/order statistics are weak evidence only.
-        if impulse_context and not rotation_dominant:
-            if critical_hits >= 2:
-                confidence = 0.35
-            elif critical_hits == 1 and warning_hits >= 1:
-                confidence = 0.3
-            elif warning_hits >= 2:
-                confidence = 0.25
-            elif tsa_evidence:
-                confidence = 0.25
-        elif tsa_evidence and not rotation_dominant:
-            confidence = 0.25
-        else:
-            # 无时域证据时，CAR/order 统计指标不可靠
-            confidence = 0.0
-
+                confidence = .35
+        elif critical_hits >= 3 and warning_hits >= 1:
+            confidence = .35
+        elif critical_hits >= 2:
+            confidence = .25
+    elif impulse_context and not rotation_dominant:
+        if critical_hits >= 2:
+            confidence = .35
+        elif critical_hits == 1 and warning_hits >= 1:
+            confidence = .3
+        elif warning_hits >= 2:
+            confidence = .25
     return {
-        "confidence": round(float(confidence), 4),
-        "warning_hits": int(warning_hits),
-        "critical_hits": int(critical_hits),
-        "hits": hit_names,
-        "abnormal": bool(confidence >= 0.55),
+        "confidence": round(confidence, 4), "warning_hits": warning_hits,
+        "critical_hits": critical_hits, "hits": hit_names, "abnormal": confidence >= .55,
     }
 
 
@@ -343,19 +275,20 @@ def _fault_label(best_bearing: Dict, best_gear: Dict, bearing_score: float, gear
         return f"gear_{gear_subtype}"
 
     indicators = best_bearing.get("evaluation", {}).get("indicators", {}) if best_bearing else {}
+    strength_key = "coherence_background_ratio" if best_bearing.get("evaluation_kind") == "sc_scoh" else "snr"
     param_hits = [
-        (name, float(item["snr"]))
+        (name, float(item[strength_key]))
         for name, item in indicators.items()
         if (
             isinstance(item, dict)
             and item.get("significant")
             and item.get("status") != "not_evaluable"
-            and item.get("snr") is not None
+            and item.get(strength_key) is not None
             and not name.endswith("_stat")
         )
     ]
     if param_hits:
-        # 按 SNR 降序取主导故障类型，避免多故障拼接导致子串误判
+        # 只在本方法的专属强度指标内排序，不把循环相干背景比冒充包络 SNR。
         param_hits.sort(key=lambda x: x[1], reverse=True)
         dominant = param_hits[0][0].lower()
         return f"bearing_{dominant}"
@@ -373,6 +306,7 @@ def run_research_ensemble(
     rot_freq: Optional[float] = None,
     profile: str = "runtime",
     max_seconds: float = 5.0,
+    bearing_options: Optional[Dict] = None,
 ) -> Dict[str, Any]:
     arr = np.array(signal, dtype=np.float64)
     if max_seconds and max_seconds > 0:
@@ -382,6 +316,8 @@ def run_research_ensemble(
 
     config = _profile_config(profile, denoise_method)
     has_gear = has_gear_params(gear_teeth)
+    from .gear.planetary import is_planetary_config
+    planetary = is_planetary_config(gear_teeth)
     has_bearing = has_bearing_params(bearing_params)
 
     # 参数有效性驱动的分析跳过逻辑：
@@ -389,14 +325,14 @@ def run_research_ensemble(
     # - 仅配置齿轮参数 → 只做齿轮诊断，跳过轴承（避免轴承统计指标误报）
     # - 都未配置 → 跑轴承统计指标（始终计算）+ 齿轮统计指标（仅 CAR/阶次峭度）
     # - 都配置 → 综合（轴承+齿轮）全跑
-    skip_bearing = not has_bearing and has_gear
-    skip_gear = not has_gear and has_bearing
+    skip_bearing = not has_bearing and (has_gear or planetary)
+    skip_gear = not has_gear and has_bearing and not planetary
 
     bearing_results: Dict[str, Dict] = {}
     gear_results: Dict[str, Dict] = {}
     bearing_votes: Dict[str, Dict] = {}
     gear_votes: Dict[str, Dict] = {}
-    rot_freq_by_denoise: Dict[str, float] = {}
+    rot_freq_by_denoise: Dict[str, Optional[float]] = {}
 
     best_time_features: Optional[Dict] = None
     best_bearing_key = None
@@ -408,6 +344,7 @@ def run_research_ensemble(
             denoise_method=_safe_denoise(denoise),
             bearing_params=bearing_params,
             gear_teeth=gear_teeth,
+            bearing_options=bearing_options,
         )
         proc = base.preprocess(arr)
         time_features = compute_time_features(proc)
@@ -418,12 +355,18 @@ def run_research_ensemble(
             proc, fs, rot_freq=rot_freq, estimation_signal=arr,
         )
         rf, _ = base._order_speed_summary(order_analysis)
-        rot_freq_by_denoise[denoise] = round(float(rf or 0.0), 3)
+        rot_freq_by_denoise[denoise] = round(float(rf), 3) if rf is not None else None
 
         for method in config["bearing"]:
             if skip_bearing:
                 continue
-            key = f"{denoise}:{method.value}"
+            effective_method = (
+                BearingMethod.MED if method == BearingMethod.MCKD
+                and not (bearing_options or {}).get("target_fault") else method
+            )
+            key = f"{denoise}:{effective_method.value}"
+            if key in bearing_results:
+                continue  # 无目标 MCKD 实际走 MED，每个去噪组合只计算和投票一次。
             try:
                 engine = DiagnosisEngine(
                     strategy=DiagnosisStrategy.STANDARD,
@@ -431,6 +374,7 @@ def run_research_ensemble(
                     denoise_method=_safe_denoise(denoise),
                     bearing_params=bearing_params,
                     gear_teeth=gear_teeth,
+                    bearing_options=bearing_options,
                 )
                 result = engine.analyze_bearing(
                     proc, fs, rf, preprocess=False, _cached_order=order_analysis,
@@ -439,13 +383,17 @@ def run_research_ensemble(
                 bearing_results[key] = result
                 vote = _bearing_confidence(result, time_features)
                 bearing_votes[key] = vote
-                if best_bearing_key is None or vote["confidence"] > bearing_votes[best_bearing_key]["confidence"]:
+                if vote.get("evaluable", True) and (
+                    best_bearing_key is None or vote["confidence"] > bearing_votes[best_bearing_key]["confidence"]
+                ):
                     best_bearing_key = key
             except Exception as exc:
                 bearing_results[key] = {"error": str(exc), "denoise": denoise, "method": method.value}
-                bearing_votes[key] = {"confidence": 0.0, "abnormal": False, "error": str(exc)}
+                bearing_votes[key] = {"confidence": 0.0, "abnormal": False, "evaluable": False, "error": str(exc)}
 
-        for method in config["gear"]:
+        # 同一行星记录的 standard/advanced、去噪变体不是独立证据，不重复投票。
+        gear_methods = (GearMethod.ADVANCED,) if planetary and not gear_results else () if planetary else config["gear"]
+        for method in gear_methods:
             if skip_gear:
                 continue
             key = f"{denoise}:{method.value}"
@@ -457,9 +405,6 @@ def run_research_ensemble(
                     bearing_params=bearing_params,
                     gear_teeth=gear_teeth,
                 )
-                # exhaustive profile 启用行星箱慢方法（VMD/SC/SCoh/MSB）
-                if profile == "exhaustive":
-                    engine._run_slow_methods = True
                 result = engine.analyze_gear(
                     proc,
                     fs,
@@ -480,8 +425,8 @@ def run_research_ensemble(
     time_features = best_time_features or compute_time_features(arr)
     time_score = _time_confidence(time_features)
 
-    bearing_conf = [v.get("confidence", 0.0) for v in bearing_votes.values()]
-    gear_conf = [v.get("confidence", 0.0) for v in gear_votes.values()]
+    bearing_conf = [v.get("confidence", 0.0) for v in bearing_votes.values() if v.get("evaluable", True)]
+    gear_conf = [v.get("confidence", 0.0) for v in gear_votes.values() if v.get("evaluable", True)]
     bearing_vote_fraction = (
         sum(1 for v in bearing_conf if v >= 0.55) / len(bearing_conf)
         if bearing_conf else 0.0
@@ -511,12 +456,16 @@ def run_research_ensemble(
         # 合并轴承和齿轮的投票为统一 method_results
         all_method_votes = {}
         for key, vote in bearing_votes.items():
+            if not vote.get("evaluable", True):
+                continue
             all_method_votes[key] = {
                 "confidence": vote.get("confidence", 0.0),
                 "abnormal": vote.get("abnormal", False),
                 "hits": vote.get("hits", []),
             }
         for key, vote in gear_votes.items():
+            if not vote.get("evaluable", True):
+                continue
             all_method_votes[key] = {
                 "confidence": vote.get("confidence", 0.0),
                 "abnormal": vote.get("abnormal", False),
@@ -546,13 +495,13 @@ def run_research_ensemble(
 
     # D-S 融合主导故障标签
     ds_fault_label = get_ds_label(ds_fusion_result)
-    if ds_fault_label:
+    if ds_fault_label and status != "indeterminate":
         fault_label = ds_fault_label
 
     return {
         "health_score": health_score,
         "status": status,
-        "fault_likelihood": round(float(likelihood), 4),
+        "fault_likelihood": round(float(likelihood), 4) if status != "indeterminate" else None,
         "fault_label": fault_label,
         "rot_freq_hz": next(iter(rot_freq_by_denoise.values()), None),
         "time_features": time_features,

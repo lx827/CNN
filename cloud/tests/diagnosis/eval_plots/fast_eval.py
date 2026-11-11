@@ -60,7 +60,7 @@ def eval_bearing_binary(dataset_name, data_dir, file_glob, fault_func, class_nam
     print(f"  健康:{len(h)} 故障:{len(f_)}")
 
     METHODS = [
-        ("标准包络", BearingMethod.ENVELOPE), ("Kurtogram", BearingMethod.KURTOGRAM),
+        ("标准包络", BearingMethod.ENVELOPE), ("Kurtogram", BearingMethod.FILTER_BANK_SK),
         ("CPW预白化", BearingMethod.CPW), ("MED增强", BearingMethod.MED),
         ("MCKD", BearingMethod.MCKD), ("Teager", BearingMethod.TEAGER),
         ("谱峭度重加权", BearingMethod.SPECTRAL_KURTOSIS), ("DWT", BearingMethod.DWT),

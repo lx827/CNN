@@ -69,7 +69,7 @@ GEAR_FAULT_NAMES: Dict[str, List[str]] = {
 
 # 轴承方法标识关键词
 BEARING_METHOD_KEYWORDS = frozenset({
-    "envelope", "kurtogram", "cpw", "med", "teager",
+    "envelope", "filter_bank_sk", "cpw", "med", "teager",
     "spectral_kurtosis", "bearing",
 })
 

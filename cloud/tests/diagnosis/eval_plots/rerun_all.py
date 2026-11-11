@@ -236,7 +236,7 @@ def eval_robustness():
     snrs = [20, 10, 5, 0, -5]
     result = {"snr_levels": snrs, "methods": {}}
 
-    for name, method in [("包络", BearingMethod.ENVELOPE), ("Kurtogram", BearingMethod.KURTOGRAM),
+    for name, method in [("包络", BearingMethod.ENVELOPE), ("Kurtogram", BearingMethod.FILTER_BANK_SK),
                           ("MED", BearingMethod.MED), ("MCKD", BearingMethod.MCKD)]:
         curve = []
         for s_db in snrs:
@@ -284,7 +284,7 @@ def main():
     hust_files = collect_hust()
     r = eval_bearing("4.2.1 HUSTbear 轴承二分类", hust_files,
                      [("标准包络", BearingMethod.ENVELOPE),
-                      ("Kurtogram", BearingMethod.KURTOGRAM),
+                      ("Kurtogram", BearingMethod.FILTER_BANK_SK),
                       ("CPW预白化", BearingMethod.CPW),
                       ("MED增强", BearingMethod.MED),
                       ("MCKD", BearingMethod.MCKD),
@@ -299,7 +299,7 @@ def main():
     cw_files = collect_cw()
     r2 = eval_bearing("4.3.1 Ottawa/CW 轴承二分类", cw_files,
                       [("标准包络", BearingMethod.ENVELOPE),
-                       ("Kurtogram", BearingMethod.KURTOGRAM),
+                       ("Kurtogram", BearingMethod.FILTER_BANK_SK),
                        ("CPW预白化", BearingMethod.CPW),
                        ("MED增强", BearingMethod.MED),
                        ("MCKD", BearingMethod.MCKD),

@@ -172,7 +172,7 @@
                   >
                     <span v-if="entry.info.significant || entry.info.critical" style="color: #F5222D; font-weight: 600;">
                       检出 ({{ entry.info.detected_hz ?? entry.info.theory_hz }}Hz,
-                      {{ entry.source === 'sc_scoh' ? `SCoh=${entry.info.scoh_peak}, SNR=${entry.info.scoh_snr}` : `SNR=${entry.info.snr}` }})
+                      {{ entry.source === 'sc_scoh' ? `SCoh=${entry.info.scoh_peak}, 相干峰背景比=${entry.info.coherence_background_ratio}` : `SNR=${entry.info.snr}` }})
                     </span>
                     <span v-else-if="entry.info.evaluable === false || entry.info.significant == null" style="color: #999;">
                       不可评估（{{ entry.info.reason || '输入或频率覆盖不足' }}）
@@ -193,7 +193,8 @@
           <template #header>
             <span style="font-weight: 600;">⚙️ 齿轮诊断 — 各方法详细参数</span>
           </template>
-          <el-table :data="gearSummaryTable" size="small" border style="width: 100%">
+          <PlanetaryResult v-for="(result, key) in planetaryResults" :key="key" :result="result" />
+          <el-table v-if="!Object.keys(planetaryResults).length" :data="gearSummaryTable" size="small" border style="width: 100%">
             <template #empty>
               <el-text type="info" size="small">
                 未配置齿轮参数，请在<el-link type="primary" @click="$router.push('/devices')">设备配置</el-link>中设置齿数（input/output）
@@ -252,6 +253,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import PlanetaryResult from '../research/PlanetaryResult.vue'
 import { bearingMethodLabel } from '../../composables/useDataView'
 import { bearingIndicatorEntries as bearingEntries } from '../../utils/bearingDiagnosis'
 import { getDiagnosisStatusView } from '../../utils/diagnosisStatus'
@@ -292,6 +294,7 @@ defineEmits(['compute-strategy', 'clear-strategy', 'compute-full', 'clear-full',
 
 const strategyStatusView = computed(() => getDiagnosisStatusView(props.strategyAnalyzeData?.status))
 const fullAnalysisStatusView = computed(() => getDiagnosisStatusView(props.fullAnalysisData?.status))
+const planetaryResults = computed(() => Object.fromEntries(Object.entries(props.fullAnalysisData?.gear_results || {}).filter(([, result]) => result?.is_planetary)))
 </script>
 
 <style scoped>

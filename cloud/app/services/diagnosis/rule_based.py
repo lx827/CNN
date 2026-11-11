@@ -1,422 +1,186 @@
-"""
-规则诊断算法（回退方案）
-"""
+"""标准对象 Pipeline 的轻量业务回退；不另建频谱、包络或阶次算法。"""
 import logging
-import numpy as np
-from scipy.fft import rfft, rfftfreq
-from scipy.signal import hilbert
+from collections.abc import Mapping
+from dataclasses import asdict
 from typing import Dict, List
-from .features import (
-    compute_channel_features, compute_fft, compute_imf_energy,
-    _get_channel_params, _compute_bearing_fault_freqs, _compute_bearing_fault_orders,
-)
-from .signal_utils import prepare_signal, _band_energy, _order_band_energy
+
+import numpy as np
+
+from app.algorithms.mechanics import FixedAxisGearGeometry
 from app.algorithms.order import (
-    AutomaticOrderPipeline,
-    LocalSpeedEstimates,
-    OrderParameters,
-    SpeedTrajectory,
+    AutomaticOrderPipeline, LocalSpeedEstimates, OrderParameters, ScalarSpeed, SpeedTrajectory,
 )
+from app.algorithms.pipelines.bearing import BearingEnvelopePipeline
+from app.algorithms.pipelines.gear.fixed_axis import FixedAxisGearPipeline
+from app.algorithms.statistics import analyze_time_domain
+from app.algorithms.transforms import compute_spectrum
+from .engine import bearing_geometry_from_config
+from .features import _get_channel_params
+from .health_score import _compute_health_score, _has_diagnosis_evidence
+from .probability_calibration import calibrate_fault_probabilities
+from .signal_utils import prepare_signal
 
 logger = logging.getLogger(__name__)
 
-# 特征阈值配置（用于 _feature_severity）
-FEATURE_THRESHOLDS = {
-    "rms": {"baseline": 2.0, "critical": 15.0},
-    "peak": {"baseline": 5.0, "critical": 40.0},
-    "kurtosis": {"baseline": 3.0, "critical": 15.0},
-    "crest_factor": {"baseline": 3.0, "critical": 12.0},
-    "skewness": {"baseline": 0.3, "critical": 2.0},
-    "impulse_factor": {"baseline": 5.0, "critical": 20.0},
-}
 
-
-def adaptive_rms_baseline(rot_freq_hz: float) -> float:
-    """
-    转速归一化 RMS baseline
-
-    不同转速下振动 RMS 的正常范围差异巨大：
-    - 20Hz 低速设备正常 RMS ≈ 1~2
-    - 40Hz 中速设备正常 RMS ≈ 2~4
-    - 50Hz 高速设备正常 RMS ≈ 3~6
-
-    简化线性模型：baseline = 0.05 × rot_freq + 1.0
-    低速(20Hz): baseline=2.0, 高速(50Hz): baseline=3.5
-    """
-    if rot_freq_hz <= 0:
-        return FEATURE_THRESHOLDS["rms"]["baseline"]
-    return max(1.0, 0.05 * rot_freq_hz + 1.0)
-
-
-def _feature_severity(value: float, metric: str, rot_freq: float = 0.0) -> float:
-    """
-    计算单一特征的严重度 (0.0 ~ 1.0+)
-    value: 特征值
-    metric: 特征名称
-    rot_freq: 转频(Hz)，用于 RMS baseline 自适应
-    """
-    cfg = FEATURE_THRESHOLDS.get(metric)
-    if not cfg:
-        return 0.0
-    baseline = cfg["baseline"]
-    critical = cfg["critical"]
-    # RMS baseline 自适应：根据转速调整
-    if metric == "rms" and rot_freq > 0:
-        baseline = adaptive_rms_baseline(rot_freq)
-        critical = baseline * 7.5  # 保持 baseline/critical 比例不变
-    if value <= baseline or critical <= baseline:
-        return 0.0
-    return max(0.0, min(1.0, (abs(value) - baseline) / (critical - baseline)))
-
-
-def _rule_based_analyze(channels_data: Dict[str, List[float]], sample_rate: int = 25600, device=None):
-    """
-    多特征综合规则诊断算法（回退方案）
-
-    融合：时域统计特征 + 频谱特征 + 包络特征 + 阶次特征
-    支持齿轮/轴承参数化诊断
-    """
-    # 1. 计算所有通道的时域特征
-    all_features = []
-    for ch_name, signal in channels_data.items():
-        features = compute_channel_features(signal)
-        if features:
-            all_features.append(features)
-
-    if not all_features:
-        return {
-            "health_score": 100,
-            "fault_probabilities": {"正常运行": 1.0},
-            "imf_energy": {},
-            "status": "normal",
-            "order_analysis": None,
-            "rot_freq": None,
-        }
-
-    # 2. 多通道平均时域特征
-    avg_features = {}
-    for key in ["rms", "peak", "kurtosis", "crest_factor", "skewness", "impulse_factor"]:
-        values = [f.get(key, 0) for f in all_features if f.get(key) is not None]
-        avg_features[key] = np.mean(values) if values else 0.0
-
-    # 3. 获取设备参数（通道级兼容）& 估计转频
-    ch_gear_teeth = _get_channel_params(device, 1, "gear_teeth")
-    ch_bearing_params = _get_channel_params(device, 1, "bearing_params")
-
-    first_channel = list(channels_data.values())[0]
-    first_arr = np.array(first_channel, dtype=np.float64)
-
-    # 3b. 与 /order 共用唯一 Pipeline；失败不伪造默认转频。
-    order_analysis = AutomaticOrderPipeline(
-        parameters=OrderParameters(samples_per_revolution=1024, max_order=50),
-    ).run(first_arr, sample_rate)
-    if order_analysis.status != "valid" or order_analysis.spectrum is None:
-        raise ValueError(order_analysis.reason or "规则诊断的转频/阶次分析不可判定")
-    order_axis = order_analysis.spectrum.order_bins
-    spectrum = order_analysis.spectrum.amplitude
-    if isinstance(order_analysis.speed, LocalSpeedEstimates):
-        rot_freq = order_analysis.speed.median_hz
-        rot_std = order_analysis.speed.std_hz
-    elif isinstance(order_analysis.speed, SpeedTrajectory):
-        # 仅阶次特征使用连续相位补偿结果；其他标量特征明确使用中位数摘要。
-        rot_freq = float(np.median(order_analysis.speed.frequency_hz))
-        rot_std = float(np.std(order_analysis.speed.frequency_hz))
-    else:
-        rot_freq = float(order_analysis.speed.frequency_hz)
-        rot_std = 0.0
-
-    # 4. 时域特征严重度
-    sev = {
-        "rms": _feature_severity(avg_features["rms"], "rms", rot_freq),
-        "peak": _feature_severity(avg_features["peak"], "peak", rot_freq),
-        "kurtosis": _feature_severity(avg_features["kurtosis"], "kurtosis", rot_freq),
-        "crest_factor": _feature_severity(avg_features["crest_factor"], "crest_factor", rot_freq),
-        "skewness": _feature_severity(abs(avg_features["skewness"]), "skewness", rot_freq),
-        "impulse_factor": _feature_severity(avg_features["impulse_factor"], "impulse_factor", rot_freq),
-    }
-
-    # 5. 频谱/包络/阶次特征提取
-    xf, yf = compute_fft(first_channel, sample_rate)
-    spec_features = _extract_spectrum_features(xf, yf, rot_freq, ch_gear_teeth, ch_bearing_params)
-
-    env_freq, env_amp = compute_envelope_spectrum(first_channel, sample_rate, max_freq=1000)
-    env_features = _extract_envelope_features(env_freq, env_amp, rot_freq, ch_bearing_params)
-
-    order_features = _extract_order_features(order_axis, spectrum, rot_freq, ch_gear_teeth, ch_bearing_params)
-
-    # 6. 频域/阶次严重度（归一化到 0~1）
-    mesh_sev = min(1.0, spec_features.get("mesh_freq_ratio", 0) * 20)
-    sideband_sev = min(1.0, spec_features.get("sideband_total_ratio", 0) * 30)
-    mesh_order_sev = min(1.0, order_features.get("mesh_order_ratio", 0) * 20)
-    sideband_order_sev = min(1.0, order_features.get("sideband_order_total_ratio", 0) * 30)
-
-    bpfo_env_sev = min(1.0, env_features.get("BPFO_env_ratio", 0) * 50)
-    bpfi_env_sev = min(1.0, env_features.get("BPFI_env_ratio", 0) * 50)
-    bsf_env_sev = min(1.0, env_features.get("BSF_env_ratio", 0) * 50)
-
-    bpfo_order_sev = min(1.0, order_features.get("BPFO_order_ratio", 0) * 50)
-    bpfi_order_sev = min(1.0, order_features.get("BPFI_order_ratio", 0) * 50)
-    bsf_order_sev = min(1.0, order_features.get("BSF_order_ratio", 0) * 50)
-
-    max_bearing_env_sev = max(bpfo_env_sev, bpfi_env_sev, bsf_env_sev)
-    max_bearing_order_sev = max(bpfo_order_sev, bpfi_order_sev, bsf_order_sev)
-
-    # 7. 故障类型判别（融合时域 + 频谱 + 包络 + 阶次）
-    fault_scores = {
-        "正常运行": 1.0,
-        "齿轮磨损": (
-            sev["rms"] * 0.25 + sev["peak"] * 0.20 + sev["crest_factor"] * 0.10 +
-            mesh_sev * 0.20 + sideband_sev * 0.15 + mesh_order_sev * 0.10
-        ),
-        "轴承内圈故障": (
-            sev["kurtosis"] * 0.20 + sev["crest_factor"] * 0.10 + sev["impulse_factor"] * 0.10 +
-            bpfi_env_sev * 0.30 + bpfi_order_sev * 0.20 + sev["peak"] * 0.10
-        ),
-        "轴承外圈故障": (
-            sev["kurtosis"] * 0.15 + sev["crest_factor"] * 0.10 + sev["rms"] * 0.10 +
-            bpfo_env_sev * 0.35 + bpfo_order_sev * 0.20 + sev["impulse_factor"] * 0.10
-        ),
-        "滚动体故障": (
-            sev["kurtosis"] * 0.15 + sev["peak"] * 0.15 + sev["impulse_factor"] * 0.10 +
-            bsf_env_sev * 0.30 + bsf_order_sev * 0.20 + sev["crest_factor"] * 0.10
-        ),
-
-    }
-
-    # 8. 正常运行概率衰减
-    normal_decay = 1.0
-    normal_decay *= max(0.0, 1.0 - sev["rms"] * 0.30)
-    normal_decay *= max(0.0, 1.0 - sev["kurtosis"] * 0.45)
-    normal_decay *= max(0.0, 1.0 - sev["crest_factor"] * 0.30)
-    normal_decay *= max(0.0, 1.0 - sev["peak"] * 0.15)
-    normal_decay *= max(0.0, 1.0 - sev["skewness"] * 0.20)
-    normal_decay *= max(0.0, 1.0 - sev["impulse_factor"] * 0.25)
-    normal_decay *= max(0.0, 1.0 - mesh_sev * 0.25)
-    normal_decay *= max(0.0, 1.0 - sideband_sev * 0.15)
-    normal_decay *= max(0.0, 1.0 - max_bearing_env_sev * 0.35)
-    normal_decay *= max(0.0, 1.0 - max_bearing_order_sev * 0.25)
-    fault_scores["正常运行"] = normal_decay
-
-    # 9. 归一化概率
-    total = sum(fault_scores.values())
-    if total > 0:
-        fault_probabilities = {k: round(v / total, 4) for k, v in fault_scores.items()}
-    else:
-        fault_probabilities = {"正常运行": 1.0}
-
-    max_fault_sev = max(v for k, v in fault_scores.items() if k != "正常运行")
-    health_score = int(max(0, min(100,
-        fault_probabilities.get("正常运行", 0) * 100 - max_fault_sev * 30
-    )))
-    status = "normal" if health_score >= 85 else "warning" if health_score >= 60 else "fault"
-
-    # 10. IMF 能量
-    imf_energy = compute_imf_energy(first_channel, sample_rate)
-
-    # 11. 构建 order_analysis 报告
-    order_analysis = {
-        "rot_freq_hz": round(rot_freq, 3),
-        "rot_rpm": round(rot_freq * 60, 1),
-        "spectrum_features": {k: round(v, 6) for k, v in spec_features.items()},
-        "envelope_features": {k: round(v, 6) for k, v in env_features.items()},
-        "order_features": {k: round(v, 6) for k, v in order_features.items()},
-    }
-
-    # 调试日志
-    logger.info(f"[规则诊断] 时域: RMS={avg_features['rms']:.3f}(sev={sev['rms']:.2f}), "
-                f"Kurt={avg_features['kurtosis']:.2f}(sev={sev['kurtosis']:.2f}), "
-                f"Crest={avg_features['crest_factor']:.2f}(sev={sev['crest_factor']:.2f}) | "
-                f"频域: mesh={mesh_sev:.2f}, sb={sideband_sev:.2f} | "
-                f"包络: BPFO={bpfo_env_sev:.2f}, BPFI={bpfi_env_sev:.2f}, BSF={bsf_env_sev:.2f} | "
-                f"阶次: BPFO={bpfo_order_sev:.2f}, BPFI={bpfi_order_sev:.2f}, BSF={bsf_order_sev:.2f} | "
-                f"健康度={health_score}, 状态={status}")
-
+def _indeterminate(reason: str) -> dict:
+    """前提失败不能经外层异常兜底变成正常诊断。"""
     return {
-        "health_score": health_score,
-        "fault_probabilities": fault_probabilities,
-        "imf_energy": imf_energy,
-        "status": status,
-        "order_analysis": order_analysis,
-        "rot_freq": rot_freq,
+        "health_score": None, "fault_probabilities": {}, "imf_energy": {},
+        "status": "indeterminate",
+        "order_analysis": {"status": "indeterminate", "reason": reason}, "rot_freq": None,
     }
 
 
-def compute_envelope_spectrum(signal: List[float], sample_rate: int = 25600, max_freq: int = 1000):
+def _rule_based_analyze(
+    channels_data: Dict[str, List[float]], sample_rate: int = 25600, device=None,
+):
+    """以首个实际通道的对象参数执行回退，其他通道仅参与时域均值。
+
+    数值表示始终保留 NumPy；这里只返回持久化需要的标量指标。没有几何
+    参数时仅允许通用统计证据，不猜测轴承故障类型；行星箱不套用定轴模型。
+    ``imf_energy`` 沿用展示字段名，实际是五个等宽频带的功率百分比，并非 IMF。
     """
-    计算包络谱（Envelope Spectrum）
+    if not channels_data:
+        return _indeterminate("missing_channel_signal")
+    try:
+        prepared = {}
+        time_features = []
+        for name, signal in channels_data.items():
+            values = np.asarray(signal, dtype=np.float64)
+            if values.ndim != 1 or len(values) < 64 or not np.all(np.isfinite(values)):
+                return _indeterminate("invalid_channel_signal")
+            arr = prepare_signal(values, detrend=True)
+            prepared[name] = arr
+            time_features.append(asdict(analyze_time_domain(arr, sample_rate).overall))
 
-    用于轴承故障诊断，通过希尔伯特变换提取信号包络，
-    再对包络信号做 FFT，检测轴承特征频率（BPFO/BPFI/BSF/FTF）。
+        first_name, arr = next(iter(prepared.items()))
+        channel_index = int(str(first_name).removeprefix("ch"))
+        gear_config = getattr(device, "gear_teeth", None) if device else None
+        if gear_config is not None:
+            if not isinstance(gear_config, Mapping):
+                return _indeterminate("invalid_gear_configuration")
+            if str(channel_index) in gear_config:
+                gear_config = gear_config[str(channel_index)]
+            elif any(str(key).isdigit() for key in gear_config):
+                gear_config = None
+            if gear_config is not None and not isinstance(gear_config, Mapping):
+                return _indeterminate("invalid_gear_configuration")
+        bearing_config = _get_channel_params(device, channel_index, "bearing_params")
+        if gear_config and any(gear_config.get(key) for key in ("sun", "ring", "planet_count", "n_planets")):
+            return _indeterminate("planetary_fallback_requires_planetary_pipeline")
+        bearing_geometry = bearing_geometry_from_config(bearing_config)
+        gear_geometry = None
+        if gear_config:
+            # 畸形/缺项配置保留不可判定；不把 None 齿数当作正常证据。
+            raw_teeth = gear_config.get("input")
+            if isinstance(raw_teeth, bool) or raw_teeth is None:
+                return _indeterminate("invalid_fixed_axis_geometry")
+            teeth = float(raw_teeth)
+            if not np.isfinite(teeth) or not teeth.is_integer():
+                return _indeterminate("invalid_fixed_axis_geometry")
+            gear_geometry = FixedAxisGearGeometry(input_teeth=int(teeth))
 
-    Args:
-        signal: 时域信号数组
-        sample_rate: 采样率 Hz
-        max_freq: 返回的最大频率 Hz（轴承故障频率通常 < 500Hz）
+        gear_pipeline = FixedAxisGearPipeline(geometry=gear_geometry)
+        max_order = max(50.0, gear_pipeline.required_max_order(False)) if gear_geometry else 50.0
+        order = AutomaticOrderPipeline(
+            parameters=OrderParameters(samples_per_revolution=1024, max_order=max_order),
+        ).run(arr, sample_rate)
+        if order.status != "valid" or order.spectrum is None:
+            return _indeterminate(order.reason or "unavailable_order_analysis")
+        if isinstance(order.speed, ScalarSpeed):
+            rot_freq, rot_std = float(order.speed.frequency_hz), 0.0
+        elif isinstance(order.speed, LocalSpeedEstimates):
+            rot_freq, rot_std = order.speed.median_hz, order.speed.std_hz
+        elif isinstance(order.speed, SpeedTrajectory):
+            rot_freq = float(np.median(order.speed.frequency_hz))
+            rot_std = float(np.std(order.speed.frequency_hz))
+        else:
+            return _indeterminate("missing_speed_representation")
 
-    Returns:
-        freq: 频率数组 (Hz)
-        amp: 包络谱幅值数组
-    """
-    arr = prepare_signal(signal, detrend=True)
+        bearing_result = {
+            "evaluation": {"status": "indeterminate", "indicators": {}},
+            "reason": "bearing_requires_constant_or_slowly_varying_speed",
+        }
+        # 连续相位只为阶次谱提供补偿，不能将轨迹中位数当成轴承恒速前提。
+        if not isinstance(order.speed, SpeedTrajectory):
+            bearing = BearingEnvelopePipeline(geometry=bearing_geometry).run(
+                arr, sample_rate, rot_frequency_hz=rot_freq, rot_frequency_std_hz=rot_std,
+            )
+            bearing_result = {
+                "features": bearing.analysis.envelope_analysis.features.as_dict(),
+                "evaluation": {
+                    "status": bearing.evaluation.status, "indicators": bearing.evaluation.indicators,
+                },
+            }
+        gear_result = {}
+        if gear_geometry:
+            gear = gear_pipeline.run(arr, sample_rate, order_analysis=order)
+            gear_result = {
+                "analysis_status": gear.evaluation.status,
+                "fault_indicators": gear.evaluation.indicators,
+                "evaluation": {
+                    "status": gear.evaluation.status, "indicators": gear.evaluation.indicators,
+                },
+            }
 
-    # 1. 带通滤波（保留 1kHz~5kHz 的共振频带，可选）
-    # 简化版本：直接用原始信号做希尔伯特变换
+        averaged = {
+            key: float(np.mean([features[key] for features in time_features]))
+            for key in time_features[0]
+        }
+        if not _has_diagnosis_evidence((bearing_result, gear_result), averaged):
+            return _indeterminate("no_evaluable_diagnosis_evidence")
+        health_score, status, deductions = _compute_health_score(
+            gear_config, averaged, bearing_result, gear_result,
+        )
+        deduction_names = {name for name, value in deductions if value > 0}
+        fault_scores = {}
+        labels = {"BPFO": "轴承外圈故障", "BPFI": "轴承内圈故障", "BSF": "滚动体故障"}
+        # 局部原始阈值不能绕过中央时域/旋转谐波证据门控，正常结论不附带故障概率。
+        if status != "normal":
+            if deduction_names & {"bearing_multi_freq", "bearing_single_freq"}:
+                for name, indicator in bearing_result["evaluation"]["indicators"].items():
+                    if name in labels and indicator.get("significant"):
+                        fault_scores[labels[name]] = min(1.0, float(indicator.get("snr") or 0.0) / 10.0)
+            # 标准边带只支持齿轮异常；通用阶次统计不确定磨损等具体故障类型。
+            for name, prefix in (("ser", "gear_ser_"), ("sideband_count", "gear_sb_")):
+                if not any(deduction.startswith(prefix) for deduction in deduction_names):
+                    continue
+                indicator = gear_result.get("fault_indicators", {}).get(name, {})
+                if indicator.get("evaluable") is not True:
+                    continue
+                severity = 0.6 if indicator.get("critical") else 0.3 if indicator.get("warning") else 0.0
+                if severity:
+                    fault_scores["齿轮异常"] = max(fault_scores.get("齿轮异常", 0.0), severity)
 
-    # 2. 希尔伯特变换获取包络
-    analytic_signal = hilbert(arr)
-    envelope = np.abs(analytic_signal)
-
-    # 3. 去除直流分量（零均值化）
-    envelope = envelope - np.mean(envelope)
-
-    # 4. 对包络信号做 FFT
-    n = len(envelope)
-    yf = np.abs(rfft(envelope))
-    xf = rfftfreq(n, 1 / sample_rate)
-
-    # 5. 只保留 0~max_freq 范围
-    freq_amp = [(f, a) for f, a in zip(xf, yf) if f <= max_freq]
-    freq = [round(f, 2) for f, a in freq_amp]
-    amp = [round(a, 4) for f, a in freq_amp]
-
-    return freq, amp
-
-
-# ==================== 齿轮/轴承故障特征计算 ====================
-
-
-def _band_energy(freq, amp, center: float, bandwidth: float) -> float:
-    """计算指定频带能量"""
-    freq = np.asarray(freq)
-    amp = np.asarray(amp)
-    mask = (freq >= center - bandwidth) & (freq <= center + bandwidth)
-    if not np.any(mask):
-        return 0.0
-    return float(np.sum(amp[mask] ** 2))
-
-
-
-
-
-def _extract_spectrum_features(freq, amp, rot_freq: float, gear_teeth: dict, bearing_params: dict) -> dict:
-    """从频谱提取齿轮/轴承相关特征"""
-    freq = np.asarray(freq)
-    amp = np.asarray(amp)
-    total_energy = float(np.sum(amp ** 2)) + 1e-10
-    features = {}
-
-    # --- 齿轮特征 ---
-    if gear_teeth and isinstance(gear_teeth, dict):
-        z_in = gear_teeth.get("input") or 0
-        z_out = gear_teeth.get("output") or 0
-        if z_in > 0:
-            mesh_freq = rot_freq * z_in
-            features["mesh_freq_hz"] = round(mesh_freq, 2)
-            mesh_amp = _band_energy(freq, amp, mesh_freq, 5.0)
-            features["mesh_freq_ratio"] = round(mesh_amp / total_energy, 6)
-
-            sideband_total = 0.0
-            sideband_count = 0
-            for n in range(1, 4):
-                sb_low = mesh_freq - n * rot_freq
-                sb_high = mesh_freq + n * rot_freq
-                sb_amp = _band_energy(freq, amp, sb_low, 2.0) + _band_energy(freq, amp, sb_high, 2.0)
-                sideband_total += sb_amp
-                if sb_amp > mesh_amp * 0.05:
-                    sideband_count += 1
-            features["sideband_total_ratio"] = round(sideband_total / total_energy, 6)
-            features["sideband_count"] = sideband_count
-
-        if z_out > 0:
-            out_mesh_freq = rot_freq * z_out
-            features["output_mesh_freq_hz"] = round(out_mesh_freq, 2)
-            features["output_mesh_ratio"] = round(_band_energy(freq, amp, out_mesh_freq, 5.0) / total_energy, 6)
-
-    # --- 轴承特征 ---
-    if bearing_params and isinstance(bearing_params, dict):
-        bfreqs = _compute_bearing_fault_freqs(rot_freq, bearing_params)
-        for name, f_hz in bfreqs.items():
-            features[f"{name}_hz"] = round(f_hz, 2)
-            f_amp = _band_energy(freq, amp, f_hz, 3.0)
-            features[f"{name}_ratio"] = round(f_amp / total_energy, 6)
-            harmonic_total = 0.0
-            for h in range(2, 4):
-                harmonic_total += _band_energy(freq, amp, f_hz * h, 3.0)
-            features[f"{name}_harmonic_ratio"] = round(harmonic_total / total_energy, 6)
-
-    return features
-
-
-def _extract_envelope_features(envelope_freq, envelope_amp, rot_freq: float, bearing_params: dict) -> dict:
-    """从包络谱提取轴承故障特征"""
-    envelope_freq = np.asarray(envelope_freq)
-    envelope_amp = np.asarray(envelope_amp)
-    total_energy = float(np.sum(envelope_amp ** 2)) + 1e-10
-    features = {}
-
-    if not bearing_params or not isinstance(bearing_params, dict):
-        features["total_env_energy"] = round(total_energy, 6)
-        return features
-
-    bfreqs = _compute_bearing_fault_freqs(rot_freq, bearing_params)
-    for name, f_hz in bfreqs.items():
-        env_amp = _band_energy(envelope_freq, envelope_amp, f_hz, 2.0)
-        features[f"{name}_env_ratio"] = round(env_amp / total_energy, 6)
-        harmonic_total = 0.0
-        for h in range(2, 5):
-            harmonic_total += _band_energy(envelope_freq, envelope_amp, f_hz * h, 2.0)
-        features[f"{name}_env_harmonic_ratio"] = round(harmonic_total / total_energy, 6)
-
-    features["total_env_energy"] = round(total_energy, 6)
-    return features
-
-
-def _extract_order_features(order_axis, spectrum, rot_freq: float, gear_teeth: dict, bearing_params: dict) -> dict:
-    """从阶次谱提取故障特征"""
-    order_axis = np.asarray(order_axis)
-    spectrum = np.asarray(spectrum)
-    total_energy = float(np.sum(spectrum ** 2)) + 1e-10
-    features = {}
-
-    # --- 齿轮阶次特征 ---
-    if gear_teeth and isinstance(gear_teeth, dict):
-        z_in = gear_teeth.get("input") or 0
-        z_out = gear_teeth.get("output") or 0
-        if z_in > 0:
-            mesh_order = float(z_in)
-            features["mesh_order"] = mesh_order
-            mesh_amp = _order_band_energy(order_axis, spectrum, mesh_order, 0.5)
-            features["mesh_order_ratio"] = round(mesh_amp / total_energy, 6)
-
-            sideband_total = 0.0
-            sideband_count = 0
-            for n in range(1, 4):
-                sb_low = mesh_order - n
-                sb_high = mesh_order + n
-                sb_amp = _order_band_energy(order_axis, spectrum, sb_low, 0.3) + _order_band_energy(order_axis, spectrum, sb_high, 0.3)
-                sideband_total += sb_amp
-                if sb_amp > mesh_amp * 0.05:
-                    sideband_count += 1
-            features["sideband_order_total_ratio"] = round(sideband_total / total_energy, 6)
-            features["sideband_order_count"] = sideband_count
-
-        if z_out > 0:
-            out_order = float(z_out)
-            features["output_mesh_order"] = out_order
-            features["output_mesh_order_ratio"] = round(_order_band_energy(order_axis, spectrum, out_order, 0.5) / total_energy, 6)
-
-    # --- 轴承阶次特征 ---
-    if bearing_params and isinstance(bearing_params, dict):
-        borders = _compute_bearing_fault_orders(rot_freq, bearing_params)
-        for name, order in borders.items():
-            features[f"{name}_order"] = round(order, 3)
-            order_amp = _order_band_energy(order_axis, spectrum, order, 0.3)
-            features[f"{name}_order_ratio"] = round(order_amp / total_energy, 6)
-            harmonic_total = 0.0
-            for h in range(2, 4):
-                harmonic_total += _order_band_energy(order_axis, spectrum, order * h, 0.3)
-            features[f"{name}_order_harmonic_ratio"] = round(harmonic_total / total_energy, 6)
-
-    return features
-
-
+        fourier = compute_spectrum(arr, sample_rate)
+        # 五等宽频带用于既有能量图；复用同一带单位功率表示，包含 Nyquist。
+        band_edges = np.linspace(0.0, sample_rate / 2.0, 6)
+        band_index = np.minimum(np.searchsorted(band_edges, fourier.frequency_hz, side="right") - 1, 4)
+        band_power = np.bincount(band_index, weights=fourier.power, minlength=5)
+        total_power = float(np.sum(band_power))
+        energy = {
+            f"IMF{index + 1}": round(float(value) / total_power * 100.0, 2) if total_power > 0 else 0.0
+            for index, value in enumerate(band_power)
+        }
+        return {
+            "health_score": health_score,
+            # 只有通用统计异常且无法分类时保留未知，不伪造“正常运行=1”。
+            "fault_probabilities": (
+                calibrate_fault_probabilities(fault_scores)
+                if status == "normal" or fault_scores else {}
+            ),
+            "imf_energy": energy,
+            "imf_energy_kind": "five_equal_frequency_bands_power_percent",
+            "status": status,
+            "order_analysis": {
+                "rot_freq_hz": round(rot_freq, 3), "rot_rpm": round(rot_freq * 60.0, 1),
+                "tracking_method": order.tracking_method, "channel": channel_index,
+                "time_features": averaged, "bearing": bearing_result, "gear": gear_result,
+                "deductions": deductions,
+            },
+            "rot_freq": rot_freq,
+        }
+    except (TypeError, ValueError, OverflowError) as exc:
+        logger.warning("规则回退前提不满足: %s", exc)
+        return _indeterminate(str(exc))

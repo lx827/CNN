@@ -27,7 +27,7 @@ from scipy.signal import hilbert as scipy_hilbert
 from scipy.fft import rfft, rfftfreq
 from typing import Dict, List, Optional
 
-from ..vmd_denoise import vmd_decompose
+from app.algorithms.decomposition.vmd import VMDParameters, decompose_vmd
 from ..signal_utils import (
     prepare_signal,
     _band_energy,
@@ -140,7 +140,11 @@ def vmd_fixed_axis_demod_analysis(
     K = max(2, K)  # 至少2个模态（1个模态无分解意义）
 
     try:
-        u, u_hat, omega = vmd_decompose(arr, K=K, alpha=alpha)
+        decomposition = decompose_vmd(arr, fs, VMDParameters(modes=K, alpha=alpha))
+        if decomposition.status != "valid":
+            raise ValueError(decomposition.reason or "vmd_not_evaluable")
+        arr = arr[:decomposition.valid_interval.stop_index]
+        u = decomposition.modes
     except Exception:
         return {
             "method": "VMD Fixed-Axis Gear Demod",
@@ -156,22 +160,8 @@ def vmd_fixed_axis_demod_analysis(
             "sideband_analysis": {"error": "vmd_failed"},
         }
 
-    # VMD 返回 omega 形状 (n_iter, K)，取最终迭代的中心频率
-    # omega 是归一化频率 (0~0.5)，需转换为 Hz：freq_hz = omega * fs
-    # 但 vmd_decompose 内部对信号做了镜像扩展，omega 的频率基数基于扩展后的长度
-    # 直接使用 u_hat 的频谱峰值作为中心频率更准确
-    mode_center_freqs = []
-    for k_idx in range(u.shape[0]):
-        imf = u[k_idx, :]
-        # 对每个 IMF 做 FFT 取峰值频率作为中心频率
-        spectrum = np.abs(rfft(imf))
-        freqs = rfftfreq(len(imf), 1.0 / fs)
-        if len(spectrum) > 0:
-            peak_idx = np.argmax(spectrum)
-            center_freq = float(freqs[peak_idx])
-        else:
-            center_freq = 0.0
-        mode_center_freqs.append(center_freq)
+    # 分解结果直接使用物理 Hz，不从旧 tuple 推断单位或重复 FFT。
+    mode_center_freqs = decomposition.center_frequencies_hz.tolist()
 
     # === Step 2: 选择啮合频率附近的敏感模态 ===
     # 选择中心频率最接近 mesh_freq 的模态

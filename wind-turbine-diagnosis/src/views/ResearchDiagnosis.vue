@@ -9,6 +9,10 @@
       v-model:selected-method="selectedMethod"
       v-model:denoise="denoise"
       v-model:profile="profile"
+      v-model:target-fault="targetFault"
+      v-model:comb-frequencies="combFrequencies"
+      v-model:comb-is-stable="combIsStable"
+      v-model:rot-frequency="rotFrequency"
       :devices="devices"
       :batches="currentBatches"
       :channels="currentChannels"
@@ -43,12 +47,12 @@
     <div v-if="result && runMode === 'single'" class="summary-band">
       <div class="metric">
         <span class="label">方法</span>
-        <el-tag :type="methodCategoryTag" size="large">{{ selectedMethodInfo?.label || selectedMethod }}</el-tag>
+        <el-tag :type="methodCategoryTag" size="large">{{ result.requested_method ? result.method.toUpperCase() + '（' + result.requested_method.toUpperCase() + ' 未指定目标）' : selectedMethodInfo?.label || selectedMethod }}</el-tag>
       </div>
       <div class="metric"><span class="label">转频</span><strong>{{ result.rot_freq_hz ?? '-' }} Hz</strong></div>
       <div class="metric" v-if="result.health_score"><span class="label">健康度</span><strong>{{ result.health_score }}</strong></div>
-      <div class="metric" v-if="selectedMethodInfo?.category === 'bearing'">
-        <span class="label">包络评估</span>
+      <div class="metric" v-if="selectedMethodInfo?.category === 'bearing' || result.is_planetary">
+        <span class="label">方法评估</span>
         <el-tag :type="evaluationStatusType(result.evaluation?.status)">
           {{ evaluationStatusText(result.evaluation?.status) }}
         </el-tag>
@@ -91,9 +95,10 @@ import { useResearchDiagnosis, percent, statusType, statusText, evaluationStatus
 const {
   devices, selectedDeviceId, selectedBatchIndex, selectedChannel,
   runMode, selectedMethod, denoise, profile, loading, result,
+  targetFault, combFrequencies, combIsStable, rotFrequency,
   currentBatches, currentChannels, canRun,
   bearingMethodGroup, gearMethodGroup, planetaryMethodGroup,
-  selectedMethodInfo, methodCategoryTag, filterPlanetaryResult,
+  selectedMethodInfo, methodCategoryTag,
   bearingVoteRows, gearVoteRows, bestIndicatorRows, dsFaultProbRows,
   hasAllResults, allBearingRows, allGearRows, allBestIndicatorRows,
   runAnalysis, gotoDataView,

@@ -230,6 +230,8 @@ def compute_continuous_deductions(
 
     # ═══════ 轴承故障扣分 ═══════
     bearing_ind = bearing_result.get("evaluation", {}).get("indicators", {})
+    if bearing_result.get("evaluation_kind") == "sc_scoh":
+        bearing_ind = {}  # 循环平稳证据仅在专属分支计分，不能再算一次包络命中。
     freq_sig_count = sum(
         bool(v.get("significant")) for k, v in bearing_ind.items()
         if isinstance(v, dict) and not k.endswith("_stat")
@@ -298,16 +300,19 @@ def compute_continuous_deductions(
     except (TypeError, ValueError):
         has_gear = False
 
-    # 判断是否为行星齿轮箱（影响门控阈值）
-    is_planetary = bool(gear_teeth and int(gear_teeth.get("planet_count") or gear_teeth.get("n_planets") or 0) >= 3)
-    if is_planetary:
-        # 行星箱时域特征重叠严重：健康 kurt=7~13, crest=7~11
-        # crack 时 kurt 显著降低（3.9~5.5），双向门控：高峭度 + 低峭度
-        GEAR_KURT_THRESHOLD = 10.0
-        GEAR_CREST_THRESHOLD = 10.0
-    else:
-        GEAR_KURT_THRESHOLD = 12.0
-        GEAR_CREST_THRESHOLD = 12.0
+    if gear_result.get("is_planetary"):
+        # 行星只消费专属评估器的可比基线结论；同一记录只记一项扣分。
+        evaluation = gear_result.get("evaluation", {})
+        if evaluation.get("status") == "evaluated":
+            calibrated = [v for v in evaluation.get("indicators", {}).values() if isinstance(v, dict) and v.get("status") == "evaluated"]
+            if any(v.get("critical") for v in calibrated):
+                deductions.append(("gear_planetary_baseline_critical", 12.0))
+            elif any(v.get("warning") for v in calibrated):
+                deductions.append(("gear_planetary_baseline_warning", 6.0))
+        gear_ind = {}
+        has_gear = False
+    GEAR_KURT_THRESHOLD = 12.0
+    GEAR_CREST_THRESHOLD = 12.0
 
     # 从轴承或齿轮指标中判断旋转谐波主导
     low_freq_ind = bearing_ind.get("low_freq_ratio") if bearing_ind else None
@@ -319,13 +324,7 @@ def compute_continuous_deductions(
 
     if has_gear:
         gear_impulse = sigmoid_deduction(kurt, GEAR_KURT_THRESHOLD, 1.0, slope=2.0) + sigmoid_deduction(crest, GEAR_CREST_THRESHOLD, 1.0, slope=2.0)
-        # 行星箱 crack 时 kurt < 5.5，直接打开齿轮门控
-        if is_planetary and kurt < 5.5:
-            gear_impulse = max(gear_impulse, 1.0)
         gear_gate = min(1.0, gear_impulse) if not rotation_dominant else 0.0
-        # 行星箱：频域指标（FM4/FM0/全频带包络）有独立区分力，gear_gate 保底 0.5
-        if is_planetary:
-            gear_gate = max(gear_gate, 0.5)
         if gear_gate > 0.1:
             ser = gear_ind.get("ser", {}) if isinstance(gear_ind.get("ser"), dict) else {}
             if ser.get("critical"):
@@ -361,15 +360,6 @@ def compute_continuous_deductions(
                 fm0_ded = 6.0 * gear_gate
                 deductions.append(("gear_fm0_warning", round(fm0_ded, 2)))
 
-            # 全频带包络峭度（行星箱 crack 专用指标）
-            pfek = gear_ind.get("planetary_fullband_env_kurt", {}) if isinstance(gear_ind.get("planetary_fullband_env_kurt"), dict) else {}
-            if pfek.get("critical"):
-                pfek_ded = 20.0 * gear_gate
-                deductions.append(("gear_planetary_fullband_env_kurt_critical", round(pfek_ded, 2)))
-            elif pfek.get("warning"):
-                pfek_ded = 12.0 * gear_gate
-                deductions.append(("gear_planetary_fullband_env_kurt_warning", round(pfek_ded, 2)))
-
             # 阶次谱统计指标（有齿轮参数时同样有效）
             order_peak = gear_ind.get("order_peak_concentration", {}) if isinstance(gear_ind.get("order_peak_concentration"), dict) else {}
             order_kurt = gear_ind.get("order_kurtosis", {}) if isinstance(gear_ind.get("order_kurtosis"), dict) else {}
@@ -377,20 +367,6 @@ def compute_continuous_deductions(
                 deductions.append(("gear_order_stat_critical", round(8.0 * gear_gate, 2)))
             elif order_peak.get("warning") or order_kurt.get("warning"):
                 deductions.append(("gear_order_stat_warning", round(4.0 * gear_gate, 2)))
-
-    # TSA 残差峭度路径（独立门控）
-    tsa_env_result = gear_result.get("planetary_tsa_demod") or {}
-    if isinstance(tsa_env_result, dict) and "error" not in tsa_env_result:
-        tsa_residual_kurt = float(tsa_env_result.get("residual_kurtosis", 0.0))
-        tsa_ded = cascade_deduction(tsa_residual_kurt, [3.0, 5.0], [8, 15])
-        # rotation_dominant 时降权
-        if rotation_dominant:
-            tsa_ded *= 0.3
-        if tsa_ded > 0.5:
-            if tsa_residual_kurt > 5.0:
-                deductions.append(("gear_tsa_residual_kurtosis_critical", round(tsa_ded, 2)))
-            else:
-                deductions.append(("gear_tsa_residual_kurtosis_warning", round(tsa_ded, 2)))
 
     if not has_gear:
         car = gear_ind.get("car", {}) if isinstance(gear_ind.get("car"), dict) else {}
@@ -412,17 +388,17 @@ def compute_continuous_deductions(
     # ═══════ SC/SCoh 循环平稳补充扣分 ═══════
     # 轴承 SC/SCoh 结果：scoh_peak > 0.3 时作为弱证据补充
     # SC/SCoh 的专属证据独立于通用包络 evaluation。
-    scoh_result = bearing_result.get("sc_scoh_indicators", {})
+    scoh_result = bearing_result.get("evaluation", {}).get("indicators", {})
     # 仅当 SC/SCoh 是分析方法时才提取（避免从 envelope 结果中误读）
     bearing_method = bearing_result.get("method", "")
     if bearing_method == "sc_scoh":
-        scoh_max = _sf(bearing_result.get("sc_max_value", 0) or
-                       max((v.get("scoh_peak", 0) for k, v in scoh_result.items()
-                            if isinstance(v, dict) and "scoh_peak" in v), default=0), 0.0)
+        scoh_max = _sf(max((v.get("scoh_peak", 0) for v in scoh_result.values()
+                           if isinstance(v, dict) and v.get("evaluable") is True
+                           and v.get("significant") is True), default=0), 0.0)
         # SCoh > 0.3 时作为补充扣分（不受 kurt>5 门控限制）
         # 但权重减半，避免误报
         scoh_ded = sigmoid_deduction(scoh_max, 0.3, 5.0, slope=4.0)
-        if scoh_ded > 0.5:
+        if scoh_max > 0 and scoh_ded > 0.5:
             deductions.append(("bearing_sc_scoh_evidence", round(scoh_ded, 2)))
 
     # ═══════ NA4/NB4 齿轮趋势指标 ═══════

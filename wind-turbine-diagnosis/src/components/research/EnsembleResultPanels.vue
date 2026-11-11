@@ -65,12 +65,14 @@
       <el-table v-if="result.ensemble" :data="bearingVoteRows" border size="small" max-height="320">
         <el-table-column prop="method" label="算法" min-width="180" />
         <el-table-column prop="confidence" label="置信度" width="110">
-          <template #default="{ row }">{{ percent(row.confidence) }}</template>
+          <template #default="{ row }">{{ row.evaluable ? percent(row.confidence) : '不可评估' }}</template>
         </el-table-column>
         <el-table-column prop="param_hits" label="参数命中" width="100" />
         <el-table-column prop="stat_hits" label="统计命中" width="100" />
         <el-table-column prop="strongest_score" label="最强证据" width="100" />
-        <el-table-column prop="hits" label="证据" min-width="220" />
+        <el-table-column label="证据 / 前提" min-width="220">
+          <template #default="{ row }">{{ row.evaluable ? row.hits : row.reason }}</template>
+        </el-table-column>
       </el-table>
       <!-- 全部方法模式：各方法检出摘要 -->
       <el-table v-else :data="allBearingRows" border size="small" max-height="320">
@@ -78,7 +80,7 @@
         <el-table-column prop="faults" label="检出故障">
           <template #default="{ row }">
             <el-tag v-for="(f, idx) in row.faults" :key="idx" :type="((f.snr ?? f.score) > 5 || f.score === '?') ? 'danger' : 'warning'" size="small" style="margin-right:6px;margin-bottom:4px">
-              {{ f.fault_type }} ({{ f.snr != null ? 'SNR' : 'score' }}={{ f.snr ?? f.score }})
+              {{ f.fault_type }} ({{ f.coherence_background_ratio != null ? '相干峰背景比' : f.snr != null ? 'SNR' : 'score' }}={{ f.coherence_background_ratio ?? f.snr ?? f.score }})
             </el-tag>
             <el-text v-if="row.evaluationStatus !== 'evaluated' && !row._error" type="info" size="small">输入不足，暂不可判定</el-text>
             <el-text v-else-if="row.faults.length === 0 && !row._error" type="info" size="small">未检出显著故障</el-text>
@@ -139,10 +141,14 @@
             <el-tag v-for="(a, idx) in row.alerts" :key="idx" :type="a.level === 'critical' ? 'danger' : 'warning'" size="small" style="margin-right:6px;margin-bottom:4px">
               {{ a.indicator }}
             </el-tag>
-            <el-text v-if="row.alerts.length === 0 && !row._error" type="info" size="small">无告警</el-text>
+            <el-text v-if="row.alerts.length === 0 && !row._error" type="info" size="small">{{ row.evaluationStatus === 'not_evaluable' ? '不可评估' : '无告警' }}</el-text>
           </template>
         </el-table-column>
       </el-table>
+    </section>
+
+    <section v-for="(gear, key) in planetaryResults" :key="key" class="panel wide">
+      <PlanetaryResult :result="gear" />
     </section>
 
     <section v-if="result.ensemble || hasAllResults" class="panel wide">
@@ -174,12 +180,14 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import PlanetaryResult from './PlanetaryResult.vue'
 import { fmt, percent } from '../../composables/useResearchDiagnosis'
 
 const indicatorType = (indicator) => indicator?.critical ? 'danger' : indicator?.warning ? 'warning' : 'success'
 const indicatorClass = (indicator) => indicator?.critical ? 'text-danger' : indicator?.warning ? 'text-warning' : ''
 
-defineProps({
+const props = defineProps({
   result: { type: Object, required: true },
   hasAllResults: { type: Object, default: null },
   bearingVoteRows: { type: Array, default: () => [] },
@@ -190,6 +198,7 @@ defineProps({
   allGearRows: { type: Array, default: () => [] },
   allBestIndicatorRows: { type: Array, default: () => [] },
 })
+const planetaryResults = computed(() => Object.fromEntries(Object.entries(props.result.gear_results || {}).filter(([, result]) => result?.is_planetary)))
 </script>
 
 <style scoped>

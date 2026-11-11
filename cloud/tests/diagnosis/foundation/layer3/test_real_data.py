@@ -404,7 +404,7 @@ def test_analyzer_real():
 
     device = MockDevice(
         diagnosis_strategy="advanced",
-        bearing_method="kurtogram",
+        bearing_method="filter_bank_sk",
         gear_method="standard",
         bearing_params={"n": 9, "d": 7.94, "D": 38.52, "alpha": 0},
         gear_teeth=None,
@@ -477,7 +477,7 @@ def test_analyzer_cw():
     """CW 变速: analyze_device 多通道"""
     print("\n--- analyzer CW 变速 ---")
     results = []
-    device = MockDevice(diagnosis_strategy="advanced", bearing_method="kurtogram",
+    device = MockDevice(diagnosis_strategy="advanced", bearing_method="filter_bank_sk",
                         bearing_params={"n": 9, "d": 7.94, "D": 38.52, "alpha": 0}, gear_teeth=None)
     channels = {}
     for ch, fname in [("1", "H-A-1.npy"), ("2", "O-A-1.npy")]:
@@ -557,40 +557,6 @@ def test_analyzer_hustgearbox():
 # 5. gear/__init__ 聚合函数
 # ═══════════════════════════════════════════════════════════
 
-def test_gear_init_functions():
-    """行星旧读模型评估入口。"""
-    print("\n--- gear/__init__ 聚合函数 ---")
-    results = []
-    from app.services.diagnosis.gear import _evaluate_gear_faults
-
-    # 已删除错误 ER 简化实现；定轴指标由独立算法测试覆盖。
-
-    # _evaluate_gear_faults: 需要 gear_result dict
-    gear_result = {
-        "planet_count": 4,
-        "ser": 8.5,
-        "car": 1.5e9,
-        "fm4": 3.2,
-        "order_kurtosis": 25.0,
-        "order_peak_concentration": 0.15,
-        "sideband_count": 8,
-    }
-    try:
-        ev = _evaluate_gear_faults(gear_result)
-        has_warning = any(v.get("warning") or v.get("critical") for v in ev.values() if isinstance(v, dict))
-        results.append({"test": "evaluate_gear_faults", "keys": list(ev.keys()), "has_warning": has_warning, "passed": len(ev) > 0})
-        print(f"  [{'PASS' if len(ev) > 0 else 'FAIL'}] _evaluate_gear_faults: keys={list(ev.keys())}, has_warning={has_warning}")
-    except Exception as e:
-        results.append({"test": "evaluate_gear_faults", "passed": False, "error": str(e)[:100]})
-        print(f"  [FAIL] _evaluate_gear_faults: {str(e)[:80]}")
-
-    return results
-
-
-# ═══════════════════════════════════════════════════════════
-# main
-# ═══════════════════════════════════════════════════════════
-
 def main():
     print("=" * 60)
     print("Layer 3: 真实数据集端到端验证")
@@ -609,7 +575,6 @@ def main():
         "analyzer_cw": test_analyzer_cw(),
         "analyzer_wtgearbox": test_analyzer_wtgearbox(),
         "analyzer_hustgearbox": test_analyzer_hustgearbox(),
-        "gear_init_functions": test_gear_init_functions(),
     }
 
     total = passed = 0

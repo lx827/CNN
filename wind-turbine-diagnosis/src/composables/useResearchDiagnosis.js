@@ -10,10 +10,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { getAllDeviceData } from '../api/data'
 import { getMethodInfo, getChannelMethodAnalysis, getChannelResearchAnalysis } from '../api/diagnosis'
 import { getDiagnosisStatusView } from '../utils/diagnosisStatus'
+import { formatErrorMessage } from '../utils/errorMessage'
 import {
   bearingIndicatorEntries,
   indicatorDisplayValue,
   significantBearingFaults,
+  bearingReasonText,
 } from '../utils/bearingDiagnosis'
 
 export const runModeOptions = [
@@ -48,6 +50,8 @@ export const evaluationStatusText = status => {
 const voteRows = (votes = {}) => Object.entries(votes).map(([method, value]) => ({
   method,
   confidence: value.confidence ?? 0,
+  evaluable: value.evaluable !== false,
+  reason: value.reason ? bearingReasonText(value.reason) : '',
   param_hits: value.param_hits ?? '-',
   stat_hits: value.stat_hits ?? '-',
   critical_hits: value.critical_hits ?? '-',
@@ -88,6 +92,10 @@ export function useResearchDiagnosis() {
   const selectedChannel = ref(1)
   const runMode = ref('single')
   const selectedMethod = ref('envelope')
+  const targetFault = ref('')
+  const combFrequencies = ref('')
+  const combIsStable = ref(false)
+  const rotFrequency = ref(null)
   const denoise = ref('none')
   const profile = ref('balanced')
   const loading = ref(false)
@@ -140,18 +148,6 @@ export function useResearchDiagnosis() {
     return false
   })
 
-  // 行星箱方法结果过滤（排除大数组/不可展示字段）
-  const filterPlanetaryResult = computed(() => {
-    if (!result.value || selectedMethodInfo.value?.category !== 'planetary') return {}
-    const filtered = {}
-    for (const [k, v] of Object.entries(result.value)) {
-      if (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') {
-        filtered[k] = v
-      }
-    }
-    return filtered
-  })
-
   // 投票行数据
   const bearingVoteRows = computed(() => voteRows(result.value?.ensemble?.bearing_votes))
   const gearVoteRows = computed(() => voteRows(result.value?.ensemble?.gear_votes))
@@ -199,6 +195,7 @@ export function useResearchDiagnosis() {
         r.rot_freq_hz != null ? `${r.rot_freq_hz?.toFixed?.(2) ?? r.rot_freq_hz}Hz` : '',
         r.band?.center_hz != null ? `频带${r.band.center_hz?.toFixed?.(0) ?? r.band.center_hz}Hz` : '',
         r.evaluation?.status !== 'evaluated' ? evaluationStatusText(r.evaluation?.status) : '',
+        r.reason ? bearingReasonText(r.reason) : '',
       ].filter(Boolean).join(', ')
       return { method, faults, evaluationStatus: r.evaluation?.status, params: params || '-' }
     })
@@ -216,10 +213,11 @@ export function useResearchDiagnosis() {
         .map(([name, v]) => ({ indicator: name, level: v.critical ? 'critical' : 'warning' }))
       return {
         method,
-        ser: r.ser != null ? Number(r.ser) : null,
-        car: r.car != null ? Number(r.car) : null,
-        fm0: r.fm0 != null ? Number(r.fm0) : null,
-        fm4: r.fm4 != null ? Number(r.fm4) : null,
+        ser: r.is_planetary ? r.sideband_analysis?.ser?.value ?? null : r.ser != null ? Number(r.ser) : null,
+        car: r.is_planetary ? r.metrics?.car?.value ?? null : r.car != null ? Number(r.car) : null,
+        fm0: r.is_planetary ? r.metrics?.fm0?.value ?? null : r.fm0 != null ? Number(r.fm0) : null,
+        fm4: r.is_planetary ? r.metrics?.fm4?.value ?? null : r.fm4 != null ? Number(r.fm4) : null,
+        evaluationStatus: r.evaluation?.status,
         sideband_count: r.sidebands?.length ?? (r.sideband_count ?? 0),
         indicators: fi,
         alerts,
@@ -291,6 +289,17 @@ export function useResearchDiagnosis() {
 
   const runAnalysis = async () => {
     if (!canRun.value) return
+    const comb = combFrequencies.value.trim()
+      ? combFrequencies.value.split(/[,，\s]+/).filter(Boolean).map(Number) : []
+    if (comb.some(value => !Number.isFinite(value) || value <= 0)) {
+      ElMessage.warning('梳状频率必须是正数，单位 Hz；多个频率用逗号分隔')
+      return
+    }
+    const methodOptions = {
+      denoise: denoise.value, target_fault: targetFault.value || undefined,
+      comb_frequencies_hz: comb, comb_is_stable: combIsStable.value,
+      rot_freq_hz: rotFrequency.value || undefined,
+    }
     loading.value = true
     result.value = null
     try {
@@ -300,7 +309,7 @@ export function useResearchDiagnosis() {
           selectedBatchIndex.value,
           selectedChannel.value,
           selectedMethod.value,
-          { denoise: denoise.value },
+          methodOptions,
         )
         result.value = res.data
       } else if (runMode.value === 'all') {
@@ -309,7 +318,7 @@ export function useResearchDiagnosis() {
           selectedBatchIndex.value,
           selectedChannel.value,
           'all',
-          { denoise: denoise.value },
+          methodOptions,
         )
         result.value = res.data
       } else if (runMode.value === 'ensemble') {
@@ -317,12 +326,12 @@ export function useResearchDiagnosis() {
           selectedDeviceId.value,
           selectedBatchIndex.value,
           selectedChannel.value,
-          { profile: profile.value, denoise: denoise.value },
+          { ...methodOptions, profile: profile.value },
         )
         result.value = res.data
       }
     } catch (error) {
-      ElMessage.error(error?.response?.data?.detail || error?.message || '诊断失败')
+      ElMessage.error(formatErrorMessage(error, '诊断失败'))
     } finally {
       loading.value = false
     }
@@ -352,6 +361,7 @@ export function useResearchDiagnosis() {
     selectedChannel,
     runMode,
     selectedMethod,
+    targetFault, combFrequencies, combIsStable, rotFrequency,
     denoise,
     profile,
     loading,
@@ -364,7 +374,6 @@ export function useResearchDiagnosis() {
     planetaryMethodGroup,
     selectedMethodInfo,
     methodCategoryTag,
-    filterPlanetaryResult,
     bearingVoteRows,
     gearVoteRows,
     bestIndicatorRows,

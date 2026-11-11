@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.services.diagnosis.gear.planetary import gear_config_for_channel
 from app.models import SensorData, Device, Diagnosis
 from datetime import datetime, timezone
 from app.services.diagnosis import DiagnosisEngine, BearingMethod, GearMethod, DenoiseMethod, DiagnosisStrategy
 from app.services.diagnosis.features import has_bearing_params as _service_has_bearing, has_gear_params as _service_has_gear
-from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum
+from app.services.diagnosis.signal_utils import estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum, DenoisingError
+from .errors import denoising_http_error, configured_denoise
 from . import router, prepare_signal, _get_channel_name, _extract_device_param, _sanitize_for_json
 import logging
 import numpy as np
@@ -68,7 +70,7 @@ async def get_channel_gear(
         if device:
             gear_teeth = device.gear_teeth or {}
         # 兼容前端通道级格式 {"1":{input:18}} → 设备级 {input:18}
-        gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
+        gear_teeth = gear_config_for_channel(gear_teeth, channel)
 
         # 未配置齿轮参数时不再注入默认齿数；
         # 诊断引擎只返回阶次谱/倒谱等统计异常指标。
@@ -77,18 +79,8 @@ async def get_channel_gear(
             "standard": GearMethod.STANDARD,
             "advanced": GearMethod.ADVANCED,
         }
-        denoise_map = {
-            "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,
-            "vmd": DenoiseMethod.VMD, "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
-            "wavelet_lms": DenoiseMethod.WAVELET_LMS,
-            "emd": DenoiseMethod.EMD, "ceemdan": DenoiseMethod.CEEMDAN,
-            "savgol": DenoiseMethod.SAVGOL,
-            "wavelet_packet": DenoiseMethod.WAVELET_PACKET,
-            "ceemdan_wp": DenoiseMethod.CEEMDAN_WP,
-            "eemd": DenoiseMethod.EEMD,
-        }
         gear_method = method_map.get(method, GearMethod.STANDARD)
-        denoise_method = denoise_map.get(denoise, DenoiseMethod.NONE)
+        denoise_method = configured_denoise(denoise)
 
         engine = DiagnosisEngine(
             gear_method=gear_method,
@@ -131,6 +123,8 @@ async def get_channel_gear(
                 "fault_indicators": result.get("fault_indicators", {}),
             }
         })
+    except DenoisingError as e:
+        raise denoising_http_error(e) from e
     except Exception as e:
         logger.error(f"齿轮诊断失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"齿轮诊断失败: {e}")
@@ -143,7 +137,7 @@ async def get_channel_analyze(
     channel: int,
     detrend: bool = Query(default=False, description="是否线性去趋势"),
     strategy: str = Query(default="standard", description="诊断策略: standard/advanced/expert"),
-    bearing_method: str = Query(default="envelope", description="轴承方法: envelope/kurtogram/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"),
+    bearing_method: str = Query(default="envelope", description="轴承方法: envelope/filter_bank_sk/cpw/med/teager/spectral_kurtosis/sc_scoh/mckd/wp/dwt/emd_envelope/ceemdan_envelope/vmd_envelope"),
     gear_method: str = Query(default="standard", description="齿轮方法: standard/advanced"),
     denoise: str = Query(default="none", description="预处理方法: none/wavelet/vmd/wavelet_vmd/wavelet_lms/emd/ceemdan/savgol/wavelet_packet/ceemdan_wp/eemd"),
     db: Session = Depends(get_db)
@@ -176,13 +170,13 @@ async def get_channel_analyze(
             gear_teeth = device.gear_teeth or {}
         # 兼容前端通道级格式
         bearing_params = _extract_device_param(bearing_params, ("n", "d", "D", "alpha"))
-        gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
+        gear_teeth = gear_config_for_channel(gear_teeth, channel)
 
         # 映射前端参数到枚举
         strategy_map = {"standard": "standard", "advanced": "advanced", "expert": "expert"}
         bearing_map = {
             "envelope": BearingMethod.ENVELOPE,
-            "kurtogram": BearingMethod.KURTOGRAM,
+            "filter_bank_sk": BearingMethod.FILTER_BANK_SK,
             "cpw": BearingMethod.CPW,
             "med": BearingMethod.MED,
             "teager": BearingMethod.TEAGER,
@@ -196,22 +190,12 @@ async def get_channel_analyze(
             "vmd_envelope": BearingMethod.VMD_ENVELOPE,
         }
         gear_map = {"standard": GearMethod.STANDARD, "advanced": GearMethod.ADVANCED}
-        denoise_map = {
-            "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,
-            "vmd": DenoiseMethod.VMD, "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
-            "wavelet_lms": DenoiseMethod.WAVELET_LMS,
-            "emd": DenoiseMethod.EMD, "ceemdan": DenoiseMethod.CEEMDAN,
-            "savgol": DenoiseMethod.SAVGOL,
-            "wavelet_packet": DenoiseMethod.WAVELET_PACKET,
-            "ceemdan_wp": DenoiseMethod.CEEMDAN_WP,
-            "eemd": DenoiseMethod.EEMD,
-        }
 
         engine = DiagnosisEngine(
             strategy=strategy_map.get(strategy, "standard"),
             bearing_method=bearing_map.get(bearing_method, BearingMethod.ENVELOPE),
             gear_method=gear_map.get(gear_method, GearMethod.STANDARD),
-            denoise_method=denoise_map.get(denoise, DenoiseMethod.NONE),
+            denoise_method=configured_denoise(denoise),
             bearing_params=bearing_params,
             gear_teeth=gear_teeth,
         )
@@ -284,6 +268,8 @@ async def get_channel_analyze(
             "code": 200,
             "data": response_data,
         })
+    except DenoisingError as e:
+        raise denoising_http_error(e) from e
     except Exception as e:
         logger.error(f"综合分析失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"综合分析失败: {e}")
@@ -335,24 +321,14 @@ async def get_channel_full_analysis(
             gear_teeth = device.gear_teeth or {}
         # 兼容前端通道级格式
         bearing_params = _extract_device_param(bearing_params, ("n", "d", "D", "alpha"))
-        gear_teeth = _extract_device_param(gear_teeth, ("input", "output"))
+        gear_teeth = gear_config_for_channel(gear_teeth, channel)
 
-        denoise_map = {
-            "none": DenoiseMethod.NONE, "wavelet": DenoiseMethod.WAVELET,
-            "vmd": DenoiseMethod.VMD, "wavelet_vmd": DenoiseMethod.WAVELET_VMD,
-            "wavelet_lms": DenoiseMethod.WAVELET_LMS,
-            "emd": DenoiseMethod.EMD, "ceemdan": DenoiseMethod.CEEMDAN,
-            "savgol": DenoiseMethod.SAVGOL,
-            "wavelet_packet": DenoiseMethod.WAVELET_PACKET,
-            "ceemdan_wp": DenoiseMethod.CEEMDAN_WP,
-            "eemd": DenoiseMethod.EEMD,
-        }
 
         engine = DiagnosisEngine(
             strategy=DiagnosisStrategy.EXPERT,
             bearing_method=BearingMethod.ENVELOPE,
             gear_method=GearMethod.STANDARD,
-            denoise_method=denoise_map.get(denoise, DenoiseMethod.NONE),
+            denoise_method=configured_denoise(denoise),
             bearing_params=bearing_params,
             gear_teeth=gear_teeth,
         )
@@ -413,6 +389,8 @@ async def get_channel_full_analysis(
             "code": 200,
             "data": response_data,
         })
+    except DenoisingError as e:
+        raise denoising_http_error(e) from e
     except Exception as e:
         import traceback
         tb = traceback.format_exc()

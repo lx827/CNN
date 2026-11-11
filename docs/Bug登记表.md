@@ -1,6 +1,6 @@
 # Bug 记录
 
-> 最后更新: 2026-11-08 | 详见 AGENTS.md §14
+> 最后更新: 2026-11-11 | 诊断重构当前处于开发分支/草稿 PR #89，未据此声明已部署生产。历史效果数字保留当时数据与实现语境。
 
 ## 未修复 (4)
 
@@ -11,7 +11,7 @@
 | 25 | `Settings.vue`(现 `components/settings/MechanicalParamsCard.vue`) | **设置页首渲染即崩、整页空白** — `form.gear_teeth` 初始为 {},模板无守卫直接访问 `form.gear_teeth[String(i)].input`;挂载中止致 onMounted 不执行、无法自愈(396cf64 引入)。T5 拆分按视觉零变化要求保留该行为 |
 | 35 | 生产 `cloud/.env` | **ECS 仍用默认 `ADMIN_PASSWORD=admin123` 与默认 JWT `SECRET_KEY`** — 旧 `.env` 缺键;历史 `EDGE_API_KEY` 为 63 字节非 ASCII 值(HTTP header 无法可靠传输,2026-11-11 已轮换为随机 hex 并同步树莓派)。待补强值 |
 
-## 已修复 (36)
+## 已修复
 
 | # | 文件 | 描述 |
 |---|------|------|
@@ -40,6 +40,13 @@
 | 32 | `algorithms/order/`, `engine.py`, `gear/metrics.py`, `data_view/order.py` | **单帧/slow 失败绕过 fast、长期越界被 clip、首尾 bin 误判越界、边缘帧数/采样点单位混用、零 MAD 保留离群、窄带纯音误拒、快速变速轴承摘要成恒速、FM0 主瓣重复计数、/order 伪造健康并覆盖通道缓存** — 全记录解析反例回归；亚 bin 峰位与外侧能量区分近边界/越界；FM0 改取谐波峰值；只更新明确批次记录并标记 JSON 变更；失败测试脚本非零退出 |
 | 33 | `tests/.../synthetic_signals.py`, `algorithms/order/estimation.py` | **轴承合成器声明 rot_freq 却未生成轴频，BPFO 冲击被误当转频** — 合成器加入可观测弱 1×轴频；保持谐波/次谐波/Welch/自相关仲裁，不按故障阶次比例猜转速；Engine 同时验证 25Hz 转频与约 90Hz BPFO，foundation 失败非零退出 |
 | 34 | `deploy.sh` | **一键部署在 venv 时代旧 ECS 上两处失效(单元未更新/根环境未生成)** — 防御性修复:uv 引导 PATH 无条件生效并验证可执行;`uv sync` 后断言 `.venv/bin/python` 存在,缺失即中止不动服务;unit 强制校验指向 `.venv` 解释器,不符即备份覆盖;重启后等待真正 active(30s)。WSL dry-run 与 ECS 实跑全绿,边端心跳自动恢复 |
+| 36 | `algorithms/gear/fixed_axis/`、齿轮业务消费者 | **TSA 表示混用、FM0 主瓣重复计数、无历史仍报告趋势、服务层重复重算** — #71 使用对象 Pipeline，明确 regular/residual/differential 与 nonsynchronous，独立评估并保留 NA4/NB4 不可评估；PR #85 已合并 |
+| 37 | `algorithms/bearing/`、`advanced_bearing.py` | **伪 Fast Kurtogram、MCKD 目标/更新混用、CPW 空先验冒名、SC 专属评估被覆盖、TEO 单位失真、秩亏有限解误报成功** — #73 真实命名滤波器组、显式目标与实际 MED 回退、稳定梳状门控、SC 频移专属评估、TEO 平方单位、SVD 数值秩；开发分支已集成 |
+| 38 | `algorithms/decomposition/`、去噪/模态消费者 | **WP 顺序/系数时间轴、DWT 混入未选频带、EMD 镜像/停止、VMD Hz/补零、熵归一化、未收敛仍诊断及吞错原信号** — #74 族专属 adapter、有效区间、原始指标/选择/故障阈值与质量门控；删除旧数学/导出，DenoisingError→HTTP422，后台未知不转规则成功、None 健康阈值不告警 |
+| 39 | `algorithms/transforms/`、DataView/Monitor/DC24、`rule_based.py` | **未归一化重复频谱、先慢去噪后截断、倒谱表示混评估、规则回退伪健康/概率矛盾** — #76 统一数值表示、计算后抽点、counts 不诊断、复用对象评估；有效证据门控与阈值概率一致，校验嵌套 Mapping；开发分支已集成 |
+| 40 | `algorithms/gear/planetary/`、行星业务/API/前端 | **行星 SER 被定轴覆盖、角域 residual 误用 fs、几何/参考轴丢失、原始研究结果冒充融合和故障命名** — #72 独立固定齿圈模型、carrier 搜索、角域点/转、当前通道完整配置与四方法公共入口；基线不足明确 unknown、未校准指标不告警；删除旧重复实现和三件旧测试，开发分支已集成 |
+
+**2026-11-11 本轮证据范围**：算法专项以公式/手算、已知合成信号、负对照与独立审查为依据；业务/API/前端回归保护门控、状态和消费路径。新 Pipeline 的真实数据分类效果、阈值校准、性能与生产部署尚未由这些测试证明。主仓 CW 有 36 个变速 `.npy`，不应笼统记录为所有数据缺失；数据效果待 #78 按新契约建立。旧 #11d/#13d 的历史效果问题不因删除旧入口自动关闭。
 
 **Bug #26 验证（2026-10-24）**：`tests/edge/test_browser_open.py`（已随旧回放链退役）使用真实 Vite、临时端口和浏览器脚本探针，在修复前确认 Vite 额外打开，修复后探针不再触发且启动器只打开一次；复用已有前端同样只打开一次。父进程浏览器环境保持原值，不修改前端代理或 `open:true` 配置，不访问云端、不上传数据。
 

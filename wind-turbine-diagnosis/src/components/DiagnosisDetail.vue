@@ -58,7 +58,7 @@
       <el-descriptions :column="2" size="small" border>
         <el-descriptions-item v-for="item in scScohItems" :key="item.key" :label="item.label">
           <span :class="item.critical ? 'text-danger' : item.significant || item.warning ? 'text-warning' : 'text-muted'">
-            SCoh={{ fmtVal(item.value) }}，SNR={{ fmtVal(item.snr) }}
+            SCoh={{ fmtVal(item.value) }}，相干峰背景比={{ fmtVal(item.coherenceRatio) }}
           </span>
           <el-text type="info" size="small" class="val-hint">理论 {{ fmtVal(item.theoryHz) }} Hz</el-text>
           <el-tag v-if="item.critical" type="danger" size="small" style="margin-left: 4px;">严重</el-tag>
@@ -67,6 +67,8 @@
         </el-descriptions-item>
       </el-descriptions>
     </div>
+
+    <PlanetaryResult v-if="data.gear?.is_planetary" :result="data.gear" />
 
     <!-- 齿轮故障指示器 -->
     <div class="detail-group" v-if="gearIndicators.length">
@@ -107,6 +109,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import PlanetaryResult from './research/PlanetaryResult.vue'
 import {
   bearingEvaluationIndicators,
   scScohEntries,
@@ -144,7 +147,7 @@ function scoreClass(hs) {
   return 'score-danger'
 }
 function faultLabelText(label) {
-  if (!label || label === 'unknown') return '未检出异常'
+  if (!label || label === 'unknown') return '未知'
   if (label === 'bearing_abnormal') return '轴承异常'
   if (label === 'gear_abnormal') return '齿轮异常'
   if (label.startsWith('bearing_')) return '轴承 ' + label.replace('bearing_', '')
@@ -225,8 +228,8 @@ const scScohItems = computed(() => scScohEntries(data.value?.bearing).map(({ key
   key,
   label: indicatorLabelMap[name] || name,
   value: info.scoh_peak ?? null,
-  snr: info.scoh_snr ?? null,
-  theoryHz: info.theory_hz ?? null,
+  coherenceRatio: info.coherence_background_ratio ?? null,
+  theoryHz: info.theory_cyclic_frequency_hz ?? info.theory_hz ?? null,
   significant: info.significant ?? false,
   warning: info.warning ?? false,
   critical: info.critical ?? false,
