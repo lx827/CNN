@@ -1,6 +1,6 @@
 # 诊断编排契约
 
-> #77/#84 核心已形成，生产编排与读写接入正在实施；本页不将待集成 HTTP、迁移或前端声明为已验证完成。最终外部字段以 [API](../api/backend_api.md) 为准。
+> #77/#84 核心、生产后端编排、存储/迁移与 HTTP 已集成开发分支；前端最终收口与集中验证单独记录。外部字段以 [API](../api/backend_api.md) 为准。
 
 ## 稳定责任边界
 
@@ -45,7 +45,7 @@ profile 只决定执行矩阵和成本：runtime 使用实际配置去噪与受�
 
 定轴与行星分别有机械模型、边带间隔和基线要求。standard/advanced 对同一行星记录不作为两份独立证据；未校准行星矩、SER 或候选峰不进故障扣分、融合和告警。行星无可比基线为 unknown，而不是正常，也不借定轴阈值。
 
-复合研究流程只展示真实阶段和原始指标，生产适配与存储明确拒绝 `research_only/production_eligible=false`；不是后台 profile 隐式可用方法。公开研究参数、POST 入口和 JSON 适配在最终实现后同步 [API](../api/backend_api.md)。
+复合研究流程只展示真实阶段和原始指标，生产适配与存储明确拒绝 `research_only/production_eligible=false`；不是后台 profile 隐式可用方法。公开研究 POST/GET、参数和 JSON 适配见 [API](../api/backend_api.md)。研究 all/ensemble 返回同版本顶层 Domain 与局部结果，不额外嵌套 diagnosis，也不写生产缓存。
 
 ## 去噪和方法失败
 
@@ -59,10 +59,10 @@ assessment 精确消费对象评估的布尔结论，不直接以原始无阈值
 
 建议保存已评估对象与覆盖限制；告警只消费统一诊断结果和自己的明确策略，不根据未知、null 或非 normal 默认生成故障。设备在线/offline 状态属于运行状态，不替代诊断结论。副作用和轻摘要详见 [业务服务](services.md)、[持久化](persistence.md)。
 
-旧分散评分、概率校准、推荐、规则回退和融合实现的删除以本批最终源码为准；不为兼容旧 JSON 保留长期双状态解释。历史效果数据保留日期与上下文，不能自动升级成新 Evidence 版本的结论。
+旧 health_score/health_score_continuous、probability_calibration、recommendation、rule_based、channel_consensus 与旧 fusion/ds_fusion 已删除；评分/建议/依赖融合均收敛到 domain/assessment/adapters/fusion/evidence。旧逐指标告警子模块删除，由统一诊断告警入口消费 Domain。没有为旧 JSON 保留长期双状态解释。历史效果数据保留日期与上下文，不能自动升级成新 Evidence 版本结论。
 
 ## 缓存、重新分析与重评
 
 重新分析从原始数据重新运行对象 Pipeline，受 2G 串行约束；直接重评只消费同版本规范 Evidence。两者不是同一个动作，旧载荷缺足够证据时必须重新分析。
 
-目标读写边界为通道精确四元键与 channel=0 批次摘要隔离，手动通道分析不覆盖设备/批次摘要，独立阶次转频写回不覆盖通道缓存。具体追加/最新行、迁移与旧缓存拒绝行为在最终源码后同步 [持久化契约](persistence.md)；不能用旧 status 猜新评估成立与否。
+通道精确四元键与 channel=0 批次摘要隔离，手动通道分析不覆盖设备/批次摘要，独立阶次转频写回不覆盖通道缓存。直接重评只追加同键新历史行，旧缓存若需重新分析则返回明确冲突提示。具体追加/最新行、迁移与旧缓存拒绝行为见 [持久化契约](persistence.md)；不能用旧 status 猜新评估成立与否。

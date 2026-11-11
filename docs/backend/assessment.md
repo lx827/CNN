@@ -1,6 +1,6 @@
 # 证据、评估与诊断状态契约
 
-> 状态：#77/#84 类型化核心已提交；生产编排、缓存/迁移、API 与前端接入仍在实施。本文先定义核心稳定语义，不将未集成接口写成已验证完成。
+> 状态：#77/#84 类型化核心与生产后端编排、存储/迁移、HTTP 已集成开发分支；统一前端最后接入和集中验证收尾中。本文定义当前稳定语义，不将尚未完成的验证写成通过。
 >
 > 核心导航：`cloud/app/services/diagnosis/domain.py`、`adapters.py`、`assessment.py` 与 `fusion/evidence.py`。数学表示与机械前提仍归 [算法契约](../algorithms/INDEX.md)。
 
@@ -61,7 +61,7 @@ profile 决定运行哪些 Pipeline，与证据融合是两层；增加运行方
 
 `DiagnosisKey=(device_id,batch_index,channel,denoise_method)`；方法 Evidence 必须是真实通道，channel=0 仅表示批次摘要。真实通道号来自记录，不用查询枚举序号或第一有效通道代替；对应机械参数同样按该通道取值。
 
-目标持久化边界是通道缓存与批次摘要分开：手动通道分析不覆盖批次/设备摘要，独立转频写回不命中通道诊断缓存。最新行按 analyzed_at/id 选择，研究结果不进生产 store。轻摘要需要无歧义的两维状态；迁移/旧数据策略、写入形态和公开 HTTP 必须在最终接入源码确认后同步 [持久化](persistence.md) 与 [API](../api/backend_api.md)，本核心文档不提前声称这些接入已经完成。
+通道缓存与批次摘要分开：手动通道分析不覆盖批次/设备摘要，独立转频写回不命中通道诊断缓存。新诊断追加历史行，按 analyzed_at/id 取最新精确键；设备/列表摘要只取 channel=0、denoise=none。研究结果不进生产 store。轻摘要使用独立两维状态和 nullable 分数；迁移/旧数据策略见 [持久化](persistence.md)，HTTP 读、直接重评与重新分析见 [API](../api/backend_api.md)。
 
 ## 验证状态
 
