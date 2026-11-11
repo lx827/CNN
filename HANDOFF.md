@@ -1,33 +1,21 @@
-# 诊断业务与研究流程交接（2026-11-11）
+# 本地诊断测试交接
 
-## 当前批次
+当前范围是四套本地原始数据的数据对象、可复用格式读取器、固定选样的真实数据测试、输出核对与性能测量。调用现有算法和规范诊断状态，不提供新的 HTTP 接口，不注册设备、不写业务数据库；未部署生产环境。
 
-上批 PR #89 已合 main `752d4045df439199129838b6c6e397229bde481a`，#72/#73/#74/#76/#80 已关闭。本批 **草稿 PR #90** 收口 #75/#77/#84，最终开发源码为 `fc93117a129e9e580ccb3e7135effb7cf13a5741`。本交接不声明 PR #90 已合并或生产已部署。
+主仓数据根为 `D:/code/CNN/data`。Ottawa 轴承、HUSTbear 轴承、HUSTgearbox 定轴齿轮和 WT 行星齿轮的原始文件位于 `raw_sources/`，来源、采样率与物理前提见 [数据集契约](docs/datasets.md)。独立 worktree 使用 `CNN_DATA_ROOT` 或显式 `--data-root` 共享数据。
 
-开发主控分支 `codex/diagnosis-development`，工作区 `C:/Users/25619/.codex/worktrees/diagnosis-development/CNN`；本批文档分支 `codex/diagnosis-business-docs`，工作区 `D:/code/CNN/.claude/worktrees/diagnosis-business-docs`。旧完成 worktree 保留，不在本轮清理。主控串行合并，文档/代码/测试按逻辑提交；不重复开 review、算法验证或 Issue 评论。
+`cloud/tests/diagnosis/real_data/common.py` 的 `LoadedRecord` 表示一次采集的有限窗口，包含振动通道、原采样率、辅助信号和来源元数据。`bearing.py`、`gear.py` 负责格式读取，`effectiveness.load_record` 按数据身份分派；多通道与切窗不增加独立采集数。固定测试计划、标签、分组、来源哈希和条件假设保存在提交清单与配置中。
 
-## 已形成的交付
+在 uv workspace 已同步的 `cloud/` 中运行：
 
-- #75 复用正常算法族建立 VMD AM/FM、四阶 MSB、真实 CVS→MED→MSB、VMD→ICA 与 MSWPEE；AM 输入单位、FM Hz、MSB 输入四次方、先复平均后幅值。CVS 真实相位/空间/独立圈不足无信号输出，不能回退原信号或 TSA。五组合 POST/GET/元数据与真实 Vue 展示已接；research_only/production_eligible=false，顶层 Domain 未知/空分，不进生产缓存、评分、投票、告警。旧 BSS/VMD demod/MSB 重复实现删除。
-- #77/#84 使用 Evidence→对象 Evaluation→总体 Diagnosis，evaluation_status 与 diagnosis_conclusion 分开；coverage 保留 complete/partial/none，局部未知不隐藏，总体只覆盖合法证据。共同依赖连通去重、二元 normal/anomaly 融合、精确扣分与单次权重，assessment 单源评分/建议，已有规范 Evidence 可直接重评。
-- 精确四元键追加历史缓存；channel=0/denoise=none 唯一设备/批次摘要，手动通道与转频更新不覆盖它的诊断状态。旧 JSON 返回 unknown/null 和需重分析原因，重评409、无精确缓存404。PUT batch diagnosis 只收 JSON `{rot_freq}`。worker/手工共用 process_batch，缓存、原始标记、告警同 commit，失败整体 rollback，commit 后 WS。
-- 旧库新增两维状态与 coverage，health_score nullable Float；旧状态不可可信回填，首次加两维列清旧分，后续启动不重复清分。旧物理 status/JSON 保留但不按旧协议读写；旧 NULL 通道/去噪不补身份。SQLite 实测，MySQL SQL 无实际服务验证。
-- 前端 getDiagnosisView 唯一接完整对象，非法/未来/空状态和分值中性，null 不变0；DiagnosisCoverage 显示 partial 与局部原因。Dashboard/Monitor/详情/综合/谱/齿轮/Research 已接，不补87分、不造部件偏移分、不以RMS判健康、不读旧status/votes/best/概率。
+```powershell
+$env:CNN_DATA_ROOT='D:/code/CNN/data'
+uv run python -m tests.diagnosis.real_data.effectiveness --data-root $env:CNN_DATA_ROOT
+uv run --group benchmark python -m tests.diagnosis.benchmarks.run --data-root $env:CNN_DATA_ROOT
+```
 
-权威入口：[复合算法](docs/algorithms/composite/INDEX.md)、[证据与状态](docs/backend/assessment.md)、[业务编排](docs/backend/diagnosis.md)、[持久化迁移](docs/backend/persistence.md)、[API](docs/api/backend_api.md)、[前后端交互](docs/api/frontend_backend_interaction.md)、[测试](docs/tests/INDEX.md)、[ADR0004](docs/adr/0004-evidence-and-diagnosis-state.md)。
+本地测试已执行。真实数据测试输出位于 `D:/code/CNN/data/real_diagnosis/effectiveness/`，性能输出位于 `D:/code/CNN/data/real_diagnosis/performance/`；完整结果、JSON、CSV、日志、图表和自动生成的实验 Markdown 均留在该数据根，不提交 Git。仓库保存源码、冻结清单/配置与手写说明。
 
-## 验证证据与限制
+当前验收命令和测试选择见 [测试索引](docs/tests/INDEX.md)，运行口径见 [真实数据测试](docs/benchmarks/diagnosis_effectiveness.md) 与 [性能基准](docs/benchmarks/diagnosis_performance.md)。真实数据测试区分现有产品前提与声明假设下的条件情景；性能测量记录受限进程的计算开销。本次范围为接入重构和输出核对，不包含检出效果优化验收。
 
-实现方记录：P0 None7/CPW5/order17 通过。后端集中首次 Ran79，3 FAIL+2 ERROR 子项（一个测试方法含两route）；修复后只复验四失败方法+分解10共14通过，另 order4、真实PUT1、权重/直接重评1通过。没有声称重新全跑79或P0。新的 domain/workflow 实际 HTTP/SQLite/缓存/worker/事务/告警替代旧规则、评分、校准和投票 helper 协议测试。
-
-前端最终 `node --test tests/*.test.cjs` **52/52**、生产构建通过，2307 modules。此前 SSR 单失败源于纯展示 helper 间接加载浏览器 request，修复后最终全套已过。#75 沿用核心13、早期HTTP3/SSR3/build，以及末次参数3/summary HTTP1/SSR1，不因文档重复算法检查。
-
-数学公式、单位、前提、已知解、负对照和实际消融是算法证据；业务测试保护状态与副作用，不证明真实设备检出效果。历史 dataset 实验脚本尚未按新 Domain 重建，不作为当前可直接执行效果验收。主仓 CW 有36个变速npy，独立 worktree 无数据不代表全缺；其余数据等用户后给。#78 重建真实效果/基线，#79 性能后置；本批未做真实数据效果、性能、生产部署或 MySQL 服务实测。
-
-生产仍 **2C2G**：两线程、ANALYSIS_SEM=1、逐批串行、业务窗口先于慢算法，研究同样受限。DC24 counts 仍只是显示/数组产物，不进设备物理诊断。
-
-## 收口与后续
-
-#75/#77/#84 可按本批结构和实际业务验收随 PR #90 关闭，不能据此宣称研究组合生产就绪或真实效果完成。#78/#79 保持开放，等用户数据和后续性能任务。权重只在 assessment 消费规范 DIAGNOSIS_WEIGHTS；旧 sideband/na4_nb4/wp_entropy/worst_channel/avg_channel 五键无兼容别名。
-
-本批在最终公开源码上只真实导出一次 OpenAPI，**71 路径**。Git Bash 执行一次集中文档检查退出0：**56 个 Markdown、252 个相对链接、6 算法族各9必需章节**，链接/结构/镜像清理全部 PASS；git diff --check 通过。没有重复运行算法/业务/前端测试。旧 #89 文档与原 cloud-numeric 草稿工作区均保留，不恢复镜像文档或已删除兼容入口。
+算法与业务的权威契约仍为 [算法索引](docs/algorithms/INDEX.md)、[证据与状态](docs/backend/assessment.md)、[诊断编排](docs/backend/diagnosis.md) 和 [持久化](docs/backend/persistence.md)。本地实验不会将临时健康参考、假设速度或测试输出写回生产配置。
