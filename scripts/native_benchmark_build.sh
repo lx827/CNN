@@ -7,7 +7,7 @@ mode="${3:?wsl or ecs}"
 mkdir -p "$artifact_root"
 artifact_root="$(cd "$artifact_root" && pwd)"
 config="$source_root/cloud/tests/diagnosis/benchmarks/native_performance_config.json"
-read_config() { awk -F: -v key="\"$1\"" 'index($1,key) { gsub(/[, ]/,"",$2); print $2; exit }' "$config"; }
+read_config() { awk -F: -v key="\"$1\"" 'index($1,key) { gsub(/[[:space:],]/,"",$2); print $2; exit }' "$config"; }
 if [[ "$mode" == ecs ]]; then
     maximum="$(read_config ecs_build_memory_max_bytes)"
     margin="$(read_config ecs_available_margin_bytes)"
