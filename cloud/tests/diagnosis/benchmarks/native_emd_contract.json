@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "frozen_before_native_comparison": true,
+  "seed": 20261112,
+  "local": {
+    "rtol": 1e-10,
+    "atol_scaled": 1e-12,
+    "relative_l2": 1e-10
+  },
+  "decomposition": {
+    "rtol": 1e-7,
+    "atol_scaled": 1e-9,
+    "relative_l2": 1e-7
+  },
+  "scale": "max(max(abs(input)), max(abs(reference)), float64.tiny)",
+  "metadata_equal": [
+    "method",
+    "status",
+    "input_length",
+    "sample_rate_hz",
+    "valid_interval",
+    "seed",
+    "reason",
+    "mode_count",
+    "converged"
+  ],
+  "iterations": "Equal for ordinary differential cases; threshold-adjacent differences require an explicit numerical review, never an automatic tolerance waiver.",
+  "critical_cases": "Compare local numerical error and the actual stopping margin, then verify modal output and quality status separately. Do not infer equivalence from reconstruction alone.",
+  "fixed_vectors": "Reuse the existing benchmark input SHA256, windows, parameters and seeds; keep generated vectors and results outside Git."
+}
