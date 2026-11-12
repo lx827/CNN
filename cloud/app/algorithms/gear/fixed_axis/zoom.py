@@ -22,6 +22,8 @@ def compute_zoom_spectrum(
     才是由有效记录长度决定的分辨能力。增加 output_points 只加密网格，
     不在同一 N 上宣称把物理分辨率提高 zoom_factor 倍。若需分开小于
     fs/N 的谱峰，必须提供更长的有效记录或其他经过验证的参数模型。
+    上限排除，即使上限为Nyquist，末点仍按普通正频率单边幅值刻度；
+    只有实际位于0 Hz的DC点不翻倍。
     """
     values = np.asarray(signal, dtype=np.float64)
     if values.ndim != 1:

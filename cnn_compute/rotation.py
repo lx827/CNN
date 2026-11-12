@@ -43,7 +43,10 @@ def tsa_components(cycle, mesh_orders, regular_orders, revolutions):
 
 
 def zoom_spectrum(signal, sample_rate, low, high, points):
-    """Bluestein CZT 在 [low,high) 密集采样，周期Hann幅值刻度。"""
+    """Bluestein CZT 在[low,high)采样，周期Hann单边幅值；仅真实DC不翻倍。
+
+    high不包含且不得超过Nyquist，因此返回网格没有Nyquist点。
+    """
     return _native.zoom_spectrum(_signal(signal), sample_rate, low, high, points)
 
 
