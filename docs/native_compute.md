@@ -2,6 +2,8 @@
 
 根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。当前提供构建信息和 PCHIP/cubic、SD/Rilling 四种组合的单 IMF 原生筛分候选，EMD/EEMD/CEEMDAN 外层保持 Python；生产分解默认仍为 Python。技术路线见 [ADR 0006](adr/0006-native-diagnosis-compute-package.md)。
 
+新增或重组 C++ 加速算法遵循 [cpp-accelerate skill](../.claude/skills/cpp-accelerate/SKILL.md) 与 [ADR 0007](adr/0007-native-algorithm-module-interfaces.md)：公开入口与内部加速执行接口分工，算法模块独立于公共基础结构。以下目录描述当前实现，不表示已迁移到目标组织。
+
 ## 模块与导出
 
 ```text
