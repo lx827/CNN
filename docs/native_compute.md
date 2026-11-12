@@ -109,7 +109,9 @@ uv 缓存键覆盖根配置、CMake 文件、原生源码、Python 源文件及�
 
 更换编译器或工具链版本时，CMake 已缓存的编译器不会仅靠修改环境变量替换。使用新的忽略构建目录并强制重装计算包，例如 `uv sync --reinstall-package cnn-compute --config-setting build-dir=build/new-toolchain`；Windows 仍经 `vsdev`。新目录名应标识实际工具链，确认 `build_info()` 后再采用产物。
 
-MSVC 的 `/showIncludes` 前缀以实际输出字节探测并传给 Ninja，避免中文代码页误解造成间接头依赖丢失、混用旧工作区布局。修改头文件应由依赖图触发相关对象重编；全新构建通过本身不能替代这条依赖规则。
+MSVC 的 `/showIncludes` 探测输出由 `bind/msvc_output.py` 按实际控制台输出代码页解码，再以 UTF-8 文本交给 CMake；Ninja 生成器负责按控制台代码页写出规则。GBK 原始字节直接进入 CMake 字符串会使 `rules.ninja` 漏生成，而把 UTF-8 控制台输出误按系统 ANSI 解码会丢失间接头依赖。构建同时支持中文 GBK 与 UTF-8 控制台，修改头文件应由依赖图触发相关对象重编。
+
+Windows 的构建回归在根目录执行 `uv run --with cmake==4.4.4 --with ninja==1.13.2 --no-sync python tests/test_msvc_ninja_build.py -v`：使用根配置的工具链部分和真实 MSVC/Ninja，分别在代码页 936、65001 下验证全新生成、编译及间接头文件修改后的重编。此测试只构建最小库；计算包完整安装另以普通 `uv sync` 验证。
 
 ## 验证
 
