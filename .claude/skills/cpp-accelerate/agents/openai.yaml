@@ -1,0 +1,3 @@
+interface:
+  display_name: "C++ 加速算法"
+  short_description: "设计 CNN 数值算法模块、内部加速接口、工作区及内存交接规则"
