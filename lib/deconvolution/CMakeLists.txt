@@ -1,0 +1,4 @@
+add_library(cnn_compute_deconvolution STATIC deconvolution.cpp)
+add_library(CNN::deconvolution ALIAS cnn_compute_deconvolution)
+set_target_properties(cnn_compute_deconvolution PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(cnn_compute_deconvolution PUBLIC CNN::core)

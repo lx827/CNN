@@ -7,8 +7,7 @@ Guo 等 Sensors 2018 (doi:10.3390/s18092908), Eq.10。它不是三阶常规双�
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.fft import rfft, rfftfreq
-from scipy.signal import windows
+from cnn_compute import diagnostic as native_diagnostic
 
 
 @dataclass(frozen=True)
@@ -62,78 +61,27 @@ def compute_modulation_bispectrum(
     *,
     input_unit="input_signal",
 ):
-    values = np.asarray(signal, dtype=float)
-    if (
-        values.ndim != 1
-        or not np.all(np.isfinite(values))
-        or not np.isfinite(sample_rate_hz)
-        or sample_rate_hz <= 0
-    ):
-        raise ValueError("MSB input must be a finite vector with positive sample rate")
+    """原生四阶复平均MSB；保留请求坐标、实际bin坐标及无效网格。"""
     carriers = np.atleast_1d(np.asarray(carrier_frequency_hz, dtype=float))
     modulation = np.atleast_1d(np.asarray(modulation_frequency_hz, dtype=float))
-    if (
-        carriers.ndim != 1
-        or modulation.ndim != 1
-        or not len(carriers)
-        or not len(modulation)
-    ):
-        raise ValueError("MSB axes must be nonempty vectors")
-    if (
-        not np.all(np.isfinite(carriers))
-        or not np.all(np.isfinite(modulation))
-        or np.any(carriers <= 0)
-        or np.any(modulation <= 0)
-    ):
-        raise ValueError("MSB frequencies must be finite positive Hz")
-    if np.any(carriers > sample_rate_hz / 2) or np.any(modulation > sample_rate_hz / 2):
-        raise ValueError("MSB requested frequencies must not exceed Nyquist")
-    if len(carriers) * len(modulation) > 16384:
-        raise ValueError("MSB requested grid exceeds 16384 cells")
     length = parameters.segment_length
     step = max(1, int(round(length * (1 - parameters.overlap))))
-    starts = range(0, len(values) - length + 1, step)
-    count = len(starts)
-    if count < parameters.minimum_segments:
-        raise ValueError("insufficient_segments_for_complex_MSB_average")
+    mean, coherence, valid, count = native_diagnostic.modulation_bispectrum(
+        signal,
+        sample_rate_hz,
+        carriers,
+        modulation,
+        length,
+        step,
+        parameters.minimum_segments,
+    )
     df = sample_rate_hz / length
-    carrier_bins = np.rint(carriers / df).astype(int)
-    modulation_bins = np.rint(modulation / df).astype(int)
-    upper = carrier_bins[:, None] + modulation_bins[None, :]
-    lower = carrier_bins[:, None] - modulation_bins[None, :]
-    # 不把低于一bin的调制折叠到DC，也不把超Nyquist目标夹到边界。
-    valid = (lower >= 1) & (upper <= length // 2) & (modulation_bins[None, :] >= 1)
-    valid &= carriers[:, None] + modulation[None, :] <= sample_rate_hz / 2
-    valid &= carriers[:, None] - modulation[None, :] > 0
-    shape = (len(carriers), len(modulation))
-    total = np.zeros(shape, dtype=complex)
-    side_power = np.zeros(shape)
-    carrier_power = np.zeros(shape)
-    window = windows.hann(length, sym=False)
-    # 双边傅里叶系数，bin正弦A的复系数模为A/2；MSB是输入单位四次方。
-    safe_carriers = np.clip(carrier_bins, 0, length // 2)
-    safe_upper = np.clip(upper, 0, length // 2)
-    safe_lower = np.clip(lower, 0, length // 2)
-    for start in starts:
-        segment = values[start : start + length]
-        transformed = rfft((segment - np.mean(segment)) * window) / np.sum(window)
-        side = transformed[safe_upper] * transformed[safe_lower]
-        center = transformed[safe_carriers, None] ** 2
-        total += np.where(valid, side * np.conj(center), 0)
-        side_power += np.where(valid, np.abs(side) ** 2, 0)
-        carrier_power += np.where(valid, np.abs(center) ** 2, 0)
-    mean = total / count
-    denominator = np.sqrt(side_power / count * carrier_power / count)
-    coherence = np.full(shape, np.nan)
-    np.divide(np.abs(mean), denominator, out=coherence, where=valid & (denominator > 0))
-    coherence = np.minimum(coherence, 1.0)
-    mean[~valid] = complex(np.nan, np.nan)
     return ModulationBispectrum(
-        carrier_bins * df,
-        modulation_bins * df,
+        np.rint(carriers / df) * df,
+        np.rint(modulation / df) * df,
         mean,
         coherence,
-        valid,
+        valid.astype(bool, copy=False),
         count,
         df,
         carriers,

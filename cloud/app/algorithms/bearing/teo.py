@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
+from cnn_compute import diagnostic as native_diagnostic
 from numpy.typing import NDArray
 from scipy.fft import rfft, rfftfreq
 from scipy.signal import butter, hilbert, sosfiltfilt, windows
@@ -27,16 +28,9 @@ class TEOEnvelopeResult:
     metadata: dict = field(default_factory=dict)
 
 
-def teager_energy_operator(signal: NDArray[np.float64]) -> np.ndarray:
-    """Psi[x_n]=x_n^2-x_{n-1}x_{n+1}；保留负值，端点采用单边能量。"""
-    x = np.asarray(signal, dtype=np.float64)
-    if x.ndim != 1 or len(x) < 3 or not np.all(np.isfinite(x)):
-        raise ValueError("TEO 输入必须是一维有限数组且至少 3 点")
-    result = np.empty_like(x)
-    result[0] = x[0] ** 2
-    result[-1] = x[-1] ** 2
-    result[1:-1] = x[1:-1] ** 2 - x[:-2] * x[2:]
-    return result
+def teager_energy_operator(signal):
+    """原生Psi[x_n]=x_n²-x_(n-1)x_(n+1)，保留负值，端点单边能量。"""
+    return native_diagnostic.teager(signal)
 
 
 def _envelope_after_teo(

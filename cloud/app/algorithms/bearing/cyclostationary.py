@@ -1,13 +1,11 @@
 """复频谱频移 SC/SCoh 估计、候选循环频率搜索与专属评估。"""
 
 from dataclasses import dataclass, field
-from typing import Optional, Mapping, Sequence
+from typing import Optional, Mapping
 
 import numpy as np
-from numpy.lib.stride_tricks import sliding_window_view
+from cnn_compute import diagnostic as native_diagnostic
 from numpy.typing import NDArray
-from scipy.fft import fft, rfftfreq
-from scipy.signal import windows
 
 from app.algorithms.mechanics import BearingGeometry
 
@@ -42,102 +40,39 @@ class CyclostationaryResult:
 
 
 def compute_sc_scoh(
-    signal: NDArray[np.float64],
-    sample_rate_hz: float,
-    cyclic_frequencies_hz: Sequence[float],
-    segment_length: int = 512,
-    overlap_ratio: float = 0.75,
+    signal,
+    sample_rate_hz,
+    cyclic_frequencies_hz,
+    segment_length=512,
+    overlap_ratio=0.75,
 ) -> CyclicRepresentation:
-    """直接频移复 FFT：X(f-alpha/2)*conj(X(f+alpha/2))，再跨段复平均。
-
-    频移由全局时间复指数完成，因此 alpha 不必落在 FFT bin 上；循环频率物理
-    分辨率仍由完整记录时长决定，零填充或直接计算不会改善该分辨率。
-    """
-    x = np.asarray(signal, dtype=np.float64)
-    if x.ndim != 1 or len(x) < 128 or not np.all(np.isfinite(x)):
-        raise ValueError("SC/SCoh 输入必须是一维有限数组且至少 128 点")
-    if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
-        raise ValueError("采样率必须为有限正数")
+    """全局时间复频移SC/SCoh；原生逐段复归约，物理分辨率由记录时长决定。"""
     if (
         isinstance(segment_length, bool)
         or not isinstance(segment_length, int)
         or segment_length < 32
     ):
-        raise ValueError("分段长度必须是至少为 32 的整数")
-    if segment_length > len(x):
-        raise ValueError("分段长度不能超过输入长度")
-    if not np.isfinite(overlap_ratio) or not 0.0 <= overlap_ratio < 1.0:
-        raise ValueError("重叠率必须位于 [0,1)")
+        raise ValueError("分段长度必须是至少为32的整数")
+    if not np.isfinite(overlap_ratio) or not 0 <= overlap_ratio < 1:
+        raise ValueError("重叠率必须位于[0,1)")
     alpha = np.asarray(
-        tuple(sorted(set(float(value) for value in cyclic_frequencies_hz))),
-        dtype=np.float64,
+        sorted(set(float(value) for value in cyclic_frequencies_hz)), dtype=np.float64
     )
-    if alpha.ndim != 1 or len(alpha) == 0:
-        raise ValueError("必须至少提供一个候选循环频率")
-    if (
-        not np.all(np.isfinite(alpha))
-        or np.any(alpha < 0)
-        or np.any(alpha > sample_rate_hz / 2.0)
-    ):
-        raise ValueError("循环频率必须有限且位于 [0,Nyquist]")
-
-    step = max(1, int(round(segment_length * (1.0 - overlap_ratio))))
-    starts = np.arange(0, len(x) - segment_length + 1, step, dtype=int)
-    if len(starts) < 4:
-        raise ValueError("SC/SCoh 至少需要四个完整分段")
-    centered = x - np.mean(x)
-    input_scale = float(np.max(np.abs(centered)))
-    # 相干性和后续峰背景比都是归一化量；先缩放可让固定正则化彻底退出公式。
-    normalized = centered / input_scale if input_scale > 0.0 else centered
-    segments = sliding_window_view(normalized, segment_length)[starts]
-    window = windows.hann(segment_length, sym=False)
-    scale = sample_rate_hz * float(np.sum(window**2))
-    local = np.arange(segment_length)[None, :]
-    global_time_s = (starts[:, None] + local) / sample_rate_hz
-    windowed = segments * window[None, :]
-    # 复 FFT 的 k=N/2 点在非负半轴标记为 +Nyquist；奇数长度没有 Nyquist 点。
-    carrier = rfftfreq(segment_length, 1.0 / sample_rate_hz)
-    sc = np.empty((len(alpha), len(carrier)), dtype=np.complex128)
-    scoh = np.empty((len(alpha), len(carrier)), dtype=np.float64)
-
-    for index, cyclic_frequency in enumerate(alpha):
-        # e^{+j*pi*alpha*t} 使 X(f-alpha/2)，e^{-j*pi*alpha*t} 使 X(f+alpha/2)。
-        x_lo = fft(
-            windowed * np.exp(1j * np.pi * cyclic_frequency * global_time_s), axis=1
-        )[:, : len(carrier)] / np.sqrt(scale)
-        x_hi = fft(
-            windowed * np.exp(-1j * np.pi * cyclic_frequency * global_time_s), axis=1
-        )[:, : len(carrier)] / np.sqrt(scale)
-        cross = x_lo * np.conj(x_hi)
-        sc[index] = np.mean(cross, axis=0)
-        psd_lo = np.mean(np.abs(x_lo) ** 2, axis=0)
-        psd_hi = np.mean(np.abs(x_hi) ** 2, axis=0)
-        # 顺序除以 sqrt(PSD)，避免 PSD 乘积及 |SC|^2 同时下溢。
-        coherence_amplitude = np.divide(
-            np.abs(sc[index]),
-            np.sqrt(psd_lo),
-            out=np.zeros(len(carrier), dtype=np.float64),
-            where=psd_lo > 0.0,
-        )
-        coherence_amplitude = np.divide(
-            coherence_amplitude,
-            np.sqrt(psd_hi),
-            out=np.zeros(len(carrier), dtype=np.float64),
-            where=psd_hi > 0.0,
-        )
-        scoh[index] = np.clip(coherence_amplitude**2, 0.0, 1.0)
-
+    step = max(1, int(round(segment_length * (1 - overlap_ratio))))
+    sc, scoh, count, scale = native_diagnostic.sc_scoh(
+        signal, sample_rate_hz, alpha, segment_length, step
+    )
+    n = len(signal)
     return CyclicRepresentation(
-        cyclic_frequencies_hz=alpha,
-        carrier_frequencies_hz=carrier,
-        # SC 保留原输入幅值单位，服从 SC(s*x)=s^2*SC(x)。
-        spectral_correlation=sc * input_scale**2,
-        spectral_coherence=scoh,
-        cyclic_resolution_hz=float(sample_rate_hz / len(x)),
-        segment_count=len(starts),
-        sample_rate_hz=float(sample_rate_hz),
-        duration_s=float(len(x) / sample_rate_hz),
-        input_amplitude_scale=input_scale,
+        alpha,
+        np.fft.rfftfreq(segment_length, 1 / sample_rate_hz),
+        sc,
+        scoh,
+        float(sample_rate_hz / n),
+        count,
+        float(sample_rate_hz),
+        float(n / sample_rate_hz),
+        scale,
     )
 
 

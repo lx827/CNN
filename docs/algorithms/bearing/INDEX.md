@@ -98,6 +98,8 @@ MED/MCKD 用卷积矩阵的 SVD 直接求解，不通过正规方程平方条件
 
 ## 复杂度与内存
 
+MED/MCKD、CPW、TEO、SC/SCoh 和实际滤波器组谱峭度已由[原生高级计算](../numeric/native_diagnostic.md)承担数值循环。MED/MCKD 固定矩阵经一次 QR 和小矩阵 SVD 准备后复用；工程评分、物理前提、阈值及 Pipeline 仍由本族 Python 接口维护。
+
 标准滤波、Hilbert 和 FFT 的主要成本为 $O(N\log N)$，额外存储为 $O(N)$。滤波器组随候选频带数增长；MED/MCKD 保存约 $N\times L$ 的卷积矩阵并执行 SVD/迭代；SC 随候选循环频率、段数和载波 bin 增长。业务截断、现有两线程池和后台串行分析是内存契约的一部分，见 [后端架构](../../backend/architecture.md)。
 
 ## 参考文献
