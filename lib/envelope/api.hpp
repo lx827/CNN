@@ -16,7 +16,8 @@ struct Options {
 struct Envelopes { core::Array upper, lower; };
 struct Extrema { core::Array locations, values; };
 
-// 严格局部极值；平台不是极值。输出独立拥有存储。
+// 严格局部极值；平台不是极值。调用方提供有限信号，少于三点返回空。
+// 输出独立拥有存储；原语按此前提直接比较，不额外扫描输入。
 Extrema find_extrema(std::span<const double> signal, bool maxima = true,
                      bool parabolic = false);
 // 对齐 emd 0.8.1 的极值插值包络；极值不足返回 nullopt。
