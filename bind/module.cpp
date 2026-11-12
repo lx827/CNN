@@ -11,6 +11,7 @@ PYBIND11_MODULE(_native, module) {
     cnn_compute::bind::bind_core(core);
     cnn_compute::bind::bind_emd(emd);
     cnn_compute::bind::bind_emd_family(emd, envelope, interpolation);
+    cnn_compute::bind::bind_emd_ensemble(emd);
 
     // 保留既有包入口与局部差分入口；别名复用同一导出函数。
     module.attr("build_info") = core.attr("build_info");
