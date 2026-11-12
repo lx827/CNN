@@ -12,7 +12,7 @@
 
 解析信号 `z=hilbert(x-mean(x))` 给出 AM 包络 `a=abs(z)` 和相邻采样中点瞬时频率 `f=diff(unwrap(angle(z)))*fs/(2π)`。AM 与 FM 分别生成频谱，搜索调制频率或相应参考轴阶次，不在解调谱中搜索原始载波的 `mesh±n*rot` 位置。
 
-#126 的 AM/FM 与 CVS 数值核由 `cnn_compute.rotation` 调用 C++；AM/FM 复用公共 Hilbert 实现，CVS 在通过片段内线性插值并逐独立全圈清空累加器。真实相位/空间布局前提、覆盖不足状态以及研究用途门控保留 Python，成功 CVS 只列出用于完整圈的源窗口。此实现变更不增加可观测性，也不改变研究评估或生产资格；源码编译检查不代表本轮全部数值/性能验收已完成。
+#126 的 AM/FM 与 CVS 数值核由 `cnn_compute.rotation` 调用 C++；AM/FM 复用公共 Hilbert 实现，CVS 在通过片段内线性插值并逐独立全圈清空累加器。真实相位/空间布局前提、覆盖不足状态以及研究用途门控保留 Python，成功 CVS 只列出用于完整圈的源窗口。此实现变更不增加可观测性，也不改变研究评估或生产资格。Windows 的 AM/FM/CVS 既有 7 个向量已通过，范围和限制见[原生验收记录](../order/native_rotation_validation.md)。
 
 本项目 MSB 采用 Guo 等（2018）Eq.10 的**四阶调制信号双谱**：
 

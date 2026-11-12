@@ -18,6 +18,8 @@ mask/NHT/二层组合的独立差分入口为 `tests/test_compute_emd_mask.py`�
 
 算法正确性以公式、单位、物理前提、已知解、独立参考和负对照为依据。业务测试验证状态与副作用；真实数据输出与性能分别核对。文档链接检查不能替代正确性验证。
 
+公共数值绑定在根目录执行 `uv run --no-sync python tests/test_native_numeric.py -v`，覆盖 NumPy/SciPy 参考的 Fourier/STFT、SOS/S-G、统计与结果 owner。C++ `numeric_contract` 专门核对任意复谱实部逆变换与 Hermitian 半谱逆变换。cloud 原有 `test_numeric_algorithms.py` 保留幅值/单位和数据类契约，三项 P0 由最终整合统一执行。
+
 ## P0 回归
 
 修改 `cloud/app/services/diagnosis/` 或 `cloud/app/algorithms/` 下任何文件后，以下三件必须全部通过，均使用合成信号：
