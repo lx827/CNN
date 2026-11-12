@@ -30,7 +30,7 @@ complete_ensemble_sift 先用原信号标准差归一化输入，并对每条标
 
 Rilling 与抛物线极值组合在参考中不能合法索引，原生公开拒绝该组合；抛物线与默认 numpypad 可以使用。自定义 NumPy padding 选项尚不支持，传入时明确报错。无延拓无法覆盖完整查询区间的输入明确失败。
 
-集成聚合没有单一 IMF 筛分次数，因此详细结果 `iterations` 为空，不伪造收敛次数。complete ensemble 保留参考的 `max_imfs` 检查位置：第一层后先检查一次，后续循环生成新模态后用当前层号检查再递增；它不是严格的输出列数上限。噪声对应层不足时抛 `IndexError`，不补零或循环复用噪声；常量输入或不可标准化噪声返回 `numerical_failure`，数组入口抛 `ConvergenceError`。参考在这些输入可能越界或传播非有限值，不宣称失败域逐异常一致。
+集成聚合没有单一 IMF 筛分次数，因此详细结果 `iterations` 为空，不伪造收敛次数。complete ensemble 的 `max_imfs` 明确限制振荡 IMF 数量，最后另附一列残差；原生循环先更新已生成模态数再检查上限，修正参考层号判断晚一轮、多提取一个 IMF 的缺陷。对照时只比较参考前目标数量的 IMF，残差由输入减这些 IMF 之和得到，使用相同数值容差。噪声对应层不足时抛 `IndexError`，不补零或循环复用噪声；常量输入或不可标准化噪声返回 `numerical_failure`，数组入口抛 `ConvergenceError`。参考在这些输入可能越界或传播非有限值，不宣称失败域逐异常一致。
 
 ## 内存与执行
 
@@ -44,6 +44,6 @@ Rilling 与抛物线极值组合在参考中不能合法索引，原生公开拒
 
 维护测试 [test_compute_emd.py](../../../tests/test_compute_emd.py) 对照所选 `emd 0.8.1`，覆盖默认及可选停止/插值/延拓、输入保留、输出所有权、并发隔离与失败。纯 C++ [接口测试](../../../tests/native/emd_contract.cpp) 检查公开/执行一致、大小规模复用及失败后复用。
 
-集成维护测试 [test_compute_emd_ensemble.py](../../../tests/test_compute_emd_ensemble.py) 对照 single/flip、两种插值、complete 的层数边界，并检查固定种子重复、全局 RNG 不变、独立输出所有权、并发及失败传播。[集成 C++ 接口测试](../../../tests/native/emd_ensemble_contract.cpp) 直接复用同一工作区跨不同输入长度执行，检查输出活过工作区销毁、失败后恢复与并发隔离。
+集成维护测试 [test_compute_emd_ensemble.py](../../../tests/test_compute_emd_ensemble.py) 对照 single/flip、两种插值、complete 的真实 IMF 上限，并检查固定种子重复、全局 RNG 不变、独立输出所有权、并发及失败传播。[集成 C++ 接口测试](../../../tests/native/emd_ensemble_contract.cpp) 直接复用同一工作区跨不同输入长度执行，检查输出活过工作区销毁、失败后恢复与并发隔离。
 
 [测量工具](../../../scripts/benchmark_emd.py) 在独立进程中交错三块执行参考与原生入口，包含 RNG/输入准备/输出布局成本，记录原始耗时、中位数/P95、OS 高水位和构建信息。输出保存在新建忽略目录或库外；这是本地受控比较，不复用旧同公式候选的生产采用门槛，也不替代真实数据效果和目标 ECS 2C2G 验收。
