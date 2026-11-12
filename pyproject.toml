@@ -35,6 +35,7 @@ cloud = [
 ]
 dc24 = ["requests==2.32.3", "python-dotenv==1.0.1"]
 dev = [
+    "clang-format==23.1.5",
     "httpx>=0.27",
     "pybind11-stubgen==3.0.0",
     "ruff>=0.17.4",

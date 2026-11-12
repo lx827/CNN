@@ -1,0 +1,9 @@
+# 第三方源码及生成文件保留原始排版。
+**/vendor/**
+**/third_party/**
+**/third-party/**
+**/thirdparty/**
+**/build/**
+**/_deps/**
+**/.venv/**
+**/dist/**
