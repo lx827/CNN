@@ -1,6 +1,6 @@
 # 小波与模态分解契约
 
-> 状态：#74 纯计算、分量选择、质量门控与业务错误边界在本轮开发分支集中收口；真实数据效果与性能基线未验证。
+> 状态：纯计算、分量选择、质量门控与业务错误边界已分离；#124 小波/VMD 原生模块与默认适配、同公式 EMD 默认筛分接入见 [原生小波与 VMD](native_wavelet_vmd.md)。真实数据诊断效果与目标资源仍需分别验收。
 >
 > 实现导航：`cloud/app/algorithms/decomposition/`、`cloud/app/algorithms/pipelines/decomposition.py`。各算法族保留专属 adapter，不设统一 `BaseAlgorithm`。
 
@@ -38,8 +38,9 @@ S-G、LMS、ICA 与级联各有前提，单通道扩展不会创造多测点可�
 - DWT/WP 层数与记录、滤波器长度兼容。WP 频率序按 Gray 对应频带排列；细节重构清除未选近似和细节。
 - 小波分量先重构到原时间轴再计算相关和能量，禁止用抽取系数与原信号头部作物理比较。
 - EMD 的镜像点和抛物线精化位置/幅值实际参与插值；SD 满足停止时接受本轮更新。EEMD/CEEMDAN 记录种子；当前 CEEMDAN 对应 Torres 2011，不混称 improved-CEEMDAN。
-- EMD 族可在现有算法族替换接口内注入单 IMF 筛分核；实例持有核，归一化、多 IMF、随机噪声、集成公式与结果状态继续复用 Python 外层。默认仍使用 Python 筛分，核异常直接传播，初始极值不足与筛分上限保留原有含义。
-- `NativeEMDImplementation` 是显式选择的原生候选，支持 PCHIP/cubic 与 SD/Rilling 四种组合；极值、精化、镜像、包络、更新与单 IMF 停止在 C++ 内一次完成。EMD/EEMD/CEEMDAN 归一化、随机噪声和集成公式仍复用 Python 外层。默认生产分解与 Pipeline 未切换，性能与目标资源验收另行执行。
+- EMD 族在现有算法族替换接口内使用单 IMF 筛分核；实例持有核，归一化、多 IMF、随机噪声、集成公式与结果状态继续复用 Python 外层。核异常直接传播，初始极值不足与筛分上限保留原有含义。
+- `NativeEMDImplementation` 成为默认同公式筛分，支持 PCHIP/cubic 与 SD/Rilling 四种组合；极值、精化、镜像、包络、更新与单 IMF 停止在 C++ 内一次完成。EMD/EEMD/CEEMDAN 外层公式保持原样，独立 emd.sift 0.8.1 家族不混入该默认路径。
+- 小波/VMD 默认由原生 adapter 计算；显式 PyWavelets/NumPy 参考实现继续可注入。原生小波复用官方独立 C 内核，并提供不物化全部分量的系数分析与按路径重构；VMD 使用模态连续的单边两轮工作区。详见 [数学、所有权和验证边界](native_wavelet_vmd.md)。
 - VMD 奇数/长记录按结果有效区间使用，参考信号同步切片，不补零伪装全长输出。
 - 转速估计信号与故障增强信号分离，见 [阶次契约](../order/INDEX.md)。
 
@@ -66,14 +67,14 @@ EMD/VMD 去噪 analyze 只分解并提指标，evaluate 消费已有指标选择
 
 ## 复杂度与内存
 
-DWT 约 O(N)，WP 随层数保留更多节点；VMD 为迭代数、模态数与 FFT 成本乘积；EMD 随 IMF/筛分轮数增长，集成方法再乘集成次数。结果、参考和重构同时存在会增加内存。生产 2C2G 复用两线程池、逐批串行与业务窗口限制，见 [运行时](../../backend/architecture.md)；本轮没有性能达标声明。
+DWT 约 O(N)，WP 随层数保留更多节点；完整全长 WP 分量的结果内存为 O(N·2**level)，轻量系数入口只按需要重构路径。VMD 成本为迭代更新 O(iterations·modes·N) 加输入 FFT 与各模态逆 FFT，不在每次 ADMM 更新中执行 FFT。EMD 随 IMF/筛分轮数增长，集成方法再乘集成次数。结果、参考和重构同时存在会增加内存。生产 2C2G 复用两线程池、逐批串行与业务窗口限制，见 [运行时](../../backend/architecture.md)；本地定向提速不等于目标机器资源验收。
 
 ## 参考文献
 
-- Mallat，小波多分辨率；PyWavelets 是当前小波 adapter。
+- Mallat，小波多分辨率；默认原生小波复用 PyWavelets v1.8.0 的独立 C 内核，PyWavelets adapter 保留作显式参考。
 - Huang et al. (1998)，EMD；Wu & Huang (2009)，EEMD；Torres et al. (2011)，CEEMDAN。
 - Dragomiretskiy & Zosso (2014)，VMD。
-- 生产 EMD 族为仓库内 NumPy/SciPy 实现；原生候选以同公式 Python 实现与冻结预算对照。EMD-signal/PyEMD 1.9.0 仅作为可选 benchmark 组中的离线不同公式参照，不作为同语义替换或生产默认，区别见 [性能运行说明](../../benchmarks/diagnosis_performance.md)。
+- 生产 EMD 族保留仓库内 Python 外层公式，默认筛分为其同公式原生实现。EMD-signal/PyEMD 1.9.0 仅作为可选 benchmark 组中的离线不同公式参照，不作为同语义替换或生产默认，区别见 [性能运行说明](../../benchmarks/diagnosis_performance.md)。
 - 用户指定的另一个原生候选以 `emd 0.8.1` 的 `emd.sift` 为参考，版本/源码身份、独立模块和失败边界见 [原生 EMD 契约](native_emd.md)；与上条旧候选的公式与验证预算分别维护，不静默替换生产。
 - [理论与历史示例](../wavelet_and_modality_decomposition.md) 不承担当前签名或实现状态。
 
@@ -94,4 +95,4 @@ DWT 约 O(N)，WP 随层数保留更多节点；VMD 为迭代数、模态数与 
 
 真实数据效果需按 [数据集说明](../../datasets.md) 分别建立；测试通过不替代物理有效性和设备校准。
 
-原生核的比较使用 [冻结误差契约](../../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json) 与可重建的手写对照信号；局部包络/IMF 及完整模态/残差按输入和参考幅值缩放后分别检查逐点误差和混合 L2 界。L2 使用相对项与绝对误差地板，近零残差仍受同一绝对预算约束。普通对照要求元数据与迭代一致，停止阈值附近的分支差异另作数值与质量核验，不自动放宽预算。显式原生候选支持 PCHIP/cubic 和 SD/Rilling，并复用当前 Python EMD 族外层；默认生产仍使用 Python，正确性检查不代表性能目标或目标 ECS 资源验收已通过。原生适配、线性带状工作区与依赖归属见 [计算库说明](../../native_compute.md)。
+同公式 EMD 原生核的比较使用 [冻结误差契约](../../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json) 与可重建的手写对照信号；局部包络/IMF 及完整模态/残差按输入和参考幅值缩放后分别检查逐点误差和混合 L2 界。L2 使用相对项与绝对误差地板，近零残差仍受同一绝对预算约束。普通对照要求元数据与迭代一致，停止阈值附近的分支差异另作数值与质量核验，不自动放宽预算。默认原生筛分支持 PCHIP/cubic 和 SD/Rilling，并复用当前 Python EMD 族外层；正确性检查不代表性能目标或目标 ECS 资源验收已通过。原生适配、线性带状工作区与依赖归属见 [计算库说明](../../native_compute.md)。

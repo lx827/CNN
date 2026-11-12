@@ -82,13 +82,14 @@ def decompose_vmd(
     arr = np.asarray(signal, dtype=np.float64)
     if arr.ndim != 1 or len(arr) < 16:
         raise ValueError("VMD 输入必须是一维且至少包含 16 个采样点")
-    if not np.all(np.isfinite(arr)):
+    # 默认原生公开入口扫描有限性；显式参考实现保留 Python 边界检查。
+    if implementation is not None and not np.all(np.isfinite(arr)):
         raise ValueError("输入信号不能包含 NaN 或无穷值")
     if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0.0:
         raise ValueError("采样率必须是有限正数")
     params = parameters or VMDParameters()
     if implementation is None:
-        from .python_adapter import PythonVMDImplementation
+        from .native_adapter import NativeVMDImplementation
 
-        implementation = PythonVMDImplementation()
+        implementation = NativeVMDImplementation()
     return implementation.vmd(arr, sample_rate_hz, params)

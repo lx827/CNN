@@ -1,0 +1,5 @@
+add_library(cnn_compute_vmd STATIC vmd.cpp)
+add_library(CNN::vmd ALIAS cnn_compute_vmd)
+set_target_properties(cnn_compute_vmd PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(cnn_compute_vmd PUBLIC CNN::core CNN::fourier)
+install(FILES ../LICENSE.vmdpy DESTINATION cnn_compute/licenses)
