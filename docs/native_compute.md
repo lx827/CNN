@@ -113,6 +113,17 @@ MSVC 的 `/showIncludes` 探测输出由 `bind/msvc_output.py` 按实际控制�
 
 Windows 的构建回归在根目录执行 `uv run --with cmake==4.4.4 --with ninja==1.13.2 --no-sync python tests/test_msvc_ninja_build.py -v`：使用根配置的工具链部分和真实 MSVC/Ninja，分别在代码页 936、65001 下验证全新生成、编译及间接头文件修改后的重编。此测试只构建最小库；计算包完整安装另以普通 `uv sync` 验证。
 
+## C++ 排版
+
+dev 组固定 `clang-format==23.1.5`，排版由根目录 `.clang-format` 管理。完成正常环境同步后，在根目录执行：
+
+```bash
+uv run python scripts/format_cpp.py          # 格式化
+uv run python scripts/format_cpp.py --check  # 只检查，发现差异时非零退出
+```
+
+命令只处理 Git 跟踪的 `lib/`、`bind/` 与 `tests/native/` 手写 C/C++ 文件；第三方 `vendor` / `third_party` 等目录不参与。根 `.clang-format-ignore` 同时排除第三方、构建、依赖下载和环境目录，供直接调用 clang-format 或编辑器使用。格式化不替代算法正确性与性能验证。
+
 ## 验证
 
 ```bash
