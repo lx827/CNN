@@ -103,15 +103,13 @@ def source_identity():
         ROOT / "pyproject.toml",
         ROOT / "uv.lock",
     ]
-    tracked += sorted((ROOT / "native").rglob("*.cpp")) + sorted(
-        (ROOT / "native").rglob("*.hpp")
-    )
+    for directory in (ROOT / "lib", ROOT / "bind"):
+        for pattern in ("*.cpp", "*.hpp", "*.hpp.in", "CMakeLists.txt", "LICENSE.*"):
+            tracked += sorted(directory.rglob(pattern))
     tracked += sorted((ROOT / "cloud/app/algorithms").rglob("*.py"))
-    tracked += sorted((ROOT / "src/cnn_compute").glob("*.py"))
+    tracked += sorted((ROOT / "cnn_compute").glob("*.py"))
     tracked += [
         ROOT / "CMakeLists.txt",
-        ROOT / "native/CMakeLists.txt",
-        ROOT / "native/build_config.hpp.in",
         HERE.parents[0] / "algorithms/emd_reference_contract.py",
     ]
     return {

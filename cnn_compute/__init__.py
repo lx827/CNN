@@ -1,26 +1,23 @@
 """独立原生诊断计算包；应用依赖由根项目依赖组管理。"""
 
 import numpy as np
+from numpy.typing import NDArray
 
-from ._native import build_info as _build_info
+from . import core
 from ._native import sift_imf as _sift_imf
 from ._native import sift_pchip_sd as _sift_pchip_sd
+from .core import build_info
 
-__all__ = ["build_info", "sift_imf", "sift_pchip_sd"]
-
-
-def build_info() -> dict:
-    """返回编译器、目标、编译选项、实际 SIMD 与 Eigen 版本等原生构建信息。"""
-    return _build_info()
+__all__ = ["build_info", "core", "sift_imf", "sift_pchip_sd"]
 
 
 def sift_pchip_sd(
-    signal: np.ndarray,
+    signal: NDArray[np.float64],
     *,
     max_sifts: int = 100,
     mirror_extrema: int = 3,
     sd_threshold: float = 0.2,
-):
+) -> tuple[NDArray[np.float64], int, bool] | None:
     """PCHIP/SD 完整单 IMF 筛分，返回 (独立数组, 次数, 收敛) 或 None。
 
     输入必须是 float64 ndarray；非连续视图显式连续化一次，合规输入只读
@@ -34,7 +31,7 @@ def sift_pchip_sd(
 
 
 def sift_imf(
-    signal: np.ndarray,
+    signal: NDArray[np.float64],
     *,
     max_sifts: int = 100,
     mirror_extrema: int = 3,
@@ -42,7 +39,7 @@ def sift_imf(
     interpolation: str = "pchip",
     stopping_rule: str = "sd",
     rilling_thresholds: tuple[float, float, float] = (0.05, 0.5, 0.05),
-):
+) -> tuple[NDArray[np.float64], int, bool] | None:
     """完整单 IMF 筛分，支持 PCHIP/cubic 与 SD/Rilling 四种组合。
 
     返回 (独立 float64 数组, 筛分次数, 收敛标志)，初始极值不足返回 None。

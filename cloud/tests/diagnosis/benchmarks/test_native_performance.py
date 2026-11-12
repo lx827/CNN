@@ -3,10 +3,33 @@
 import copy
 import unittest
 
-from .native_performance import CONFIG, aggregate, cases, read_json, validate_worker
+from .native_performance import (
+    CONFIG,
+    aggregate,
+    cases,
+    read_json,
+    source_identity,
+    validate_worker,
+)
 
 
 class PerformanceGateTests(unittest.TestCase):
+    def test_source_identity_covers_shared_core_algorithms_and_bindings(self):
+        hashes = source_identity()["sha256"]
+        for path in (
+            "lib/core/interpolation.cpp",
+            "lib/core/tridiagonal.hpp",
+            "lib/core/build_config.hpp.in",
+            "lib/emd/sift.cpp",
+            "lib/emd/CMakeLists.txt",
+            "bind/arrays.cpp",
+            "bind/module.cpp",
+            "bind/CMakeLists.txt",
+            "cnn_compute/core.py",
+        ):
+            self.assertIn(path, hashes)
+        self.assertFalse(any(path.startswith("native/") for path in hashes))
+
     def setUp(self):
         self.config = read_json(CONFIG)
         self.case = cases(self.config)[2]

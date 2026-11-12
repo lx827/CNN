@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-namespace cnn_compute {
+namespace cnn_compute::core {
 
 // 返回信息结构的版本，与数值算法版本分开。
 inline constexpr int build_info_schema = 1;
@@ -21,4 +21,4 @@ struct BuildInfo {
 
 BuildInfo build_info();
 
-}  // namespace cnn_compute
+}  // namespace cnn_compute::core
