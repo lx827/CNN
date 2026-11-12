@@ -23,6 +23,9 @@ Extrema find_extrema(std::span<const double> signal, bool maxima = true,
 // 对齐 emd 0.8.1 的极值插值包络；极值不足返回 nullopt。
 std::optional<Envelopes> extrema_envelopes(std::span<const double> signal,
                                          const Options& options = {});
+// 单侧极大值插值包络；结果独立拥有，不计算或分配下包络结果。
+std::optional<core::Array> upper_envelope(std::span<const double> signal,
+                                         const Options& options = {});
 // abs(signal) 的极大值构成单条包络；仅 numpypad 组合有定义。
 std::optional<core::Array> combined_envelope(std::span<const double> signal,
                                            const Options& options);

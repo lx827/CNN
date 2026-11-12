@@ -21,6 +21,10 @@ namespace execution {
 bool extrema_envelopes(std::span<const double> signal, std::span<double> upper,
                        std::span<double> lower, const Options& options,
                        Workspace& workspace);
+// 上包络直接写入等长 output；Rilling 仍共用上下极值延拓，省略下包络插值。
+// 输出不与输入/工作区重叠；工作区独占，容量准备规则同 extrema_envelopes。
+bool upper_envelope(std::span<const double> signal, std::span<double> output,
+                     const Options& options, Workspace& workspace);
 bool combined_envelope(std::span<const double> signal, std::span<double> output,
                        const Options& options, Workspace& workspace);
 std::pair<std::size_t, std::size_t> count_extrema(std::span<const double> signal);

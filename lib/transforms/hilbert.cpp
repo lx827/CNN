@@ -23,7 +23,7 @@ void check_signal(std::span<const double> signal) {
 struct HilbertWorkspace::Impl {
     Eigen::FFT<double> fft;
     std::vector<std::complex<double>> spectrum, analytic;
-    Array normalised, envelope, lower, unwrapped, smoothed;
+    Array normalised, envelope, unwrapped, smoothed;
     std::vector<double> median;
     envelope::Workspace extrema;
 };
@@ -33,7 +33,7 @@ HilbertWorkspace::HilbertWorkspace(HilbertWorkspace&&) noexcept = default;
 HilbertWorkspace& HilbertWorkspace::operator=(HilbertWorkspace&&) noexcept = default;
 void HilbertWorkspace::prepare(std::size_t samples) {
     impl->spectrum.resize(samples); impl->analytic.resize(samples);
-    for (auto* array : {&impl->normalised, &impl->envelope, &impl->lower,
+    for (auto* array : {&impl->normalised, &impl->envelope,
                         &impl->unwrapped, &impl->smoothed}) array->resize(samples);
     impl->extrema.prepare(samples, 2);
 }
@@ -78,8 +78,7 @@ void frequency_transform(std::span<const double> signal, std::span<double> phase
         amplitude_normalise(signal, writable(work.normalised), workspace);
         analytic_signal(readonly(work.normalised), work.analytic, workspace);
         envelope::Options options;
-        if (!envelope::execution::extrema_envelopes(signal, amplitude, writable(work.lower),
-                                                   options, work.extrema))
+        if (!envelope::execution::upper_envelope(signal, amplitude, options, work.extrema))
             throw std::runtime_error("NHT 振幅包络极值不足");
     } else {
         analytic_signal(signal, work.analytic, workspace);
