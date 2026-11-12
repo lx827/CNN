@@ -12,6 +12,8 @@ mask/NHT/二层组合的独立差分入口为 `tests/test_compute_emd_mask.py`�
 
 集成筛分可定向运行 `uv run --no-sync python -m unittest discover -s tests -p 'test_compute_emd_ensemble.py' -v`，覆盖 EEMD single/flip、complete ensemble 的参考边界、随机性与所有权。CTest 中的 `emd_ensemble_contract` 验证内部执行接口同一工作区的跨规模复用；它与 Python 公开入口测试互补。
 
+小波/VMD 的独立数学对照在根目录运行 `uv run --no-sync python tests/test_native_wavelet_vmd.py`，使用当前 cloud 依赖组中的 PyWavelets 与仓库 NumPy 参考，不需要真实数据。`tests/native/wavelet_vmd_contract.cpp` 检查 C++ 公开/执行接口、工作区复用与失败结果；根 CTest 注册由 #124 整合。独立官方 vmdpy 0.2 对照、本地端到端测量及限制见 [原生小波与 VMD](../algorithms/decomposition/native_wavelet_vmd.md)。
+
 算法正确性以公式、单位、物理前提、已知解、独立参考和负对照为依据。业务测试验证状态与副作用；真实数据输出与性能分别核对。文档链接检查不能替代正确性验证。
 
 ## P0 回归
