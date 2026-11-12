@@ -86,6 +86,8 @@ SER 使用 carrier 间隔，搜索窗互不重叠，不能再被定轴 1 阶 SER
 
 #126 将 TSA、Chirp-Z、CAR 倒谱与谱窗数值、高阶中心矩和边带峰计算下沉到 `lib/rotation/`、`lib/sequence/`。TSA 的 mesh/regular 共用一次单圈 DFT，长记录周期 Hann 幅值谱由 DFT 移频恒等式构造，不重复执行平铺长记录 FFT；mesh/regular/residual/differential 仍分别拥有独立输出，保持已有表示定义。原始值的可评估门控、可比历史检查和工程阈值留在 Python。Windows 数值及公开调用测量见[原生验收记录](../order/native_rotation_validation.md)，不声明 ARM 或生产资源已验证。
 
+Chirp-Z 频率网格为半开区间 `[low,high)`；即使上限为物理 Nyquist，末点仍按普通正频率幅值刻度，不因靠近上限而折半。仅实际采到 0 Hz 的 DC 点不翻倍；端点刻度的数学修正与必要真值向量见[验收补充](../order/native_rotation_validation.md#czt-端点刻度数学修正)。
+
 ## 参考文献
 
 - Randall (1982)，齿轮振动；McFadden (1986/1987)，解调与 TSA。

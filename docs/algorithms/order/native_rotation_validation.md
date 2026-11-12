@@ -25,6 +25,12 @@ Python 对照直接读取提交 `a3cef06` 的原公开实现。两侧各预热�
 
 相同输入的转速两侧均为 24 Hz；CZT 幅值最大绝对差 `7.56e-11`，TSA 幅值谱最大绝对差 `4.82e-17`，Kalman 既有舍入响应逐项一致。TSA 还验证单圈 DFT 推导的长记录周期 Hann 谱、mesh/regular/residual/differential 恒等式及输出生命周期。CZT 的非 FFT 网格另与直接 DFT 比较。
 
+### CZT 端点刻度数学修正
+
+官方 [SciPy 1.18.1 `ZoomFFT` 源码](https://github.com/scipy/scipy/blob/v1.18.1/scipy/signal/_czt.py)规定 `endpoint=False` 不包含频带上限，实际点为 `low+k*(high-low)/m`、`0<=k<m`。本库限制 `high<=fs/2`，因此输出没有 Nyquist 点；只有真正 `low==0` 的 DC 点取消单边翻倍。
+
+旧 Python 及最初原生移植使用 `isclose` 将非常接近 Nyquist 的普通正频点误当端点，或将接近零的正频点当 DC。这次明确修正该数学缺陷，不把它当作兼容义务。新增独立端点向量采用 `fs=2048 Hz`、`N=262144`、16 点网格，上限为 `1024 Hz`，末点为 `1023.9921875 Hz`：该处单位正弦的峰值幅值应为 **1**，不能折半；真正 DC 的单位常数幅值仍为 **1**。该补充向量不计入前述 60 项统计，不改变前表普通频带的性能测量。
+
 ## 内存与限制
 
 TSA 在两个独立进程内使用相同导入、输入准备、一次预热和一次结果存活的公开调用，Windows OS `PeakWorkingSetSize` 分别为 Python 对照 **107.44 MiB**、原生 **106.10 MiB**。此数字含解释器与数值库导入，不将全部差额归因于算法缓冲。
