@@ -1,7 +1,7 @@
 find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(pybind11 3.1 CONFIG REQUIRED)
 
-pybind11_add_module(_native MODULE NO_EXTRAS module.cpp arrays.cpp core.cpp emd.cpp emd_family.cpp)
+pybind11_add_module(_native MODULE NO_EXTRAS module.cpp arrays.cpp core.cpp emd.cpp emd_family.cpp emd_ensemble.cpp)
 target_link_libraries(_native PRIVATE CNN::core CNN::emd)
 
 # 导入刚编译的扩展生成声明；只写构建目录，安装时随 wheel 分发。
