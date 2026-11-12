@@ -8,6 +8,8 @@ Python 环境由根目录单项目统一管理。仓库根目录先执行 `uv sy
 
 mask/NHT/二层组合的独立差分入口为 `tests/test_compute_emd_mask.py`，原生工作区测试名为 `emd_mask_native_contract`；覆盖原生复用与真实参考的成功域，不将上游失败样例当作差分通过。
 
+集成筛分可定向运行 `uv run --no-sync python -m unittest discover -s tests -p 'test_compute_emd_ensemble.py' -v`，覆盖 EEMD single/flip、complete ensemble 的参考边界、随机性与所有权。CTest 中的 `emd_ensemble_contract` 验证内部执行接口同一工作区的跨规模复用；它与 Python 公开入口测试互补。
+
 算法正确性以公式、单位、物理前提、已知解、独立参考和负对照为依据。业务测试验证状态与副作用；真实数据输出与性能分别核对。文档链接检查不能替代正确性验证。
 
 ## P0 回归

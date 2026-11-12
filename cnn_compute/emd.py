@@ -207,6 +207,13 @@ def get_next_imf(
 
 
 # 各算法单独实现；此处聚合公开入口，复用上面的参数与拥有型结果契约。
+# 延迟到基础结果与参数适配定义后导入；集成包装的反向 helper 导入发生在调用时。
+from ._emd_ensemble import (  # noqa: F401
+    complete_ensemble_sift,
+    complete_ensemble_sift_detailed,
+    ensemble_sift,
+    ensemble_sift_detailed,
+)
 from ._emd_mask import (  # noqa: F401
     IteratedMaskDecomposition,
     MaskDecomposition,

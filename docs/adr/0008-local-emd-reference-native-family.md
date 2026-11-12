@@ -1,6 +1,6 @@
 # ADR 0008：以本地 emd.sift 为参考的独立原生算法族
 
-- 状态：基础候选已实现；集成与 mask 系列按依赖分支继续验证
+- 状态：基础与集成候选已实现；mask 系列按依赖分支继续验证
 - 日期：2026-11-12
 - 关联：[基础 EMD](https://github.com/lx827/CNN/issues/116)、[集成算法](https://github.com/lx827/CNN/issues/117)、[Mask 算法](https://github.com/lx827/CNN/issues/118)
 

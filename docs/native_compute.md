@@ -1,6 +1,6 @@
 # 诊断计算库构建与安装
 
-根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。旧原生筛分候选仍复用仓库 Python EMD 族外层；另增以本地 `emd.sift 0.8.1` 为参考的完整基础 EMD C++ 候选，契约见 [原生 EMD](algorithms/decomposition/native_emd.md) 与 [ADR 0008](adr/0008-local-emd-reference-native-family.md)。生产分解默认仍为 Python。
+根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。旧原生筛分候选仍复用仓库 Python EMD 族外层；另增以本地 `emd.sift 0.8.1` 为参考的基础 EMD、EEMD、complete ensemble、mask/迭代/二层 C++ 候选，契约见 [原生 EMD](algorithms/decomposition/native_emd.md) 与 [ADR 0008](adr/0008-local-emd-reference-native-family.md)。生产分解默认仍为 Python。
 
 新增或重组 C++ 加速算法遵循 [cpp-accelerate skill](../.claude/skills/cpp-accelerate/SKILL.md) 与 [ADR 0007](adr/0007-native-algorithm-module-interfaces.md)：公开入口与内部加速执行接口分工，算法模块独立于公共基础结构。
 
@@ -13,7 +13,7 @@ lib/
 ├── interpolation/ # splrep/PCHIP/cubic、旧数值兼容实现
 ├── envelope/      # 独立极值插值包络及工作区
 ├── transforms/    # 独立解析信号、幅度归一化与 Hilbert/NHT
-└── emd/           # 完整 sift、mask/迭代/二层组合与旧筛分候选
+└── emd/           # 完整 sift、集成、mask/迭代/二层组合与旧筛分候选
 bind/              # 独立 pybind11 绑定与 NumPy 所有权转换
 cnn_compute/       # Python 入口、core 公共接口及内联类型注解
 ```
