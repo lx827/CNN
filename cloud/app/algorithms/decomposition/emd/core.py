@@ -122,9 +122,9 @@ def _validate_signal(signal: FloatArray, sample_rate_hz: float) -> FloatArray:
 def _implementation(implementation: EMDImplementation | None) -> EMDImplementation:
     if implementation is not None:
         return implementation
-    from .python_adapter import PythonEMDImplementation
+    from .native_adapter import NativeEMDImplementation
 
-    return PythonEMDImplementation()
+    return NativeEMDImplementation()
 
 
 def decompose_emd(

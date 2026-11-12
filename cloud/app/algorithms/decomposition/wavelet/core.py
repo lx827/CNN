@@ -124,11 +124,12 @@ class WaveletImplementation(Protocol):
     ) -> FloatArray: ...
 
 
-def _validate_signal(signal: FloatArray, sample_rate_hz: float) -> FloatArray:
+def _validate_signal(signal: FloatArray, sample_rate_hz: float, *, check_finite: bool) -> FloatArray:
     arr = np.asarray(signal, dtype=np.float64)
     if arr.ndim != 1 or len(arr) < 2:
         raise ValueError("小波分解输入必须是一维且至少包含 2 个采样点")
-    if not np.all(np.isfinite(arr)):
+    # 默认原生入口在 C++ 公开边界扫描一次；显式参考/第三方实现仍在此建立前提。
+    if check_finite and not np.all(np.isfinite(arr)):
         raise ValueError("输入信号不能包含 NaN 或无穷值")
     if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0.0:
         raise ValueError("采样率必须是有限正数")
@@ -149,9 +150,9 @@ def _implementation(
 ) -> WaveletImplementation:
     if implementation is not None:
         return implementation
-    from .pywavelets_adapter import PyWaveletsImplementation
+    from .native_adapter import NativeWaveletImplementation
 
-    return PyWaveletsImplementation()
+    return NativeWaveletImplementation()
 
 
 def decompose_dwt(
@@ -163,7 +164,7 @@ def decompose_dwt(
     implementation: WaveletImplementation | None = None,
 ) -> DWTDecomposition:
     """执行多层 DWT；每个频带同时给出抽取系数和原时间轴重构。"""
-    arr = _validate_signal(signal, sample_rate_hz)
+    arr = _validate_signal(signal, sample_rate_hz, check_finite=implementation is not None)
     _validate_parameters(wavelet, level, mode)
     return _implementation(implementation).dwt(
         arr, sample_rate_hz, wavelet, level, mode
@@ -200,7 +201,7 @@ def decompose_wavelet_packet(
     implementation: WaveletImplementation | None = None,
 ) -> WaveletPacketDecomposition:
     """执行完全 WP 分解；freq->natural 为 Gray 码，natural->freq 使用逆 Gray。"""
-    arr = _validate_signal(signal, sample_rate_hz)
+    arr = _validate_signal(signal, sample_rate_hz, check_finite=implementation is not None)
     _validate_parameters(wavelet, level, mode)
     return _implementation(implementation).wavelet_packet(
         arr, sample_rate_hz, wavelet, level, mode
@@ -234,7 +235,7 @@ def denoise_wavelet(
     level=None 取当前输入和小波允许的最大无边界效应层数。
     improved 是明确工程收缩函数，不声称具有普适降噪最优性。
     """
-    arr = _validate_signal(signal, 1.0)
+    arr = _validate_signal(signal, 1.0, check_finite=implementation is not None)
     if threshold_mode not in ("soft", "hard", "improved"):
         raise ValueError("未知小波阈值模式")
     if not np.isfinite(threshold_scale) or threshold_scale < 0:
