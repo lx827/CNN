@@ -18,7 +18,7 @@ signal = reference_contract.signal
 class EnsembleReferenceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # 共用版本与源码 SHA256 核验，不引入另一份参考预算。
+        # 共用已安装参考版本与测试预算。
         reference_contract.EMDReferenceTest.setUpClass.__func__(cls)
 
     def test_ensemble_single_flip_and_complete_match_local_reference(self):
