@@ -10,11 +10,11 @@ struct SecondLayerResult {
     std::size_t output_depth = 0;
 };
 
-// first_layer 是等长输入列；max_imfs 必须明确且不超过 first_layer.size()。
-// 保留 emd 0.8.1 的成功域：该入口仅处理前 max_imfs 个 first-layer 列。
+// first_layer 是等长输入列；对全部列分别调用 sift，max_imfs 控制每列分解。
+// output_depth 为实际最大结果列数，包含基础 sift 返回的真实残差。
 SecondLayerResult sift_second_layer(const std::vector<std::span<const double>>& first_layer,
                                     const Options& options);
-// 每个 first-layer 列使用 frequencies[index:]；输出深度为 options.max_imfs。
+// 每个 first-layer 列使用 frequencies[index:]；深度取实际最大结果列数。
 SecondLayerResult mask_sift_second_layer(const std::vector<std::span<const double>>& first_layer,
                                          std::span<const double> frequencies,
                                          const MaskOptions& options);

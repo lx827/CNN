@@ -157,6 +157,19 @@ class MaskReferenceTest(unittest.TestCase):
             self, emd.mask_sift_second_layer(columns, masks, mask_options), expected, x
         )
 
+        # 每列模态上限独立于 first-layer 列数，不复刻参考的越界/漏列缺陷。
+        actual = emd.sift_second_layer(columns, {"max_imfs": 1})
+        expected_columns = [
+            emd.sift(columns[:, i], max_imfs=1) for i in range(columns.shape[1])
+        ]
+        self.assertEqual(
+            actual.shape[2], max(column.shape[1] for column in expected_columns)
+        )
+        for i, column in enumerate(expected_columns):
+            np.testing.assert_array_equal(actual[:, i, : column.shape[1]], column)
+        larger = emd.sift_second_layer(columns, {"max_imfs": 3})
+        self.assertEqual(larger.shape[1], columns.shape[1])
+
 
 class MaskLifecycleTest(unittest.TestCase):
     def test_result_ownership_and_concurrent_calls(self):
@@ -186,7 +199,7 @@ class MaskLifecycleTest(unittest.TestCase):
             emd.mask_sift(oscillation(), mask_amp=[1], max_imfs=0)
         with self.assertRaises(ValueError):
             emd.sift_second_layer(
-                np.column_stack([oscillation(), oscillation()]), {"max_imfs": 3}
+                np.column_stack([oscillation(), oscillation()]), {"max_imfs": -1}
             )
         with self.assertRaises(emd.ConvergenceError):
             emd.mask_sift(

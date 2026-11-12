@@ -263,8 +263,8 @@ def _second_result(raw, length, first_layers):
 def sift_second_layer(IA, sift_args=None):
     """原生 sift 的二层组合；3D 输出从独立 C++ 列组装一次。
 
-    本地参考只在显式 sift_args 且 max_imfs 不超过输入列数、每次 sift
-    输出不超过预分配深度时成功；超出此域明确报错，不悄悄截断残差。
+    全部输入列分别分解，max_imfs 只控制每列的模态上限；实际最大输出深度
+    包含真实残差列，空余位置零填，不复刻参考的输入列索引和固定深度错误。
     """
     array, columns = _second_input(IA)
     options = dict(sift_args or {})
