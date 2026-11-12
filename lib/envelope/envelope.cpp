@@ -59,17 +59,17 @@ void rilling(std::span<const double> x, int width, Workspace& w) {
             reversed_slice(min, nmin - width - 1, nmin - 1, rn); rsym = min.back();
         } else {
             // -(width-2) 为 0 时，Python [-0:] 选择完整数组。
-            reversed_slice(max, width == 2 ? 0 : nmax - (width - 2), nmax, rm);
+            reversed_slice(max, width <= 2 ? 2 - width : nmax - (width - 2), nmax, rm);
             rm.insert(rm.begin(), last);
-            reversed_slice(min, nmin - (width - 1), nmin, rn); rsym = last;
+            reversed_slice(min, width == 1 ? 0 : nmin - (width - 1), nmin, rn); rsym = last;
         }
     } else {
         if (x.back() > x[min.back()]) {
             reversed_slice(max, nmax - width - 1, nmax - 1, rm);
             reversed_slice(min, nmin - width, nmin, rn); rsym = max.back();
         } else {
-            reversed_slice(max, nmax - (width - 1), nmax, rm);
-            reversed_slice(min, width == 2 ? 0 : nmin - (width - 2), nmin, rn);
+            reversed_slice(max, width == 1 ? 0 : nmax - (width - 1), nmax, rm);
+            reversed_slice(min, width <= 2 ? 2 - width : nmin - (width - 2), nmin, rn);
             rn.insert(rn.begin(), last); rsym = last;
         }
     }
@@ -105,12 +105,14 @@ void values(std::span<const double> input, const Indices& indices, bool paraboli
 }
 
 // np.pad reflect/odd 的位置延拓与 median(stat_length=1) 幅值延拓。
-void numpy_pad(std::vector<double>& x, std::vector<double>& y, std::size_t len, int width) {
+void numpy_pad(std::vector<double>& x, std::vector<double>& y, std::size_t len, int width,
+               Workspace& workspace) {
     width = std::min<int>(width, x.size());
     if (!width) return;
     do {
         const std::size_t n = x.size();
-        std::vector<double> left(width), right(width);
+        auto& left = workspace.pad_left; auto& right = workspace.pad_right;
+        left.resize(width); right.resize(width);
         // 参考默认 pad_width<=nextrema，极限 width==n 需重复反射一项。
         auto odd = [&](Index index) {
             double offset = 0.0;
@@ -130,9 +132,11 @@ void numpy_pad(std::vector<double>& x, std::vector<double>& y, std::size_t len, 
     } while (x.back() < static_cast<double>(len) || x.front() >= 0.0);
 }
 
-void queries(Workspace& w, double start, std::size_t n) {
+void queries(Workspace& w, double start, double end, std::size_t n) {
     // 上游先 arange(padded_first,padded_last)，再按 [0,N) 裁剪。
-    const double first = start + std::ceil(-start);
+    const double first = start + std::max(0.0, std::ceil(-start));
+    if (first >= 1.0 || first + n - 1 >= end)
+        throw std::runtime_error("包络裁剪长度与输入不符");
     for (std::size_t i = 0; i < n; ++i) w.query[i] = first + i;
 }
 
@@ -142,7 +146,7 @@ void interpolate(const std::vector<double>& x, const std::vector<double>& y,
     if (x.size() < minimum) throw std::runtime_error("包络插值节点不足");
     for (std::size_t i = 1; i < x.size(); ++i)
         if (x[i] <= x[i - 1]) throw std::runtime_error("极值位置必须严格递增");
-    queries(w, x.front(), out.size());
+    queries(w, x.front(), x.back(), out.size());
     interpolation::execution::interpolate(x, y, {w.query.data(), out.size()}, out,
                                           options.interpolation, w.interpolation);
     for (double value : out)
@@ -162,6 +166,7 @@ void Workspace::prepare(std::size_t samples, std::size_t padding) {
     const std::size_t nodes = samples + 2 * padding + 4;
     for (auto* item : {&maxima, &minima, &left_max, &left_min, &right_max, &right_min}) item->reserve(nodes);
     for (auto* item : {&max_x, &max_y, &min_x, &min_y}) item->reserve(nodes);
+    pad_left.reserve(padding); pad_right.reserve(padding);
     if (static_cast<std::size_t>(query.size()) < samples) query.resize(samples);
     interpolation.prepare(nodes, samples);
 }
@@ -184,8 +189,8 @@ bool extrema_envelopes(std::span<const double> signal, std::span<double> upper,
     else {
         values(signal, w.maxima, options.parabolic_extrema, w.max_x, w.max_y);
         values(signal, w.minima, options.parabolic_extrema, w.min_x, w.min_y);
-        numpy_pad(w.max_x, w.max_y, signal.size(), options.pad_width);
-        numpy_pad(w.min_x, w.min_y, signal.size(), options.pad_width);
+        numpy_pad(w.max_x, w.max_y, signal.size(), options.pad_width, w);
+        numpy_pad(w.min_x, w.min_y, signal.size(), options.pad_width, w);
     }
     interpolate(w.max_x, w.max_y, upper, options, w);
     interpolate(w.min_x, w.min_y, lower, options, w);
@@ -200,8 +205,18 @@ bool combined_envelope(std::span<const double> signal, std::span<double> out,
             w.maxima.push_back(i);
     if (w.maxima.size() < 2) return false;
     w.max_x.clear(); w.max_y.clear();
-    for (auto i : w.maxima) { w.max_x.push_back(i); w.max_y.push_back(std::abs(signal[i])); }
-    numpy_pad(w.max_x, w.max_y, signal.size(), options.pad_width);
+    for (auto i : w.maxima) {
+        if (options.parabolic_extrema) {
+            const double before = std::abs(signal[i - 1]), center = std::abs(signal[i]);
+            const double after = std::abs(signal[i + 1]);
+            const double a = .5 * before - center + .5 * after;
+            const double b = -2.5 * before + 4.0 * center - 1.5 * after;
+            const double c = 3.0 * before - 3.0 * center + after;
+            const double tp = -b / (2.0 * a);
+            w.max_x.push_back(tp - 2.0 + i); w.max_y.push_back(tp * b / 2.0 + c);
+        } else { w.max_x.push_back(i); w.max_y.push_back(std::abs(signal[i])); }
+    }
+    numpy_pad(w.max_x, w.max_y, signal.size(), options.pad_width, w);
     interpolate(w.max_x, w.max_y, out, options, w);
     return true;
 }

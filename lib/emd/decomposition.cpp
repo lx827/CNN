@@ -78,6 +78,12 @@ void validate(const Options& options) {
     if (options.max_imfs < 0 || (options.sift_thresh && (!std::isfinite(*options.sift_thresh)
         || *options.sift_thresh < 0)) || (options.energy_thresh && !std::isfinite(*options.energy_thresh)))
         throw std::invalid_argument("EMD 参数无效");
+    if (options.rilling_thresh) {
+        const auto& t = *options.rilling_thresh;
+        if (!std::isfinite(t[0]) || !std::isfinite(t[1]) || !std::isfinite(t[2])
+            || t[0] <= 0 || t[1] < t[0] || t[2] < 0 || t[2] > 1)
+            throw std::invalid_argument("外层 Rilling 阈值无效");
+    }
 }
 
 namespace execution {
@@ -166,8 +172,9 @@ Result sift(std::span<const double> signal, const Options& options, Workspace& w
         if (info.status == Status::iteration_limit) { result.status = info.status; return result; }
         // 对齐上游 X - imf.sum(axis=1)，不能改成反复 residual -= next。
         for (std::size_t i = 0; i < signal.size(); ++i) {
-            double total = 0.0;
-            for (const auto& component : result.components) total += component[i];
+            const double total = pairwise(result.components.size(), [&](std::size_t column) {
+                return result.components[column][i];
+            });
             w.residual[i] = signal[i] - total;
         }
         ++layer;

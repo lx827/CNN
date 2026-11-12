@@ -9,3 +9,9 @@ endif()
 
 add_subdirectory(lib)
 add_subdirectory(bind)
+
+option(CNN_COMPUTE_BUILD_TESTS "Build native C++ interface contract tests" OFF)
+if(CNN_COMPUTE_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests/native)
+endif()
