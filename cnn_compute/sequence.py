@@ -36,3 +36,13 @@ def central_moment(values, degree, *, scaled=False):
 def window_moments(values, window):
     """完整不重叠窗口的RMS/Pearson峰度；常数窗峰度NaN。"""
     return _native.window_moments(_signal(values), window)
+
+
+def robust_standardize(values):
+    """以中位数/MAD构造有符号z序列，sigma下限为1e-12。"""
+    return _native.robust_standardize(_signal(values))
+
+
+def sign_cusum(values, reference=None):
+    """符号CUSUM双侧最大值与参考值，参考缺失时用中位数；阈值留给调用方。"""
+    return _native.sign_cusum(_signal(values), 0.0 if reference is None else reference, reference is None)

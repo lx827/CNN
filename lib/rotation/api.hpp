@@ -11,7 +11,7 @@ namespace cnn_compute::rotation {
 // prepare 是可能分配阶段，同长度重复执行不重建 FFT plan；输出不可与输入重叠。
 struct Workspace {
     fourier::Plan plan;
-    core::Array real;
+    core::Array real, window;
     std::vector<fourier::Complex> spectrum, temporary;
     void prepare(std::size_t n);
 };
@@ -41,6 +41,13 @@ core::Array band_envelope(std::span<const double> x,double fs,double low,double 
 core::Array window_peaks(std::span<const double> axis,std::span<const double> amplitude,
                          std::span<const double> centers,double half_width,bool disjoint=false);
 double band_sum(std::span<const double> axis,std::span<const double> values,double center,double half_width);
+struct LocalPeak {double coordinate=0,amplitude=0,background=0;std::size_t background_count=0;bool found=false;};
+LocalPeak local_peak(std::span<const double> axis,std::span<const double> amplitude,
+                     double center,double half_width,double background_inner,double background_outer,
+                     std::span<const double> exclusions,bool median_background);
+struct CARFeatures {core::Array coordinate,amplitude;double background;std::size_t background_count;};
+CARFeatures car_features(std::span<const double> axis,std::span<const double> cepstrum,
+                         std::span<const double> targets,double half_width);
 std::pair<double,double> order_statistics(std::span<const double> amplitude);
 struct RidgeParameters {
     double peak_to_background=8,local_energy=.12,reliable_fraction=.6,boundary_fraction=.2;
@@ -52,7 +59,7 @@ struct SpeedResult { double frequency=0;std::string source,reason; };
 SpeedResult spectrum_speed(std::span<const double> x,double fs,double low,double high,int harmonics,double bandwidth,double smoothing);
 SpeedResult autocorrelation_speed(std::span<const double> x,double fs,double low,double high);
 SpeedResult envelope_speed(std::span<const double> x,double fs,double carrier,double low,double high,double bandwidth);
-struct CVSResult {core::Array signal;std::vector<std::pair<std::size_t,std::size_t>> intervals;int cycles=0;double coverage=0;};
+struct CVSResult {core::Array signal;std::vector<std::pair<std::size_t,std::size_t>> intervals;int cycles=0;double coverage=0;std::size_t completed_intervals=0;};
 // 已验证相位单调、恒定相对转速、空间窗口无重叠；仅进行数值重组。
 CVSResult cvs(std::span<const double> x,std::span<const double> carrier,std::span<const double> planet,
               double azimuth,double sensor,double half_width,int samples_per_revolution);

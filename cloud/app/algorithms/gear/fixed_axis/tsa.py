@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import numpy as np
-from scipy.fft import irfft, rfft
+from cnn_compute import rotation as native
 
-from app.algorithms.order import AngleDomainSignal, compute_order_spectrum
+import numpy as np
+
+from app.algorithms.order import AngleDomainSignal, OrderSpectrum
 
 from .types import SynchronousAverage, TSARepresentation
 
@@ -21,24 +22,12 @@ def compute_synchronous_average(
     """
     if isinstance(min_revolutions, bool) or min_revolutions < 2:
         raise ValueError("TSA 至少需要 2 个完整转周期")
-    points_per_revolution = angle_domain.samples_per_revolution
-    revolutions = len(angle_domain.samples) // points_per_revolution
-    if revolutions < min_revolutions:
-        raise ValueError("有效完整转数不足，无法形成 TSA")
-    count = revolutions * points_per_revolution
-    cycles = angle_domain.samples[:count].reshape(revolutions, points_per_revolution)
-    cycle = np.mean(cycles, axis=0)
-    trimmed = AngleDomainSignal(
-        angle_revolutions=angle_domain.angle_revolutions[:count],
-        samples=angle_domain.samples[:count],
-        samples_per_revolution=points_per_revolution,
-    )
-    return SynchronousAverage(
-        angle_domain=trimmed,
-        tsa_cycle=np.asarray(cycle, dtype=np.float64),
-        tsa_signal=np.tile(cycle, revolutions),
-        revolutions=revolutions,
-    )
+    spr = angle_domain.samples_per_revolution
+    cycle, repeated = native.tsa(angle_domain.samples, spr, min_revolutions)
+    count = len(repeated)
+    trimmed = AngleDomainSignal(angle_revolutions=angle_domain.angle_revolutions[:count],
+        samples=angle_domain.samples[:count], samples_per_revolution=spr)
+    return SynchronousAverage(angle_domain=trimmed, tsa_cycle=cycle, tsa_signal=repeated, revolutions=count // spr)
 
 
 def _periodic_components(
@@ -46,13 +35,7 @@ def _periodic_components(
     orders: set[int],
 ) -> np.ndarray:
     """用整转 DFT 精确保留指定整数阶次，避免移动平均伪差分。"""
-    coefficients = rfft(cycle)
-    retained = np.zeros_like(coefficients)
-    for order in orders:
-        if order < 0 or order >= len(coefficients):
-            raise ValueError("regular 成分超出单转角域奈奎斯特覆盖")
-        retained[order] = coefficients[order]
-    return np.asarray(irfft(retained, n=len(cycle)), dtype=np.float64)
+    return native.periodic_components(cycle, orders)
 
 
 def compute_tsa_representation(
@@ -98,20 +81,15 @@ def compute_tsa_representation(
     if regular_orders and max(regular_orders) > max_order:
         raise ValueError("TSA 阶次谱未覆盖全部 regular 成分")
 
-    mesh_cycle = _periodic_components(synchronous.tsa_cycle, mesh_bins)
-    regular_cycle = _periodic_components(synchronous.tsa_cycle, regular_orders)
-    mesh_signal = np.tile(mesh_cycle, synchronous.revolutions)
-    regular_signal = np.tile(regular_cycle, synchronous.revolutions)
-    residual = synchronous.tsa_signal - regular_signal
-    differential = regular_signal - mesh_signal
-    spectrum = compute_order_spectrum(
-        AngleDomainSignal(
-            angle_revolutions=synchronous.angle_domain.angle_revolutions,
-            samples=synchronous.tsa_signal,
-            samples_per_revolution=synchronous.angle_domain.samples_per_revolution,
-        ),
-        max_order=max_order,
-    )
+    mesh_signal, regular_signal, residual, differential, amplitudes = native.tsa_components(
+        synchronous.tsa_cycle, mesh_bins, regular_orders, synchronous.revolutions)
+    spr = synchronous.angle_domain.samples_per_revolution
+    count = len(synchronous.tsa_signal)
+    resolution = spr / count
+    retained = min(len(amplitudes), int(np.floor(max_order / resolution + 1e-9)) + 1)
+    bins = np.arange(retained, dtype=np.float64) * resolution
+    spectrum = OrderSpectrum(order_bins=bins, amplitude=amplitudes[:retained],
+        order_resolution=resolution, samples_per_revolution=spr, total_revolutions=count / spr)
     return TSARepresentation(
         synchronous=synchronous,
         mesh_order=float(mesh_order),

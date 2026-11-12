@@ -28,4 +28,6 @@ std::pair<double,double> regression(std::span<const double> x, std::span<const d
 std::pair<double,double> central_moment(std::span<const double> values, int degree, bool scale=false);
 // 独立输出窗口RMS与Pearson峰度；尾部不足整窗不输出。
 std::pair<core::Array,core::Array> window_moments(std::span<const double> values, int window);
+core::Array robust_standardize(std::span<const double> values);
+std::pair<CusumResult,double> sign_cusum(std::span<const double> values,double reference,bool use_median);
 }

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <vector>
 
 namespace cnn_compute::sequence {
 namespace {
@@ -114,5 +115,25 @@ std::pair<core::Array,core::Array> window_moments(std::span<const double> values
         rms[i]=std::sqrt(core::Map(x.data(),x.size()).square().mean());
         auto [m,v]=central_moment(x,4);kurt[i]=v==0?std::numeric_limits<double>::quiet_NaN():m/(v*v);}
     return {std::move(rms),std::move(kurt)};
+}
+namespace {
+double median(std::vector<double>& a){
+    auto k=a.size()/2;std::nth_element(a.begin(),a.begin()+k,a.end());double value=a[k];
+    return a.size()%2?value:(value+*std::max_element(a.begin(),a.begin()+k))*.5;
+}
+}
+core::Array robust_standardize(std::span<const double> x){
+    if(x.empty())throw std::invalid_argument("robust series must not be empty");
+    std::vector<double> scratch(x.begin(),x.end());double center=median(scratch);
+    for(std::size_t j=0;j<x.size();++j)scratch[j]=std::abs(x[j]-center);
+    double sigma=std::max(1.4826*median(scratch),1e-12);
+    return ((core::Map(x.data(),x.size())-center)/sigma).eval();
+}
+std::pair<CusumResult,double> sign_cusum(std::span<const double> x,double reference,bool use_median){
+    validate(x);if(use_median){std::vector<double> scratch(x.begin(),x.end());reference=median(scratch);}
+    CusumResult r{};for(double v:x){double sign=(v>reference)-(v<reference);
+        r.final_positive=std::max(0.,r.final_positive+sign-.5);r.final_negative=std::max(0.,r.final_negative-sign-.5);
+        r.positive=std::max(r.positive,r.final_positive);r.negative=std::max(r.negative,r.final_negative);}
+    return {r,reference};
 }
 }

@@ -1,4 +1,5 @@
 #include "api.hpp"
+#include "execution.hpp"
 #include <filtering/api.hpp>
 #include <transforms/hilbert.hpp>
 #include <algorithm>
@@ -30,17 +31,23 @@ Statistics stats(std::span<const double> x,double floor) {
             mean_abs>1e-12?rms/mean_abs:0,mean_abs>1e-12?peak/mean_abs:0,rms>1e-12?peak/rms:0};
 }
 }
+namespace execution {
+void amplitude_spectrum(std::span<const double> x,std::span<double> amplitude,
+                        std::span<const double> window,std::span<double> buffer,
+                        std::span<fourier::Complex> transformed,fourier::Plan& plan,bool remove_mean) {
+    const auto n=x.size();const double gain=Eigen::Map<const core::Array>(window.data(),n).sum();
+    const double mean=remove_mean?Eigen::Map<const core::Array>(x.data(),n).mean():0.;
+    Eigen::Map<core::Array>(buffer.data(),n)=(Eigen::Map<const core::Array>(x.data(),n)-mean)*Eigen::Map<const core::Array>(window.data(),n);
+    plan.forward(buffer,transformed);
+    for(std::size_t k=0;k<amplitude.size();++k){const bool edge=k==0||(n%2==0&&k==n/2);amplitude[k]=std::abs(transformed[k])*(edge?1:2)/gain;}
+}
+}
 Spectrum spectrum(std::span<const double> x,double fs,bool remove_mean) {
     check(x,2);rate(fs);const auto n=x.size(),bins=n/2+1;
-    auto window=filtering::hann(n);std::vector<double> buffer(n);const double gain=std::accumulate(window.begin(),window.end(),0.0);
-    const double mean=remove_mean?Eigen::Map<const Array>(x.data(),n).mean():0;
-    Eigen::Map<Array>(buffer.data(),n)=(Eigen::Map<const Array>(x.data(),n)-mean)*Eigen::Map<const Array>(window.data(),n);
-    auto transformed=fourier::fft(buffer);Spectrum out{Array(bins),Array(bins),Array(bins)};
-    for(std::size_t k=0;k<bins;++k) {
-        const bool edge=k==0 || (n%2==0 && k==n/2);
-        const double amp=std::abs(transformed[k])*(edge?1:2)/gain;
-        out.frequency[k]=static_cast<double>(k)*fs/n;out.amplitude[k]=amp;out.power[k]=amp*amp/(edge?1:2);
-    }
+    auto window=filtering::hann(n);std::vector<double> buffer(n);std::vector<fourier::Complex> transformed(n);fourier::Plan plan(n);
+    Spectrum out{Array(bins),Array(bins),Array(bins)};
+    execution::amplitude_spectrum(x,{out.amplitude.data(),bins},window,buffer,transformed,plan,remove_mean);
+    for(std::size_t k=0;k<bins;++k){const bool edge=k==0||(n%2==0&&k==n/2);out.frequency[k]=static_cast<double>(k)*fs/n;out.power[k]=out.amplitude[k]*out.amplitude[k]/(edge?1:2);}
     return out;
 }
 Stft stft(std::span<const double> x,double fs,int window,int overlap,int nfft) {

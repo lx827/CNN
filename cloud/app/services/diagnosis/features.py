@@ -4,6 +4,7 @@
 统一提供时域、频域、包络域、阶次域的特征提取接口。
 """
 
+from cnn_compute import sequence as native_sequence
 import numpy as np
 from scipy import stats
 from scipy.fft import rfft, rfftfreq
@@ -76,67 +77,20 @@ def _compute_dynamic_baseline_features(signal: np.ndarray) -> Dict[str, float]:
     持续偏移或突发冲击，避免完全依赖固定阈值。
     """
     arr = np.asarray(signal, dtype=np.float64)
+    empty = dict(rms_mad_z=0.0, kurtosis_mad_z=0.0, ewma_drift=0.0, cusum_score=0.0)
     if len(arr) < 512:
-        return {
-            "rms_mad_z": 0.0,
-            "kurtosis_mad_z": 0.0,
-            "ewma_drift": 0.0,
-            "cusum_score": 0.0,
-        }
-
+        return empty
     n_windows = min(32, max(8, len(arr) // 1024))
-    win = max(128, len(arr) // n_windows)
-    rms_series = []
-    kurt_series = []
-    for start in range(0, len(arr) - win + 1, win):
-        chunk = arr[start : start + win]
-        if len(chunk) < 128:
-            continue
-        rms_series.append(float(np.sqrt(np.mean(chunk**2))))
-        try:
-            kurt_series.append(float(stats.kurtosis(chunk, fisher=False)))
-        except Exception:
-            kurt_series.append(3.0)
-
+    rms_series, kurt_series = native_sequence.window_moments(arr, max(128, len(arr) // n_windows))
     if len(rms_series) < 4:
-        return {
-            "rms_mad_z": 0.0,
-            "kurtosis_mad_z": 0.0,
-            "ewma_drift": 0.0,
-            "cusum_score": 0.0,
-        }
-
-    def robust_z(series):
-        x = np.asarray(series, dtype=np.float64)
-        med = float(np.median(x))
-        mad = float(np.median(np.abs(x - med)))
-        sigma = max(1.4826 * mad, 1e-12)
-        return np.abs((x - med) / sigma), med, sigma
-
-    rms_z, _, _ = robust_z(rms_series)
-    kurt_z, _, _ = robust_z(kurt_series)
-
-    # EWMA/CUSUM 使用 RMS 序列，捕捉缓慢上升趋势。
-    rms_z_signed = np.asarray(rms_series, dtype=np.float64)
-    median_rms = float(np.median(rms_z_signed))
-    mad_rms = max(1.4826 * float(np.median(np.abs(rms_z_signed - median_rms))), 1e-12)
-    z = (rms_z_signed - median_rms) / mad_rms
-    ewma = 0.0
-    for val in z:
-        ewma = 0.2 * float(val) + 0.8 * ewma
-
-    c_pos = 0.0
-    c_neg = 0.0
-    for val in z:
-        c_pos = max(0.0, c_pos + float(val) - 0.5)
-        c_neg = max(0.0, c_neg - float(val) - 0.5)
-
-    return {
-        "rms_mad_z": round(float(np.max(rms_z)), 4),
-        "kurtosis_mad_z": round(float(np.max(kurt_z)), 4),
-        "ewma_drift": round(float(abs(ewma)), 4),
-        "cusum_score": round(float(max(c_pos, c_neg)), 4),
-    }
+        return empty
+    z = native_sequence.robust_standardize(rms_series)
+    # 常数窗口Pearson峰度无定义，沿既有输出NaN语义保留，不伪造正常峰度。
+    kurt_z = native_sequence.robust_standardize(kurt_series) if np.all(np.isfinite(kurt_series)) else np.full_like(kurt_series, np.nan)
+    _, _, c_pos, c_neg, ewma = native_sequence.cusum(z)
+    return dict(rms_mad_z=round(float(np.max(np.abs(z))), 4),
+        kurtosis_mad_z=round(float(np.max(np.abs(kurt_z))), 4),
+        ewma_drift=round(abs(ewma), 4), cusum_score=round(max(c_pos, c_neg), 4))
 
 
 def compute_fft_features(
@@ -413,44 +367,10 @@ def _sign_cusum(
     x = np.asarray(series, dtype=np.float64)
     if len(x) < 4:
         return 0.0, 0.0, {"method": "sign_cusum", "error": "insufficient_data"}
-
-    # 基线：中位数（比均值更抗异常值）
-    if reference is None:
-        reference = float(np.median(x))
-
-    # 符号统计量
-    signs = np.sign(x - reference)
-    K = 0.5  # 参考值（符号统计的K固定为0.5）
-
-    c_pos = 0.0
-    c_neg = 0.0
-    c_pos_max = 0.0
-    c_neg_max = 0.0
-
-    for s in signs:
-        c_pos = max(0.0, c_pos + s - K)
-        c_neg = max(0.0, c_neg - s - K)
-        c_pos_max = max(c_pos_max, c_pos)
-        c_neg_max = max(c_neg_max, c_neg)
-
-    # 决策限 H：对于符号统计，等效 σ ≈ 1（因为 sign 只有 ±1）
-    # H ≈ 4~5 × n_points的等效标准差
-    # 实际工程中 H 取 n/4 到 n/2 之间的值
-    n = len(x)
-    H = max(4.0, n * 0.1)
-
-    return (
-        float(c_pos_max),
-        float(c_neg_max),
-        {
-            "method": "sign_cusum",
-            "reference": round(reference, 6),
-            "K": K,
-            "H": round(H, 2),
-            "alarm_positive": bool(c_pos_max > H),
-            "alarm_negative": bool(c_neg_max > H),
-        },
-    )
+    positive, negative, reference = native_sequence.sign_cusum(x, reference)
+    limit = max(4.0, len(x) * 0.1)
+    return positive, negative, dict(method="sign_cusum", reference=round(reference, 6), K=0.5,
+        H=round(limit, 2), alarm_positive=positive > limit, alarm_negative=negative > limit)
 
 
 def _mann_whitney_cusum(
@@ -485,82 +405,16 @@ def _mann_whitney_cusum(
         (C⁺_max, C⁻_max, info_dict)
     """
     x = np.asarray(series, dtype=np.float64)
-    n = len(x)
-
-    if n < window_size * 2:
+    if len(x) < window_size * 2:
         return 0.0, 0.0, {"method": "mann_whitney_cusum", "error": "insufficient_data"}
-
-    # 参考窗口（健康基线）
-    if reference_window is None:
-        reference_window = x[:window_size]
-    ref = np.asarray(reference_window, dtype=np.float64)
-    n1 = len(ref)
-
-    # 计算每个滑动窗口与参考窗口的 Mann-Whitney z 分数
-    z_scores = []
-    for start in range(window_size, n - window_size + 1, max(1, window_size // 4)):
-        current_window = x[start : start + window_size]
-        if len(current_window) < window_size:
-            continue
-        n2 = len(current_window)
-
-        # 计算 Mann-Whitney U 统计量
-        u1 = 0.0
-        for x1 in ref:
-            for x2 in current_window:
-                if x1 > x2:
-                    u1 += 1.0
-                elif x1 == x2:
-                    u1 += 0.5
-
-        u2 = n1 * n2 - u1
-        u_min = min(u1, u2)
-
-        # 归一化
-        e_u = n1 * n2 / 2.0
-        var_u = n1 * n2 * (n1 + n2 + 1) / 12.0
-        sigma_u = np.sqrt(var_u) if var_u > 0 else 1.0
-
-        z = (u_min - e_u) / sigma_u
-        z_scores.append(z)
-
-    if len(z_scores) < 2:
-        return (
-            0.0,
-            0.0,
-            {"method": "mann_whitney_cusum", "error": "insufficient_z_scores"},
-        )
-
-    # CUSUM 累积 z 分数
-    K_mw = 0.5  # 参考值
-    c_pos = 0.0
-    c_neg = 0.0
-    c_pos_max = 0.0
-    c_neg_max = 0.0
-
-    for z_val in z_scores:
-        c_pos = max(0.0, c_pos + z_val - K_mw)
-        c_neg = max(0.0, c_neg - z_val - K_mw)
-        c_pos_max = max(c_pos_max, c_pos)
-        c_neg_max = max(c_neg_max, c_neg)
-
-    # 决策限：基于 z 分数的 CUSUM，H ≈ 4~5
-    H_mw = 4.0
-
-    return (
-        float(c_pos_max),
-        float(c_neg_max),
-        {
-            "method": "mann_whitney_cusum",
-            "window_size": window_size,
-            "n1": n1,
-            "K": K_mw,
-            "H": H_mw,
-            "n_z_scores": len(z_scores),
-            "alarm_positive": bool(c_pos_max > H_mw),
-            "alarm_negative": bool(c_neg_max > H_mw),
-        },
-    )
+    reference = x[:window_size] if reference_window is None else np.asarray(reference_window, dtype=np.float64)
+    scores = native_sequence.mann_whitney_z(x, reference, window_size)
+    if len(scores) < 2:
+        return 0.0, 0.0, {"method": "mann_whitney_cusum", "error": "insufficient_z_scores"}
+    positive, negative, *_ = native_sequence.cusum(scores)
+    return positive, negative, dict(method="mann_whitney_cusum", window_size=window_size,
+        n1=len(reference), K=0.5, H=4.0, n_z_scores=len(scores),
+        alarm_positive=positive > 4.0, alarm_negative=negative > 4.0)
 
 
 def compute_nonparam_cusum_features(signal: np.ndarray) -> Dict[str, float]:
@@ -599,12 +453,7 @@ def compute_nonparam_cusum_features(signal: np.ndarray) -> Dict[str, float]:
     # 滑动窗口 RMS 序列（与 _compute_dynamic_baseline_features 相同的窗口策略）
     n_windows = min(32, max(8, len(arr) // 1024))
     win = max(128, len(arr) // n_windows)
-    rms_series = []
-    for start in range(0, len(arr) - win + 1, win):
-        chunk = arr[start : start + win]
-        if len(chunk) < 128:
-            continue
-        rms_series.append(float(np.sqrt(np.mean(chunk**2))))
+    rms_series, _ = native_sequence.window_moments(arr, win)
 
     if len(rms_series) < 4:
         return {

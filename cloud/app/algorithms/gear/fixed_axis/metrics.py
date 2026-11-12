@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from cnn_compute import rotation as native
+from cnn_compute import sequence as native_sequence
 import numpy as np
-from scipy.signal import butter, hilbert, sosfiltfilt
 
 from app.algorithms.order import OrderSpectrum
 
@@ -25,11 +26,10 @@ def standardized_moment(signal: np.ndarray, order: int, name: str) -> MetricValu
         or not np.all(np.isfinite(values))
     ):
         return MetricValue.unavailable(name, "invalid_or_short_signal")
-    centered = values - np.mean(values)
-    variance = float(np.mean(centered**2))
+    moment, variance = native_sequence.central_moment(values, order)
     if variance <= np.finfo(np.float64).tiny:
         return MetricValue.unavailable(name, "zero_variance")
-    value = float(np.mean(centered**order) / variance ** (order / 2.0))
+    value = moment / variance ** (order / 2.0)
     return MetricValue(
         name=name,
         status="evaluated",
@@ -84,10 +84,7 @@ def compute_fm0(tsa: TSARepresentation) -> MetricValue:
 
 
 def _peak_in_window(spectrum: OrderSpectrum, center: float, half_width: float) -> float:
-    mask = np.abs(spectrum.order_bins - center) <= half_width
-    if not np.any(mask):
-        raise ValueError("阶次窗内没有谱点")
-    return float(np.max(spectrum.amplitude[mask]))
+    return float(native.window_peaks(spectrum.order_bins, spectrum.amplitude, [center], half_width)[0])
 
 
 def analyze_fixed_axis_sidebands(
@@ -156,46 +153,21 @@ def analyze_fixed_axis_sidebands(
             amplitude_unit=spectrum.amplitude_unit,
         )
 
+    centers = [mesh_order + sign * n for n in range(1, n_sidebands + 1) for sign in (-1, 1)]
+    try:
+        amplitudes = native.window_peaks(spectrum.order_bins, spectrum.amplitude, centers,
+            sideband_half_width_order, disjoint=True)
+    except ValueError:
+        return SidebandAnalysis(status="not_evaluable", mesh_amplitude=mesh_amplitude,
+            ser=MetricValue.unavailable("SER", "overlapping_or_unresolvable_sideband_windows"),
+            amplitude_unit=spectrum.amplitude_unit)
+    numerator = float(np.sum(amplitudes))
     observations = []
-    numerator = 0.0
-    occupied_bins: set[int] = set()
-    for sideband_order in range(1, n_sidebands + 1):
-        lower_order = mesh_order - sideband_order
-        upper_order = mesh_order + sideband_order
-        windows = (
-            (lower_order, sideband_half_width_order),
-            (upper_order, sideband_half_width_order),
-        )
-        for center, half_width in windows:
-            indices = set(
-                np.flatnonzero(
-                    np.abs(spectrum.order_bins - center) <= half_width
-                ).tolist()
-            )
-            if not indices or occupied_bins & indices:
-                return SidebandAnalysis(
-                    status="not_evaluable",
-                    mesh_amplitude=mesh_amplitude,
-                    ser=MetricValue.unavailable(
-                        "SER", "overlapping_or_unresolvable_sideband_windows"
-                    ),
-                    amplitude_unit=spectrum.amplitude_unit,
-                )
-            occupied_bins |= indices
-        lower = _peak_in_window(spectrum, lower_order, sideband_half_width_order)
-        upper = _peak_in_window(spectrum, upper_order, sideband_half_width_order)
-        numerator += lower + upper
-        observations.append(
-            SidebandObservation(
-                order=sideband_order,
-                lower_order=float(lower_order),
-                upper_order=float(upper_order),
-                lower_amplitude=lower,
-                upper_amplitude=upper,
-                asymmetry=abs(lower - upper)
-                / (lower + upper + np.finfo(np.float64).tiny),
-            )
-        )
+    for i in range(n_sidebands):
+        lower, upper = (float(v) for v in amplitudes[2 * i:2 * i + 2])
+        observations.append(SidebandObservation(order=i + 1, lower_order=float(centers[2 * i]),
+            upper_order=float(centers[2 * i + 1]), lower_amplitude=lower, upper_amplitude=upper,
+            asymmetry=abs(lower - upper) / (lower + upper + np.finfo(np.float64).tiny)))
     return SidebandAnalysis(
         status="evaluated",
         mesh_amplitude=mesh_amplitude,
@@ -243,8 +215,7 @@ def compute_na4(tsa: TSARepresentation, history: TrendHistory | None) -> MetricV
             "NA4", "incompatible_residual_history_representation"
         )
     residual = tsa.residual_signal
-    centered = residual - np.mean(residual)
-    numerator = float(np.mean(centered**4))
+    numerator, _ = native_sequence.central_moment(residual, 4)
     denominator = _historical_denominator(history.residual_variances)
     return MetricValue(
         name="NA4",
@@ -264,22 +235,11 @@ def compute_na4(tsa: TSARepresentation, history: TrendHistory | None) -> MetricV
 
 def residual_envelope(tsa: TSARepresentation) -> np.ndarray:
     """在角域以点/转为 fs、以阶次为 mesh 频率滤波并取 Hilbert 包络。"""
-    angular_sample_rate = tsa.synchronous.angle_domain.samples_per_revolution
-    low_order = tsa.mesh_order * 0.9
-    high_order = tsa.mesh_order * 1.1
-    if low_order <= 0 or high_order >= angular_sample_rate / 2:
+    spr = tsa.synchronous.angle_domain.samples_per_revolution
+    low, high = tsa.mesh_order * 0.9, tsa.mesh_order * 1.1
+    if low <= 0 or high >= spr / 2:
         raise ValueError("NB4 啮合带超出角域奈奎斯特范围")
-    if len(tsa.residual_signal) < 32:
-        raise ValueError("NB4 residual 信号过短")
-    sos = butter(
-        4,
-        [low_order, high_order],
-        btype="bandpass",
-        fs=angular_sample_rate,
-        output="sos",
-    )
-    filtered = sosfiltfilt(sos, tsa.residual_signal)
-    return np.asarray(np.abs(hilbert(filtered)), dtype=np.float64)
+    return native.band_envelope(tsa.residual_signal, spr, low, high)
 
 
 def compute_nb4(tsa: TSARepresentation, history: TrendHistory | None) -> MetricValue:
@@ -294,8 +254,7 @@ def compute_nb4(tsa: TSARepresentation, history: TrendHistory | None) -> MetricV
         envelope = residual_envelope(tsa)
     except ValueError as exc:
         return MetricValue.unavailable("NB4", str(exc))
-    centered = envelope - np.mean(envelope)
-    numerator = float(np.mean(centered**4))
+    numerator, _ = native_sequence.central_moment(envelope, 4)
     denominator = _historical_denominator(history.envelope_variances)
     return MetricValue(
         name="NB4",
@@ -317,23 +276,8 @@ def compute_nb4(tsa: TSARepresentation, history: TrendHistory | None) -> MetricV
 
 def analyze_order_statistics(spectrum: OrderSpectrum):
     from .types import OrderStatistics
-
-    amplitude = spectrum.amplitude
-    total = float(np.sum(amplitude**2))
-    if total <= np.finfo(np.float64).tiny:
-        return OrderStatistics(
-            status="not_evaluable",
-            peak_concentration=None,
-            kurtosis=None,
-            reason="zero_order_spectrum_energy",
-        )
-    top5 = float(np.sum(np.sort(amplitude)[::-1][:5] ** 2))
-    normalized = amplitude / (np.mean(amplitude) + np.finfo(np.float64).tiny)
-    kurtosis = float(
-        np.mean(normalized**4) / (np.mean(normalized**2) ** 2 + 1e-12) - 2.0
-    )
-    return OrderStatistics(
-        status="evaluated",
-        peak_concentration=top5 / total,
-        kurtosis=kurtosis,
-    )
+    if not np.any(spectrum.amplitude):
+        return OrderStatistics(status="not_evaluable", peak_concentration=None, kurtosis=None,
+            reason="zero_order_spectrum_energy")
+    concentration, kurtosis = native.order_statistics(spectrum.amplitude)
+    return OrderStatistics(status="evaluated", peak_concentration=concentration, kurtosis=kurtosis)

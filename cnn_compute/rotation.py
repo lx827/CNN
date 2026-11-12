@@ -72,6 +72,17 @@ def band_sum(axis, values, center, half_width):
     return _native.band_sum(_signal(axis), _signal(values), center, half_width)
 
 
+def local_peak(axis, amplitude, center, half_width, background_inner=2.0, background_outer=4.0, *, exclusions=(), median_background=False):
+    """返回局部峰位置/幅值/背景/背景bin数/峰有效性；背景可取均值或中位数。"""
+    return _native.local_peak(_signal(axis), _signal(amplitude), center, half_width,
+        background_inner, background_outer, _signal(exclusions), median_background)
+
+
+def car_features(axis, cepstrum, targets, half_width):
+    """目标窗内绝对倒谱峰及最后目标窗外独立背景中位数；保留实际峰位置。"""
+    return _native.car_features(_signal(axis), _signal(cepstrum), _signal(targets), half_width)
+
+
 def order_statistics(amplitude):
     """返回最高5峰能量占比与谱峰度；领域零能量状态由调用方保留。"""
     return _native.order_statistics(_signal(amplitude))

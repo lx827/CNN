@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
+from cnn_compute import rotation as native
+
 import numpy as np
 from numpy.typing import NDArray
-from scipy.fft import rfft
-from scipy.integrate import cumulative_trapezoid
-from scipy.signal import windows
 
 from .types import (
     AngleDomainSignal,
@@ -33,10 +32,7 @@ def _validate_signal(signal: FloatArray, sample_rate_hz: float) -> FloatArray:
 
 def integrate_speed_trajectory(speed: SpeedTrajectory) -> PhaseTrajectory:
     """用梯形积分计算 θ(t)/(2π)=∫fr(t)dt，不采用后向欧拉累加。"""
-    revolutions = cumulative_trapezoid(speed.frequency_hz, speed.time_s, initial=0.0)
-    return PhaseTrajectory(
-        time_s=speed.time_s, revolutions=np.asarray(revolutions, dtype=np.float64)
-    )
+    return PhaseTrajectory(time_s=speed.time_s, revolutions=native.integrate(speed.time_s, speed.frequency_hz))
 
 
 def resample_constant_speed(
@@ -67,31 +63,14 @@ def resample_to_phase(
     samples_per_revolution: int = 1024,
 ) -> AngleDomainSignal:
     """在等累计转数位置插值；采样点轴单位为 rev，独立于后续 FFT 阶次轴。"""
-    arr = np.asarray(signal, dtype=np.float64)
-    if arr.ndim != 1 or len(arr) != len(phase.time_s):
+    values = np.asarray(signal, dtype=np.float64)
+    if values.ndim != 1 or len(values) != len(phase.time_s):
         raise ValueError("重采样信号必须与连续相位时间轴等长")
-    if not np.all(np.isfinite(arr)):
-        raise ValueError("重采样信号不能包含 NaN 或无穷值")
-    if isinstance(samples_per_revolution, bool) or not isinstance(
-        samples_per_revolution, int
-    ):
+    if isinstance(samples_per_revolution, bool) or not isinstance(samples_per_revolution, int):
         raise ValueError("每转采样点数必须是整数")
-    if samples_per_revolution < 16:
-        raise ValueError("每转采样点数至少为 16")
-    # 恒速 t=fr*N/fs 的浮点积分可能把整数转数写成 31.99999999999999；
-    # 加入远小于一个角域采样间隔的容差，避免无端丢失最后一个完整周期。
-    point_count = int(np.floor(phase.revolutions[-1] * samples_per_revolution + 1e-9))
-    if point_count < 16:
-        raise ValueError("有效转数太少，无法进行等角重采样")
-    target_revolutions = (
-        np.arange(point_count, dtype=np.float64) / samples_per_revolution
-    )
-    samples = np.interp(target_revolutions, phase.revolutions, arr)
-    return AngleDomainSignal(
-        angle_revolutions=target_revolutions,
-        samples=samples,
-        samples_per_revolution=samples_per_revolution,
-    )
+    samples = native.angle_resample(values, phase.revolutions, samples_per_revolution)
+    return AngleDomainSignal(angle_revolutions=np.arange(len(samples), dtype=np.float64) / samples_per_revolution,
+        samples=samples, samples_per_revolution=samples_per_revolution)
 
 
 def compute_order_spectrum(
@@ -107,26 +86,14 @@ def compute_order_spectrum(
         raise ValueError("最大阶次必须是有限正数")
     if max_order >= angle_domain.samples_per_revolution / 2:
         raise ValueError("最大阶次必须低于角域奈奎斯特阶次")
-    centered = angle_domain.samples - np.mean(angle_domain.samples)
-    count = len(centered)
-    window = windows.hann(count, sym=False)
-    coherent_gain = float(np.sum(window))
-    if coherent_gain <= 0:
-        raise ValueError("角域信号过短，无法形成有效窗")
-    amplitude = np.abs(rfft(centered * window)) * (2.0 / coherent_gain)
-    amplitude[0] *= 0.5
-    if count % 2 == 0:
-        amplitude[-1] *= 0.5
-    order_resolution = angle_domain.samples_per_revolution / count
-    order_bins = np.arange(len(amplitude), dtype=np.float64) * order_resolution
-    retained = order_bins <= max_order + order_resolution * 1e-9
-    return OrderSpectrum(
-        order_bins=order_bins[retained],
-        amplitude=amplitude[retained],
-        order_resolution=float(order_resolution),
-        samples_per_revolution=angle_domain.samples_per_revolution,
-        total_revolutions=count / angle_domain.samples_per_revolution,
-    )
+    amplitude = native.amplitude_spectrum(angle_domain.samples)
+    count = len(angle_domain.samples)
+    resolution = angle_domain.samples_per_revolution / count
+    retained = min(len(amplitude), int(np.floor(max_order / resolution + 1e-9)) + 1)
+    bins = np.arange(retained, dtype=np.float64) * resolution
+    return OrderSpectrum(order_bins=bins, amplitude=amplitude[:retained],
+        order_resolution=resolution, samples_per_revolution=angle_domain.samples_per_revolution,
+        total_revolutions=count / angle_domain.samples_per_revolution)
 
 
 def order_band_amplitude_sum(
@@ -140,26 +107,9 @@ def order_band_amplitude_sum(
     该函数不声明能量比，也不执行峰值检测。定轴 SER 使用独立的不重叠
     局部峰幅值比，不与行星 carrier 间隔共用高层逻辑。
     """
-    orders = np.asarray(order_bins, dtype=np.float64)
-    values = np.asarray(amplitude, dtype=np.float64)
-    if (
-        orders.ndim != 1
-        or values.ndim != 1
-        or len(orders) != len(values)
-        or len(orders) == 0
-    ):
-        raise ValueError("阶次轴与幅值必须是非空一维等长数组")
-    if (
-        not np.all(np.isfinite(orders))
-        or not np.all(np.isfinite(values))
-        or np.any(values < 0)
-    ):
-        raise ValueError("阶次轴与幅值必须有限，幅值不能为负")
-    if (
-        not np.isfinite(center_order)
-        or not np.isfinite(half_width_order)
-        or half_width_order < 0
-    ):
+    if not np.isfinite(center_order) or not np.isfinite(half_width_order) or half_width_order < 0:
         raise ValueError("阶次窗中心必须有限，半带宽必须有限且非负")
-    mask = np.abs(orders - center_order) <= half_width_order
-    return float(np.sum(values[mask])) if np.any(mask) else 0.0
+    values = np.asarray(amplitude, dtype=np.float64)
+    if np.any(values < 0):
+        raise ValueError("幅值不能为负")
+    return native.band_sum(order_bins, values, center_order, half_width_order)

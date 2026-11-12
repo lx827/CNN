@@ -2,6 +2,7 @@
 #include <sequence/api.hpp>
 #include <transforms/hilbert.hpp>
 #include <filtering/api.hpp>
+#include <numeric/execution.hpp>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -21,7 +22,10 @@ void axes(std::span<const double> x,std::span<const double> y){
     for(std::size_t i=1;i<x.size();++i)if(x[i]<=x[i-1])throw std::invalid_argument("axis must increase strictly");
 }
 }
-void Workspace::prepare(std::size_t n){plan.prepare(n);real.resize(n);spectrum.resize(n);temporary.resize(n);}
+void Workspace::prepare(std::size_t n){
+    plan.prepare(n);real.resize(n);spectrum.resize(n);temporary.resize(n);
+    if(window.size()!=static_cast<std::ptrdiff_t>(n)){auto h=filtering::hann(n);window=core::Map(h.data(),n);}
+}
 namespace execution {
 void integrate(std::span<const double> t,std::span<const double> speed,std::span<double> phase){
     phase[0]=0.;for(std::size_t i=1;i<t.size();++i)phase[i]=phase[i-1]+(t[i]-t[i-1])*(speed[i]+speed[i-1])*.5;
@@ -38,11 +42,8 @@ void interpolate(std::span<const double> x,std::span<const double> y,std::span<c
     }
 }
 void amplitude_spectrum(std::span<const double> x,std::span<double> amp,Workspace& w,bool center){
-    double m=center?core::Map(x.data(),x.size()).mean():0.,gain=0.;
-    for(std::size_t i=0;i<x.size();++i){double h=.5-.5*std::cos(2*pi*i/x.size());w.real[i]=(x[i]-m)*h;gain+=h;}
-    w.plan.forward({w.real.data(),x.size()},w.spectrum);
-    for(std::size_t k=0;k<amp.size();++k)amp[k]=std::abs(w.spectrum[k])*2/gain;
-    amp[0]*=.5;if(x.size()%2==0)amp.back()*=.5;
+    numeric::execution::amplitude_spectrum(x,amp,{w.window.data(),x.size()},
+        {w.real.data(),x.size()},w.spectrum,w.plan,center);
 }
 void tsa(std::span<const double> x,int spr,std::span<double> cycle,std::span<double> repeated){
     std::size_t cycles=x.size()/spr;std::fill(cycle.begin(),cycle.end(),0.);
@@ -156,6 +157,35 @@ core::Array window_peaks(std::span<const double> axis,std::span<const double> am
 double band_sum(std::span<const double> axis,std::span<const double> values,double center,double width){
     axes(axis,values);double sum=0.;for(std::size_t j=0;j<axis.size();++j)if(std::abs(axis[j]-center)<=width)sum+=values[j];return sum;
 }
+LocalPeak local_peak(std::span<const double> axis,std::span<const double> amplitude,double center,double width,
+                     double inner,double outer,std::span<const double> exclusions,bool median_background){
+    axes(axis,amplitude);if(width<=0||inner<0||outer<=inner)throw std::invalid_argument("invalid local spectrum windows");
+    LocalPeak out;std::vector<double> background;if(median_background)background.reserve(axis.size());double total=0.;
+    for(std::size_t j=0;j<axis.size();++j){if(axis[j]<=0)continue;double distance=std::abs(axis[j]-center);
+        if(distance<=width&&(!out.found||amplitude[j]>out.amplitude)){out.coordinate=axis[j];out.amplitude=amplitude[j];out.found=true;}
+        if(distance<inner*width||distance>outer*width)continue;
+        bool excluded=false;for(double other:exclusions)if(std::abs(axis[j]-other)<=width){excluded=true;break;}
+        if(excluded)continue;++out.background_count;total+=amplitude[j];if(median_background)background.push_back(amplitude[j]);
+    }
+    if(out.background_count){
+        if(median_background){auto k=background.size()/2;std::nth_element(background.begin(),background.begin()+k,background.end());out.background=background[k];
+            if(background.size()%2==0)out.background=(out.background+*std::max_element(background.begin(),background.begin()+k))*.5;}
+        else out.background=total/out.background_count;
+    }return out;
+}
+CARFeatures car_features(std::span<const double> axis,std::span<const double> amplitude,std::span<const double> targets,double width){
+    axes(axis,amplitude);validate(targets);if(width<=0)throw std::invalid_argument("CAR half-width must be positive");
+    CARFeatures out{core::Array(targets.size()),core::Array(targets.size()),0,0};
+    for(std::size_t k=0;k<targets.size();++k){auto first=std::lower_bound(axis.begin(),axis.end(),targets[k]-width),last=std::upper_bound(axis.begin(),axis.end(),targets[k]+width);
+        if(first==last)throw std::invalid_argument("target_quefrency_not_resolvable");auto best=first-axis.begin();
+        for(auto p=first;p!=last;++p){auto j=p-axis.begin();if(std::abs(amplitude[j])>std::abs(amplitude[best]))best=j;}
+        out.coordinate[k]=axis[best];out.amplitude[k]=std::abs(amplitude[best]);}
+    std::vector<double> background;for(std::size_t j=0;j<axis.size();++j){if(axis[j]<=targets.back()+width)continue;
+        bool excluded=false;for(double target:targets)if(std::abs(axis[j]-target)<=width){excluded=true;break;}if(!excluded)background.push_back(std::abs(amplitude[j]));}
+    out.background_count=background.size();if(!background.empty()){auto k=background.size()/2;std::nth_element(background.begin(),background.begin()+k,background.end());out.background=background[k];
+        if(background.size()%2==0)out.background=(out.background+*std::max_element(background.begin(),background.begin()+k))*.5;}
+    return out;
+}
 std::pair<double,double> order_statistics(std::span<const double> amp){
     validate(amp);double sum=0,energy=0;std::vector<double> top(amp.begin(),amp.end());
     for(double a:amp){sum+=a;energy+=a*a;}if(energy<=std::numeric_limits<double>::min())return {0,0};
@@ -182,6 +212,7 @@ CVSResult cvs(std::span<const double> x,std::span<const double> carrier,std::spa
             result.intervals.insert(result.intervals.end(),pending.begin(),pending.end());pending.clear();++result.cycles;
             std::fill(sums.begin(),sums.end(),0.);std::fill(counts.begin(),counts.end(),0);filled=0;}
     }
+    result.completed_intervals=result.intervals.size();
     result.coverage=static_cast<double>(filled)/spr;
     // 保存未完成覆盖的源窗口供不可判定原因检查；成功包装只返回已用窗口。
     result.intervals.insert(result.intervals.end(),pending.begin(),pending.end());

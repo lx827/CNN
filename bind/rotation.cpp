@@ -28,6 +28,10 @@ void bind_rotation(py::module_& root){
     module.def("band_envelope",[](const ArrayInput& x,double fs,double low,double high){auto a=input(x,32);return output(compute([&]{return r::band_envelope(a,fs,low,high);}));});
     module.def("window_peaks",[](const ArrayInput& axis,const ArrayInput& values,const ArrayInput& centers,double width,bool disjoint){auto a=input(axis,1),b=input(values,1),c=input(centers,0);return output(compute([&]{return r::window_peaks(a,b,c,width,disjoint);}));});
     module.def("band_sum",[](const ArrayInput& axis,const ArrayInput& values,double center,double width){auto a=input(axis,1),b=input(values,1);return compute([&]{return r::band_sum(a,b,center,width);});});
+    module.def("local_peak",[](const ArrayInput& axis,const ArrayInput& values,double center,double width,double inner,double outer,const ArrayInput& exclusions,bool median){auto a=input(axis,1),b=input(values,1),c=input(exclusions,0);
+        auto out=compute([&]{return r::local_peak(a,b,center,width,inner,outer,c,median);});return py::make_tuple(out.coordinate,out.amplitude,out.background,out.background_count,out.found);});
+    module.def("car_features",[](const ArrayInput& axis,const ArrayInput& values,const ArrayInput& targets,double width){auto a=input(axis,1),b=input(values,1),c=input(targets,1);auto out=compute([&]{return r::car_features(a,b,c,width);});
+        return py::make_tuple(output(std::move(out.coordinate)),output(std::move(out.amplitude)),out.background,out.background_count);});
     module.def("order_statistics",[](const ArrayInput& x){auto a=input(x,1);return compute([&]{return r::order_statistics(a);});});
     module.def("spectrum_speed",[](const ArrayInput& x,double fs,double low,double high,int harmonics,double bandwidth,double smoothing){auto a=input(x,1);return speed_output(compute([&]{return r::spectrum_speed(a,fs,low,high,harmonics,bandwidth,smoothing);}));});
     module.def("autocorrelation_speed",[](const ArrayInput& x,double fs,double low,double high){auto a=input(x,1);return speed_output(compute([&]{return r::autocorrelation_speed(a,fs,low,high);}));});
@@ -37,7 +41,7 @@ void bind_rotation(py::module_& root){
         return py::make_tuple(output(std::move(out.frequency)),out.reliable,out.total,out.reason);
     });
     module.def("cvs",[](const ArrayInput& x,const ArrayInput& carrier,const ArrayInput& planet,double azimuth,double sensor,double half,int spr){auto a=input(x,64),b=input(carrier,64),c=input(planet,64);
-        auto out=compute([&]{return r::cvs(a,b,c,azimuth,sensor,half,spr);});return py::make_tuple(output(std::move(out.signal)),out.intervals,out.cycles,out.coverage);
+        auto out=compute([&]{return r::cvs(a,b,c,azimuth,sensor,half,spr);});return py::make_tuple(output(std::move(out.signal)),out.intervals,out.cycles,out.coverage,out.completed_intervals);
     });
     sequence.def("holt",[](const ArrayInput& x,int steps,double alpha,double beta,double gamma,int period,double initial){auto a=input(x,1);auto out=compute([&]{return s::holt(a,steps,alpha,beta,gamma,period,initial);});
         return py::make_tuple(output(std::move(out.level)),output(std::move(out.trend)),output(std::move(out.season)),output(std::move(out.fitted)),output(std::move(out.forecast)));
@@ -48,5 +52,7 @@ void bind_rotation(py::module_& root){
     sequence.def("regression",[](const ArrayInput& x,const ArrayInput& y){auto a=input(x,1),b=input(y,1);return compute([&]{return s::regression(a,b);});});
     sequence.def("central_moment",[](const ArrayInput& x,int degree,bool scaled){auto a=input(x,1);return compute([&]{return s::central_moment(a,degree,scaled);});});
     sequence.def("window_moments",[](const ArrayInput& x,int window){auto a=input(x,1);return pair_output(compute([&]{return s::window_moments(a,window);}));});
+    sequence.def("robust_standardize",[](const ArrayInput& x){auto a=input(x,1);return output(compute([&]{return s::robust_standardize(a);}));});
+    sequence.def("sign_cusum",[](const ArrayInput& x,double reference,bool use_median){auto a=input(x,1);auto out=compute([&]{return s::sign_cusum(a,reference,use_median);});return py::make_tuple(out.first.positive,out.first.negative,out.second);});
 }
 }

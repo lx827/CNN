@@ -2,6 +2,7 @@
 #include <filtering/api.hpp>
 #include <sequence/api.hpp>
 #include <transforms/hilbert.hpp>
+#include <numeric/api.hpp>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -54,10 +55,7 @@ SpeedResult autocorrelation_speed(std::span<const double> x,double fs,double low
     search_range(low,high);auto y=centered(x,fs);
     if(y.size()<16||no_variation(y))return {0,"autocorrelation","信号过短或没有有效变化"};
     double h=std::min(fs/2-1e-6,std::max(high*6,high+20)),l=std::max(1e-6,low*.5);if(l<h)y=bandpass(y,fs,l,h);
-    std::size_t size=1;while(size<2*y.size()-1)size*=2;
-    std::vector<double> padded(size);std::copy(y.begin(),y.end(),padded.begin());
-    fourier::Plan plan(size);std::vector<fourier::Complex> spectrum(size);plan.forward(padded,spectrum);
-    for(auto& v:spectrum)v={std::norm(v),0.};plan.inverse_real(spectrum,padded);
+    auto padded=numeric::autocorrelation(y,false);
     if(padded[0]<=0)return {0,"autocorrelation","零滞后自相关无效"};double normalization=padded[0];
     for(std::size_t i=0;i<y.size();++i)padded[i]/=normalization;
     int start=std::max(1,static_cast<int>(fs/high)),stop=std::min(static_cast<int>(y.size())-1,static_cast<int>(fs/low));
@@ -105,7 +103,7 @@ SpeedResult spectrum_speed(std::span<const double> x,double fs,double low,double
     std::size_t seg=std::min(y.size(),static_cast<std::size_t>(std::max(256,static_cast<int>(fs)))),hop=std::max<std::size_t>(1,seg/2);
     Workspace w;w.prepare(seg);std::vector<double> power(seg/2+1);
     for(std::size_t begin=0;begin+seg<=y.size();begin+=hop){double m=core::Map(y.data()+begin,seg).mean();
-        for(std::size_t j=0;j<seg;++j)w.real[j]=(y[begin+j]-m)*(.5-.5*std::cos(2*std::numbers::pi*j/seg));
+        for(std::size_t j=0;j<seg;++j)w.real[j]=(y[begin+j]-m)*w.window[j];
         w.plan.forward({w.real.data(),seg},w.spectrum);for(std::size_t j=0;j<power.size();++j)power[j]+=std::norm(w.spectrum[j]);}
     int welch=peak(power,fs/seg,low,high);if(welch>=0&&power[welch]>0)candidates.push_back({welch*fs/seg,"welch",{}});
     auto ac=autocorrelation_speed(y,fs,low,high);if(ac.reason.empty())candidates.push_back(ac);
@@ -132,7 +130,7 @@ RidgeResult speed_ridge(std::span<const double> x,double fs,double low,double hi
     Workspace w;w.prepare(window);std::vector<double> a(window/2+1),noise;noise.reserve(a.size());
     std::vector<double> times,ridge;times.reserve(frames);ridge.reserve(frames);int boundary_count=0,current_run=0,longest_run=0;
     for(int column=0;column<frames;++column){
-        for(int j=0;j<window;++j)w.real[j]=y[column*hop+j]*(.5-.5*std::cos(2*std::numbers::pi*j/window));
+        for(int j=0;j<window;++j)w.real[j]=y[column*hop+j]*w.window[j];
         w.plan.forward({w.real.data(),static_cast<std::size_t>(window)},w.spectrum);
         for(std::size_t j=0;j<a.size();++j)a[j]=std::abs(w.spectrum[j])/(window*.5);
         int j=static_cast<int>(std::max_element(a.begin()+start,a.begin()+stop+1)-a.begin());double f=parabolic(a,j,df);

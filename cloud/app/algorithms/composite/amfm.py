@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass
 
+from cnn_compute import rotation as native
 import numpy as np
-from scipy.signal import hilbert
 
 from app.algorithms.transforms import FourierSpectrum, compute_spectrum
 
@@ -39,25 +39,13 @@ def demodulate_amfm(
     FM 位于相邻采样中点，长度 N-1；不重复 Hilbert 归一化载波，也不补尾值。
     幅值零点使瞬时相位失去定义，显式拒绝。FFT 采用公共单边 Hann 刻度。
     """
-    values = np.asarray(signal, dtype=float)
-    if values.ndim != 1 or len(values) < 64 or not np.all(np.isfinite(values)):
-        raise ValueError("AM/FM requires at least 64 finite scalar samples")
-    if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
-        raise ValueError("sample_rate_hz must be positive")
-    analytic = hilbert(values - np.mean(values))
-    envelope = np.abs(analytic)
-    scale = float(np.max(envelope))
-    if scale == 0 or np.min(envelope) <= 64 * np.finfo(float).eps * scale:
-        raise ValueError("undefined_instantaneous_phase_at_amplitude_null")
-    frequency = np.diff(np.unwrap(np.angle(analytic))) * (sample_rate_hz / (2 * np.pi))
-    return AMFMRepresentation(
-        envelope,
-        frequency,
+    values = np.asarray(signal, dtype=np.float64)
+    if values.ndim != 1:
+        raise ValueError("AM/FM requires a scalar vector")
+    envelope, frequency = native.amfm(values, sample_rate_hz)
+    return AMFMRepresentation(envelope, frequency,
         compute_spectrum(envelope, sample_rate_hz, amplitude_unit=input_unit),
-        compute_spectrum(frequency, sample_rate_hz, amplitude_unit="Hz"),
-        float(sample_rate_hz),
-        input_unit,
-    )
+        compute_spectrum(frequency, sample_rate_hz, amplitude_unit="Hz"), float(sample_rate_hz), input_unit)
 
 
 def analyze_modulation_peak(
@@ -67,43 +55,17 @@ def analyze_modulation_peak(
     axis, amplitude = spectrum.frequency_hz, spectrum.amplitude
     if not np.isfinite(target_hz) or target_hz <= 0:
         raise ValueError("modulation target must be positive Hz")
-    if reference_hz is not None and (
-        not np.isfinite(reference_hz) or reference_hz <= 0
-    ):
+    if reference_hz is not None and (not np.isfinite(reference_hz) or reference_hz <= 0):
         raise ValueError("reference speed must be positive Hz")
     order = target_hz / reference_hz if reference_hz else None
     df = axis[1] - axis[0]
     tolerance = max(1.5 * df, 0.02 * target_hz)
-    mask = (np.abs(axis - target_hz) <= tolerance) & (axis > 0)
-    if target_hz > axis[-1] or not np.any(mask) or target_hz < 2 * df:
-        return ModulationPeak(
-            target_hz,
-            order,
-            None,
-            None,
-            spectrum.amplitude_unit,
-            None,
-            None,
-            "not_evaluable",
-            "target_outside_resolvable_modulation_band",
-        )
-    indices = np.flatnonzero(mask)
-    index = int(indices[np.argmax(amplitude[indices])])
-    bg_mask = (
-        (np.abs(axis - target_hz) >= 3 * tolerance)
-        & (np.abs(axis - target_hz) <= 8 * tolerance)
-        & (axis > 0)
-    )
-    background = float(np.median(amplitude[bg_mask])) if np.any(bg_mask) else None
-    peak = float(amplitude[index])
+    observed, peak, background, count, found = native.local_peak(axis, amplitude, target_hz,
+        tolerance, 3.0, 8.0, median_background=True)
+    if target_hz > axis[-1] or not found or target_hz < 2 * df:
+        return ModulationPeak(target_hz, order, None, None, spectrum.amplitude_unit,
+            None, None, "not_evaluable", "target_outside_resolvable_modulation_band")
+    background = background if count else None
     ratio = peak / background if background is not None and background > 0 else None
-    return ModulationPeak(
-        target_hz,
-        order,
-        float(axis[index]),
-        peak,
-        spectrum.amplitude_unit,
-        background,
-        ratio,
-        "computed",
-    )
+    return ModulationPeak(target_hz, order, observed, peak, spectrum.amplitude_unit,
+        background, ratio, "computed")
