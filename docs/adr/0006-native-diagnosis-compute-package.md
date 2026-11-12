@@ -15,13 +15,15 @@
 
 首批 C++ 下沉范围为极值检测与精化、镜像延拓、包络插值及单个 IMF 的完整筛分循环；每次筛分调用跨越一次 Python/C++ 边界，不把内部每个数组操作拆成公共 Python 接口。多 IMF 提取、归一化、EEMD/CEEMDAN 集成调度、NumPy 随机数生成和聚合继续位于 Python，保持噪声生成顺序及当前公式。原生筛分返回筛分结果、迭代次数和收敛情况，并明确区分极值不足。
 
+源码按职责分为纯 C++ 的 `lib/core`、`lib/emd`，独立 Python 绑定 `bind/` 和根目录 Python 包 `cnn_compute/`。公共数值模块拥有插值、带状求解及数组类型，算法通过 CMake target 单向依赖公共模块；Python 导出与数组所有权适配不进入算法实现。构建时从真实 pybind11 导出自动生成类型存根，与扩展一起分发，避免手写声明与绑定签名漂移。根目录不再保留 `native/` 与 `src/` 布局；模块导航与生成规则见 [计算库构建说明](../native_compute.md)。
+
 ## 取舍与验收边界
 
 优先使用现成的数组和数值计算能力，把项目实现集中在算法编排及现有行为的适配。Eigen 不替代插值语义选型，BLAS/LAPACK 后端也不代替极值、边界与筛分规则。库选型不构成性能收益结论。
 
 本决策延续 [ADR 0005](0005-diagnosis-native-benchmark-gate.md) 的固定向量、正确性、状态、所有权和目标资源准入要求。采用源码构建后，目标环境的编译工具链、构建峰值内存及并发限制也需要验证；现有生产分析线程与内存上限继续有效。
 
-当前 Python 实现的 cubic 使用 SciPy 默认 not-a-knot 边界，PCHIP 与 cubic 均允许外推。候选覆盖非等距精化节点、端点、小节点数退化和平台极值规则；不能仅凭插值方法同名宣称兼容。数学行为以 [Python adapter](../../cloud/app/algorithms/decomposition/emd/python_adapter.py) 为对照，原生函数签名由 [包源码 docstring](../../src/cnn_compute/__init__.py) 维护。
+当前 Python 实现的 cubic 使用 SciPy 默认 not-a-knot 边界，PCHIP 与 cubic 均允许外推。候选覆盖非等距精化节点、端点、小节点数退化和平台极值规则；不能仅凭插值方法同名宣称兼容。数学行为以 [Python adapter](../../cloud/app/algorithms/decomposition/emd/python_adapter.py) 为对照，原生函数签名由 [包源码 docstring](../../cnn_compute/__init__.py) 维护。
 
 ## 向量化与数值一致性
 

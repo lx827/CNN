@@ -1,14 +1,14 @@
 #pragma once
 
-#include <Eigen/Core>
+#include <core/interpolation.hpp>
 #include <optional>
 #include <span>
 #include <array>
 
 namespace cnn_compute::emd {
 
-using Array = Eigen::ArrayXd;
-enum class Interpolation { pchip, cubic };
+using core::Array;
+using core::Interpolation;
 enum class StoppingRule { sd, rilling };
 struct SiftParameters {
     int max_sifts;
@@ -32,9 +32,6 @@ struct Envelopes {
 std::optional<SiftResult> sift(std::span<const double> signal, const SiftParameters& parameters);
 std::optional<Envelopes> envelopes(std::span<const double> signal, int mirror_extrema,
                                  Interpolation interpolation = Interpolation::pchip);
-// 调用者保证节点严格递增；查询顺序任意，首尾段多项式承担外推。
-Array pchip(std::span<const double> x, std::span<const double> y, std::span<const double> query);
-Array cubic(std::span<const double> x, std::span<const double> y, std::span<const double> query);
 bool rilling_stop(std::span<const double> upper, std::span<const double> lower,
                   const std::array<double, 3>& thresholds);
 

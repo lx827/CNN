@@ -41,7 +41,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-The single-right-hand-side tridiagonal elimination in src/tridiagonal.cpp
+The single-right-hand-side tridiagonal elimination in core/tridiagonal.cpp
 is a C++ adaptation of Reference-LAPACK 3.12.1 DGTSV:
 https://github.com/Reference-LAPACK/lapack/blob/v3.12.1/SRC/dgtsv.f
 The adaptation operates on Eigen buffers and retains only the banded

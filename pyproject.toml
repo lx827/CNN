@@ -4,6 +4,8 @@ requires = [
     "pybind11==3.1.0",
     "cmake==4.4.4",
     "ninja==1.13.2",
+    "pybind11-stubgen==3.0.0",
+    "numpy>=1.26.4",
 ]
 build-backend = "scikit_build_core.build"
 
@@ -12,7 +14,9 @@ name = "cnn-compute"
 version = "0.1.0"
 description = "风机齿轮箱诊断的原生数值计算库"
 requires-python = ">=3.13"
-dependencies = ["numpy>=1.26.4"]
+dependencies = [
+    "numpy>=1.26.4",
+]
 
 [dependency-groups]
 cloud = [
@@ -30,7 +34,11 @@ cloud = [
     "python-jose[cryptography]>=3.3.0",
 ]
 dc24 = ["requests==2.32.3", "python-dotenv==1.0.1"]
-dev = ["httpx>=0.27", "ruff>=0.17.4"]
+dev = [
+    "httpx>=0.27",
+    "pybind11-stubgen==3.0.0",
+    "ruff>=0.17.4",
+]
 benchmark = ["emd-signal==1.9.0", "psutil==7.2.2"]
 
 [tool.uv]
@@ -38,8 +46,10 @@ default-groups = ["cloud", "dc24", "dev"]
 cache-keys = [
     { file = "pyproject.toml" },
     { file = "CMakeLists.txt" },
-    { file = "native/**" },
-    { file = "src/cnn_compute/**/*.py" },
+    { file = "lib/**" },
+    { file = "bind/**" },
+    { file = "cnn_compute/**/*.py" },
+    { file = "cnn_compute/py.typed" },
     { env = "CNN_COMPUTE_ARCH" },
     { env = "CMAKE_ARGS" },
     { env = "CMAKE_GENERATOR" },
@@ -55,7 +65,7 @@ cmake.version = ">=3.28"
 cmake.args = ["-GNinja"]
 build-dir = "build/{wheel_tag}/ninja"
 build.tool-args = ["-j1"]
-wheel.packages = ["src/cnn_compute"]
+wheel.packages = ["cnn_compute"]
 wheel.exclude = ["**/__pycache__/**", "**/*.pyc"]
-sdist.include = ["CMakeLists.txt", "native/**", "src/cnn_compute/**"]
-sdist.exclude = ["data/**", "build/**", "dist/**", ".venv/**"]
+sdist.include = ["CMakeLists.txt", "lib/**", "bind/**", "cnn_compute/**"]
+sdist.exclude = ["data/**", "build/**", "dist/**", ".venv/**", "cnn_compute/_native/**"]

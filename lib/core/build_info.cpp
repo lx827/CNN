@@ -1,10 +1,10 @@
-#include <cnn_compute/build_info.hpp>
+#include <core/build_info.hpp>
 
 #include <Eigen/Core>
 
 #include "build_config.hpp"
 
-namespace cnn_compute {
+namespace cnn_compute::core {
 
 BuildInfo build_info() {
     return {
@@ -20,4 +20,4 @@ BuildInfo build_info() {
     };
 }
 
-}  // namespace cnn_compute
+}  // namespace cnn_compute::core
