@@ -35,6 +35,8 @@ $$e(t)=|y(t)+j\mathcal{H}\{y(t)\}|.$$
 
 非 DC/Nyquist bin 的幅值使用周期 Hann 相干增益补偿并乘 2，DC 与偶数长度 Nyquist 不翻倍。展示截断不改变完整有效频带上的分析和评估。
 
+标准包络和 TEO 包络的 Butterworth SOS、Hilbert 幅值与单边频谱默认复用 `cnn_compute.filtering` / `numeric` 的公共 C++ 数值入口；频带解析、TEO 截负策略、单位、机械指标与阈值评估仍由当前 Python 算法/业务对象表达。基础能力与所有权见 [基础数值契约](../numeric/INDEX.md)。
+
 ## 必要前提
 
 - 标准包络输入至少 64 点、全部有限，采样率为正；滤波器参数与低通截止必须可实现。
