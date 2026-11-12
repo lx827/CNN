@@ -1,5 +1,6 @@
 """原生公开调用的独立数学向量和输出生命周期。"""
 import numpy as np
+import pytest
 from numpy.testing import assert_allclose
 
 from cnn_compute import rotation, sequence
@@ -53,3 +54,18 @@ def test_sequence_constants_cusum_and_scale_free_moments():
     phase = np.arange(1024) * 2 * np.pi / 1024
     moment, variance = sequence.central_moment(1e-50 * np.sin(phase), 4, scaled=True)
     assert_allclose(moment / variance**2, 1.5, atol=1e-14)
+
+
+@pytest.mark.parametrize("operation", [
+    lambda: sequence.regression([0.0, np.nan], [1.0, 2.0]),
+    lambda: sequence.cusum([0.0, np.nan]),
+    lambda: sequence.mann_whitney_z(np.arange(12.0), [np.nan], 4),
+    lambda: sequence.window_moments([0.0, np.nan], 2),
+    lambda: sequence.robust_standardize([0.0, np.nan]),
+    lambda: rotation.window_peaks([0.0, 1.0], [1.0, 2.0], [np.nan], 0.1),
+    lambda: rotation.local_peak([0.0, 1.0], [1.0, 2.0], 1.0, 0.1, exclusions=[np.nan]),
+])
+def test_public_numeric_boundary_rejects_undefined_inputs(operation):
+    # 绑定只建立布局前提；公开核必须承担数值前提，不能把NaN吞成零CUSUM或空峰。
+    with pytest.raises(ValueError):
+        operation()
