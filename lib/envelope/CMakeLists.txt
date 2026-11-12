@@ -1,0 +1,5 @@
+add_library(cnn_compute_envelope STATIC envelope.cpp)
+add_library(CNN::envelope ALIAS cnn_compute_envelope)
+set_target_properties(cnn_compute_envelope PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(cnn_compute_envelope PUBLIC "${PROJECT_SOURCE_DIR}/lib")
+target_link_libraries(cnn_compute_envelope PUBLIC CNN::interpolation)

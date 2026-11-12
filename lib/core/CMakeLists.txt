@@ -1,4 +1,4 @@
-add_library(cnn_compute_core STATIC build_info.cpp interpolation.cpp tridiagonal.cpp)
+add_library(cnn_compute_core STATIC build_info.cpp)
 add_library(CNN::core ALIAS cnn_compute_core)
 set_target_properties(cnn_compute_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(cnn_compute_core PUBLIC "${PROJECT_SOURCE_DIR}/lib"

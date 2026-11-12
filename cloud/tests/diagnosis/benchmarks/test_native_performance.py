@@ -17,7 +17,9 @@ class PerformanceGateTests(unittest.TestCase):
     def test_source_identity_covers_shared_core_algorithms_and_bindings(self):
         hashes = source_identity()["sha256"]
         for path in (
-            "lib/core/interpolation.cpp",
+            "lib/interpolation/legacy.cpp",
+            "lib/interpolation/interpolation.cpp",
+            "lib/solvers/tridiagonal.cpp",
             "lib/core/tridiagonal.hpp",
             "lib/core/build_config.hpp.in",
             "lib/emd/sift.cpp",

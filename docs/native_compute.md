@@ -1,22 +1,27 @@
 # 诊断计算库构建与安装
 
-根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。当前提供构建信息和 PCHIP/cubic、SD/Rilling 四种组合的单 IMF 原生筛分候选，EMD/EEMD/CEEMDAN 外层保持 Python；生产分解默认仍为 Python。技术路线见 [ADR 0006](adr/0006-native-diagnosis-compute-package.md)。
+根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。旧原生筛分候选仍复用仓库 Python EMD 族外层；另增以本地 `emd.sift 0.8.1` 为参考的完整基础 EMD C++ 候选，契约见 [原生 EMD](algorithms/decomposition/native_emd.md) 与 [ADR 0008](adr/0008-local-emd-reference-native-family.md)。生产分解默认仍为 Python。
 
-新增或重组 C++ 加速算法遵循 [cpp-accelerate skill](../.claude/skills/cpp-accelerate/SKILL.md) 与 [ADR 0007](adr/0007-native-algorithm-module-interfaces.md)：公开入口与内部加速执行接口分工，算法模块独立于公共基础结构。以下目录描述当前实现，不表示已迁移到目标组织。
+新增或重组 C++ 加速算法遵循 [cpp-accelerate skill](../.claude/skills/cpp-accelerate/SKILL.md) 与 [ADR 0007](adr/0007-native-algorithm-module-interfaces.md)：公开入口与内部加速执行接口分工，算法模块独立于公共基础结构。
 
 ## 模块与导出
 
 ```text
 lib/
-├── core/          # 数组类型、PCHIP/cubic 插值、三对角求解、构建信息
-└── emd/           # 极值、镜像、包络、停止准则、单 IMF 筛分
+├── core/          # 数组类型、旧兼容头、构建信息
+├── solvers/       # 三对角求解、直接写入的内部执行接口
+├── interpolation/ # splrep/PCHIP/cubic、旧数值兼容实现
+├── envelope/      # 独立极值插值包络及工作区
+└── emd/           # 完整 sift 和旧单 IMF 筛分候选
 bind/              # 独立 pybind11 绑定与 NumPy 所有权转换
 cnn_compute/       # Python 入口、core 公共接口及内联类型注解
 ```
 
-依赖方向为 `CNN::emd → CNN::core → Eigen3::Eigen`；两个纯 C++ target 都不依赖 Python。EMD 的包络直接调用公共插值，cubic 插值调用公共三对角求解。绑定单独链接这些 target，集中处理 Python 参数检查、GIL 释放和输出 capsule。各算法在 `lib/` 复用公共模块，绑定在 `bind/` 按模块注册，根目录不再设置 `src/`。
+依赖方向为 `CNN::emd → CNN::envelope → CNN::interpolation → CNN::solvers`，各数值模块使用 core/Eigen，纯 C++ target 不依赖 Python。公开入口准备拥有型结果与工作区，内部执行接口用于直接写输出和跨算法组合。绑定单独链接这些 target，处理 Python 布局、GIL 释放和输出 capsule；根目录不设置 `src/`。
 
-Python 公共数值接口由 `cnn_compute.core` 导出；原生模块按 `cnn_compute._native.core` 与 `cnn_compute._native.emd` 分组。既有筛分入口和下划线差分入口继续作为同一函数的别名保留。输入、输出及失败契约见 [公共数值源码 docstring](../cnn_compute/core.py) 与 [筛分源码 docstring](../cnn_compute/__init__.py)。
+Python 独立模块为 `cnn_compute.emd`、`envelope`、`interpolation`；既有 `core` 数值入口和下划线差分别名保留兼容。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
+
+旧 C++ `core` 头和函数符号保留，但数值算法的链接目标分别为 `CNN::interpolation`、`CNN::solvers`；只链接 `CNN::core` 不再带入算法实现，以保持 core 不依赖算法。
 
 ### 编辑器类型检查
 
@@ -89,9 +94,15 @@ CNN_COMPUTE_ARCH=avx2 uv sync       # Linux
 
 固定目标只允许 baseline 或 avx2。这里不将 native 字符串映射成未经探测的 AVX2，也不构建运行时多 ISA 派发。后端报告编译器、目标、编译选项、Eigen 版本和实际启用的 SIMD；具体数值函数的向量化仍需优化报告与基准验证。
 
+新 EMD 核的包络均值和信号更新使用 Eigen 数组表达式；Windows baseline 的编译器汇编中已观察到 `addpd/mulpd/subpd`。B 样条基函数、带状消元、极值压缩和查找保留其专用流程，不宣称全部路径均为 SIMD。曾比较的 PCHIP 额外收集六条数组后批量求值增加了内存流量，测量更慢，已撤回；向量化以实际收益决定采用。ARM64/NEON 尚未构建验证。
+
+2026-11-12 基础 EMD 在 Windows MSVC 19.50 与 WSL Ubuntu 22.04 GCC 11.4 的 x64 baseline 均完成源码构建、参考差分及 C++ 工作区/所有权检查；Linux 反汇编同样观察到 SSE2 批量运算。这证明两个平台的基础候选可构建运行，不代表尚未合入的算法、ARM64 或 ECS 全机资源已验收。
+
 uv 缓存键覆盖根配置、CMake 文件、原生源码、Python 源文件及影响目标/编译器的环境变量，不包含导入产生的 Python 字节码。切换 `CNN_COMPUTE_ARCH`、编译选项，以及修改源码/头文件后会重新构建；未变化时复用兼容产物。构建目录按 Python wheel tag 和 Ninja 隔离，Windows 和 Linux 不共用二进制。
 
 更换编译器或工具链版本时，CMake 已缓存的编译器不会仅靠修改环境变量替换。使用新的忽略构建目录并强制重装计算包，例如 `uv sync --reinstall-package cnn-compute --config-setting build-dir=build/new-toolchain`；Windows 仍经 `vsdev`。新目录名应标识实际工具链，确认 `build_info()` 后再采用产物。
+
+MSVC 的 `/showIncludes` 前缀以实际输出字节探测并传给 Ninja，避免中文代码页误解造成间接头依赖丢失、混用旧工作区布局。修改头文件应由依赖图触发相关对象重编；全新构建通过本身不能替代这条依赖规则。
 
 ## 验证
 
