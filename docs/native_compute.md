@@ -22,6 +22,12 @@ cnn_compute/       # Python 入口、core 公共接口及内联类型注解
 
 Python 独立模块为 `cnn_compute.emd`、`envelope`、`interpolation`、`transforms`；既有 `core` 数值入口和下划线差分别名保留兼容。`CNN::emd` 的 mask 路径使用 `CNN::transforms`，NHT 再组合包络与插值，依赖无环。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
 
+### mask 分支本地受控结果（2026-11-12）
+
+Windows MSVC baseline SSE2，1024 点固定合成信号、每个后端三块交错运行且每块三次，完整公开调用包含布局成本。mask sift 中位耗时从 6.734 ms 降至 1.015 ms（6.64 倍），迭代 mask 从 34.163 ms 降至 3.919 ms（8.72 倍）。两算法各块输出均通过测试中的既定数组与归一化 L2 比较预算，未按测量结果放宽。
+
+原生进程 OS 高水位分别为 30.78 / 31.12 MiB，参考为 105.34 / 106.94 MiB；包含各自导入和预热，不能将差值全部归因于工作区节省。原始逐次计时和数组保留在本地忽略目录，Git 只记录测量方法与手写结论。本结果不替代真实数据质量、其他 CPU/ISA 或目标 ECS 2C2G 验收。
+
 旧 C++ `core` 头和函数符号保留，但数值算法的链接目标分别为 `CNN::interpolation`、`CNN::solvers`；只链接 `CNN::core` 不再带入算法实现，以保持 core 不依赖算法。
 
 ### 编辑器类型检查
