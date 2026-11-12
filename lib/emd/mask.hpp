@@ -62,6 +62,9 @@ IteratedMaskResult iterated_mask_sift(std::span<const double> signal,
                                     const IteratedMaskOptions& options = {});
 
 namespace execution {
+// 调用者先 prepare(samples,pad_width)；输入/输出等长且不得与工作区重叠。
+// 工作区每个活跃调用独占；跨尺寸或延拓宽度改变后再次 prepare。
+// 返回的 MaskResult 拥有独立存储，后续执行不会覆盖它；不保存输入 view。
 NextInfo get_next_imf_mask(std::span<const double> signal, std::span<double> output,
                           double frequency, double amplitude, int nphases,
                           const IMFOptions& options, const envelope::Options& envelope_options,

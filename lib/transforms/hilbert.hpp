@@ -31,7 +31,8 @@ struct HilbertWorkspace {
 };
 
 namespace execution {
-// 所有输出与输入、工作区互不重叠且等长；输入和参数在公开边界验证。
+// 调用者先 prepare(samples)；所有输出与输入、工作区互不重叠且等长。
+// 输入和参数在公开边界验证；同一工作区不并发执行。
 // 解析信号复用同一 FFT 结果，不额外创建 Hilbert 虚部数组。
 void analytic_signal(std::span<const double> signal, std::span<std::complex<double>> output,
                      HilbertWorkspace& workspace);
