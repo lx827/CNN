@@ -52,5 +52,6 @@ set(CNN_COMPUTE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CNN_BUILD_TYPE_UPP
 add_subdirectory(core)
 add_subdirectory(interpolation)
 add_subdirectory(envelope)
+add_subdirectory(transforms)
 add_subdirectory(emd)
 install(FILES LICENSE.scipy LICENSE.lapack LICENSE.emd DESTINATION cnn_compute/licenses)

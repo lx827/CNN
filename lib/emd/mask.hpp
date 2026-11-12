@@ -1,0 +1,77 @@
+#pragma once
+
+#include <emd/api.hpp>
+#include <emd/execution.hpp>
+#include <transforms/hilbert.hpp>
+
+namespace cnn_compute::emd {
+
+enum class FirstMask { zero_crossings, instantaneous_frequency, explicit_frequency };
+enum class AmplitudeMode { absolute, ratio_signal, ratio_imf };
+struct MaskOptions {
+    IMFOptions imf;
+    envelope::Options envelope;
+    // 非空时为显式归一化频率；空时按 first_mask 生成 max_imfs 个频率。
+    std::vector<double> mask_freqs;
+    FirstMask first_mask = FirstMask::zero_crossings;
+    double first_frequency = 0.25;
+    std::vector<double> mask_amp{1.0};
+    AmplitudeMode amp_mode = AmplitudeMode::ratio_signal;
+    double mask_step_factor = 2.0;
+    int max_imfs = 9;
+    int nphases = 4;
+    double sift_thresh = 1e-8;
+};
+struct MaskResult { Result decomposition; core::Array mask_frequencies; };
+struct MaskWorkspace {
+    Workspace sift;
+    transforms::HilbertWorkspace hilbert;
+    core::Array mask, perturbed, member, sum, residual, first, phase, frequency, amplitude;
+    void prepare(std::size_t samples, int pad_width = 2);
+};
+
+// 频率以 cycles/sample 表示；结果不包含额外残差列，与 mask_sift 一致。
+NextResult get_next_imf_mask(std::span<const double> signal, double frequency, double amplitude,
+                            int nphases = 4, const IMFOptions& options = {},
+                            const envelope::Options& envelope_options = {});
+double get_mask_frequency(std::span<const double> signal, FirstMask method = FirstMask::zero_crossings,
+                          double explicit_frequency = 0.25, const IMFOptions& options = {});
+MaskResult mask_sift(std::span<const double> signal, const MaskOptions& options = {});
+void validate(const MaskOptions& options);
+
+struct IteratedMaskOptions {
+    MaskOptions mask;
+    int max_iter = 15;
+    int averages = 1;
+    double iter_thresh = 0.1;
+    double sample_rate = 1.0;
+    double weight_power = 2.0;
+    bool weighted = true;
+    bool exclude_edges = false;
+    IteratedMaskOptions();
+};
+struct IteratedMaskResult {
+    MaskResult result;
+    core::Array mask_variability;
+    int iterations = 0;
+    bool converged = false;
+};
+// 随机初始 mask 由调用者生成后传入 mask.mask_freqs；算法内部不使用全局 RNG。
+// 返回频率保留参考语义：收敛平均时为 Hz，迭代上限退出时为 cycles/sample。
+IteratedMaskResult iterated_mask_sift(std::span<const double> signal,
+                                    const IteratedMaskOptions& options = {});
+
+namespace execution {
+NextInfo get_next_imf_mask(std::span<const double> signal, std::span<double> output,
+                          double frequency, double amplitude, int nphases,
+                          const IMFOptions& options, const envelope::Options& envelope_options,
+                          MaskWorkspace& workspace);
+double get_mask_frequency(std::span<const double> signal, FirstMask method,
+                          double explicit_frequency, const IMFOptions& options,
+                          MaskWorkspace& workspace);
+MaskResult mask_sift(std::span<const double> signal, const MaskOptions& options,
+                     MaskWorkspace& workspace);
+IteratedMaskResult iterated_mask_sift(std::span<const double> signal,
+                                     const IteratedMaskOptions& options, MaskWorkspace& workspace);
+}
+} // namespace cnn_compute::emd
