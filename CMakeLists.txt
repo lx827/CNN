@@ -7,16 +7,19 @@ if(WIN32 AND NOT MSVC)
     message(FATAL_ERROR "Windows builds require MSVC; run uv sync through vsdev")
 endif()
 if(MSVC)
-    # /showIncludes 前缀按编译器实际输出字节传给 Ninja。CMake 的自动代码页
-    # 解码可能损坏中文前缀，漏掉间接头依赖，进而混入旧工作区布局的对象。
+    # CMake 内部字符串必须是 UTF-8；Ninja 生成器再按控制台代码页输出规则。
+    # /showIncludes 的原始 GBK 字节不能直接写入前缀，也不能按系统 ANSI
+    # 代码页解码 UTF-8 控制台输出，否则会漏生成规则或丢失间接头依赖。
+    find_package(Python REQUIRED COMPONENTS Interpreter)
     set(CNN_INCLUDE_PROBE "${CMAKE_CURRENT_BINARY_DIR}/cnn_include_probe")
     file(WRITE "${CNN_INCLUDE_PROBE}.hpp" "#pragma once\n")
     file(WRITE "${CNN_INCLUDE_PROBE}.cpp" "#include \"${CNN_INCLUDE_PROBE}.hpp\"\n")
     execute_process(
-        COMMAND "${CMAKE_CXX_COMPILER}" /nologo /showIncludes /c
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/bind/msvc_output.py"
+                "${CMAKE_CXX_COMPILER}" /nologo /showIncludes /c
                 "${CNN_INCLUDE_PROBE}.cpp" "/Fo${CNN_INCLUDE_PROBE}.obj"
         OUTPUT_VARIABLE CNN_INCLUDE_OUTPUT ERROR_VARIABLE CNN_INCLUDE_ERROR
-        ENCODING NONE COMMAND_ERROR_IS_FATAL ANY
+        ENCODING UTF-8 COMMAND_ERROR_IS_FATAL ANY
     )
     string(REPLACE "\\" "/" CNN_INCLUDE_OUTPUT "${CNN_INCLUDE_OUTPUT}${CNN_INCLUDE_ERROR}")
     string(REPLACE "\n" ";" CNN_INCLUDE_LINES "${CNN_INCLUDE_OUTPUT}")
