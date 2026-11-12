@@ -37,8 +37,9 @@ CNN/
 ├── wind-turbine-diagnosis/    # Vue 3 前端（测试在 wind-turbine-diagnosis/tests/）
 ├── edge/                      # Rust 边端（开发中，目标树莓派，cargo 管理）
 ├── dc24/                      # DC24 现场采集工具链（dc24 依赖组，测试在 dc24/tests/）
-├── native/                    # CMake 管理的 C++ 计算核心与 pybind11 绑定
-├── src/cnn_compute/           # 独立 Python 计算包
+├── lib/                       # 纯 C++：core 公共数值模块、emd 算法模块
+├── bind/                      # pybind11 导出、NumPy 互操作与类型声明生成
+├── cnn_compute/               # 独立 Python 计算包
 ├── deploy/                    # 部署资产：cloud/CNN.service 模板、edge/ 交叉编译构建
 ├── scripts/                   # 运维调试脚本（dc24_start、export_openapi 等）
 ├── data/                      # 数据集（不提交 Git）

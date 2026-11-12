@@ -2,7 +2,7 @@
 
 Python 环境由根目录单项目统一管理。仓库根目录先执行 `uv sync`（Windows 构建用 Git Bash 的 `vsdev uv sync`），以下 Python 命令在 `cloud/` 执行；前端命令在 `wind-turbine-diagnosis/` 执行。按模块或单文件选择测试，脚本式测试可能在导入时计算，不对 `cloud/tests/` 整体 discover。
 
-计算包安装后的行为在根目录运行 `uv run --no-sync python tests/test_compute_package.py -v`，检查真实编译器/目标/SIMD 信息及独立分发依赖。源码变更重建、ISA 缓存和双平台说明见 [计算库构建说明](../native_compute.md)。
+计算包安装后的行为在根目录运行 `uv run --no-sync python -m unittest discover -s tests -p 'test_compute*.py' -v`，检查真实编译器/目标/SIMD 信息、独立分发依赖、公共插值/三对角求解、输出所有权，以及生成类型存根和 `py.typed` 的安装。源码变更重建、ISA 缓存和双平台说明见 [计算库构建说明](../native_compute.md)。
 
 算法正确性以公式、单位、物理前提、已知解、独立参考和负对照为依据。业务测试验证状态与副作用；真实数据输出与性能分别核对。文档链接检查不能替代正确性验证。
 
