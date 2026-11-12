@@ -84,7 +84,7 @@ SER 使用 carrier 间隔，搜索窗互不重叠，不能再被定轴 1 阶 SER
 
 等角/谱分析约 O(N log N)，TSA 需角域与周期表示；各包络方法串行计算。行星窗口最多 5 秒，禁止为复合方法并发放大内存。生产两线程池和单批分析限制见 [运行时](../../backend/architecture.md)。
 
-#126 将 TSA、Chirp-Z、CAR 倒谱与谱窗数值、高阶中心矩和边带峰计算下沉到 `lib/rotation/`、`lib/sequence/`。TSA 的 mesh/regular 共用一次单圈 DFT，长记录周期 Hann 幅值谱由 DFT 移频恒等式构造，不重复执行平铺长记录 FFT；mesh/regular/residual/differential 仍分别拥有独立输出，保持已有表示定义。原始值的可评估门控、可比历史检查和工程阈值留在 Python。源码已完成 MSVC 编译检查，具体数值和性能证据另行验收，不声明 ARM 或生产资源已验证。
+#126 将 TSA、Chirp-Z、CAR 倒谱与谱窗数值、高阶中心矩和边带峰计算下沉到 `lib/rotation/`、`lib/sequence/`。TSA 的 mesh/regular 共用一次单圈 DFT，长记录周期 Hann 幅值谱由 DFT 移频恒等式构造，不重复执行平铺长记录 FFT；mesh/regular/residual/differential 仍分别拥有独立输出，保持已有表示定义。原始值的可评估门控、可比历史检查和工程阈值留在 Python。Windows 数值及公开调用测量见[原生验收记录](../order/native_rotation_validation.md)，不声明 ARM 或生产资源已验证。
 
 ## 参考文献
 
