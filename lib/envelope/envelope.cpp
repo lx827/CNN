@@ -205,7 +205,17 @@ bool combined_envelope(std::span<const double> signal, std::span<double> out,
             w.maxima.push_back(i);
     if (w.maxima.size() < 2) return false;
     w.max_x.clear(); w.max_y.clear();
-    for (auto i : w.maxima) { w.max_x.push_back(i); w.max_y.push_back(std::abs(signal[i])); }
+    for (auto i : w.maxima) {
+        if (options.parabolic_extrema) {
+            const double before = std::abs(signal[i - 1]), center = std::abs(signal[i]);
+            const double after = std::abs(signal[i + 1]);
+            const double a = .5 * before - center + .5 * after;
+            const double b = -2.5 * before + 4.0 * center - 1.5 * after;
+            const double c = 3.0 * before - 3.0 * center + after;
+            const double tp = -b / (2.0 * a);
+            w.max_x.push_back(tp - 2.0 + i); w.max_y.push_back(tp * b / 2.0 + c);
+        } else { w.max_x.push_back(i); w.max_y.push_back(std::abs(signal[i])); }
+    }
     numpy_pad(w.max_x, w.max_y, signal.size(), options.pad_width, w);
     interpolate(w.max_x, w.max_y, out, options, w);
     return true;

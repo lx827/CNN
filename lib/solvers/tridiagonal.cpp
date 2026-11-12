@@ -62,6 +62,9 @@ void solve_tridiagonal(std::span<double> lower, std::span<double> diagonal,
 namespace cnn_compute::solvers {
 core::Array solve_tridiagonal(core::Array lower, core::Array diagonal,
                               core::Array upper, core::Array rhs) {
+    const auto n = diagonal.size();
+    if (n < 2 || lower.size() != n - 1 || upper.size() != n - 1 || rhs.size() != n)
+        throw std::invalid_argument("三对角数组形状无效");
     execution::solve_tridiagonal({lower.data(), static_cast<std::size_t>(lower.size())},
         {diagonal.data(), static_cast<std::size_t>(diagonal.size())},
         {upper.data(), static_cast<std::size_t>(upper.size())},
