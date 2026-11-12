@@ -139,6 +139,13 @@ class EMDLifecycleTest(unittest.TestCase):
         self.assertEqual(result.status, "insufficient_extrema")
         np.testing.assert_array_equal(result.components[0], monotonic)
         self.assertEqual(emd.sift_detailed(x, max_imfs=2).status, "success")
+        large = np.array([9.5e307, 1e308, 9.5e307, 9e307] * 3 + [9.5e307])
+        result = emd.sift_detailed(
+            large,
+            imf_opts={"stop_method": "fixed", "max_iters": 1},
+            envelope_opts={"interp_method": "pchip"},
+        )
+        self.assertEqual(result.status, "numerical_failure")
         with self.assertRaises(ValueError):
             emd.sift(np.array([0.0, np.nan, 1.0]))
 

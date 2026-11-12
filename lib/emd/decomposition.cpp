@@ -134,6 +134,7 @@ NextInfo get_next_imf(std::span<const double> signal, std::span<double> output,
         w.current.swap(w.updated);
         if (stop) break;
     }
+    if (!w.current.isFinite().all()) info.status = Status::numerical_failure;
     std::copy_n(w.current.data(), signal.size(), output.data());
     return info;
 }
@@ -169,14 +170,11 @@ Result sift(std::span<const double> signal, const Options& options, Workspace& w
         Array next(signal.size());
         const NextInfo info = get_next_imf(view(w.residual), write(next), options.imf, options.envelope, w);
         result.components.push_back(std::move(next)); result.iterations.push_back(info.iterations);
-        if (info.status == Status::iteration_limit) { result.status = info.status; return result; }
-        // 对齐上游 X - imf.sum(axis=1)，不能改成反复 residual -= next。
-        for (std::size_t i = 0; i < signal.size(); ++i) {
-            const double total = pairwise(result.components.size(), [&](std::size_t column) {
-                return result.components[column][i];
-            });
-            w.residual[i] = signal[i] - total;
+        if (info.status == Status::iteration_limit || info.status == Status::numerical_failure) {
+            result.status = info.status; return result;
         }
+        // 残差递推与数学定义等价，避免每阶重扫全部已提取模态。
+        w.residual -= result.components.back();
         ++layer;
         more = check_continue(signal, view(w.residual), layer, options, w);
     }
