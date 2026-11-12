@@ -336,7 +336,7 @@ class DeconvolutionPipelineTests(unittest.TestCase):
                 self.assertIsNone(zero.representation)
 
         with mock.patch(
-            "app.algorithms.bearing.deconvolution._mckd_filter_update",
+            "app.algorithms.bearing.deconvolution.native_diagnostic.deconvolve",
             side_effect=np.linalg.LinAlgError("singular normal equation"),
         ):
             undefined = MCKDEnvelopePipeline().run(

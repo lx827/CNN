@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
+from cnn_compute import diagnostic as native_diagnostic
 from numpy.typing import NDArray
-from scipy.signal import butter, hilbert, sosfiltfilt
 
 from app.algorithms.bearing.envelope import (
     EnvelopeParameters,
@@ -55,32 +55,9 @@ class FilterBankKurtogramResult:
         return max((item.spectral_kurtosis for item in self.bands), default=-1.0)
 
 
-def _validated_signal(signal: NDArray[np.float64], sample_rate_hz: float) -> np.ndarray:
-    arr = np.asarray(signal, dtype=np.float64)
-    if arr.ndim != 1 or len(arr) < 256:
-        raise ValueError("谱峭度滤波器组输入必须是一维且至少 256 点")
-    if not np.all(np.isfinite(arr)):
-        raise ValueError("输入信号不能包含 NaN 或无穷值")
-    if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
-        raise ValueError("采样率必须为有限正数")
-    return arr - np.mean(arr)
-
-
-def complex_spectral_kurtosis(values: NDArray[np.complex128]) -> float:
-    """K=E|z|^4/(E|z|^2)^2-2；圆对称复高斯背景的理论基准为 0。"""
-    z = np.asarray(values, dtype=np.complex128)
-    if z.ndim != 1 or len(z) < 2:
-        raise ValueError("谱峭度输入必须是一维且至少两个复样本")
-    if not np.all(np.isfinite(z)):
-        raise ValueError("谱峭度输入不能包含 NaN 或无穷值")
-    scale = float(np.max(np.abs(z)))
-    if scale == 0.0:
-        raise ValueError("零能量频带无法估计谱峭度")
-    power = np.abs(z / scale) ** 2
-    mean_power = float(np.mean(power))
-    if mean_power == 0.0 or not np.isfinite(mean_power):
-        raise ValueError("频带数值退化，无法估计谱峭度")
-    return float(np.mean(power**2) / mean_power**2 - 2.0)
+def complex_spectral_kurtosis(values):
+    """原生K=E|z|⁴/(E|z|²)²-2；圆对称复高斯背景理论基准为0。"""
+    return native_diagnostic.complex_spectral_kurtosis(values)
 
 
 def _validate_parameters(parameters: FilterBankKurtogramParameters) -> None:
@@ -107,67 +84,30 @@ def _validate_parameters(parameters: FilterBankKurtogramParameters) -> None:
         raise ValueError("包络低通截止频率必须为有限正数")
 
 
-def _band_statistics(z: np.ndarray, level: int, band: FrequencyBand) -> BandKurtosis:
-    # 零相位滤波的边缘暂态不参与统计，避免把滤波器边缘误当冲击。
-    edge = max(8, len(z) // 20)
-    core = z[edge:-edge] if len(z) > 2 * edge + 16 else z
-    sk = complex_spectral_kurtosis(core)
-    magnitude = np.abs(core)
-    peak = float(np.max(magnitude))
-    # 工程幅值比只使用随当前频带尺度变化的下限，避免零中位数除法。
-    median = max(float(np.median(magnitude)), peak * np.finfo(np.float64).eps)
-    impulsiveness = peak / median
-    signal_to_background = float(np.percentile(magnitude, 95.0)) / median
-    # 明确是工程重加权分数，不把 Pearson 峭度减 3 冒充谱峭度。
-    score = max(0.0, sk) * float(
-        np.log1p(impulsiveness) * np.log1p(signal_to_background)
-    )
-    return BandKurtosis(
-        band=band,
-        level=level,
-        spectral_kurtosis=sk,
-        impulsiveness=impulsiveness,
-        signal_to_background=signal_to_background,
-        reweighted_score=score,
-    )
-
-
 def compute_filter_bank_kurtogram(
-    signal: NDArray[np.float64],
-    sample_rate_hz: float,
-    parameters: Optional[FilterBankKurtogramParameters] = None,
+    signal, sample_rate_hz, parameters=None
 ) -> tuple[BandKurtosis, ...]:
-    """对每层每个实际带通后的解析信号估计复谱峭度。"""
+    """原生实际IIR滤波器组+Hilbert+逐带统计；工程评分与阈值留在Python。"""
     params = parameters or FilterBankKurtogramParameters()
     _validate_parameters(params)
-    arr = _validated_signal(signal, sample_rate_hz)
-    nyquist = sample_rate_hz / 2.0
-    if params.min_frequency_hz >= nyquist:
-        raise ValueError("最低搜索频率必须低于 Nyquist")
-
-    candidates = []
-    for level in range(1, params.max_level + 1):
-        width = nyquist / (2**level)
-        for index in range(2**level):
-            low = max(index * width, params.min_frequency_hz)
-            high = min((index + 1) * width, nyquist * (1.0 - 1e-8))
-            if high - low < max(2.0, width * 0.05):
-                continue
-            band = FrequencyBand(float(low), float(high))
-            sos = butter(
-                params.filter_order,
-                [band.low_hz, band.high_hz],
-                btype="bandpass",
-                fs=sample_rate_hz,
-                output="sos",
-            )
-            filtered = sosfiltfilt(sos, arr)
-            if not np.any(filtered):
-                continue
-            candidates.append(_band_statistics(hilbert(filtered), level, band))
-    if not candidates:
-        raise ValueError("没有足够采样点或有效频带可估计谱峭度")
-    return tuple(candidates)
+    rows = native_diagnostic.filter_bank_kurtogram(
+        signal,
+        sample_rate_hz,
+        params.max_level,
+        params.min_frequency_hz,
+        params.filter_order,
+    )
+    return tuple(
+        BandKurtosis(
+            FrequencyBand(low, high),
+            level,
+            sk,
+            impulsiveness,
+            background,
+            max(0.0, sk) * float(np.log1p(impulsiveness) * np.log1p(background)),
+        )
+        for low, high, level, sk, impulsiveness, background in rows
+    )
 
 
 class FilterBankKurtogramPipeline:
