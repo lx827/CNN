@@ -10,8 +10,8 @@ by Andrew Quinn and the emd contributors.
 Upstream source: https://gitlab.com/emd-dev/emd
 Upstream documentation: https://emd.readthedocs.io/
 
-Reference identity: distribution emd, version 0.8.1,
-local source D:/Python/Lib/site-packages/emd.
+Reference package: emd 0.8.1, module emd.sift.
+Local source supplied by the user: D:/Python/Lib/site-packages/emd.
 
 The distribution metadata identifies GPLv2 or later; its supplied LICENSE.txt
 contains the GNU General Public License version 3. That original license text
