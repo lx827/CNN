@@ -9,6 +9,7 @@ namespace cnn_compute::envelope {
 struct Workspace {
     std::vector<std::ptrdiff_t> maxima, minima, left_max, left_min, right_max, right_min;
     std::vector<double> max_x, max_y, min_x, min_y;
+    std::vector<double> pad_left, pad_right;
     core::Array query;
     interpolation::Workspace interpolation;
     void prepare(std::size_t samples, std::size_t padding);
