@@ -169,5 +169,6 @@ Python UTF-8 + 中文注释;shell 命令路径用 `/`;改文件用编辑工具,�
 
 - Bug 登记:`docs/Bug登记表.md`,修复后更新
 - 现场试验数据(设备1动不平衡、设备2外圈故障、桌面 CSV):先读 `docs/FIELD_DATA_HANDOFF_20261020.md`
+- 边端树莓派(MIC-DT-Pi)的 SSH/WiFi/直连网络配置、链路约定与排障:先读 `docs/树莓派直连配置.md`
 - Issue 跟踪(GitHub Issues + `gh`)、triage 标签、域文档(`GLOSSARY.md` + `docs/adr/`):见 `docs/agents/`
 - 诊断算法全景:`docs/诊断算法体系全景.md`;理论推导:`docs/算法原理.md`
