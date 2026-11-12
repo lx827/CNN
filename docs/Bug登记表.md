@@ -47,6 +47,7 @@
 | 41 | composite 算法/Pipeline/研究 HTTP | **AM/FM 搜错载波边带、MSB 先取绝对值、伪 CVS 与虚假串联、研究组合误进生产** — #75 明确调制谱、Guo 四阶复平均与同量纲背景、真实相位/独立圈 CVS→MED→MSB、VMD→ICA 逆映射与资源门控；专用研究入口不写缓存/投票/告警 |
 | 42 | domain/assessment/adapters/存储/流程 | **未知默认正常、相关方法重复票、扣分键回退/重复权重、缓存跨通道/去噪与手工覆盖批摘要** — #77/#84 类型化两维状态与 coverage、dependency 连通分组、规范扣分/单源建议、精确追加缓存与 channel0/none 摘要、旧 JSON 要求重分析、原始标记/告警同事务 |
 | 43 | 统一前端状态 adapter/实际消费者 | **缺分补87/部件偏移造分、RMS自判健康、旧status默认正常/故障、隐藏局部未知** — getDiagnosisView 接完整 Domain 严格判定，DiagnosisCoverage 显示partial/局部原因；移除旧映射/votes/best/概率读取，未知中性、null不变0 |
+| 44 | 根 `CMakeLists.txt` / 原生计算构建 | **中文 MSVC `/showIncludes` 前缀被错误解码，Ninja 漏追踪头文件，工作区布局变化后混用旧对象导致堆损坏** — 原始输出字节探测前缀，Ninja 间接头依赖恢复；全新构建、头依赖重编与公开/内部接口测试通过。发现于新 EMD 开发分支，未部署生产 |
 | 25 | `composables/useSettings.js`(`MechanicalParamsCard.vue` 消费) | **设置页首渲染即崩、整页空白** — `gear_teeth/bearing_params` 初始为 {},模板无守卫直访通道字段,挂载中止致 onMounted 不执行无法自愈(396cf64 引入);现按 channel_count 预填并在通道数调大时补齐,三条崩溃路径真实模板回归覆盖(见下) |
 
 **本批 #75/#77/#84 证据范围**：核心已知解/负对照与消融、真实隔离 HTTP/SQLite 缓存/worker/事务/告警及前端52项/构建有记录；首次后端79项的失败只做定向修复复验，没有伪称重跑全部。SQLite 旧库迁移幂等实际验证，MySQL SQL 未连接真实服务；真实数据效果、性能与生产部署未验证。当前已实现结构/业务修复不替代 #78/#79。
