@@ -12,14 +12,15 @@ lib/
 ├── solvers/       # 三对角求解、直接写入的内部执行接口
 ├── interpolation/ # splrep/PCHIP/cubic、旧数值兼容实现
 ├── envelope/      # 独立极值插值包络及工作区
-└── emd/           # 完整 sift 和旧单 IMF 筛分候选
+├── transforms/    # 独立解析信号、幅度归一化与 Hilbert/NHT
+└── emd/           # 完整 sift、mask/迭代/二层组合与旧筛分候选
 bind/              # 独立 pybind11 绑定与 NumPy 所有权转换
 cnn_compute/       # Python 入口、core 公共接口及内联类型注解
 ```
 
 依赖方向为 `CNN::emd → CNN::envelope → CNN::interpolation → CNN::solvers`，各数值模块使用 core/Eigen，纯 C++ target 不依赖 Python。公开入口准备拥有型结果与工作区，内部执行接口用于直接写输出和跨算法组合。绑定单独链接这些 target，处理 Python 布局、GIL 释放和输出 capsule；根目录不设置 `src/`。
 
-Python 独立模块为 `cnn_compute.emd`、`envelope`、`interpolation`；既有 `core` 数值入口和下划线差分别名保留兼容。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
+Python 独立模块为 `cnn_compute.emd`、`envelope`、`interpolation`、`transforms`；既有 `core` 数值入口和下划线差分别名保留兼容。`CNN::emd` 的 mask 路径使用 `CNN::transforms`，NHT 再组合包络与插值，依赖无环。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
 
 ### 编辑器类型检查
 

@@ -6,6 +6,8 @@ Python 环境由根目录单项目统一管理。仓库根目录先执行 `uv sy
 
 本地 `emd.sift 0.8.1` 参考差分先显式启用 `emd-reference` 组（Windows 用 `vsdev uv sync --group emd-reference`），再执行上述根测试。参考未安装会跳过差分，生命周期测试仍运行，不能把跳过记作参考通过。C++ 接口测试通过 CMake 选项 `CNN_COMPUTE_BUILD_TESTS=ON` 构建并由 CTest 运行。受控测量入口与边界见 [原生 EMD 契约](../algorithms/decomposition/native_emd.md)。
 
+mask/NHT/二层组合的独立差分入口为 `tests/test_compute_emd_mask.py`，原生工作区测试名为 `emd_mask_native_contract`；覆盖原生复用与真实参考的成功域，不将上游失败样例当作差分通过。
+
 算法正确性以公式、单位、物理前提、已知解、独立参考和负对照为依据。业务测试验证状态与副作用；真实数据输出与性能分别核对。文档链接检查不能替代正确性验证。
 
 ## P0 回归
