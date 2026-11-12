@@ -5,10 +5,11 @@ from typing import Optional
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.fft import rfft, rfftfreq
-from scipy.signal import butter, hilbert, sosfiltfilt, windows
 
 from app.algorithms.core import FrequencyBand, Spectrum
+from cnn_compute.filtering import butterworth, detrend, sosfiltfilt
+from cnn_compute.numeric import hilbert_envelope
+from cnn_compute.numeric import spectrum as native_spectrum
 
 
 @dataclass(frozen=True)
@@ -71,8 +72,6 @@ def compute_envelope(
         raise ValueError("包络分析输入必须是一维信号")
     if len(arr) < 64:
         raise ValueError("包络分析至少需要 64 个采样点")
-    if not np.all(np.isfinite(arr)):
-        raise ValueError("输入信号不能包含 NaN 或无穷值")
     if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
         raise ValueError("采样率必须为正数")
     if isinstance(params.filter_order, bool) or not isinstance(
@@ -84,35 +83,17 @@ def compute_envelope(
     if not np.isfinite(params.envelope_low_pass_hz) or params.envelope_low_pass_hz <= 0:
         raise ValueError("低通截止频率必须是有限正数")
 
-    arr = arr - np.mean(arr)
+    arr = detrend(arr)
     nyquist = sample_rate_hz / 2.0
     band = _resolve_band(sample_rate_hz, params)
-    sos = butter(
-        params.filter_order,
-        [band.low_hz / nyquist, band.high_hz / nyquist],
-        btype="bandpass",
-        output="sos",
-    )
+    sos = butterworth(params.filter_order, band.low_hz, band.high_hz, sample_rate_hz)
     filtered = sosfiltfilt(sos, arr)
 
-    envelope = np.abs(hilbert(filtered))
+    envelope = hilbert_envelope(filtered)
     low_pass_hz = min(params.envelope_low_pass_hz, nyquist * (1.0 - 1e-6))
-    low_sos = butter(
-        params.filter_order,
-        low_pass_hz / nyquist,
-        btype="lowpass",
-        output="sos",
-    )
+    low_sos = butterworth(params.filter_order, 0.0, low_pass_hz, sample_rate_hz)
     envelope = sosfiltfilt(low_sos, envelope)
-    envelope = envelope - np.mean(envelope)
-
-    # 周期 Hann + 相干增益补偿；正弦分量的返回幅值对应输入信号峰值。
-    window = windows.hann(len(envelope), sym=False)
-    amplitude = np.abs(rfft(envelope * window)) * (2.0 / np.sum(window))
-    amplitude[0] *= 0.5
-    if len(envelope) % 2 == 0:
-        amplitude[-1] *= 0.5
-    frequency = rfftfreq(len(envelope), 1.0 / sample_rate_hz)
+    frequency, amplitude, _ = native_spectrum(envelope, sample_rate_hz)
     spectrum = Spectrum(frequency_hz=frequency, amplitude=amplitude)
     return EnvelopeRepresentation(
         # 分析始终使用完整有效包络频带；展示截断由业务层单独执行。

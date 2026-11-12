@@ -35,6 +35,7 @@ cloud = [
 ]
 dc24 = ["requests==2.32.3", "python-dotenv==1.0.1"]
 dev = [
+    "clang-format==23.1.5",
     "httpx>=0.27",
     "pybind11-stubgen==3.0.0",
     "ruff>=0.17.4",
@@ -51,6 +52,8 @@ cache-keys = [
     { file = "CMakeLists.txt" },
     { file = "lib/**" },
     { file = "bind/**" },
+    { file = "cmake/**" },
+    { file = "capi/**" },
     { file = "cnn_compute/**/*.py" },
     { file = "cnn_compute/py.typed" },
     { env = "CNN_COMPUTE_ARCH" },
@@ -70,5 +73,5 @@ build-dir = "build/{wheel_tag}/ninja"
 build.tool-args = ["-j1"]
 wheel.packages = ["cnn_compute"]
 wheel.exclude = ["**/__pycache__/**", "**/*.pyc"]
-sdist.include = ["CMakeLists.txt", "lib/**", "bind/**", "cnn_compute/**"]
+sdist.include = ["CMakeLists.txt", "cmake/**", "capi/**", "lib/**", "bind/**", "cnn_compute/**", "examples/native-consumer/**"]
 sdist.exclude = ["data/**", "build/**", "dist/**", ".venv/**", "cnn_compute/_native/**"]

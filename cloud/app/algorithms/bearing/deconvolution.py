@@ -8,9 +8,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
-from numpy.lib.stride_tricks import sliding_window_view
+from cnn_compute import diagnostic as native_diagnostic
 from numpy.typing import NDArray
-from scipy.signal import fftconvolve
 
 from app.algorithms.bearing.envelope import EnvelopeRepresentation, compute_envelope
 from app.algorithms.mechanics import BearingGeometry
@@ -58,276 +57,86 @@ class _ZeroEnergyError(ValueError):
     """去均值后严格为零的输入或输出。"""
 
 
-def _input_and_filter_length(
-    signal, filter_length: int
-) -> tuple[np.ndarray, int, float]:
-    arr = np.asarray(signal, dtype=np.float64)
-    if arr.ndim != 1 or len(arr) < 64:
-        raise ValueError("解卷积输入必须是一维且至少 64 点")
-    if not np.all(np.isfinite(arr)):
-        raise ValueError("输入信号不能包含 NaN 或无穷值")
-    if (
-        isinstance(filter_length, bool)
-        or not isinstance(filter_length, int)
-        or filter_length < 2
-    ):
-        raise ValueError("FIR 滤波器长度必须是至少为 2 的整数")
-    if filter_length >= len(arr) // 2:
-        raise ValueError("FIR 滤波器长度必须小于输入长度的一半")
-    arr = arr - np.mean(arr)
-    input_scale = float(np.max(np.abs(arr)))
-    if input_scale == 0.0:
-        raise _ZeroEnergyError("零能量信号无法解卷积")
-    return arr, filter_length, input_scale
+def normalized_kurtosis(values):
+    """E[y^4]/E[y^2]^2；原生缩放归约，不减3。"""
+    try:
+        return native_diagnostic.normalized_kurtosis(values)
+    except ValueError as error:
+        if "零能量" in str(error):
+            raise _ZeroEnergyError(str(error)) from error
+        raise
 
 
-def normalized_kurtosis(values: NDArray[np.float64]) -> float:
-    """E[y^4]/E[y^2]^2；不减 3，也不在迭代中做非线性去均值。"""
-    y = np.asarray(values, dtype=np.float64)
-    if y.ndim != 1 or len(y) < 2 or not np.all(np.isfinite(y)):
-        raise ValueError("峭度输入必须是一维有限数组")
-    scale = float(np.max(np.abs(y)))
-    if scale == 0.0:
-        raise _ZeroEnergyError("零能量输出无法计算峭度")
-    normalized = y / scale
-    power = float(np.mean(normalized**2))
-    if power == 0.0 or not np.isfinite(power):
-        raise ValueError("输出数值退化，无法计算峭度")
-    return float(np.mean(normalized**4) / power**2)
+def correlated_kurtosis(values, period, shift_order=1):
+    """平方周期乘积相关峭度，周期和移位阶数显式提供。"""
+    try:
+        return native_diagnostic.correlated_kurtosis(values, period, shift_order)
+    except ValueError as error:
+        if "零能量" in str(error):
+            raise _ZeroEnergyError(str(error)) from error
+        raise
 
 
-def correlated_kurtosis(
-    values: NDArray[np.float64], period: int, shift_order: int = 1
-) -> float:
-    """CK_M=sum(beta_n^2)/(sum(y_n^2)^(M+1))，beta 为 M+1 个延迟输出之积。"""
-    y = np.asarray(values, dtype=np.float64)
-    if y.ndim != 1 or not np.all(np.isfinite(y)):
-        raise ValueError("相关峭度输入必须是一维有限数组")
-    if isinstance(period, bool) or not isinstance(period, int) or period <= 0:
-        raise ValueError("故障周期必须是正整数采样点")
-    if (
-        isinstance(shift_order, bool)
-        or not isinstance(shift_order, int)
-        or shift_order < 1
-    ):
-        raise ValueError("移位阶数必须是正整数")
-    start = period * shift_order
-    if len(y) <= start:
-        raise ValueError("信号长度不足以覆盖指定周期和移位阶数")
-    scale = float(np.max(np.abs(y)))
-    if scale == 0.0:
-        raise _ZeroEnergyError("零能量输出无法计算相关峭度")
-    normalized = y / scale
-    energy = float(np.sum(normalized**2))
-    if energy == 0.0 or not np.isfinite(energy):
-        raise ValueError("输出数值退化，无法计算相关峭度")
-    shifted = [
-        normalized[start - m * period : len(y) - m * period]
-        for m in range(shift_order + 1)
-    ]
-    beta = np.prod(np.vstack(shifted), axis=0)
-    return float(np.sum(beta**2) / energy ** (shift_order + 1))
+def _mckd_filter_update(X, filter_coefficients, period, shift_order, ridge):
+    """独立更新原语复用完整MCKD的同一原生留一乘积/薄SVD实现。"""
+    return native_diagnostic.mckd_update(
+        X, filter_coefficients, period, shift_order, ridge
+    )
 
 
-def _solve_regularized_least_squares(
-    X: NDArray[np.float64], target: NDArray[np.float64], ridge: float
-) -> np.ndarray:
-    """用 X 的 SVD 解 (X.T@X + ridge*I)f = X.T@target。
-
-    ridge=0 时必须具有完整数值列秩；ridge>0 时所有零空间方向由正则化唯一确定。
-    数值秩采用 LAPACK 常用的 eps*max(m,n)*sigma_max 判据，而非任意条件数阈值。
-    """
-    if not np.all(np.isfinite(target)):
-        raise np.linalg.LinAlgError("解卷积正规方程右端包含非有限值")
-    U, singular_values, Vt = np.linalg.svd(X, full_matrices=False)
-    if len(singular_values) < X.shape[1] or not np.all(np.isfinite(singular_values)):
-        raise np.linalg.LinAlgError("解卷积矩阵 SVD 数值退化")
-    largest = float(singular_values[0])
-    if largest == 0.0:
-        raise np.linalg.LinAlgError("解卷积矩阵零能量，无法更新")
-    rank_tolerance = np.finfo(np.float64).eps * max(X.shape) * largest
-    numerical_rank = int(np.sum(singular_values > rank_tolerance))
-    if ridge == 0.0 and numerical_rank < X.shape[1]:
-        raise np.linalg.LinAlgError("无正则化解卷积矩阵数值秩亏，无法唯一更新")
-
-    projected = U.T @ target
-    if ridge == 0.0:
-        factors = np.zeros_like(singular_values)
-        np.divide(
-            1.0,
-            singular_values,
-            out=factors,
-            where=singular_values > rank_tolerance,
-        )
-    else:
-        factors = singular_values / (singular_values**2 + float(ridge))
-    return Vt.T @ (factors * projected)
-
-
-def _mckd_filter_update(
-    X: NDArray[np.float64],
-    filter_coefficients: NDArray[np.float64],
-    period: int,
-    shift_order: int,
-    ridge: float,
-) -> np.ndarray:
-    """McDonald(2012) 正规方程；显式使用留一乘积与 X_{mT} 延迟输入。"""
-    y = X @ filter_coefficients
-    start = period * shift_order
-    valid = len(y) - start
-    if valid <= 0:
-        raise ValueError("卷积矩阵行数不足以覆盖 MCKD 延迟项")
-    input_scale = float(np.max(np.abs(X)))
-    if input_scale == 0.0 or not np.isfinite(input_scale):
-        raise np.linalg.LinAlgError("MCKD 输入矩阵数值退化，无法更新")
-    # 正规方程和 ridge 都作用于归一化输入；数学解与输入幅值尺度无关。
-    X = X / input_scale
-    y = y / input_scale
-    shifted = [
-        y[start - m * period : len(y) - m * period] for m in range(shift_order + 1)
-    ]
-    beta = np.prod(np.vstack(shifted), axis=0)
-    beta_energy = float(np.sum(beta**2))
-    if beta_energy == 0.0 or not np.isfinite(beta_energy):
-        raise np.linalg.LinAlgError("MCKD 周期乘积为零或数值退化，无法更新")
-
-    target = np.zeros(X.shape[0], dtype=np.float64)
-    for m in range(shift_order + 1):
-        # 不执行 beta/y 除法：零输出附近直接计算留一乘积，数值稳定且符合定义。
-        leave_one = np.ones(valid, dtype=np.float64)
-        for k in range(shift_order + 1):
-            if k != m:
-                leave_one *= shifted[k]
-        alpha_m = beta * leave_one
-        # X_{mT}.T@alpha_m 等价于把 alpha_m 填回对应的延迟行后取 X.T@target。
-        target[start - m * period : len(X) - m * period] += alpha_m
-
-    target *= float(np.sum(y**2)) / (2.0 * beta_energy)
-    return _solve_regularized_least_squares(X, target, ridge)
-
-
-def _validate_iterations(max_iterations: int, tolerance: float, ridge: float) -> None:
-    if (
-        isinstance(max_iterations, bool)
-        or not isinstance(max_iterations, int)
-        or max_iterations < 1
-    ):
-        raise ValueError("最大迭代次数必须是正整数")
-    if not np.isfinite(tolerance) or tolerance <= 0:
-        raise ValueError("收敛容差必须为有限正数")
-    if not np.isfinite(ridge) or ridge < 0:
-        raise ValueError("正则化系数必须为有限非负数")
-
-
-def _same_length_output(x: np.ndarray, coefficients: np.ndarray) -> np.ndarray:
-    # X@f 是互相关形式，等价于与反转 FIR 系数卷积。
-    return fftconvolve(x, coefficients[::-1], mode="same")
-
-
-def minimum_entropy_deconvolution(
-    signal: NDArray[np.float64], parameters: Optional[MEDParameters] = None
-) -> DeconvolutionResult:
-    """Wiggins MED / Endo-Randall 迭代，目标仅为全局归一化峭度。"""
+def minimum_entropy_deconvolution(signal, parameters=None) -> DeconvolutionResult:
+    """MED全局归一化峭度；固定设计矩阵只在C++准备一次薄SVD。"""
     params = parameters or MEDParameters()
-    _validate_iterations(params.max_iterations, params.tolerance, params.ridge)
-    x, length, input_scale = _input_and_filter_length(signal, params.filter_length)
-    X = sliding_window_view(x / input_scale, length)
-    f = np.zeros(length)
-    f[length // 2] = 1.0
-    best_f = f.copy()
-    best_objective = -np.inf
-    history = []
-    converged = False
-    iterations = 0
-    for iteration in range(params.max_iterations):
-        iterations = iteration + 1
-        y = X @ f
-        objective = normalized_kurtosis(y)
-        history.append(objective)
-        if objective > best_objective:
-            best_objective = objective
-            best_f = f.copy()
-        if len(history) > 1 and abs(
-            history[-1] - history[-2]
-        ) <= params.tolerance * max(1.0, abs(history[-2])):
-            converged = True
-            break
-        energy = float(np.sum(y**2))
-        fourth = float(np.sum(y**4))
-        if fourth == 0.0 or not np.isfinite(fourth):
-            raise np.linalg.LinAlgError("MED 四阶矩为零或数值退化，无法更新")
-        target = (energy / fourth) * y**3
-        try:
-            updated = _solve_regularized_least_squares(X, target, params.ridge)
-        except np.linalg.LinAlgError as exc:
-            raise np.linalg.LinAlgError("MED 最小二乘更新数值退化，无法更新") from exc
-        norm = float(np.linalg.norm(updated))
-        if not np.isfinite(norm) or norm == 0.0:
-            raise np.linalg.LinAlgError("MED 滤波器更新为零或非有限值")
-        f = updated / norm
+    try:
+        output, coefficients, history, iterations, converged = (
+            native_diagnostic.deconvolve(
+                signal,
+                filter_length=params.filter_length,
+                max_iterations=params.max_iterations,
+                tolerance=params.tolerance,
+                ridge=params.ridge,
+            )
+        )
+    except ValueError as error:
+        if "零能量" in str(error):
+            raise _ZeroEnergyError(str(error)) from error
+        raise
     return DeconvolutionResult(
-        _same_length_output(x, best_f), best_f, tuple(history), iterations, converged
+        output, coefficients, tuple(history), iterations, converged
     )
 
 
 def maximum_correlated_kurtosis_deconvolution(
-    signal: NDArray[np.float64],
-    period_samples: int,
-    parameters: Optional[MCKDParameters] = None,
+    signal, period_samples, parameters=None
 ) -> DeconvolutionResult:
-    """McDonald(2012) MCKD；period_samples 必须来自显式目标，不得默认。"""
+    """MCKD显式周期留一乘积更新；全部迭代复用一次薄SVD。"""
     params = parameters or MCKDParameters(
         target_fault="CUSTOM_PERIOD", period_samples=period_samples
     )
-    _validate_iterations(params.max_iterations, params.tolerance, params.ridge)
     if (
         isinstance(period_samples, bool)
         or not isinstance(period_samples, int)
         or period_samples <= 0
     ):
-        raise ValueError("MCKD 故障周期必须是正整数采样点")
-    if (
-        isinstance(params.shift_order, bool)
-        or not isinstance(params.shift_order, int)
-        or params.shift_order < 1
-    ):
-        raise ValueError("MCKD 移位阶数必须是正整数")
-    x, length, input_scale = _input_and_filter_length(signal, params.filter_length)
-    X = sliding_window_view(x / input_scale, length)
-    if len(X) <= period_samples * params.shift_order + 1:
-        raise ValueError("输入长度不足以覆盖 MCKD 故障周期和移位阶数")
-    f = np.zeros(length)
-    f[length // 2] = 1.0
-    best_f = f.copy()
-    best_objective = -np.inf
-    history = []
-    converged = False
-    iterations = 0
-    for iteration in range(params.max_iterations):
-        iterations = iteration + 1
-        y = X @ f
-        objective = correlated_kurtosis(y, period_samples, params.shift_order)
-        history.append(objective)
-        if objective > best_objective:
-            best_objective = objective
-            best_f = f.copy()
-        if len(history) > 1 and abs(
-            history[-1] - history[-2]
-        ) <= params.tolerance * max(1.0, abs(history[-2])):
-            converged = True
-            break
-        try:
-            updated = _mckd_filter_update(
-                X, f, period_samples, params.shift_order, params.ridge
+        raise ValueError("MCKD故障周期必须是正整数采样点")
+    try:
+        output, coefficients, history, iterations, converged = (
+            native_diagnostic.deconvolve(
+                signal,
+                filter_length=params.filter_length,
+                max_iterations=params.max_iterations,
+                tolerance=params.tolerance,
+                ridge=params.ridge,
+                period=period_samples,
+                shift_order=params.shift_order,
             )
-        except np.linalg.LinAlgError as exc:
-            raise np.linalg.LinAlgError("MCKD 正规方程数值退化，无法更新") from exc
-        norm = float(np.linalg.norm(updated))
-        if not np.isfinite(norm) or norm == 0.0:
-            raise np.linalg.LinAlgError("MCKD 滤波器更新为零或非有限值")
-        f = updated / norm
+        )
+    except ValueError as error:
+        if "零能量" in str(error):
+            raise _ZeroEnergyError(str(error)) from error
+        raise
     return DeconvolutionResult(
-        _same_length_output(x, best_f), best_f, tuple(history), iterations, converged
+        output, coefficients, tuple(history), iterations, converged
     )
 
 

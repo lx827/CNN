@@ -4,9 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.fft import rfft, rfftfreq
-from scipy.signal import windows
 
+from cnn_compute.numeric import spectrum as native_spectrum
 
 FloatArray = NDArray[np.float64]
 
@@ -79,31 +78,10 @@ def compute_spectrum(
     values = np.asarray(signal, dtype=np.float64)
     if values.ndim != 1 or len(values) < 2:
         raise ValueError("FFT 输入必须是一维且至少包含 2 个采样点")
-    if not np.all(np.isfinite(values)):
-        raise ValueError("输入信号不能包含 NaN 或无穷值")
     if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
         raise ValueError("采样率必须是有限正数")
 
-    centered = values - np.mean(values) if remove_mean else values
-    window = windows.hann(len(centered), sym=False)
-    coherent_gain = float(np.sum(window))
-    if coherent_gain <= 0:
-        raise ValueError("输入信号过短，无法形成有效 Hann 窗")
-
-    transformed = np.abs(rfft(centered * window)) * (2.0 / coherent_gain)
-    amplitude = transformed
-    amplitude[0] *= 0.5
-    if len(centered) % 2 == 0:
-        amplitude[-1] *= 0.5
-
-    power = amplitude**2 / 2.0
-    power[0] = amplitude[0] ** 2
-    if len(centered) % 2 == 0:
-        power[-1] = amplitude[-1] ** 2
-    frequency = np.asarray(
-        rfftfreq(len(centered), 1.0 / sample_rate_hz),
-        dtype=np.float64,
-    )
+    frequency, amplitude, power = native_spectrum(values, sample_rate_hz, remove_mean)
     return FourierSpectrum(
         frequency_hz=frequency,
         amplitude=amplitude,

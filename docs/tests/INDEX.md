@@ -4,7 +4,9 @@ Python 环境由根目录单项目统一管理。仓库根目录先执行 `uv sy
 
 计算包安装后的行为在根目录运行 `uv run --no-sync python -m unittest discover -s tests -p 'test_compute*.py' -v`，检查真实编译器/目标/SIMD 信息、独立分发依赖、公共插值/三对角求解、输出所有权，以及生成类型存根和 `py.typed` 的安装。源码变更重建、ISA 缓存和双平台说明见 [计算库构建说明](../native_compute.md)。
 
-Windows 构建配置回归单独执行 `uv run --with cmake==4.4.4 --with ninja==1.13.2 --no-sync python tests/test_msvc_ninja_build.py -v`。使用真实 MSVC/Ninja，在 GBK（936）与 UTF-8（65001）控制台下检查全新规则生成、编译、间接头依赖及头文件修改触发重编；需要可用的 `cl` 和 Windows 控制台，不依赖数据集。
+Windows 构建配置回归单独执行 `uv run --with cmake==4.4.4 --with ninja==1.13.2 --no-sync python tests/test_msvc_ninja_build.py -v`。使用真实 MSVC/Ninja，在 GBK（936）与 UTF-8（65001）控制台下检查无 Python 配置、全新规则生成、编译、间接头依赖及头文件修改触发重编；需要可用的 `cl` 和 Windows 控制台，不依赖数据集。
+
+C ABI 与独立 C++ 分发使用 [外部消费示例](../../examples/native-consumer/CMakeLists.txt) 验证安装后的真实 targets、公共头与动态库；独立构建启用 `CNN_COMPUTE_BUILD_TESTS=ON` 后，`ctest --test-dir <build> -R '^c_abi_consumer$' --output-on-failure` 定向检查计划复用、owner 生命周期、重构、真实质量状态与错误传播。Windows/Linux 命令、工具链隔离和验证范围见 [独立分发说明](../native_compute_distribution.md)。
 
 本地 `emd.sift 0.8.1` 参考差分先显式启用 `emd-reference` 组（Windows 用 `vsdev uv sync --group emd-reference`），再执行上述根测试。参考未安装会跳过差分，生命周期测试仍运行，不能把跳过记作参考通过。C++ 接口测试通过 CMake 选项 `CNN_COMPUTE_BUILD_TESTS=ON` 构建并由 CTest 运行。受控测量入口与边界见 [原生 EMD 契约](../algorithms/decomposition/native_emd.md)。
 
@@ -12,7 +14,11 @@ mask/NHT/二层组合的独立差分入口为 `tests/test_compute_emd_mask.py`�
 
 集成筛分可定向运行 `uv run --no-sync python -m unittest discover -s tests -p 'test_compute_emd_ensemble.py' -v`，覆盖 EEMD single/flip、complete ensemble 的参考边界、随机性与所有权。CTest 中的 `emd_ensemble_contract` 验证内部执行接口同一工作区的跨规模复用；它与 Python 公开入口测试互补。
 
+小波/VMD 的独立数学对照在根目录运行 `uv run --no-sync python tests/test_native_wavelet_vmd.py`，使用当前 cloud 依赖组中的 PyWavelets 与仓库 NumPy 参考，不需要真实数据。`tests/native/wavelet_vmd_contract.cpp` 检查 C++ 公开/执行接口、工作区复用与失败结果；根 CTest 注册由 #124 整合。独立官方 vmdpy 0.2 对照、本地端到端测量及限制见 [原生小波与 VMD](../algorithms/decomposition/native_wavelet_vmd.md)。
+
 算法正确性以公式、单位、物理前提、已知解、独立参考和负对照为依据。业务测试验证状态与副作用；真实数据输出与性能分别核对。文档链接检查不能替代正确性验证。
+
+公共数值绑定在根目录执行 `uv run --no-sync python tests/test_native_numeric.py -v`，覆盖 NumPy/SciPy 参考的 Fourier/STFT、SOS/S-G、统计与结果 owner。C++ `numeric_contract` 专门核对任意复谱实部逆变换与 Hermitian 半谱逆变换。cloud 原有 `test_numeric_algorithms.py` 保留幅值/单位和数据类契约，三项 P0 由最终整合统一执行。
 
 ## P0 回归
 

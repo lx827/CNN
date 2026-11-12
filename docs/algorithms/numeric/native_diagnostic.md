@@ -1,0 +1,53 @@
+# 原生高级诊断计算
+
+本页记录高级诊断的 C++ 实现边界；阈值、故障评估、健康评分和业务门控继续属于 Python。源码接口、参数和默认值以公开头文件及 Python docstring 为准。
+
+## 模块与数据流
+
+```text
+lib/deconvolution  MED / MCKD → 固定设计矩阵 QR → 小 R 的 SVD → 迭代更新
+lib/ica            SVD 白化 → logcosh symmetric FastICA → 观测单位逆映射
+lib/adaptive       延迟参考 LMS / NLMS / VSS-LMS
+lib/diagnostic     TEO / CPW / SC / SCoh / 四阶 MSB / 实际滤波器组谱峭度
+                         ↓
+                   公共 Fourier 与 filtering
+
+以上公共 C++ 入口 → bind/diagnostic.cpp → cnn_compute.diagnostic → cloud 薄适配
+```
+
+公开 C++ 入口与内部执行路径共用计算实现，Python 不保留另一套迭代公式。输入在同步调用期间只读借用，布局转换集中在 Python 边界。独立拥有的结果缓冲通过 capsule 交给 NumPy，旧结果不随下一次调用或工作区复用而变化；原生执行释放 GIL，不建立内部线程池。
+
+## 数学行为与状态
+
+- MED 保持全局归一化峭度；MCKD 保持显式周期的平方乘积相关峭度、留一乘积及延迟目标。固定卷积矩阵只准备一次 QR 和 SVD；通过 Householder 反射应用 `Qᵀ target`，不显式构造大 Q 或薄 U，不形成 `XᵀX`。秩判据仍为 `eps * max(X.shape) * sigma_max`，ridge 与输入归一化的作用位置不变。历史、最佳滤波器、实际迭代数与收敛标志分别保留，未收敛不伪装为收敛。
+- ICA 使用真实数值秩、SVD 白化、tanh 固定点及 symmetric decorrelation，输出 mixing/unmixing 保持观测尺度。随机初始化由本次调用独享的原生 RNG 生成；相同 seed 在本实现内可重复，不承诺 NumPy 的随机序列、分量符号或排列。秩亏、奇异更新、迭代上限分别保留状态。
+- LMS/NLMS/VSS-LMS 保持原有延迟参考向量顺序、NLMS 能量分母与 VSS 步长公式。服务层 `max_iter` 现在实际限制权重更新次数；达到上限后继续使用最终权重滤波。旧实现仅赋值该参数而未使用，本次不保留该缺陷。
+- CPW 保持原相位、正负倒频率对称 lifter 及恒定梳状频率前提。TEO 保留负值与单边端点，截负仅在包络输入阶段发生。
+- SC/SCoh 用全局时间复指数支持非 FFT-bin 循环频率，跨段复归约后再恢复输入平方/Hz 的 SC；PSD 分开归一化，SCoh 保持无量纲。MSB 是四阶调制双谱，先复平均，再取幅值，保留无效网格的 NaN 与请求/实际频率坐标。
+- 谱峭度对实际 Butterworth 带通和 Hilbert 解析样本计算复高斯基统计量。工程重加权与选带阈值留在 Python。公共 SOS 设计优先为最接近单位圆的极点配最近零点，然后按低 Q 到高 Q 执行，避免接近 Nyquist 时不适当零点配对造成内部巨大增益和舍入抵消。
+
+## 内存与并发
+
+MED/MCKD 的主要常驻临时存储为原设计矩阵和 QR 因子两份 `rows × filter_length` double，另有若干等长信号/目标向量和小矩阵；SVD 只保留小 R 的 U/V。以 51200 点、64 taps 为例，两份大矩阵合计约 50 MiB，不能把“只分解一次”误称为 O(N) 内存。峰值还须计入输入、输出、分配器、后端及同时活跃任务。
+
+SC 临时空间按段长复用，结果随 `alpha × carrier_bins` 增长，不保存全体分段 FFT 矩阵。MSB 临时空间按段长及显式网格增长。谱峭度逐带串行，复用滤波与变换缓冲，不并行保存全部频带。工作区由活跃调用独占，跨规模调用先重新 prepare；线程额度继续遵守 2C2G 的现有调度。
+
+## 验证范围
+
+数学契约与既有真值资产分别见[轴承方法](../bearing/INDEX.md)和[复合研究流程](../composite/INDEX.md)。本次原生接口检查补充非连续输入保留、NumPy owner、ICA 秩亏以及自适应更新上限的手算向量；C++ 检查公开/内部路径一致和工作区跨规模复用。
+
+本轮仅验证 Windows x64 MSVC baseline；不能据此宣称 ARM64、目标树莓派、ECS 2C2G 整机资源或真实故障分类效果已验收。参考环境为本地 NumPy 2.5.4、SciPy 1.18.1，按实际已安装源码核对分段变换、滤波与矩阵语义；性能证据单独记录，不把参考实现末位或迭代路径作为算法质量定义。
+
+### 本地受控测量（2026-11-13）
+
+Windows MSVC 19.50 x64 baseline，Release `/O2`、`/fp:strict`；参考为提交 `f3ce36d` 的原始 Python 数值实现，NumPy BLAS 线程在导入前限制为 1。每个后端独立进程连续测量三次完整公开调用，包含输入适配、必要副本和输出交接；表中为中位耗时及 OS 进程高水位。
+
+| 公开调用与规模 | Python | C++ | 本地比值 | Python / C++ 进程峰值 |
+|---|---:|---:|---:|---:|
+| MED，51200点、64 taps，实际3轮收敛 | 264.4 ms | 81.0 ms | 3.26× | 178.6 / 152.7 MiB |
+| SC/SCoh，51200点、16个alpha、512点窗、397段 | 238.8 ms | 67.6 ms | 3.53× | 116.9 / 99.7 MiB |
+| NLMS，51200点、32 taps | 126.9 ms | 2.90 ms | 43.7× | 102.3 / 100.5 MiB |
+
+MED 两者实际收敛轮数一致，最终目标均约 79.8497818723，输出 L2 范数均约 71.5412426389。该规模下直接物化薄 U 的 Eigen JacobiSVD 候选实测更慢，最终采用 QR 与小矩阵 SVD，不把候选名视为加速证据。高水位包括应用/NumPy/SciPy/原生模块导入与前次调用结果，差值不能全部归因于单一缓冲区，也不是 ECS 两活跃任务的资源验收。
+
+近 Nyquist 的 SOS 缩放反例同时定位并修复了零点分配造成的内部消去；未修改既有 SK 验证预算。编译对象反汇编中观察到自适应更新的 `mulpd/addpd`，Householder/SVD 仍包含专用依赖流程，不宣称全部算法均已 SIMD。定向数学验证中既有 composite 序列化资产仍有 `fault_indicators` 缺失的基线失败，该字段属于业务契约，与本次原生数值循环无关。

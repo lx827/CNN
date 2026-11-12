@@ -2,8 +2,10 @@ find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(pybind11 3.1 CONFIG REQUIRED)
 
 pybind11_add_module(_native MODULE NO_EXTRAS module.cpp arrays.cpp core.cpp emd.cpp
-                   emd_family.cpp emd_ensemble.cpp emd_mask.cpp)
-target_link_libraries(_native PRIVATE CNN::core CNN::emd)
+                   emd_family.cpp emd_ensemble.cpp emd_mask.cpp numeric.cpp rotation.cpp
+                   wavelet.cpp vmd.cpp diagnostic.cpp)
+target_link_libraries(_native PRIVATE CNN::core CNN::emd CNN::numeric CNN::rotation CNN::sequence
+                      CNN::wavelet CNN::vmd CNN::deconvolution CNN::ica CNN::adaptive CNN::diagnostic)
 
 # 导入刚编译的扩展生成声明；只写构建目录，安装时随 wheel 分发。
 set(CNN_STUB_DIR "${CMAKE_CURRENT_BINARY_DIR}/stubs")

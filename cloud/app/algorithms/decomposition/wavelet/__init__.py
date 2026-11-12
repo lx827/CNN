@@ -13,6 +13,7 @@ from .core import (
     denoise_wavelet,
 )
 from .pywavelets_adapter import PyWaveletsImplementation
+from .native_adapter import NativeWaveletImplementation
 
 __all__ = [
     "DWTBand",
@@ -21,6 +22,7 @@ __all__ = [
     "WaveletPacketDecomposition",
     "WaveletPacketNode",
     "PyWaveletsImplementation",
+    "NativeWaveletImplementation",
     "decompose_dwt",
     "decompose_wavelet_packet",
     "reconstruct_dwt",

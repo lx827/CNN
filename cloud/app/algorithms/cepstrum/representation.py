@@ -4,9 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.fft import fft, ifft
-from scipy.signal import windows
 
+from cnn_compute.numeric import cepstrum as native_cepstrum
 
 FloatArray = NDArray[np.float64]
 
@@ -55,18 +54,13 @@ def compute_cepstrum(
     values = np.asarray(signal, dtype=np.float64)
     if values.ndim != 1 or len(values) < 2:
         raise ValueError("倒谱输入必须是一维且至少包含 2 个采样点")
-    if not np.all(np.isfinite(values)):
-        raise ValueError("输入信号不能包含 NaN 或无穷值")
     if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
         raise ValueError("采样率必须是有限正数")
 
-    windowed = values * windows.hann(len(values), sym=False)
-    log_spectrum = np.log(np.abs(fft(windowed)) + 1e-10)
-    log_spectrum -= np.mean(log_spectrum)
-    cepstrum = np.real(ifft(log_spectrum))
+    cepstrum = native_cepstrum(values)
     half = len(values) // 2
     quefrency = np.arange(half, dtype=np.float64) / sample_rate_hz
     return CepstrumRepresentation(
         quefrency_s=quefrency,
-        amplitude=np.asarray(cepstrum[:half], dtype=np.float64),
+        amplitude=cepstrum,
     )

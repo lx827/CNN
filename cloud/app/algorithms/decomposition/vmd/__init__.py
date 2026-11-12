@@ -2,11 +2,13 @@
 
 from .core import VMDImplementation, VMDParameters, VMDResult, decompose_vmd
 from .python_adapter import PythonVMDImplementation
+from .native_adapter import NativeVMDImplementation
 
 __all__ = [
     "VMDImplementation",
     "VMDParameters",
     "VMDResult",
     "PythonVMDImplementation",
+    "NativeVMDImplementation",
     "decompose_vmd",
 ]

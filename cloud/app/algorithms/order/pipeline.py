@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from cnn_compute import rotation as native
+
 from typing import Optional
 
 import numpy as np
@@ -182,13 +184,7 @@ class SlowVaryingSpeedOrderPipeline:
         point_count = int(np.floor(self.parameters.max_order / resolution)) + 1
         common_orders = np.arange(point_count, dtype=np.float64) * resolution
         interpolated = [
-            np.interp(
-                common_orders,
-                spectrum.order_bins,
-                spectrum.amplitude,
-                left=0.0,
-                right=0.0,
-            )
+            native.interpolate(spectrum.order_bins, spectrum.amplitude, common_orders, zero_outside=True)
             for spectrum in spectra
         ]
         average = np.mean(np.asarray(interpolated), axis=0)

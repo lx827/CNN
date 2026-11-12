@@ -1,5 +1,8 @@
 """行星 carrier 边带和包络局部证据；所有窗口互斥且检查真实分辨率。"""
 
+from cnn_compute import rotation as native
+from cnn_compute import sequence as native_sequence
+
 import numpy as np
 
 from app.algorithms.gear.fixed_axis.types import MetricValue
@@ -49,16 +52,11 @@ def analyze_planetary_sidebands(
         > spectrum.order_bins[-1] + spectrum.order_resolution * 1e-9
     ):
         return unavailable("requested_planetary_sidebands_outside_spectrum")
-    amplitudes = []
-    occupied: set[int] = set()
-    for center in centers:
-        indices = set(
-            np.flatnonzero(np.abs(spectrum.order_bins - center) <= width).tolist()
-        )
-        if not indices or occupied & indices:
-            return unavailable("overlapping_or_empty_planetary_windows")
-        occupied |= indices
-        amplitudes.append(float(np.max(spectrum.amplitude[list(indices)])))
+    try:
+        amplitudes = native.window_peaks(spectrum.order_bins, spectrum.amplitude, centers,
+            width, disjoint=True)
+    except ValueError:
+        return unavailable("overlapping_or_empty_planetary_windows")
     mesh = amplitudes[0]
     if (
         mesh <= float(np.max(spectrum.amplitude)) * 1e-10
@@ -130,25 +128,12 @@ def modulation_peaks(
         if reason:
             result.append(ModulationPeak(name, center, "not_evaluable", reason=reason))
             continue
-        distance = np.abs(spectrum.order_bins - center)
-        target_mask = distance <= width
-        background_mask = (distance >= 2 * width) & (distance <= 4 * width)
-        for other in centers:
-            background_mask &= np.abs(spectrum.order_bins - other) > width
-        if np.count_nonzero(background_mask) < 4 or not np.any(target_mask):
-            result.append(
-                ModulationPeak(
-                    name,
-                    center,
-                    "not_evaluable",
-                    reason="insufficient_independent_background_bins",
-                )
-            )
+        coordinate, amplitude, background, count, found = native.local_peak(
+            spectrum.order_bins, spectrum.amplitude, center, width, exclusions=centers)
+        if count < 4 or not found:
+            result.append(ModulationPeak(name, center, "not_evaluable",
+                reason="insufficient_independent_background_bins"))
             continue
-        indices = np.flatnonzero(target_mask)
-        peak_index = int(indices[np.argmax(spectrum.amplitude[indices])])
-        amplitude = float(spectrum.amplitude[peak_index])
-        background = float(np.mean(spectrum.amplitude[background_mask]))
         scale = float(np.max(spectrum.amplitude))
         if background <= max(scale * 1e-10, np.finfo(float).tiny):
             result.append(
@@ -157,7 +142,7 @@ def modulation_peaks(
                     center,
                     "not_evaluable",
                     amplitude=amplitude,
-                    peak_order=float(spectrum.order_bins[peak_index]),
+                    peak_order=coordinate,
                     background=background,
                     reason="no_measurable_local_background",
                 )
@@ -169,7 +154,7 @@ def modulation_peaks(
                     center,
                     "computed",
                     amplitude,
-                    float(spectrum.order_bins[peak_index]),
+                    coordinate,
                     background,
                     amplitude / background,
                 )
@@ -181,15 +166,10 @@ def normalized_moment(
     values: np.ndarray, degree: int, name: str, representation: str
 ) -> MetricValue:
     """先缩放再标准化，避免小量纲的四/六/八阶矩下溢。"""
-    centered = values - np.mean(values)
-    scale = float(np.max(np.abs(centered)))
-    if scale <= np.finfo(float).tiny:
-        return MetricValue.unavailable(name, "zero_variance")
-    normalized = centered / scale
-    variance = float(np.mean(normalized**2))
+    moment, variance = native_sequence.central_moment(values, degree, scaled=True)
     if variance <= np.finfo(float).tiny:
         return MetricValue.unavailable(name, "zero_variance")
-    value = float(np.mean(normalized**degree) / variance ** (degree / 2))
+    value = moment / variance ** (degree / 2)
     return MetricValue(
         name,
         "evaluated",

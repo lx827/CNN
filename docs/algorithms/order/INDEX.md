@@ -4,6 +4,12 @@
 >
 > 实现导航：`cloud/app/algorithms/order/`；`services/diagnosis/order_tracking.py` 仅是旧 tuple 兼容边界。
 
+## 原生计算实现（#126）
+
+标量转速候选仲裁、FFT 自相关、STFT 脊线、梯形相位积分、线性等角重采样和阶次幅值谱由 `cnn_compute.rotation` 调用 `lib/rotation/`。Python 保留结构化对象、工况选择和 Pipeline 组合；不存在按失败静默返回 Python 算法的分支。周期 Hann 单边幅值计算与公共数值模块共用同一内部执行入口。
+
+STFT 逐帧复用窗、FFT Plan 和临时频谱，仅保存可靠脊线及最终连续轨迹，不持有完整时频矩阵。输入同步借用；结果通过独立 owner 交给 NumPy，返回后的数组不受后续工作区复用影响。各活跃调用独占工作区，不另建线程。Windows MSVC 的数值向量、公开调用性能与所限内存测量见[原生验收记录](native_rotation_validation.md)；该记录不声明 Linux、ARM 或目标服务器资源已验收。
+
 ## 数学目的
 
 将等时间采样振动转换为等转角表示，使旋转机械在变速时的轴频、啮合及故障调制落在稳定阶次上。累计转数和相位为
@@ -97,6 +103,7 @@ STFT 可靠脊线 → 连续转速轨迹 → 梯形积分相位
 | 验证资产 | 覆盖向量 |
 |----------|----------|
 | `cloud/tests/diagnosis/algorithms/test_order_pipeline.py` | 恒速已知阶次/近频峰、单边幅值、两类阶次轴、解析积分、全记录三角扫频、单帧快扫频、边界与越界、零 MAD、窄带纯音、slow→fast、不同采样率、故障调制不冒充轴频 |
+| `cloud/tests/diagnosis/algorithms/test_native_rotation.py` | 解析相位积分、角域插值、输出生命周期、单圈DFT推导TSA的长记录Hann谱、非FFT网格CZT与序列不变量 |
 | `cloud/tests/diagnosis/algorithms/test_order_integration.py` | Engine/ensemble 快速变速边界、HTTP 不可判定、缓存保护和不伪造健康 |
 | `cloud/tests/diagnosis/regression/test_varying_speed_order.py` | P0 合成回归；已知阶次、解析转速、轨迹和非法输入 |
 | `cloud/tests/diagnosis/foundation/layer2/test_order_tracking_correctness.py` | 分层正确性资产 |

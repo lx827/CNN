@@ -1,6 +1,6 @@
 # 诊断计算库构建与安装
 
-根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。旧原生筛分候选仍复用仓库 Python EMD 族外层；另增以本地 `emd.sift 0.8.1` 为参考的基础 EMD、EEMD、complete ensemble、mask/迭代/二层 C++ 候选，契约见 [原生 EMD](algorithms/decomposition/native_emd.md) 与 [ADR 0008](adr/0008-local-emd-reference-native-family.md)。生产分解默认仍为 Python。
+根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。独立 C++ 数学模块经 Python 薄绑定和 C ABI 共用同一实现；独立 CMake 不依赖 Python。C 头、DLL/SO、C++ 安装消费与 ARM64 入口见 [独立分发说明](native_compute_distribution.md) 和 [ADR 0009](adr/0009-c-abi-native-distribution.md)。EMD 候选契约见 [原生 EMD](algorithms/decomposition/native_emd.md) 与 [ADR 0008](adr/0008-local-emd-reference-native-family.md)，各业务入口的采用状态以算法族契约为准。
 
 新增或重组 C++ 加速算法遵循 [cpp-accelerate skill](../.claude/skills/cpp-accelerate/SKILL.md) 与 [ADR 0007](adr/0007-native-algorithm-module-interfaces.md)：公开入口与内部加速执行接口分工，算法模块独立于公共基础结构。
 
@@ -12,15 +12,23 @@ lib/
 ├── solvers/       # 三对角求解、直接写入的内部执行接口
 ├── interpolation/ # splrep/PCHIP/cubic、旧数值兼容实现
 ├── envelope/      # 独立极值插值包络及工作区
+├── fourier/       # pocketfft 实/复计划、半谱与卷积
+├── filtering/     # Butterworth SOS、零相位、SG、Hann、去趋势
 ├── transforms/    # 独立解析信号、幅度归一化与 Hilbert/NHT
-└── emd/           # 完整 sift、集成、mask/迭代/二层组合与旧筛分候选
+├── numeric/       # 频谱/STFT/倒谱、统计、抽点、自相关
+├── emd/           # 完整 sift、集成、mask/迭代/二层组合与旧筛分候选
+├── wavelet/ vmd/  # 内置离散小波与 ADMM 分解
+├── deconvolution/ ica/ adaptive/ # MED/MCKD、FastICA、LMS 族
+└── diagnostic/ rotation/ sequence/ # 高阶谱、相位阶次/TSA、趋势与序列
 bind/              # 独立 pybind11 绑定与 NumPy 所有权转换
+capi/              # 公开 C 头、动态库适配与 C 生命周期消费
+cmake/             # 独立安装 package、MSVC 前缀探针、ARM64 toolchain
 cnn_compute/       # Python 入口、core 公共接口及内联类型注解
 ```
 
 依赖方向为 `CNN::emd → CNN::envelope → CNN::interpolation → CNN::solvers`，各数值模块使用 core/Eigen，纯 C++ target 不依赖 Python。公开入口准备拥有型结果与工作区，内部执行接口用于直接写输出和跨算法组合。绑定单独链接这些 target，处理 Python 布局、GIL 释放和输出 capsule；根目录不设置 `src/`。
 
-Python 独立模块为 `cnn_compute.emd`、`envelope`、`interpolation`、`transforms`；既有 `core` 数值入口和下划线差分别名保留兼容。`CNN::emd` 的 mask 路径使用 `CNN::transforms`，NHT 再组合包络与插值，依赖无环。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
+Python 独立模块包括 `cnn_compute.fourier`、`filtering`、`numeric`、`wavelet`、`vmd`、`diagnostic`、`rotation`、`sequence` 及既有 `emd`、`envelope`、`interpolation`、`transforms`。MED/MCKD、ICA 与自适应滤波的 Python 数值函数聚合于 `diagnostic`，对应 C++ 目录和 targets 仍按数学族独立。既有 `core` 数值入口和下划线差分别名保留兼容。`CNN::emd` 的 mask 路径使用 `CNN::transforms`，NHT 再组合包络与插值，依赖无环。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
 
 ### mask 分支本地受控结果（2026-11-12）
 
@@ -109,9 +117,20 @@ uv 缓存键覆盖根配置、CMake 文件、原生源码、Python 源文件及�
 
 更换编译器或工具链版本时，CMake 已缓存的编译器不会仅靠修改环境变量替换。使用新的忽略构建目录并强制重装计算包，例如 `uv sync --reinstall-package cnn-compute --config-setting build-dir=build/new-toolchain`；Windows 仍经 `vsdev`。新目录名应标识实际工具链，确认 `build_info()` 后再采用产物。
 
-MSVC 的 `/showIncludes` 探测输出由 `bind/msvc_output.py` 按实际控制台输出代码页解码，再以 UTF-8 文本交给 CMake；Ninja 生成器负责按控制台代码页写出规则。GBK 原始字节直接进入 CMake 字符串会使 `rules.ninja` 漏生成，而把 UTF-8 控制台输出误按系统 ANSI 解码会丢失间接头依赖。构建同时支持中文 GBK 与 UTF-8 控制台，修改头文件应由依赖图触发相关对象重编。
+MSVC 的 `/showIncludes` 探测由 `cmake/msvc_include_probe.ps1` 使用系统 PowerShell 按实际控制台输出代码页解码，无控制台时使用 ANSI，再以 UTF-8 交给 CMake；Ninja 生成器负责按控制台代码页写出规则。独立构建和安装后的 CMake package 都不依赖 Python 或英文资源包。GBK 原始字节直接进入 CMake 字符串会使 `rules.ninja` 漏生成，而把 UTF-8 控制台输出误按系统 ANSI 解码会丢失间接头依赖。构建同时支持中文 GBK 与 UTF-8 控制台，修改头文件应由依赖图触发相关对象重编。
 
 Windows 的构建回归在根目录执行 `uv run --with cmake==4.4.4 --with ninja==1.13.2 --no-sync python tests/test_msvc_ninja_build.py -v`：使用根配置的工具链部分和真实 MSVC/Ninja，分别在代码页 936、65001 下验证全新生成、编译及间接头文件修改后的重编。此测试只构建最小库；计算包完整安装另以普通 `uv sync` 验证。
+
+## C++ 排版
+
+dev 组固定 `clang-format==23.1.5`，排版由根目录 `.clang-format` 管理。完成正常环境同步后，在根目录执行：
+
+```bash
+uv run python scripts/format_cpp.py          # 格式化
+uv run python scripts/format_cpp.py --check  # 只检查，发现差异时非零退出
+```
+
+命令只处理 Git 跟踪的 `lib/`、`bind/`、`capi/` 与 `tests/native/` 手写 C/C++ 文件；第三方 `vendor` / `third_party` 等目录不参与。根 `.clang-format-ignore` 同时排除第三方、构建、依赖下载和环境目录，供直接调用 clang-format 或编辑器使用。格式化不替代算法正确性与性能验证。
 
 ## 验证
 

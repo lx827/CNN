@@ -6,9 +6,11 @@ Savitzky-Golay 多项式平滑模块
 - S-G 滤波：适合宽带高斯噪声背景下的平滑，保留峰形，计算极快（O(N)）。
 """
 
+from typing import Dict, Tuple
+
 import numpy as np
-from scipy.signal import savgol_filter
-from typing import Tuple, Dict
+
+from cnn_compute.filtering import savgol
 
 from .signal_utils import _estimate_noise_mad, _snr_by_residual_std
 
@@ -31,7 +33,7 @@ def sg_denoise(
     Returns:
         (平滑后信号, 元信息)
     """
-    arr = np.array(signal, dtype=np.float64)
+    arr = np.asarray(signal, dtype=np.float64)
     N = len(arr)
 
     if window_length > N:
@@ -48,9 +50,7 @@ def sg_denoise(
         window_length -= 1
 
     polyorder = min(polyorder, window_length - 1)
-    smoothed = savgol_filter(
-        arr, window_length=window_length, polyorder=polyorder, deriv=deriv
-    )
+    smoothed = savgol(arr, window_length, polyorder, deriv)
 
     noise_est = _estimate_noise_mad(arr - smoothed)
     snr_imp = _snr_by_residual_std(arr, smoothed)

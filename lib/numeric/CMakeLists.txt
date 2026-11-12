@@ -1,0 +1,5 @@
+add_library(cnn_compute_numeric STATIC numeric.cpp)
+add_library(CNN::numeric ALIAS cnn_compute_numeric)
+target_include_directories(cnn_compute_numeric PUBLIC "${PROJECT_SOURCE_DIR}/lib")
+target_link_libraries(cnn_compute_numeric PUBLIC CNN::options CNN::core CNN::fourier CNN::filtering CNN::transforms)
+set_target_properties(cnn_compute_numeric PROPERTIES POSITION_INDEPENDENT_CODE ON)

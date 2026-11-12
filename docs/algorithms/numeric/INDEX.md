@@ -2,7 +2,7 @@
 
 > 状态：当前契约（#76 / PR #81 已合并）。函数签名以源码 docstring 为准，HTTP 字段以 [后端 API](../../api/backend_api.md) 为准。
 >
-> 实现导航：`cloud/app/algorithms/transforms/`、`statistics/`、`cepstrum/`。本页由逐文件草稿按数值主题合并，不复制签名镜像。
+> 实现导航：`lib/numeric/`、`lib/filtering/`、`lib/fourier/` 提供独立数值能力；`cnn_compute.numeric`、`filtering`、`fourier` 是 Python 绑定；cloud 的 `transforms/`、`statistics/`、`cepstrum/` 保留单位、数据类与业务适配。
 
 ## 数学目的
 
@@ -67,6 +67,12 @@ DataView 在慢去噪前先截到业务窗口，再去趋势/去噪和计算；�
 
 FFT/STFT/倒谱主要为 $O(N\log N)$；STFT 额外存储随频率 bin 与帧数乘积增长。统计与绘图抽点为 $O(N)$。完整数组与显示摘要并存会增加持久化体积，但不允许为了降低显示点数而先破坏分析输入。生产线程和 5 秒业务限制见 [后端架构](../../backend/architecture.md)。
 
+生产基础数值默认调用 C++。Fourier 使用单线程 pocketfft；实输入使用缓存 real plan，频谱和 STFT 仅生成非负频点。完整实输入 FFT 按 Hermitian 对称补齐；任意复频谱的实部逆变换仍使用完整复逆变换，不能误用半谱逆变换。Plan 为每个活跃调用独占，不新增线程池。
+
+连续 float64 输入在同步绑定调用期间只读借用；类型或布局不合规时在 Python 边界集中转换一次。数值前提由公开 C++ 入口建立，绑定不重复扫描。最终 C++ 拥有型数组由 NumPy capsule 持有，矩阵列切片沿用该 owner；后续计算与工作区复用不会覆盖结果。总体统计的中心四阶矩使用 Eigen 平方表达式归约，不物化逐窗 Python 列表。
+
+通用 Butterworth 设计以 SOS 输出，双向执行使用 odd 延拓，默认延拓长度沿用 SOS 零极点规则。服务层旧滤波助手保留原有短记录和频带裁剪策略，执行改为同一 SOS 数值能力；SOS 避免高阶传递函数系数的数值病态，舍入结果按数学误差预算比较。Savitzky–Golay 保留奇数窗、导数间隔与端点多项式插值语义。
+
 ## 参考文献
 
 - Oppenheim & Schafer，离散时间信号处理、FFT 与倒谱。
@@ -77,4 +83,8 @@ FFT/STFT/倒谱主要为 $O(N\log N)$；STFT 额外存储随频率 bin 与帧数
 
 已合并的验证资产为 `cloud/tests/test_numeric_algorithms.py` 与 `cloud/tests/test_numeric_routes.py`。登记的向量主题包括整数周期正弦、DC、Nyquist、非整数周期、STFT 轴和形状、倒谱单位、统计零分母、分段末段、极值抽点、全长数组独立性，以及 DataView/Monitor 路由归一化与兼容字段。
 
-本工单未执行这些算法或路由测试，因此不把测试资产写成最近一次通过记录。运行方式和数据依赖见 [测试索引](../../tests/INDEX.md)。
+原生公共边界验证入口为 `tests/test_native_numeric.py`，以 NumPy/SciPy 对照奇偶 FFT、半谱、任意复谱逆变换、STFT 补零/刻度、统计、SOS/S-G、倒谱与自相关，并检查只读/非连续输入和最终结果生命周期。C++ `numeric_contract` 另验证 Plan 的实部逆变换与 Hermitian 逆变换契约。验证平台和最近执行结果见 [构建说明](../../native_compute.md)；运行方式和数据依赖见 [测试索引](../../tests/INDEX.md)。
+
+2026-11-13 在 Windows x64、MSVC 19.50、`/O2 /fp:strict`、Eigen 3.4 baseline SSE2 构建通过：原生 Python 7 项、C++ numeric 契约、cloud 数值 7 项、标准包络 11 项、CPW/TEO 8 项、S-G 5 项及 signal_utils 45 项。numeric 对象反汇编观察到 `mulpd` 批量乘法；不据此宣称所有归约或所有算法均 SIMD。
+
+同机 51200 点固定向量、1024 点周期 Hann、512 点步长的时域统计，三块交错、每块每后端 5 次：原生公开调用中位 0.408 ms，同公式 Python/SciPy 参考 45.073 ms（110.6 倍）；参考预先准备窗，原生调用包含窗、结果与工作区准备。该对照测量统计内核及其窗口/结果构造，不包含导入、JSON、数据库或诊断评分。另以已准备 Plan 对同一实序列做完整输出 FFT，每块 100 次、交错三块，real plan 三块均值为 213.9/213.8/215.7 µs，原 complex 路径为 631.7/633.3/634.9 µs，约 2.96 倍。原始测量脚本和产物保留忽略的 `build/`，不将此本机结果当作 Linux、ARM64 或生产整机验收。

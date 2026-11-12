@@ -7,4 +7,4 @@ namespace cnn_compute::solvers {
 // 允许调用者移动交接，返回求解后的 rhs owner。
 core::Array solve_tridiagonal(core::Array lower, core::Array diagonal,
                               core::Array upper, core::Array rhs);
-}
+}    // namespace cnn_compute::solvers

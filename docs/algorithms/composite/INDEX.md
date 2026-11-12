@@ -12,6 +12,8 @@
 
 解析信号 `z=hilbert(x-mean(x))` 给出 AM 包络 `a=abs(z)` 和相邻采样中点瞬时频率 `f=diff(unwrap(angle(z)))*fs/(2π)`。AM 与 FM 分别生成频谱，搜索调制频率或相应参考轴阶次，不在解调谱中搜索原始载波的 `mesh±n*rot` 位置。
 
+#126 的 AM/FM 与 CVS 数值核由 `cnn_compute.rotation` 调用 C++；AM/FM 复用公共 Hilbert 实现，CVS 在通过片段内线性插值并逐独立全圈清空累加器。真实相位/空间布局前提、覆盖不足状态以及研究用途门控保留 Python，成功 CVS 只列出用于完整圈的源窗口。此实现变更不增加可观测性，也不改变研究评估或生产资格。Windows 的 AM/FM/CVS 既有 7 个向量已通过，范围和限制见[原生验收记录](../order/native_rotation_validation.md)。
+
 本项目 MSB 采用 Guo 等（2018）Eq.10 的**四阶调制信号双谱**：
 
 $$M(f_c,f_m)=E[X(f_c+f_m)X(f_c-f_m)\overline{X(f_c)}^{\,2}].$$
@@ -85,6 +87,8 @@ VMD.modes.T → SVD 白化 → ICA → 源逆映射到观测单位
 专用 POST 与 method-analysis 的组合 GET 始终使用原始记录，不隐式附加去噪或去趋势；GET 配置额外前处理会拒绝。数据缺失、非法资源参数、请求校验和合法但物理前提不足是不同 HTTP 情形，详见 [API](../../api/backend_api.md)。研究 all/ensemble 同样不写生产诊断缓存，不能把研究页面运行当作生产重新诊断。
 
 ## 复杂度与内存
+
+ICA 与四阶 MSB 的数值循环走[原生高级计算](../numeric/native_diagnostic.md)，复合编排、物理前提和研究不可评估语义不变。ICA 原生 RNG 不锁定 NumPy 初始化序列，验证依据为源分离质量、观测单位逆映射和明确状态。
 
 VMD、ICA、MED 各有模态、迭代、矩阵倍率；MSB 按请求网格而非全二维计算。研究入口先限制最多 5 秒，再串行执行阶段；VMD 模态不超过 5、显式计算窗口不超过 51200 点，其他阶段的迭代、滤波长度、尺度和网格均有上限。与生产共用 2C2G，不能因研究用途新增并行线程或取消上限。性能基线与原生移植仍归 #79。
 

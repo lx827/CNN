@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from cnn_compute import rotation as native
+
 import numpy as np
 
 
@@ -116,55 +118,10 @@ def reconstruct_continuous_planet_signal(
         return unavailable(
             "CVS_uniform_time_reassembly_requires_constant_relative_speed"
         )
-    spatial = np.angle(
-        np.exp(1j * (carrier + azimuths[selected] - alignment.sensor_azimuth_rad))
-    )
-    mask = np.abs(spatial) <= alignment.passage_half_width_rad
-    transitions = np.diff(np.r_[False, mask, False].astype(int))
-    intervals = tuple(
-        zip(
-            np.flatnonzero(transitions == 1).tolist(),
-            np.flatnonzero(transitions == -1).tolist(),
-        )
-    )
-    sums, counts = np.zeros(spr), np.zeros(spr, dtype=int)
-    cycles = []
-    used = []
-    pending = []
-    for start, stop in intervals:
-        if stop - start < 3:
-            continue
-        # 仅窗口内部可插值的角样点；所有源样本均属于选定行星经过传感器的窗口。
-        first = int(np.ceil(planet[start] / (2 * np.pi) * spr))
-        last = int(np.floor(planet[stop - 1] / (2 * np.pi) * spr))
-        grid = np.arange(first, last + 1, dtype=np.int64)
-        if not len(grid):
-            continue
-        reconstructed = np.interp(
-            grid * (2 * np.pi / spr), planet[start:stop], values[start:stop]
-        )
-        bins = grid % spr
-        np.add.at(sums, bins, reconstructed)
-        np.add.at(counts, bins, 1)
-        pending.append((start, stop))
-        if np.all(counts > 0):
-            cycles.append(sums / counts)
-            used.extend(pending)
-            pending = []
-            sums, counts = np.zeros(spr), np.zeros(spr, dtype=int)
-    coverage = float(np.mean(counts > 0))
-    if len(cycles) < minimum_cycles:
-        return unavailable(
-            "insufficient_full_planet_phase_coverage_for_continuous_reassembly",
-            used + pending,
-            coverage,
-        )
-    return CVSRepresentation(
-        "computed",
-        np.concatenate(cycles),
-        float(frequency * spr),
-        selected,
-        tuple(used),
-        len(cycles),
-        1.0,
-    )
+    samples, intervals, cycles, coverage, completed = native.cvs(values, carrier, planet,
+        float(azimuths[selected]), alignment.sensor_azimuth_rad,
+        alignment.passage_half_width_rad, spr)
+    if cycles < minimum_cycles:
+        return unavailable("insufficient_full_planet_phase_coverage_for_continuous_reassembly", intervals, coverage)
+    return CVSRepresentation("computed", samples, float(frequency * spr), selected,
+        tuple(tuple(v) for v in intervals[:completed]), cycles, 1.0)

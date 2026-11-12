@@ -1,4 +1,4 @@
-"""显式选择的原生筛分候选；归一化、随机数与族编排复用 Python 外层。"""
+"""默认原生筛分；归一化、随机数与族编排复用现有 Python 外层。"""
 
 from .core import EMDParameters, FloatArray
 from .python_adapter import PythonEMDImplementation
@@ -19,7 +19,7 @@ def _native_sift(signal: FloatArray, parameters: EMDParameters):
 
 
 class NativeEMDImplementation(PythonEMDImplementation):
-    """仅显式注入时使用原生筛分；默认生产 adapter 保持 Python。
+    """默认生产 adapter 的同公式原生筛分。
 
     支持 PCHIP/cubic 与 SD/Rilling，复用同一外层且不回退或伪装成功。
     """

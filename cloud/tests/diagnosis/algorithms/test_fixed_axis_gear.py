@@ -326,14 +326,14 @@ def test_evaluation_reuses_metrics_without_fft():
     )
     import app.algorithms.order.resampling as resampling
 
-    original = resampling.rfft
-    resampling.rfft = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+    original = resampling.native.amplitude_spectrum
+    resampling.native.amplitude_spectrum = lambda *_args, **_kwargs: (_ for _ in ()).throw(
         AssertionError("评估不得重算 FFT")
     )
     try:
         evaluation = pipeline.evaluate(analysis)
     finally:
-        resampling.rfft = original
+        resampling.native.amplitude_spectrum = original
     assert evaluation.status == "evaluated"
     assert evaluation.indicators["m6a"]["warning"] is None
     assert evaluation.indicators["m8a"]["critical"] is None

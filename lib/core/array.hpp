@@ -5,6 +5,6 @@
 namespace cnn_compute::core {
 
 using Array = Eigen::ArrayXd;
-using Map = Eigen::Map<const Array>;
+using Map   = Eigen::Map< const Array >;
 
-} // namespace cnn_compute::core
+}    // namespace cnn_compute::core
