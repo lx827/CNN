@@ -1,7 +1,7 @@
 // emd 0.8.1 spectra/imftools 路径的 C++ 移植；归属见 lib/LICENSE.emd。
 #include <transforms/hilbert.hpp>
 #include <envelope/execution.hpp>
-#include <unsupported/Eigen/FFT>
+#include <fourier/api.hpp>
 #include <algorithm>
 #include <cmath>
 #include <numbers>
@@ -21,7 +21,7 @@ void check_signal(std::span<const double> signal) {
 }
 }
 struct HilbertWorkspace::Impl {
-    Eigen::FFT<double> fft;
+    fourier::Plan fft;
     std::vector<std::complex<double>> spectrum, analytic;
     Array normalised, envelope, unwrapped, smoothed;
     std::vector<double> median;
@@ -32,6 +32,7 @@ HilbertWorkspace::~HilbertWorkspace() = default;
 HilbertWorkspace::HilbertWorkspace(HilbertWorkspace&&) noexcept = default;
 HilbertWorkspace& HilbertWorkspace::operator=(HilbertWorkspace&&) noexcept = default;
 void HilbertWorkspace::prepare(std::size_t samples) {
+    impl->fft.prepare(samples);
     impl->spectrum.resize(samples); impl->analytic.resize(samples);
     for (auto* array : {&impl->normalised, &impl->envelope,
                         &impl->unwrapped, &impl->smoothed}) array->resize(samples);
@@ -42,11 +43,11 @@ void analytic_signal(std::span<const double> signal, std::span<std::complex<doub
                      HilbertWorkspace& workspace) {
     auto& work = *workspace.impl;
     const auto n = signal.size();
-    work.fft.fwd(work.spectrum.data(), signal.data(), static_cast<Eigen::Index>(n));
+    work.fft.forward(signal, work.spectrum);
     // 与 scipy.signal.hilbert 一致：DC 和偶数长度 Nyquist 保留，正频加倍。
     for (std::size_t k = 1; k < (n + 1) / 2; ++k) work.spectrum[k] *= 2.0;
     for (std::size_t k = n / 2 + 1; k < n; ++k) work.spectrum[k] = 0.0;
-    work.fft.inv(output.data(), work.spectrum.data(), static_cast<Eigen::Index>(n));
+    work.fft.inverse(work.spectrum, output);
 }
 void amplitude_normalise(std::span<const double> signal, std::span<double> output,
                          HilbertWorkspace& workspace) {
