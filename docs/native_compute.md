@@ -96,6 +96,8 @@ CNN_COMPUTE_ARCH=avx2 uv sync       # Linux
 
 新 EMD 核的包络均值和信号更新使用 Eigen 数组表达式；Windows baseline 的编译器汇编中已观察到 `addpd/mulpd/subpd`。B 样条基函数、带状消元、极值压缩和查找保留其专用流程，不宣称全部路径均为 SIMD。曾比较的 PCHIP 额外收集六条数组后批量求值增加了内存流量，测量更慢，已撤回；向量化以实际收益决定采用。ARM64/NEON 尚未构建验证。
 
+2026-11-12 基础 EMD 在 Windows MSVC 19.50 与 WSL Ubuntu 22.04 GCC 11.4 的 x64 baseline 均完成源码构建、参考差分及 C++ 工作区/所有权检查；Linux 反汇编同样观察到 SSE2 批量运算。这证明两个平台的基础候选可构建运行，不代表尚未合入的算法、ARM64 或 ECS 全机资源已验收。
+
 uv 缓存键覆盖根配置、CMake 文件、原生源码、Python 源文件及影响目标/编译器的环境变量，不包含导入产生的 Python 字节码。切换 `CNN_COMPUTE_ARCH`、编译选项，以及修改源码/头文件后会重新构建；未变化时复用兼容产物。构建目录按 Python wheel tag 和 Ninja 隔离，Windows 和 Linux 不共用二进制。
 
 更换编译器或工具链版本时，CMake 已缓存的编译器不会仅靠修改环境变量替换。使用新的忽略构建目录并强制重装计算包，例如 `uv sync --reinstall-package cnn-compute --config-setting build-dir=build/new-toolchain`；Windows 仍经 `vsdev`。新目录名应标识实际工具链，确认 `build_info()` 后再采用产物。
