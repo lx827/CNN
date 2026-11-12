@@ -4,7 +4,9 @@ Python 环境由根目录单项目统一管理。仓库根目录先执行 `uv sy
 
 计算包安装后的行为在根目录运行 `uv run --no-sync python -m unittest discover -s tests -p 'test_compute*.py' -v`，检查真实编译器/目标/SIMD 信息、独立分发依赖、公共插值/三对角求解、输出所有权，以及生成类型存根和 `py.typed` 的安装。源码变更重建、ISA 缓存和双平台说明见 [计算库构建说明](../native_compute.md)。
 
-Windows 构建配置回归单独执行 `uv run --with cmake==4.4.4 --with ninja==1.13.2 --no-sync python tests/test_msvc_ninja_build.py -v`。使用真实 MSVC/Ninja，在 GBK（936）与 UTF-8（65001）控制台下检查全新规则生成、编译、间接头依赖及头文件修改触发重编；需要可用的 `cl` 和 Windows 控制台，不依赖数据集。
+Windows 构建配置回归单独执行 `uv run --with cmake==4.4.4 --with ninja==1.13.2 --no-sync python tests/test_msvc_ninja_build.py -v`。使用真实 MSVC/Ninja，在 GBK（936）与 UTF-8（65001）控制台下检查无 Python 配置、全新规则生成、编译、间接头依赖及头文件修改触发重编；需要可用的 `cl` 和 Windows 控制台，不依赖数据集。
+
+C ABI 与独立 C++ 分发使用 [外部消费示例](../../examples/native-consumer/CMakeLists.txt) 验证安装后的真实 targets、公共头与动态库；独立构建启用 `CNN_COMPUTE_BUILD_TESTS=ON` 后，`ctest --test-dir <build> -R '^c_abi_consumer$' --output-on-failure` 定向检查计划复用、owner 生命周期、重构、真实质量状态与错误传播。Windows/Linux 命令、工具链隔离和验证范围见 [独立分发说明](../native_compute_distribution.md)。
 
 本地 `emd.sift 0.8.1` 参考差分先显式启用 `emd-reference` 组（Windows 用 `vsdev uv sync --group emd-reference`），再执行上述根测试。参考未安装会跳过差分，生命周期测试仍运行，不能把跳过记作参考通过。C++ 接口测试通过 CMake 选项 `CNN_COMPUTE_BUILD_TESTS=ON` 构建并由 CTest 运行。受控测量入口与边界见 [原生 EMD 契约](../algorithms/decomposition/native_emd.md)。
 

@@ -1,0 +1,7 @@
+@PACKAGE_INIT@
+if(MSVC)
+    include("${CMAKE_CURRENT_LIST_DIR}/DetectMsvcIncludes.cmake")
+    cnn_compute_detect_msvc_includes()
+endif()
+include("${CMAKE_CURRENT_LIST_DIR}/CnnComputeTargets.cmake")
+check_required_components(CnnCompute)

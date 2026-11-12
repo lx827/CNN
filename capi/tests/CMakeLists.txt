@@ -1,0 +1,11 @@
+add_executable(cnn_c_consumer consumer.c)
+target_compile_features(cnn_c_consumer PRIVATE c_std_11)
+target_link_libraries(cnn_c_consumer PRIVATE CNN::c)
+if(UNIX)
+    target_link_libraries(cnn_c_consumer PRIVATE m)
+endif()
+if(WIN32)
+    add_custom_command(TARGET cnn_c_consumer POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:cnn_compute_c>" "$<TARGET_FILE_DIR:cnn_c_consumer>")
+endif()
+add_test(NAME c_abi_consumer COMMAND cnn_c_consumer)
