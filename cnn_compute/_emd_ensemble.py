@@ -114,10 +114,10 @@ def complete_ensemble_sift_detailed(
     envelope_opts=None,
     extrema_opts=None,
 ) -> Decomposition:
-    """返回 complete ensemble 的独立结果列，保留 emd 0.8.1 公式与边界。
+    """返回 complete ensemble 的独立结果列，采用 emd 0.8.1 局部均值公式。
 
     噪声逐行 zscore、噪声全分解和逐层局部均值计算均位于 C++。
-    最后一列是残差；max_imfs 保留上游检查位置，不重新解释为严格列上限。
+    max_imfs 限制真实 IMF 数量，最后另附残差；修正参考层号检查晚一轮的问题。
     噪声模态不足抛 IndexError，不补零；常量输入返回 numerical_failure。
     """
     from .emd import _options, _result, _signal

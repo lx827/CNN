@@ -14,6 +14,20 @@ assert_budget = reference_contract.assert_budget
 signal = reference_contract.signal
 
 
+def complete_reference(module, values, options):
+    """参考只指导公式：截取目标 IMF 数，再从输入重构对应残差。
+
+    emd 0.8.1 的层号检查晚一轮，可能多产生一个 IMF；不把该缺陷作为
+    原生接口契约，也不放宽数值容差来接受不同目标模态数。
+    """
+    reference = module.sift.complete_ensemble_sift(values, **options)
+    maximum = options.get("max_imfs")
+    if maximum is not None and reference.shape[1] - 1 > maximum:
+        modes = reference[:, :maximum]
+        return np.column_stack((modes, values - modes.sum(axis=1)))
+    return reference
+
+
 @unittest.skipUnless(HAS_REFERENCE, "需显式安装 emd-reference 可选组")
 class EnsembleReferenceTest(unittest.TestCase):
     @classmethod
@@ -38,11 +52,11 @@ class EnsembleReferenceTest(unittest.TestCase):
                     actual = emd.ensemble_sift(x, noise_mode=mode, **options)
                     assert_budget(self, actual, expected, x)
             with self.subTest(interpolation=interpolation, method="complete"):
-                expected = self.reference.sift.complete_ensemble_sift(x, **options)
+                expected = complete_reference(self.reference, x, options)
                 actual = emd.complete_ensemble_sift(x, **options)
                 assert_budget(self, actual, expected, x)
 
-    def test_complete_preserves_reference_limit_position_and_residual(self):
+    def test_complete_limits_true_imf_count_and_reconstructs_residual(self):
         x = signal(512)
         for maximum in (1, 2):
             with self.subTest(max_imfs=maximum):
@@ -51,10 +65,11 @@ class EnsembleReferenceTest(unittest.TestCase):
                     "noise_seed": 42,
                     "max_imfs": maximum,
                 }
-                expected = self.reference.sift.complete_ensemble_sift(x, **options)
+                expected = complete_reference(self.reference, x, options)
                 actual = emd.complete_ensemble_sift(x, **options)
                 assert_budget(self, actual, expected, x)
-                # 原样保留上游公式；重构仅为附加检查，不替代逐模态对照。
+                self.assertLessEqual(actual.shape[1], maximum + 1)
+                # 重构仅为附加检查，不替代逐模态对照。
                 np.testing.assert_allclose(actual.sum(axis=1), x, atol=1e-12)
 
 

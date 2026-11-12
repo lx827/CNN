@@ -46,7 +46,7 @@ namespace execution {
 // 聚合无单一筛分迭代数，因此 Result.iterations 为空；计算失败状态不伪装成功。
 Result ensemble_sift(std::span<const double> signal, std::span<const double> normal_noise,
                      const EnsembleOptions& options, EnsembleWorkspace& workspace);
-// 原样保留 emd 0.8.1 的 max_imfs 检查位置和最后一列残差。
+// max_imfs 为真实 IMF 数量上限，最后另外附一列残差；0 表示不限制。
 // 噪声模态不足会抛 out_of_range，与上游越界对应，不补零、不重用其他层。
 Result complete_ensemble_sift(std::span<const double> signal,
                               std::span<const double> normal_noise,

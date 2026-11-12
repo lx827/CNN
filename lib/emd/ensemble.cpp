@@ -225,10 +225,10 @@ Result complete_ensemble_sift(std::span<const double> signal,
         }
         workspace.local_mean = workspace.accumulator / static_cast<double>(options.nensembles);
         result.components.emplace_back(workspace.previous - workspace.local_mean);
-        // emd 0.8.1 先检查当前 layer 再递增，保留其 max_imfs 边界。
+        // layer 表示已经生成的 IMF 数，先递增再检查真实模态上限。
+        ++layer;
         keep_going = execution::check_continue(view(workspace.normalized), view(workspace.local_mean),
                                                layer, options.sift, workspace.sift);
-        ++layer;
     }
     result.components.emplace_back(workspace.local_mean);
     for (auto& component : result.components) component *= input_std;

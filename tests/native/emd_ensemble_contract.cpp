@@ -65,8 +65,10 @@ void workspace_and_owners() {
     complete.nensembles = config.nensembles;
     for (std::size_t n : {256u, 127u, 512u}) {
         const auto input = signal(n), noisy = noise(n, complete.nensembles);
-        equal(emd::execution::complete_ensemble_sift(view(input), view(noisy), complete, workspace),
-              emd::complete_ensemble_sift(view(input), view(noisy), complete));
+        auto actual = emd::execution::complete_ensemble_sift(view(input), view(noisy), complete, workspace);
+        require(actual.components.size() <= static_cast<std::size_t>(complete.sift.max_imfs + 1),
+                "complete ensemble exceeded true IMF limit plus residual");
+        equal(actual, emd::complete_ensemble_sift(view(input), view(noisy), complete));
     }
     {
         emd::EnsembleWorkspace temporary;
