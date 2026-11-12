@@ -28,7 +28,7 @@ cnn_compute/       # Python 入口、core 公共接口及内联类型注解
 
 依赖方向为 `CNN::emd → CNN::envelope → CNN::interpolation → CNN::solvers`，各数值模块使用 core/Eigen，纯 C++ target 不依赖 Python。公开入口准备拥有型结果与工作区，内部执行接口用于直接写输出和跨算法组合。绑定单独链接这些 target，处理 Python 布局、GIL 释放和输出 capsule；根目录不设置 `src/`。
 
-Python 独立模块覆盖上述数学族，包括 `cnn_compute.fourier`、`filtering`、`numeric`、`wavelet`、`vmd`、`deconvolution`、`ica`、`adaptive`、`diagnostic`、`rotation`、`sequence` 及既有 EMD/包络/插值/变换；既有 `core` 数值入口和下划线差分别名保留兼容。`CNN::emd` 的 mask 路径使用 `CNN::transforms`，NHT 再组合包络与插值，依赖无环。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
+Python 独立模块包括 `cnn_compute.fourier`、`filtering`、`numeric`、`wavelet`、`vmd`、`diagnostic`、`rotation`、`sequence` 及既有 `emd`、`envelope`、`interpolation`、`transforms`。MED/MCKD、ICA 与自适应滤波的 Python 数值函数聚合于 `diagnostic`，对应 C++ 目录和 targets 仍按数学族独立。既有 `core` 数值入口和下划线差分别名保留兼容。`CNN::emd` 的 mask 路径使用 `CNN::transforms`，NHT 再组合包络与插值，依赖无环。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
 
 ### mask 分支本地受控结果（2026-11-12）
 
