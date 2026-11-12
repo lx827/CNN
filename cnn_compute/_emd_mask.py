@@ -182,7 +182,8 @@ def iterated_mask_sift_detailed(
     """迭代与 NHT 全在 C++；Python 只准备随机初始 mask 和参数。
 
     频率输出沿用 emd 0.8.1：收敛平均分支为 Hz，max_iter 退出分支为归一化
-    cycles/sample。converged 区分外层收敛，不伪造上游未报告的 IMF 状态。
+    cycles/sample。收敛后在线聚合，不保存全部信号历史，也不执行平均完成后
+    的额外空耗轮次。converged 区分外层收敛，不伪造 IMF 收敛状态。
     """
     values = _signal(signal)
     _serial(kwargs.pop("nprocesses", 1))
@@ -232,7 +233,7 @@ def iterated_mask_sift(signal, *, ret_mask_freq=False, **kwargs):
     result = iterated_mask_sift_detailed(signal, **kwargs)
     if result.decomposition.status == "numerical_failure" or (
         result.decomposition.status == "iteration_limit"
-        and result.iterations < kwargs.get("max_iter", 15)
+        and len(result.decomposition.iterations) > len(result.decomposition.components)
     ):
         _require_success(result.decomposition)
     array = result.decomposition.as_array()

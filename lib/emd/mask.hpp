@@ -58,10 +58,11 @@ struct IteratedMaskOptions {
 struct IteratedMaskResult {
     MaskResult result;
     core::Array mask_variability;
-    int iterations = 0;
+    int iterations = 0; // 实际执行的 mask 分解次数，含收敛后平均。
     bool converged = false;
 };
 // 随机初始 mask 由调用者生成后传入 mask.mask_freqs；算法内部不使用全局 RNG。
+// 收敛后在线聚合，仅保存当前结果与累加结果，内存不随迭代上限增长。
 // 返回频率保留参考语义：收敛平均时为 Hz，迭代上限退出时为 cycles/sample。
 IteratedMaskResult iterated_mask_sift(std::span<const double> signal,
                                     const IteratedMaskOptions& options = {});

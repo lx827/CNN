@@ -17,12 +17,14 @@ void validate_signal(std::span<const double> signal) {
         if (!std::isfinite(value)) throw std::invalid_argument("输入必须有限");
 }
 bool failure(Status status) { return status == Status::iteration_limit || status == Status::numerical_failure; }
+void prepare_frequency(MaskWorkspace& workspace, std::size_t samples) {
+    workspace.hilbert.prepare(samples);
+    for (auto* array : {&workspace.phase, &workspace.frequency, &workspace.amplitude}) array->resize(samples);
+}
 }
 void MaskWorkspace::prepare(std::size_t samples, int pad_width) {
     sift.prepare(samples, pad_width);
-    hilbert.prepare(samples);
-    for (auto* array : {&mask, &perturbed, &member, &sum, &residual, &first,
-                        &phase, &frequency, &amplitude}) array->resize(samples);
+    for (auto* array : {&mask, &perturbed, &member, &sum, &residual, &first}) array->resize(samples);
 }
 IteratedMaskOptions::IteratedMaskOptions() {
     mask.max_imfs = 6;
@@ -88,6 +90,7 @@ double get_mask_frequency(std::span<const double> signal, FirstMask method,
             crossings += sign(workspace.first[i]) != sign(workspace.first[i - 1]);
         return double(crossings) / signal.size() / 2.0;
     }
+    prepare_frequency(workspace, signal.size());
     transforms::execution::frequency_transform(readonly(workspace.first), writable(workspace.phase),
         writable(workspace.frequency), writable(workspace.amplitude), 1.0, true, 3, 3, workspace.hilbert);
     double weighted_sum = 0.0, weight_sum = 0.0;
@@ -125,12 +128,8 @@ MaskResult mask_sift(std::span<const double> signal, const MaskOptions& options,
         result.decomposition.iterations.push_back(info.iterations);
         if (failure(info.status)) { result.decomposition.status = info.status; break; }
         result.decomposition.components.push_back(std::move(output));
-        // 上游每轮从原信号减去全部 IMF 之和，保留该归约次序。
-        for (std::size_t i = 0; i < signal.size(); ++i) {
-            double sum = 0.0;
-            for (const auto& imf : result.decomposition.components) sum += imf[i];
-            work.residual[i] = signal[i] - sum;
-        }
+        // 递推剩余信号，不为模仿参考归约次序重复扫描全部历史模态。
+        work.residual -= result.decomposition.components.back();
         if (!info.continue_flag) { result.decomposition.status = Status::insufficient_extrema; break; }
         double absolute_sum = 0.0;
         for (double value : result.decomposition.components.back()) absolute_sum += std::abs(value);
@@ -147,30 +146,26 @@ IteratedMaskResult iterated_mask_sift(std::span<const double> signal,
     mask_options.max_imfs = modes;
     std::vector<double> mask = mask_options.mask_freqs;
     if (mask.empty()) {
-        auto initial = execution::mask_sift(signal, mask_options, workspace);
-        mask.assign(initial.mask_frequencies.data(), initial.mask_frequencies.data() + initial.mask_frequencies.size());
+        // 初始化只需要频率，不执行随后丢弃的完整 mask 分解。
+        const double first = execution::get_mask_frequency(signal, mask_options.first_mask,
+            mask_options.first_frequency, mask_options.imf, workspace);
+        mask.resize(modes);
+        for (int i = 0; i < modes; ++i) mask[i] = first / std::pow(mask_options.mask_step_factor, i);
     }
-    const int history_size = options.max_iter + options.averages;
-    std::vector<Array> masks(history_size, Array::Zero(modes));
-    std::vector<std::vector<Array>> history(history_size);
+    prepare_frequency(workspace, n);
     int iteration = 0, averages_done = 0;
-    bool converged = false, maximum_reached = false;
-    Array variance = Array::Zero(modes);
-    MaskResult current;
+    bool converged = false;
+    Array variance;
+    Array mean_mask, mask_m2;
+    IteratedMaskResult result;
     while (true) {
-        const int row = iteration + averages_done;
         const auto previous = mask;
-        std::copy(mask.begin(), mask.end(), masks[row].data());
         mask_options.mask_freqs = mask;
-        current = execution::mask_sift(signal, mask_options, workspace);
+        auto current = execution::mask_sift(signal, mask_options, workspace);
         if (failure(current.decomposition.status)) {
-            return {std::move(current), std::move(variance), iteration, false};
+            return {std::move(current), std::move(variance), iteration + averages_done + 1, false};
         }
         const auto found = current.decomposition.components.size();
-        history[row].reserve(modes);
-        for (int mode = 0; mode < modes; ++mode)
-            history[row].push_back(mode < static_cast<int>(found)
-                ? current.decomposition.components[mode] : Array::Zero(n));
         mask.resize(found);
         const auto edge = options.exclude_edges ? static_cast<std::size_t>(0.025 * n) : 0;
         for (std::size_t mode = 0; mode < found; ++mode) {
@@ -194,52 +189,41 @@ IteratedMaskResult iterated_mask_sift(std::span<const double> signal,
         }
         if (stable || converged) {
             converged = true;
-            if (averages_done < options.averages) ++averages_done;
-            else break;
-        }
-        if (!converged) ++iteration;
-        if (iteration >= options.max_iter) { maximum_reached = true; break; }
-    }
-    IteratedMaskResult result;
-    result.iterations = iteration;
-    result.converged = converged;
-    result.mask_variability = variance;
-    int final_modes = 0;
-    const int mode_row = iteration ? iteration - 1 : history_size - 1;
-    for (double value : masks[mode_row]) final_modes += !std::isnan(value);
-    result.result.mask_frequencies = Array::Zero(final_modes);
-    if (!maximum_reached && options.averages > 1) result.mask_variability = Array::Zero(final_modes);
-    if (maximum_reached) {
-        result.result.decomposition.components = std::move(history[iteration - 1]);
-        result.result.decomposition.status = Status::iteration_limit;
-        result.result.mask_frequencies.resize(mask.size());
-        std::copy(mask.begin(), mask.end(), result.result.mask_frequencies.data());
-    } else {
-        result.result.decomposition.components.resize(final_modes);
-        for (int mode = 0; mode < final_modes; ++mode) {
-            auto& output = result.result.decomposition.components[mode];
-            output = Array::Zero(n);
-            double frequency_sum = 0.0;
-            int count = 0;
-            for (int k = iteration; k < iteration + options.averages; ++k) {
-                output += history[k][mode];
-                if (!std::isnan(masks[k][mode])) { frequency_sum += masks[k][mode]; ++count; }
-            }
-            output /= options.averages;
-            result.result.mask_frequencies[mode] = count ? frequency_sum / count * options.sample_rate
-                : std::numeric_limits<double>::quiet_NaN();
-            if (options.averages > 1) {
-                double squared = 0.0;
-                const double mean = frequency_sum / count;
-                for (int k = iteration; k < iteration + options.averages; ++k) {
-                    const double value = masks[k][mode];
-                    if (!std::isnan(value)) squared += (value - mean) * (value - mean);
+            if (averages_done == 0) {
+                result.result.decomposition = std::move(current.decomposition);
+                mean_mask.resize(found);
+                mask_m2 = Array::Zero(found);
+                std::copy_n(previous.begin(), found, mean_mask.data());
+            } else {
+                // 仅聚合共同有效模态，不为上游的历史零填充缺陷保留大数组。
+                const auto count = std::min(result.result.decomposition.components.size(), found);
+                result.result.decomposition.components.resize(count);
+                result.result.decomposition.iterations.resize(count);
+                mean_mask.conservativeResize(count); mask_m2.conservativeResize(count);
+                for (std::size_t mode = 0; mode < count; ++mode) {
+                    result.result.decomposition.components[mode] += current.decomposition.components[mode];
+                    result.result.decomposition.iterations[mode] += current.decomposition.iterations[mode];
+                    const double delta = previous[mode] - mean_mask[mode];
+                    mean_mask[mode] += delta / (averages_done + 1);
+                    mask_m2[mode] += delta * (previous[mode] - mean_mask[mode]);
                 }
-                result.mask_variability[mode] = std::sqrt(squared / count) * options.sample_rate;
             }
+            if (++averages_done == options.averages) {
+                for (auto& component : result.result.decomposition.components) component /= averages_done;
+                result.result.mask_frequencies = mean_mask * options.sample_rate;
+                result.mask_variability = options.averages == 1 ? variance
+                    : Array((mask_m2 / averages_done).sqrt() * options.sample_rate);
+                result.iterations = iteration + averages_done;
+                result.converged = true;
+                return result;
+            }
+        } else if (++iteration >= options.max_iter) {
+            current.mask_frequencies.resize(mask.size());
+            std::copy(mask.begin(), mask.end(), current.mask_frequencies.data());
+            current.decomposition.status = Status::iteration_limit;
+            return {std::move(current), std::move(variance), iteration, false};
         }
     }
-    return result;
 }
 }
 NextResult get_next_imf_mask(std::span<const double> signal, double frequency, double amplitude,
