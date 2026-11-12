@@ -111,15 +111,21 @@ def get_next_imf_mask(
 def get_mask_freqs(signal, first_mask_mode="zc", imf_opts=None):
     """返回首个 mask 频率，单位 cycles/sample；支持过零、NHT 加权 IF 和显式值。"""
     method, frequency = _first_mask(first_mask_mode)
-    return _native.get_mask_frequency(
-        _signal(signal), method, frequency, _imf_options(imf_opts)
-    )
+    try:
+        return _native.get_mask_frequency(
+            _signal(signal), method, frequency, _imf_options(imf_opts)
+        )
+    except _native.MaskConvergenceFailure as error:
+        raise ConvergenceError(str(error)) from error
 
 
 def mask_sift_detailed(signal, **kwargs):
     """返回独立拥有的 IMF 列和 mask 频率，避免二维布局复制。"""
     values = _signal(signal)
-    raw, frequencies = _native.mask_sift(values, _mask_options(**kwargs))
+    try:
+        raw, frequencies = _native.mask_sift(values, _mask_options(**kwargs))
+    except _native.MaskConvergenceFailure as error:
+        raise ConvergenceError(str(error)) from error
     return MaskDecomposition(_result(raw, len(values)), frequencies)
 
 
@@ -210,9 +216,12 @@ def iterated_mask_sift_detailed(
         options.weight_power = w_method
     else:
         raise ValueError("w_method 必须为 amplitude、power、avg 或浮点指数")
-    (raw, frequencies), variability, iterations, converged = _native.iterated_mask_sift(
-        values, options
-    )
+    try:
+        (raw, frequencies), variability, iterations, converged = (
+            _native.iterated_mask_sift(values, options)
+        )
+    except _native.MaskConvergenceFailure as error:
+        raise ConvergenceError(str(error)) from error
     return IteratedMaskDecomposition(
         _result(raw, len(values)), frequencies, variability, iterations, converged
     )

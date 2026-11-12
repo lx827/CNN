@@ -80,7 +80,7 @@ double get_mask_frequency(std::span<const double> signal, FirstMask method,
     if (method == FirstMask::explicit_frequency) return explicit_frequency;
     // 上游 get_mask_freqs 只接 imf_opts，使用默认包络配置。
     const auto info = execution::get_next_imf(signal, writable(workspace.first), options, {}, workspace.sift);
-    if (failure(info.status)) throw std::runtime_error("首个 IMF 未能完成筛分");
+    if (failure(info.status)) throw MaskConvergenceFailure("首个 IMF 未能完成筛分");
     if (method == FirstMask::zero_crossings) {
         auto sign = [](double value) { return (value > 0.0) - (value < 0.0); };
         std::size_t crossings = 0;

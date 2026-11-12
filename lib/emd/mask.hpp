@@ -3,11 +3,16 @@
 #include <emd/api.hpp>
 #include <emd/execution.hpp>
 #include <transforms/hilbert.hpp>
+#include <stdexcept>
 
 namespace cnn_compute::emd {
 
 enum class FirstMask { zero_crossings, instantaneous_frequency, explicit_frequency };
 enum class AmplitudeMode { absolute, ratio_signal, ratio_imf };
+class MaskConvergenceFailure : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
 struct MaskOptions {
     IMFOptions imf;
     envelope::Options envelope;

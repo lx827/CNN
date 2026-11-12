@@ -43,6 +43,7 @@ std::vector<std::span<const double>> column_views(const std::vector<ArrayInput>&
 }
 }
 void bind_emd_mask(py::module_& module, py::module_& transforms) {
+    py::register_exception<e::MaskConvergenceFailure>(module, "MaskConvergenceFailure");
     py::enum_<e::FirstMask>(module, "FirstMask")
         .value("zc", e::FirstMask::zero_crossings).value("ifrequency", e::FirstMask::instantaneous_frequency)
         .value("explicit_frequency", e::FirstMask::explicit_frequency);
