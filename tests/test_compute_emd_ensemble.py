@@ -5,9 +5,9 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
+import test_compute_emd as reference_contract
 
 from cnn_compute import _native, emd
-import test_compute_emd as reference_contract
 
 HAS_REFERENCE = reference_contract.HAS_REFERENCE
 assert_budget = reference_contract.assert_budget
@@ -92,7 +92,10 @@ class EnsembleLifecycleTest(unittest.TestCase):
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     results = list(
                         executor.map(
-                            lambda _: getattr(emd, method)(values, **options), range(4)
+                            lambda _, selected=method: getattr(emd, selected)(
+                                values, **options
+                            ),
+                            range(4),
                         )
                     )
                 for result in results:
