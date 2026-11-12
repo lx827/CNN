@@ -1,4 +1,5 @@
 #include <interpolation/execution.hpp>
+#include <solvers/execution.hpp>
 
 #include <algorithm>
 #include <array>
@@ -125,14 +126,9 @@ void derivatives(std::span<const double> x, std::span<const double> y, Method me
     length = x[n - 1] - x[n - 3];
     w.rhs[n - 1] = (w.h[n - 2] * w.h[n - 2] * w.slope[n - 3]
         + (2.0 * length + w.h[n - 2]) * w.h[n - 3] * w.slope[n - 2]) / length;
-    for (std::size_t i = 0; i + 1 < n; ++i) {
-        const double factor = w.lower[i] / w.diagonal[i];
-        w.diagonal[i + 1] -= factor * w.upper[i];
-        w.rhs[i + 1] -= factor * w.rhs[i];
-    }
-    w.derivative[n - 1] = w.rhs[n - 1] / w.diagonal[n - 1];
-    for (auto i = static_cast<std::ptrdiff_t>(n) - 2; i >= 0; --i)
-        w.derivative[i] = (w.rhs[i] - w.upper[i] * w.derivative[i + 1]) / w.diagonal[i];
+    solvers::execution::solve_tridiagonal({w.lower.data(), n - 1}, {w.diagonal.data(), n},
+                                         {w.upper.data(), n - 1}, {w.rhs.data(), n});
+    w.derivative.head(n) = w.rhs.head(n);
 }
 }
 

@@ -3,6 +3,7 @@
 #include <envelope/api.hpp>
 #include <interpolation/execution.hpp>
 #include <vector>
+#include <utility>
 
 namespace cnn_compute::envelope {
 
