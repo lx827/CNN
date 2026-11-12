@@ -52,8 +52,9 @@ class MsvcNinjaBuildTests(unittest.TestCase):
                     encoding="utf-8",
                 ).partition("add_subdirectory(lib)")
                 self.assertTrue(separator, "根配置的数值库入口已变化，需同步测试边界")
-                (source / "bind").mkdir()
-                shutil.copy2(ROOT / "bind/msvc_output.py", source / "bind/msvc_output.py")
+                (source / "cmake").mkdir()
+                for helper in ("DetectMsvcIncludes.cmake", "msvc_include_probe.ps1"):
+                    shutil.copy2(ROOT / "cmake" / helper, source / "cmake" / helper)
                 (source / "CMakeLists.txt").write_text(
                     platform_config + "\nadd_library(probe STATIC probe.cpp)\n",
                     encoding="utf-8",
@@ -68,7 +69,7 @@ class MsvcNinjaBuildTests(unittest.TestCase):
                 header = source / "detail.hpp"
                 header.write_text("constexpr int value = 1;\n", encoding="utf-8")
                 run(cmake, "-S", str(source), "-B", str(build), "-G", "Ninja",
-                    f"-DCMAKE_MAKE_PROGRAM={ninja}", f"-DPython_EXECUTABLE={sys.executable}")
+                    f"-DCMAKE_MAKE_PROGRAM={ninja}", "-DCNN_COMPUTE_BUILD_PYTHON=OFF")
                 self.assertTrue((build / "CMakeFiles/rules.ninja").is_file())
                 run(ninja, "-C", str(build))
                 dependencies = run(ninja, "-C", str(build), "-t", "deps")

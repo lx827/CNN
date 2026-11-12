@@ -21,6 +21,7 @@ def main() -> int:
             "--",
             "lib",
             "bind",
+            "capi",
             "tests/native",
             ":(exclude,glob)**/vendor/**",
             ":(exclude,glob)**/third_party/**",
