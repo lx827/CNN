@@ -14,6 +14,12 @@ PYBIND11_MODULE(_native, module) {
     cnn_compute::bind::bind_emd_family(emd, envelope, interpolation);
     cnn_compute::bind::bind_emd_mask(emd, transforms);
     cnn_compute::bind::bind_emd_ensemble(emd);
+    cnn_compute::bind::bind_numeric(module);
+    cnn_compute::bind::bind_rotation(module);
+    cnn_compute::bind::bind_wavelet(module);
+    cnn_compute::bind::bind_vmd(module);
+    auto diagnostic = module.def_submodule("diagnostic", "解卷积、ICA、自适应滤波与诊断数值表示");
+    cnn_compute::bind::bind_diagnostic(diagnostic);
 
     // 保留既有包入口与局部差分入口；别名复用同一导出函数。
     module.attr("build_info") = core.attr("build_info");

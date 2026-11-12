@@ -28,7 +28,7 @@ namespace {
         const double                    threshold = std::numeric_limits< double >::epsilon( ) * std::abs(mean);
         double                          kurt = std::numeric_limits< double >::quiet_NaN( ), skew = kurt;
         if (variance > threshold * threshold) {
-            kurt = (a - mean).pow(4).mean( ) / (variance * variance);
+            kurt = (a - mean).square( ).square( ).mean( ) / (variance * variance);
             skew = (a - mean).cube( ).mean( ) / std::pow(variance, 1.5);
         }
         return { peak, rms, kurt, skew, mean_sqrt > 1e-12 ? peak / (mean_sqrt * mean_sqrt) : 0,
@@ -43,7 +43,7 @@ namespace execution {
         const double gain                            = Eigen::Map< const core::Array >(window.data( ), n).sum( );
         const double mean                            = remove_mean ? Eigen::Map< const core::Array >(x.data( ), n).mean( ) : 0.;
         Eigen::Map< core::Array >(buffer.data( ), n) = (Eigen::Map< const core::Array >(x.data( ), n) - mean) * Eigen::Map< const core::Array >(window.data( ), n);
-        plan.forward(buffer, transformed);
+        plan.forward_half(buffer, transformed.first(x.size( ) / 2 + 1));
         for (std::size_t k = 0; k < amplitude.size( ); ++k) {
             const bool edge = k == 0 || (n % 2 == 0 && k == n / 2);
             amplitude[k]    = std::abs(transformed[k]) * (edge ? 1 : 2) / gain;
@@ -56,7 +56,7 @@ Spectrum spectrum(std::span< const double > x, double fs, bool remove_mean) {
     const auto                      n = x.size( ), bins = n / 2 + 1;
     auto                            window = filtering::hann(n);
     std::vector< double >           buffer(n);
-    std::vector< fourier::Complex > transformed(n);
+    std::vector< fourier::Complex > transformed(bins);
     fourier::Plan                   plan(n);
     Spectrum                        out{ Array(bins), Array(bins), Array(bins) };
     execution::amplitude_spectrum(x, { out.amplitude.data( ), bins }, window, buffer, transformed, plan, remove_mean);
@@ -79,14 +79,14 @@ Stft stft(std::span< const double > x, double fs, int window, int overlap, int n
     const double                    gain = std::accumulate(w.begin( ), w.end( ), 0.0);
     fourier::Plan                   plan(nfft);
     std::vector< double >           buffer(nfft);
-    std::vector< fourier::Complex > fft(nfft);
+    std::vector< fourier::Complex > fft(bins);
     for (std::size_t frame = 0; frame < frames; ++frame) {
         std::fill(buffer.begin( ), buffer.end( ), 0.0);
         for (int j = 0; j < window; ++j) {
             const auto index = static_cast< std::ptrdiff_t >(frame * hop + j) - static_cast< std::ptrdiff_t >(edge);
             if (index >= 0 && index < static_cast< std::ptrdiff_t >(x.size( ))) buffer[j] = x[index] * w[j];
         }
-        plan.forward(buffer, fft);
+        plan.forward_half(buffer, fft);
         out.time[frame] = static_cast< double >(frame * hop) / fs;
         for (std::size_t k = 0; k < bins; ++k) {
             const bool terminal     = k == 0 || (nfft % 2 == 0 && k == static_cast< std::size_t >(nfft / 2));
@@ -126,6 +126,7 @@ Array hilbert_envelope(std::span< const double > x) {
 }
 Statistics statistics(std::span< const double > x, double floor) {
     check(x);
+    if (!std::isfinite(floor) || floor < 0) throw std::invalid_argument("margin floor must be finite and nonnegative");
     return stats(x, floor);
 }
 TimeDomain time_domain(std::span< const double > x, double fs, int window, int step) {
@@ -190,10 +191,10 @@ Array autocorrelation(std::span< const double > x, bool demean) {
     const double          mean = demean ? Eigen::Map< const Array >(x.data( ), x.size( )).mean( ) : 0;
     for (std::size_t i = 0; i < x.size( ); ++i) input[i] = x[i] - mean;
     fourier::Plan                   plan(n);
-    std::vector< fourier::Complex > f(n);
-    plan.forward(input, f);
+    std::vector< fourier::Complex > f(n / 2 + 1);
+    plan.forward_half(input, f);
     for (auto &v : f) v = std::norm(v);
-    plan.inverse_real(f, output);
+    plan.inverse_half(f, output);
     return Eigen::Map< Array >(output.data( ), x.size( ));
 }
 }    // namespace cnn_compute::numeric

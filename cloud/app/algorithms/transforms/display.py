@@ -3,6 +3,8 @@
 import numpy as np
 from numpy.typing import NDArray
 
+from cnn_compute.numeric import extrema
+
 
 def decimate_extrema(
     x: NDArray[np.float64],
@@ -20,19 +22,4 @@ def decimate_extrema(
         or maximum < 2
     ):
         raise ValueError("绘图点数上限必须是至少为 2 的整数")
-    if len(y_values) <= maximum:
-        return np.column_stack((x_values, y_values))
-
-    block_size = int(np.ceil(len(y_values) / (maximum // 2)))
-    indices = []
-    for start in range(0, len(y_values), block_size):
-        block = y_values[start : start + block_size]
-        indices.extend(
-            sorted(
-                {
-                    start + int(np.argmin(block)),
-                    start + int(np.argmax(block)),
-                }
-            )
-        )
-    return np.column_stack((x_values[indices], y_values[indices]))
+    return extrema(x_values, y_values, maximum)

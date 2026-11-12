@@ -2,11 +2,11 @@
 通用信号处理辅助函数
 """
 
-import numpy as np
-from scipy import signal as scipy_signal
-from scipy.fft import rfft, rfftfreq
-from typing import Tuple, Optional, List, Dict
+from typing import Dict, Optional, Tuple
 
+import numpy as np
+
+from cnn_compute import filtering, fourier, numeric
 
 # ══════════════════════════════════════════════════════════
 # Layer 0: 原子函数（不可再分的基本操作）
@@ -138,12 +138,12 @@ def _snr_by_residual_std(original: np.ndarray, denoised: np.ndarray) -> float:
 
 def remove_dc(signal: np.ndarray) -> np.ndarray:
     """去除直流分量（零均值化）"""
-    return signal - np.mean(signal)
+    return filtering.detrend(signal)
 
 
 def linear_detrend(signal: np.ndarray) -> np.ndarray:
     """线性去趋势"""
-    return scipy_signal.detrend(signal, type="linear")
+    return filtering.detrend(signal, linear=True)
 
 
 def prepare_signal(signal, detrend: bool = False) -> np.ndarray:
@@ -152,10 +152,7 @@ def prepare_signal(signal, detrend: bool = False) -> np.ndarray:
     detrend=False: 去直流（零均值化）
     detrend=True:  线性去趋势（消除 y=kx+b 漂移）
     """
-    arr = np.array(signal, dtype=np.float64)
-    if detrend:
-        return scipy_signal.detrend(arr, type="linear")
-    return arr - np.mean(arr)
+    return filtering.detrend(signal, linear=detrend)
 
 
 class DenoisingError(ValueError):
@@ -184,7 +181,7 @@ def denoise_signal(signal: np.ndarray, method: str) -> np.ndarray:
 
             result = vmd_denoise(arr, K=5, alpha=2000)
         elif method in ("wavelet_vmd", "wavelet_lms"):
-            from .preprocessing import cascade_wavelet_vmd, cascade_wavelet_lms
+            from .preprocessing import cascade_wavelet_lms, cascade_wavelet_vmd
 
             function = (
                 cascade_wavelet_vmd if method == "wavelet_vmd" else cascade_wavelet_lms
@@ -235,8 +232,8 @@ def bandpass_filter(
     high = min(1.0 - 1e-6, f_high / nyq)
     if low >= high:
         return signal.copy()
-    b, a = scipy_signal.butter(order, [low, high], btype="band")
-    return scipy_signal.filtfilt(b, a, signal)
+    sos = filtering.butterworth(order, low * nyq, high * nyq, fs)
+    return filtering.sosfiltfilt(sos, signal)
 
 
 def lowpass_filter(
@@ -250,8 +247,8 @@ def lowpass_filter(
         return signal.copy()
     nyq = fs / 2.0
     cut = min(1.0 - 1e-6, f_cut / nyq)
-    b, a = scipy_signal.butter(order, cut, btype="low")
-    return scipy_signal.filtfilt(b, a, signal)
+    sos = filtering.butterworth(order, 0.0, cut * nyq, fs)
+    return filtering.sosfiltfilt(sos, signal)
 
 
 def highpass_filter(
@@ -265,8 +262,8 @@ def highpass_filter(
         return signal.copy()
     nyq = fs / 2.0
     cut = max(1e-6, f_cut / nyq)
-    b, a = scipy_signal.butter(order, cut, btype="high")
-    return scipy_signal.filtfilt(b, a, signal)
+    sos = filtering.butterworth(order, cut * nyq, nyq, fs)
+    return filtering.sosfiltfilt(sos, signal)
 
 
 def compute_fft_spectrum(
@@ -276,8 +273,8 @@ def compute_fft_spectrum(
     """计算 FFT 频谱，返回 (频率轴, 幅值)"""
     arr = prepare_signal(signal)
     n = len(arr)
-    yf = np.abs(rfft(arr))
-    xf = rfftfreq(n, 1.0 / fs)
+    yf = np.abs(fourier.rfft(arr))
+    xf = np.arange(n // 2 + 1, dtype=np.float64) * (fs / n)
     return xf, yf
 
 
@@ -350,32 +347,27 @@ def compute_snr(peak_amp: float, spectrum: np.ndarray, method: str = "median") -
 
 def kurtosis(signal: np.ndarray, fisher: bool = False) -> float:
     """计算峭度，fisher=False 时正态分布=3"""
-    from scipy import stats
-
-    return float(stats.kurtosis(signal, fisher=fisher))
+    return float(numeric.statistics(signal)[2] - (3.0 if fisher else 0.0))
 
 
 def skewness(signal: np.ndarray) -> float:
     """计算偏度"""
-    from scipy import stats
-
-    return float(stats.skew(signal))
+    return float(numeric.statistics(signal)[3])
 
 
 def rms(signal: np.ndarray) -> float:
     """均方根"""
-    return float(np.sqrt(np.mean(signal**2)))
+    return float(numeric.statistics(signal)[1])
 
 
 def peak_value(signal: np.ndarray) -> float:
     """峰值（最大绝对值）"""
-    return float(np.max(np.abs(signal)))
+    return float(numeric.statistics(signal)[0])
 
 
 def crest_factor(signal: np.ndarray) -> float:
     """峰值因子 = Peak / RMS"""
-    r = rms(signal)
-    return peak_value(signal) / r if r > 1e-12 else 0.0
+    return float(numeric.statistics(signal)[7])
 
 
 def parabolic_interpolation(freqs, spectrum, idx):
@@ -543,10 +535,10 @@ def lowpass_filter_complex(
     """
     nyq = fs / 2.0
     cut = min(1.0 - 1e-6, f_cut / nyq)
-    b, a = scipy_signal.butter(order, cut, btype="low")
+    sos = filtering.butterworth(order, 0.0, cut * nyq, fs)
 
     # 分离实部和虚部，分别滤波
-    real_part = scipy_signal.filtfilt(b, a, np.real(signal))
-    imag_part = scipy_signal.filtfilt(b, a, np.imag(signal))
+    real_part = filtering.sosfiltfilt(sos, np.real(signal))
+    imag_part = filtering.sosfiltfilt(sos, np.imag(signal))
 
     return real_part + 1.0j * imag_part

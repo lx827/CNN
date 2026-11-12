@@ -10,6 +10,10 @@
 
 namespace cnn_compute::filtering {
 namespace {
+    void finite(std::span< const double > values) {
+        for (double v : values)
+            if (!std::isfinite(v)) throw std::invalid_argument("signal must be finite");
+    }
     using Complex              = std::complex< double >;
     constexpr double        pi = std::numbers::pi;
     std::array< double, 3 > polynomial(const std::vector< Complex > &roots) {
@@ -137,6 +141,12 @@ namespace execution {
     }
 }    // namespace execution
 std::vector< double > sosfiltfilt(std::span< const double > input, std::span< const Sos > sos, int padlen) {
+    finite(input);
+    if (padlen < -1) throw std::invalid_argument("padlen must be -1 or nonnegative");
+    for (const auto &section : sos) {
+        finite(section);
+        if (section[3] != 1.0) throw std::invalid_argument("SOS a0 must be one");
+    }
     Workspace             w;
     std::vector< double > out(input.size( ));
     execution::sosfiltfilt(input, sos, out, w, padlen);
@@ -149,6 +159,7 @@ std::vector< double > hann(std::size_t n) {
     return w;
 }
 std::vector< double > detrend(std::span< const double > x, bool linear) {
+    finite(x);
     if (x.empty( )) throw std::invalid_argument("detrend requires nonempty input");
     Eigen::Map< const Eigen::ArrayXd > a(x.data( ), x.size( ));
     const double                       mean = a.mean( );
@@ -164,7 +175,8 @@ std::vector< double > detrend(std::span< const double > x, bool linear) {
     return out;
 }
 std::vector< double > savgol(std::span< const double > x, int window, int order, int deriv, double delta) {
-    if (window < 1 || window % 2 != 1 || window > static_cast< int >(x.size( )) || order < 0 || order >= window || deriv < 0 || delta <= 0)
+    finite(x);
+    if (window < 1 || window % 2 != 1 || window > static_cast< int >(x.size( )) || order < 0 || order >= window || deriv < 0 || !std::isfinite(delta) || delta <= 0)
         throw std::invalid_argument("invalid Savitzky-Golay window or polynomial");
     std::vector< double > out(x.size( ), 0.0);
     if (deriv > order) return out;
