@@ -4,10 +4,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
-from cnn_compute import diagnostic as native_diagnostic
 from numpy.typing import NDArray
-from scipy.fft import rfft, rfftfreq
-from scipy.signal import butter, hilbert, sosfiltfilt, windows
 
 from app.algorithms.bearing.envelope import (
     EnvelopeParameters,
@@ -15,6 +12,10 @@ from app.algorithms.bearing.envelope import (
     _resolve_band,
 )
 from app.algorithms.core import Spectrum
+from cnn_compute import diagnostic as native_diagnostic
+from cnn_compute.filtering import butterworth, detrend, sosfiltfilt
+from cnn_compute.numeric import hilbert_envelope
+from cnn_compute.numeric import spectrum as native_spectrum
 
 
 @dataclass(frozen=True)
@@ -41,24 +42,13 @@ def _envelope_after_teo(
 ) -> EnvelopeRepresentation:
     """已限带且已执行 TEO 的信号只做 Hilbert、低通和单边幅值谱。"""
     nyquist = sample_rate_hz / 2.0
-    envelope = np.abs(hilbert(values))
+    envelope = hilbert_envelope(values)
     low_pass_hz = min(parameters.envelope_low_pass_hz, nyquist * (1.0 - 1e-6))
-    low_sos = butter(
-        parameters.filter_order,
-        low_pass_hz,
-        btype="lowpass",
-        fs=sample_rate_hz,
-        output="sos",
-    )
+    low_sos = butterworth(parameters.filter_order, 0.0, low_pass_hz, sample_rate_hz)
     envelope = sosfiltfilt(low_sos, envelope)
-    envelope -= np.mean(envelope)
-    window = windows.hann(len(envelope), sym=False)
-    amplitude = np.abs(rfft(envelope * window)) * (2.0 / np.sum(window))
-    amplitude[0] *= 0.5
-    if len(envelope) % 2 == 0:
-        amplitude[-1] *= 0.5
+    frequency, amplitude, _ = native_spectrum(envelope, sample_rate_hz)
     spectrum = Spectrum(
-        frequency_hz=rfftfreq(len(envelope), 1.0 / sample_rate_hz),
+        frequency_hz=frequency,
         amplitude=amplitude,
         amplitude_unit="input_signal^2",
     )
@@ -83,7 +73,7 @@ class TEOEnvelopePipeline:
     ) -> TEOEnvelopeResult:
         params = parameters or EnvelopeParameters()
         x = np.asarray(signal, dtype=np.float64)
-        if x.ndim != 1 or len(x) < 64 or not np.all(np.isfinite(x)):
+        if x.ndim != 1 or len(x) < 64:
             raise ValueError("TEO 包络输入必须是一维有限数组且至少 64 点")
         if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
             raise ValueError("采样率必须为有限正数")
@@ -98,7 +88,7 @@ class TEOEnvelopePipeline:
             or params.filter_order <= 0
         ):
             raise ValueError("滤波器阶数必须为正整数")
-        x = x - np.mean(x)
+        x = detrend(x)
         if not np.any(x):
             return TEOEnvelopeResult(
                 status="indeterminate",
@@ -109,13 +99,7 @@ class TEOEnvelopePipeline:
                 reason="zero_energy",
             )
         band = _resolve_band(sample_rate_hz, params)
-        sos = butter(
-            params.filter_order,
-            [band.low_hz, band.high_hz],
-            btype="bandpass",
-            fs=sample_rate_hz,
-            output="sos",
-        )
+        sos = butterworth(params.filter_order, band.low_hz, band.high_hz, sample_rate_hz)
         filtered = sosfiltfilt(sos, x)
         raw = teager_energy_operator(filtered)
         # 多分量 TEO 含交叉项；限带只是工程缓解，截负也只用于包络输入。

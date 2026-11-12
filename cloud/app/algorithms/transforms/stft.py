@@ -4,9 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.signal import stft as scipy_stft
-from scipy.signal import windows
 
+from cnn_compute.numeric import stft as native_stft
 
 FloatArray = NDArray[np.float64]
 
@@ -62,12 +61,10 @@ def compute_stft(
     nfft: int,
     amplitude_unit: str = "input_signal",
 ) -> STFTRepresentation:
-    """用 SciPy STFT 计算周期 Hann 单边峰值幅值，显式保留两端补零语义。"""
+    """原生周期 Hann STFT 单边峰值幅值，显式保留两端补零语义。"""
     values = np.asarray(signal, dtype=np.float64)
     if values.ndim != 1 or len(values) < 2:
         raise ValueError("STFT 输入必须是一维且至少包含 2 个采样点")
-    if not np.all(np.isfinite(values)):
-        raise ValueError("输入信号不能包含 NaN 或无穷值")
     if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0:
         raise ValueError("采样率必须是有限正数")
     if any(
@@ -82,27 +79,9 @@ def compute_stft(
     if nfft < nperseg:
         raise ValueError("STFT FFT 点数不能小于窗口长度")
 
-    frequency, time, complex_spectrum = scipy_stft(
-        values,
-        fs=sample_rate_hz,
-        window=windows.hann(nperseg, sym=False),
-        nperseg=nperseg,
-        noverlap=noverlap,
-        nfft=nfft,
-        detrend=False,
-        return_onesided=True,
-        boundary="zeros",
-        padded=True,
-        axis=-1,
-        scaling="spectrum",
+    time, frequency, amplitude = native_stft(
+        values, sample_rate_hz, nperseg, noverlap, nfft
     )
-    amplitude = np.abs(complex_spectrum)
-    # SciPy spectrum 刻度的中间单边 bin 为 A/2；DC/Nyquist 不翻倍。
-    if nfft % 2 == 0:
-        if len(frequency) > 2:
-            amplitude[1:-1, :] *= 2.0
-    elif len(frequency) > 1:
-        amplitude[1:, :] *= 2.0
     return STFTRepresentation(
         time_s=np.asarray(time, dtype=np.float64),
         frequency_hz=np.asarray(frequency, dtype=np.float64),
