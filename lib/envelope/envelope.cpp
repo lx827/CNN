@@ -158,6 +158,24 @@ void validate(std::span<const double> signal, const Options& options) {
     if (options.padding == Padding::rilling && options.parabolic_extrema)
         throw std::invalid_argument("参考实现不支持 Rilling 与抛物线极值组合");
 }
+
+bool prepare_extrema(std::span<const double> signal, const Options& options,
+                     Workspace& w, bool both) {
+    w.prepare(signal.size(), options.pad_width);
+    locate(signal, w.maxima, w.minima);
+    const bool rilling_padding = options.padding == Padding::rilling && options.pad_width > 0;
+    if (w.maxima.size() < 2 || ((both || rilling_padding) && w.minima.size() < 2)) return false;
+    if (rilling_padding) rilling(signal, options.pad_width, w);
+    else {
+        values(signal, w.maxima, options.parabolic_extrema, w.max_x, w.max_y);
+        numpy_pad(w.max_x, w.max_y, signal.size(), options.pad_width, w);
+        if (both) {
+            values(signal, w.minima, options.parabolic_extrema, w.min_x, w.min_y);
+            numpy_pad(w.min_x, w.min_y, signal.size(), options.pad_width, w);
+        }
+    }
+    return true;
+}
 }
 
 void Workspace::prepare(std::size_t samples, std::size_t padding) {
@@ -180,18 +198,15 @@ std::pair<std::size_t, std::size_t> count_extrema(std::span<const double> signal
 }
 bool extrema_envelopes(std::span<const double> signal, std::span<double> upper,
                        std::span<double> lower, const Options& options, Workspace& w) {
-    w.prepare(signal.size(), options.pad_width);
-    locate(signal, w.maxima, w.minima);
-    if (w.maxima.size() < 2 || w.minima.size() < 2) return false;
-    if (options.padding == Padding::rilling && options.pad_width > 0) rilling(signal, options.pad_width, w);
-    else {
-        values(signal, w.maxima, options.parabolic_extrema, w.max_x, w.max_y);
-        values(signal, w.minima, options.parabolic_extrema, w.min_x, w.min_y);
-        numpy_pad(w.max_x, w.max_y, signal.size(), options.pad_width, w);
-        numpy_pad(w.min_x, w.min_y, signal.size(), options.pad_width, w);
-    }
+    if (!prepare_extrema(signal, options, w, true)) return false;
     interpolate(w.max_x, w.max_y, upper, options, w);
     interpolate(w.min_x, w.min_y, lower, options, w);
+    return true;
+}
+bool upper_envelope(std::span<const double> signal, std::span<double> output,
+                     const Options& options, Workspace& w) {
+    if (!prepare_extrema(signal, options, w, false)) return false;
+    interpolate(w.max_x, w.max_y, output, options, w);
     return true;
 }
 bool combined_envelope(std::span<const double> signal, std::span<double> out,
@@ -242,6 +257,13 @@ std::optional<core::Array> combined_envelope(std::span<const double> signal, con
     if (options.padding != Padding::numpypad) throw std::invalid_argument("combined 包络需要 numpypad");
     core::Array result(signal.size()); Workspace w;
     if (!execution::combined_envelope(signal, {result.data(), signal.size()}, options, w)) return std::nullopt;
+    return result;
+}
+std::optional<core::Array> upper_envelope(std::span<const double> signal, const Options& options) {
+    validate(signal, options);
+    core::Array result(signal.size()); Workspace workspace;
+    if (!execution::upper_envelope(signal, {result.data(), signal.size()}, options, workspace))
+        return std::nullopt;
     return result;
 }
 } // namespace cnn_compute::envelope

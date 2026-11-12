@@ -1,6 +1,6 @@
 # 诊断计算库构建与安装
 
-根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。旧原生筛分候选仍复用仓库 Python EMD 族外层；另增以本地 `emd.sift 0.8.1` 为参考的完整基础 EMD、EEMD 与 complete ensemble C++ 候选，契约见 [原生 EMD](algorithms/decomposition/native_emd.md) 与 [ADR 0008](adr/0008-local-emd-reference-native-family.md)。生产分解默认仍为 Python。
+根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。旧原生筛分候选仍复用仓库 Python EMD 族外层；另增以本地 `emd.sift 0.8.1` 为参考的基础 EMD、EEMD、complete ensemble、mask/迭代/二层 C++ 候选，契约见 [原生 EMD](algorithms/decomposition/native_emd.md) 与 [ADR 0008](adr/0008-local-emd-reference-native-family.md)。生产分解默认仍为 Python。
 
 新增或重组 C++ 加速算法遵循 [cpp-accelerate skill](../.claude/skills/cpp-accelerate/SKILL.md) 与 [ADR 0007](adr/0007-native-algorithm-module-interfaces.md)：公开入口与内部加速执行接口分工，算法模块独立于公共基础结构。
 
@@ -12,14 +12,21 @@ lib/
 ├── solvers/       # 三对角求解、直接写入的内部执行接口
 ├── interpolation/ # splrep/PCHIP/cubic、旧数值兼容实现
 ├── envelope/      # 独立极值插值包络及工作区
-└── emd/           # 完整 sift、集成/完整集成与旧单 IMF 筛分候选
+├── transforms/    # 独立解析信号、幅度归一化与 Hilbert/NHT
+└── emd/           # 完整 sift、集成、mask/迭代/二层组合与旧筛分候选
 bind/              # 独立 pybind11 绑定与 NumPy 所有权转换
 cnn_compute/       # Python 入口、core 公共接口及内联类型注解
 ```
 
 依赖方向为 `CNN::emd → CNN::envelope → CNN::interpolation → CNN::solvers`，各数值模块使用 core/Eigen，纯 C++ target 不依赖 Python。公开入口准备拥有型结果与工作区，内部执行接口用于直接写输出和跨算法组合。绑定单独链接这些 target，处理 Python 布局、GIL 释放和输出 capsule；根目录不设置 `src/`。
 
-Python 独立模块为 `cnn_compute.emd`、`envelope`、`interpolation`；既有 `core` 数值入口和下划线差分别名保留兼容。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
+Python 独立模块为 `cnn_compute.emd`、`envelope`、`interpolation`、`transforms`；既有 `core` 数值入口和下划线差分别名保留兼容。`CNN::emd` 的 mask 路径使用 `CNN::transforms`，NHT 再组合包络与插值，依赖无环。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
+
+### mask 分支本地受控结果（2026-11-12）
+
+Windows MSVC baseline SSE2，1024 点固定合成信号、每个后端三块交错运行且每块三次，完整公开调用包含布局成本。mask sift 中位耗时从 6.734 ms 降至 1.015 ms（6.64 倍），迭代 mask 从 34.163 ms 降至 3.919 ms（8.72 倍）。两算法各块输出均通过测试中的既定数组与归一化 L2 比较预算，未按测量结果放宽。
+
+原生进程 OS 高水位分别为 30.78 / 31.12 MiB，参考为 105.34 / 106.94 MiB；包含各自导入和预热，不能将差值全部归因于工作区节省。原始逐次计时和数组保留在本地忽略目录，Git 只记录测量方法与手写结论。本结果不替代真实数据质量、其他 CPU/ISA 或目标 ECS 2C2G 验收。
 
 旧 C++ `core` 头和函数符号保留，但数值算法的链接目标分别为 `CNN::interpolation`、`CNN::solvers`；只链接 `CNN::core` 不再带入算法实现，以保持 core 不依赖算法。
 
@@ -96,7 +103,7 @@ CNN_COMPUTE_ARCH=avx2 uv sync       # Linux
 
 新 EMD 核的包络均值和信号更新使用 Eigen 数组表达式；Windows baseline 的编译器汇编中已观察到 `addpd/mulpd/subpd`。B 样条基函数、带状消元、极值压缩和查找保留其专用流程，不宣称全部路径均为 SIMD。曾比较的 PCHIP 额外收集六条数组后批量求值增加了内存流量，测量更慢，已撤回；向量化以实际收益决定采用。ARM64/NEON 尚未构建验证。
 
-2026-11-12 基础 EMD 在 Windows MSVC 19.50 与 WSL Ubuntu 22.04 GCC 11.4 的 x64 baseline 均完成源码构建、参考差分及 C++ 工作区/所有权检查；Linux 反汇编同样观察到 SSE2 批量运算。这证明两个平台的基础候选可构建运行，不代表尚未合入的算法、ARM64 或 ECS 全机资源已验收。
+2026-11-12 完整 EMD、集成、mask 与 Hilbert/NHT 在 Windows MSVC 19.50 和 WSL Ubuntu 22.04 GCC 11.4 的 x64 baseline 均完成源码构建及对应数值/工作区检查；Linux 最终新增集成 5 项、mask/变换/二层 8 项与原生 CTest 3 项通过。基础 Linux 反汇编同样观察到 SSE2 批量运算。这证明两个平台的候选可构建运行，不代表 ARM64 或 ECS 全机资源已验收。
 
 uv 缓存键覆盖根配置、CMake 文件、原生源码、Python 源文件及影响目标/编译器的环境变量，不包含导入产生的 Python 字节码。切换 `CNN_COMPUTE_ARCH`、编译选项，以及修改源码/头文件后会重新构建；未变化时复用兼容产物。构建目录按 Python wheel tag 和 Ninja 隔离，Windows 和 Linux 不共用二进制。
 

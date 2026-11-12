@@ -4,7 +4,7 @@
 
 参考为用户本地 `D:/Python/Lib/site-packages/emd` 中 `emd 0.8.1` 的 `emd.sift` 与 `_sift_core`。局部/完整分解比较容差直接维护在测试代码中。它和 `emd-signal/PyEMD` 不同；后者既有 benchmark 记录不作为本候选真值。
 
-基础 EMD 的极值/包络、四种停止准则和完整多模态循环位于 C++；Python 新入口为 `cnn_compute.emd`。当前分支提供完整基础 sift、ensemble_sift 与 complete_ensemble_sift；mask 与 NHT/二层能力由独立工单分支继续验证，不把未合入能力列为已完成。生产默认和原仓库 SD/Rilling 候选保留。
+基础 EMD 的极值/包络、四种停止准则和完整多模态循环位于 C++；Python 新入口为 `cnn_compute.emd`。完整 sift、ensemble_sift、complete_ensemble_sift、多相位 mask、迭代 mask 与二层分解分别组织；Hilbert/NHT 作为独立变换模块复用。生产默认和原仓库 SD/Rilling 候选保留。
 
 ## 数学与组合契约
 
@@ -30,6 +30,16 @@ complete_ensemble_sift 先用原信号标准差归一化输入，并对每条标
 
 Rilling 与抛物线极值组合在参考中不能合法索引，原生公开拒绝该组合；抛物线与默认 numpypad 可以使用。自定义 NumPy padding 选项尚不支持，传入时明确报错。无延拓无法覆盖完整查询区间的输入明确失败。
 
+## mask、迭代与二层组合
+
+`mask_sift` 和 `get_next_imf_mask` 的相位生成、去 mask、均值、模态循环都在 C++；支持显式归一化频率、首频几何递减、过零估频和 NHT 幅值加权瞬时频率估计。幅值可以是绝对量、原信号标准差比例或前一 IMF 标准差比例，也可逐模态指定。mask 的结果不额外追加残差列，不能沿用基础 sift 的末列解释。
+
+独立 `cnn_compute.transforms` 提供一维解析信号、幅度归一化和 Hilbert/NHT 的相位、瞬时频率、幅值输出。NHT 使用三轮 combined/PCHIP 包络归一化后做 Hilbert，幅值通过包络模块的单侧执行接口取原信号上包络，不生成下包络；极值与延拓共用同一模块实现。相位采用参考的升零相位、零填充中值滤波和一阶 Savitzky-Golay 导数。FFT 由 Eigen 后端执行，工作区保存计划与复数临时量，不为包络或相位分别重做 FFT。
+
+`iterated_mask_sift` 的频率权重、边缘排除、收敛判据和收敛后平均在 C++。Python 仅在选择随机初始 mask 时用局部 `RandomState` 生成初始频率，不修改全局 RNG。保留参考 0.8.1 的结果单位差异：收敛后平均返回 Hz，外层达到 `max_iter` 返回归一化 cycles/sample。详细结果中的 `converged` 区分这两种退出；外层迭代上限保留最后有效模态，内部 IMF 筛分耗尽仍是失败。
+
+二层分解接收 `[samples, first_layer_imfs]` 幅值列，C++ 内处理全部输入列，各列使用指定的模态上限。输出深度取实际最大有效结果列数：基础 sift 包含真实残差列，mask 不额外追加残差。`mask_sift_second_layer` 每列依次丢弃最高频 mask。3D 输出在薄层一次组装并零填充空余列。这样不复刻上游混淆输入列数和模态深度所导致的漏列、越界或残差装不进数组问题；在正常参考成功域比较相同数学分解，同时验证全部输入列与单列调用一致。
+
 集成聚合没有单一 IMF 筛分次数，因此详细结果 `iterations` 为空，不伪造收敛次数。complete ensemble 的 `max_imfs` 明确限制振荡 IMF 数量，最后另附一列残差；原生循环先更新已生成模态数再检查上限，修正参考层号判断晚一轮、多提取一个 IMF 的缺陷。对照时只比较参考前目标数量的 IMF，残差由输入减这些 IMF 之和得到，使用相同数值容差。噪声对应层不足时抛 `IndexError`，不补零或循环复用噪声；常量输入或不可标准化噪声返回 `numerical_failure`，数组入口抛 `ConvergenceError`。参考在这些输入可能越界或传播非有限值，不宣称失败域逐异常一致。
 
 ## 内存与执行
@@ -38,11 +48,17 @@ Rilling 与抛物线极值组合在参考中不能合法索引，原生公开拒
 
 基础筛分、包络、插值和带状求解临时空间随输入/节点规模线性增长，结果随模态数增长。工作区调用者独占，可以跨模态复用；库内不创建线程池、不持有全局可写工作区。SIMD 基座与实际验证架构见 [构建说明](../../native_compute.md)，跨架构能力与已测目标分别报告。
 
+mask 复用同一个成员筛分工作区；独立任务各自准备工作区。只有 IF 初始化或迭代估频才准备 Hilbert 和相位缓冲区，显式/过零 mask 不承担这些大缓冲区的成本。剩余信号递推更新，不反复重扫历史模态。
+
+迭代 mask 只持有当前分解和收敛后的在线模态聚合，mask 均值与方差用在线统计，内存为 `O(samples × modes + modes)`，不随 `max_iter` 或 `N_avg` 保存完整信号历史。收到足够的收敛后平均结果立即返回，不执行参考中只用于随后丢弃的一轮；模态数减少时只返回共同有效模态，不为参考的零填充历史和错误计数保留额外列。这些优化保持算法目标和正常成功域的模态/频率结果，不承诺复刻上游缺陷或相同末位舍入。常规二维/三维兼容输出包含一次布局组装，详细列结果可以直接消费 owner。
+
 集成临时向量在 `EnsembleWorkspace` 中复用，每个活跃调用独占。EEMD 为选择成员模态数保留各成员分解；complete ensemble 缓存全部噪声分解，因此峰值还依赖集成次数和模态数，不声称只有 O(N)。输出聚合列独立于这些缓存，后续工作区复用与销毁不会覆盖已交接结果。
 
 ## 验证边界
 
 维护测试 [test_compute_emd.py](../../../tests/test_compute_emd.py) 对照所选 `emd 0.8.1`，覆盖默认及可选停止/插值/延拓、输入保留、输出所有权、并发隔离与失败。纯 C++ [接口测试](../../../tests/native/emd_contract.cpp) 检查公开/执行一致、大小规模复用及失败后复用。
+
+[mask 差分测试](../../../tests/test_compute_emd_mask.py) 覆盖默认/显式/IF mask、幅值模式、奇偶长度 Hilbert/NHT、迭代收敛平均和上限退出、局部随机状态、二层成功域及输出所有权和并发隔离；[原生工作区测试](../../../tests/native/emd_mask_contract.cpp) 检查跨尺寸 prepare 后复用、公开/内部一致与并发任务隔离。具体通过状态与性能证据随 PR 验收记录，不以接口存在代替测试。
 
 集成维护测试 [test_compute_emd_ensemble.py](../../../tests/test_compute_emd_ensemble.py) 对照 single/flip、两种插值、complete 的真实 IMF 上限，并检查固定种子重复、全局 RNG 不变、独立输出所有权、并发及失败传播。[集成 C++ 接口测试](../../../tests/native/emd_ensemble_contract.cpp) 直接复用同一工作区跨不同输入长度执行，检查输出活过工作区销毁、失败后恢复与并发隔离。
 

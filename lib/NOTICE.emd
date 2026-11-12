@@ -1,9 +1,11 @@
 EMD reference implementation attribution
 ======================================
 
-The behavior adaptations in envelope/envelope.cpp and emd/decomposition.cpp
+The behavior adaptations in envelope/envelope.cpp, emd/decomposition.cpp, emd/ensemble.cpp,
+emd/mask.cpp, emd/second_layer.cpp and transforms/hilbert.cpp
 are based on the locally supplied emd 0.8.1 Python package, specifically
-emd/_sift_core.py and emd/sift.py, by Andrew Quinn and the emd contributors.
+emd/_sift_core.py, emd/sift.py, emd/spectra.py and emd/imftools.py,
+by Andrew Quinn and the emd contributors.
 
 Upstream source: https://gitlab.com/emd-dev/emd
 Upstream documentation: https://emd.readthedocs.io/
