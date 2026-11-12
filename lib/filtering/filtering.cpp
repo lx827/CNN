@@ -53,7 +53,10 @@ std::vector<Sos> butterworth(int order,double low,double high,double fs) {
         gain=std::pow(bw,order);
         for(auto p:prototype) {
             auto h=p*bw/2.0,d=std::sqrt(h*h-wo*wo);
-            poles.push_back(h+d);poles.push_back(h-d);
+            // 二次方程两根乘积为wo²；直接h-d会在宽带/近Nyquist时消去有效位。
+            auto first=h+d,second=h-d;
+            if(std::abs(first)<std::abs(second)) std::swap(first,second);
+            poles.push_back(first);poles.push_back((wo*wo)/first);
         }
         zeros.resize(order,Complex(0));
     }
@@ -67,7 +70,9 @@ std::vector<Sos> butterworth(int order,double low,double high,double fs) {
 
     std::vector<std::vector<Complex>> groups;
     while(!poles.empty()) {
-        auto it=std::min_element(poles.begin(),poles.end(),[](auto a,auto b){return std::abs(a)<std::abs(b);});
+        // 先给最接近单位圆的高Q极点配最近零点，避免低Q段先用掉可消除高Q
+        // 内部增益的零点。最终反转段顺序，先运行低Q段，与zpk2sos原则一致。
+        auto it=std::min_element(poles.begin(),poles.end(),[](auto a,auto b){return std::abs(1-std::abs(a))<std::abs(1-std::abs(b));});
         auto p=*it;poles.erase(it);std::vector<Complex> pair{p};
         if(std::abs(p.imag())>1e-12) {
             auto other=std::min_element(poles.begin(),poles.end(),[p](auto a,auto b){return std::abs(a-std::conj(p))<std::abs(b-std::conj(p));});
@@ -88,6 +93,7 @@ std::vector<Sos> butterworth(int order,double low,double high,double fs) {
         auto b=polynomial(zpair),a=polynomial(pair);
         sections.push_back({b[0],b[1],b[2],a[0],a[1],a[2]});
     }
+    std::reverse(sections.begin(),sections.end());
     for(int i=0;i<3;++i) sections.front()[i]*=gain;
     return sections;
 }
