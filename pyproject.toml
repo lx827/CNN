@@ -40,6 +40,9 @@ dev = [
     "ruff>=0.17.4",
 ]
 benchmark = ["emd-signal==1.9.0", "psutil==7.2.2"]
+emd-reference = [
+    "emd==0.8.1",
+]
 
 [tool.uv]
 default-groups = ["cloud", "dc24", "dev"]
