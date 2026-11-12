@@ -144,8 +144,6 @@ void interpolate(const std::vector<double>& x, const std::vector<double>& y,
                  std::span<double> out, const Options& options, Workspace& w) {
     const auto minimum = options.interpolation == interpolation::Method::splrep ? 4u : 2u;
     if (x.size() < minimum) throw std::runtime_error("包络插值节点不足");
-    for (std::size_t i = 1; i < x.size(); ++i)
-        if (x[i] <= x[i - 1]) throw std::runtime_error("极值位置必须严格递增");
     queries(w, x.front(), x.back(), out.size());
     interpolation::execution::interpolate(x, y, {w.query.data(), out.size()}, out,
                                           options.interpolation, w.interpolation);
