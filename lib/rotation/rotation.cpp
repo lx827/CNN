@@ -198,11 +198,9 @@ core::Array zoom_spectrum(std::span< const double > x, double fs, double low, do
     plan.inverse(fa, a);
     core::Array out(m);
     for (std::size_t k = 0; k < m; ++k) out[k] = std::abs(a[n - 1 + k]) * 2 / gain;
-    if (std::abs(low) <= 1e-8) out[0] *= .5;
-    // 高端点不含在网格内；沿既有 isclose 规则，仅命中 Nyquist 时折半。
-    if (std::abs(high - fs / 2) <= 1e-8 + 1e-5 * fs / 2 && points % 2 == 0)
-        for (int k = 0; k < points; ++k)
-            if (std::abs(low + k * step - fs / 2) <= 1e-8 + 1e-5 * fs / 2) out[k] *= .5;
+    // 网格为low+k*(high-low)/m，k<m；high<=fs/2，因此没有Nyquist采样点。
+    // 只在真正采到DC时取消单边翻倍，不能用isclose把邻近的正频率当作端点。
+    if (low == 0.) out[0] *= .5;
     return out;
 }
 core::Array real_cepstrum(std::span< const double > x) {

@@ -40,6 +40,28 @@ def test_chirp_z_matches_direct_dft_on_non_fft_grid():
     assert_allclose(rotation.zoom_spectrum(signal, fs, low, high, points), truth, rtol=2e-13, atol=2e-14)
 
 
+def test_chirp_z_exclusive_nyquist_endpoint_keeps_full_sinusoid_amplitude():
+    from scipy.signal import ZoomFFT
+    from app.algorithms.gear.fixed_axis import ZoomParameters, compute_zoom_spectrum
+
+    count, points, fs = 262144, 16, 2048.0
+    resolution = fs / count
+    low, high = fs / 2 - points * resolution, fs / 2
+    frequency = high - resolution
+    samples = np.sin(2 * np.pi * frequency / fs * np.arange(count))
+    expected_axis = np.linspace(low, high, points, endpoint=False)
+    # 官方ZoomFFT的频率点排除high；末点仍是普通正频率，不是Nyquist。
+    official = ZoomFFT(count, [low, high], points, fs=fs, endpoint=False)
+    assert_allclose(official.points(), np.exp(2j * np.pi * expected_axis / fs), atol=2e-14)
+    result = compute_zoom_spectrum(samples, fs, ZoomParameters((low + high) / 2, high - low, points))
+    assert_allclose(result.spectrum.frequency_hz, expected_axis, atol=0)
+    assert result.spectrum.frequency_hz[-1] < fs / 2
+    assert_allclose(result.spectrum.amplitude[-1], 1.0, atol=2e-9)
+    # 真正的DC不翻倍；与区间上限相邻的正频率规则分开。
+    dc = rotation.zoom_spectrum(np.ones(64), fs, 0.0, fs / 4, points)
+    assert_allclose(dc[0], 1.0, atol=1e-14)
+
+
 def test_sequence_constants_cusum_and_scale_free_moments():
     scores, rates, variance = sequence.kalman(np.full(100, 37.0))
     assert_allclose(scores, 37, atol=0)
