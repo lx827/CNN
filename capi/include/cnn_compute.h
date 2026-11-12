@@ -177,6 +177,20 @@ typedef struct cnn_emd_options {
 } cnn_emd_options;
 CNN_API cnn_imf_options CNN_CALL cnn_imf_defaults(void);
 CNN_API cnn_emd_options CNN_CALL cnn_emd_defaults(void);
+/* 旧筛分候选保留独立语义，只接受 PCHIP/cubic 与 SD/Rilling。
+ * 正常结果为 imf/iterations/converged；极值不足时 status=insufficient_extrema。
+ */
+typedef struct cnn_legacy_sift_options {
+    int               max_sifts, mirror_extrema;
+    double            sd_threshold;
+    cnn_interpolation interpolation;
+    cnn_stop_method   stopping_rule;
+    double            rilling_threshold[3];
+} cnn_legacy_sift_options;
+CNN_API cnn_legacy_sift_options CNN_CALL cnn_legacy_sift_defaults(void);
+CNN_API cnn_result *CNN_CALL             cnn_legacy_sift(cnn_span x, const cnn_legacy_sift_options *options, cnn_error *error);
+CNN_API cnn_result *CNN_CALL             cnn_legacy_envelopes(cnn_span x, int mirror_extrema, cnn_interpolation method, cnn_error *error);
+CNN_API cnn_result *CNN_CALL             cnn_rilling_stop(cnn_span upper, cnn_span lower, cnn_span thresholds, cnn_error *error);
 /* component.i[Nsamples]，component_count 为分量数；iterations 为实际筛分记录。
  * next_imf 另有 continue_flag；status 对应 cnn_emd_status。集成迭代记录为空。 */
 CNN_API cnn_result *CNN_CALL cnn_next_imf(cnn_span x, const cnn_imf_options *imf, const cnn_envelope_options *envelope, cnn_error *error);

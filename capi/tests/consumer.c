@@ -76,6 +76,16 @@ int main(void) {
     CHECK(strcmp(field(state, "status").data, "insufficient_extrema") == 0);
     cnn_result_free(state);
     {
+        cnn_legacy_sift_options options = cnn_legacy_sift_defaults( );
+        options.max_sifts               = 1;
+        options.sd_threshold            = 1e-30;
+        state                           = cnn_legacy_sift(input, &options, &error);
+        CHECK(state);
+        CHECK(*(const int32_t *)field(state, "iterations").data == 1);
+        CHECK(*(const int32_t *)field(state, "converged").data == 0);
+        cnn_result_free(state);
+    }
+    {
         cnn_imf_options options = cnn_imf_defaults( );
         options.max_iterations  = 1;
         state                   = cnn_next_imf(input, &options, NULL, &error);
