@@ -4,7 +4,7 @@
 - 日期：2026-11-12
 - 关联：[基础 EMD](https://github.com/lx827/CNN/issues/116)、[集成算法](https://github.com/lx827/CNN/issues/117)、[Mask 算法](https://github.com/lx827/CNN/issues/118)
 
-用户指定的参考是本地 distribution `emd==0.8.1` 的 `emd.sift`，并非名称相近的 `emd-signal/PyEMD`。以版本、实际源码哈希及独立参考测试固定身份；源码经校验一致的可选 `emd-reference` 组用于同依赖数值对照，不进入计算包运行依赖。来源与原始许可证随包保留。
+用户指定的参考是本地 distribution `emd==0.8.1` 的 `emd.sift`，并非名称相近的 `emd-signal/PyEMD`。记录包名、版本与实际源码路径；可选 `emd-reference` 组用于同依赖数值对照，不进入计算包运行依赖。来源与原始许可证随包保留，不建立参考源码 hash 校验或参考清单 JSON。
 
 基础 EMD、EEMD、complete ensemble 与 mask 按算法分别实现和验收，对外模块统一叫 `emd`，`sift` 是算法函数。以 [ADR 0007](0007-native-algorithm-module-interfaces.md) 的公开/内部执行分工组合独立包络、插值、求解及变换能力，core 仅保留公共结构和非算法基础设施。结果列拥有存储，工作区可复用；Python 的二维兼容输出显式承担一次列布局复制，详细结果可以直接消费零复制交接的列。
 

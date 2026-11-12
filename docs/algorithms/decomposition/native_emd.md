@@ -2,7 +2,7 @@
 
 ## 参考身份与范围
 
-参考为用户本地 `emd 0.8.1` 的 `emd.sift` 与 `_sift_core`，关键源码 SHA256 和事前冻结的局部/完整分解预算见 [参考契约](../../../tests/emd_reference_contract.json)。它和 `emd-signal/PyEMD` 不同；后者既有 benchmark 记录不作为本候选真值。
+参考为用户本地 `D:/Python/Lib/site-packages/emd` 中 `emd 0.8.1` 的 `emd.sift` 与 `_sift_core`。局部/完整分解比较容差直接维护在测试代码中。它和 `emd-signal/PyEMD` 不同；后者既有 benchmark 记录不作为本候选真值。
 
 基础 EMD 的极值/包络、四种停止准则和完整多模态循环位于 C++；Python 新入口为 `cnn_compute.emd`。当前分支提供完整基础 sift；集成算法、mask 与 NHT/二层能力由独立工单分支继续验证，不把未合入能力列为已完成。生产默认和原仓库 SD/Rilling 候选保留。
 
@@ -30,6 +30,6 @@ Rilling 与抛物线极值组合在参考中不能合法索引，原生公开拒
 
 ## 验证边界
 
-维护测试 [test_compute_emd.py](../../../tests/test_compute_emd.py) 对照源码哈希一致的参考，覆盖默认及可选停止/插值/延拓、输入保留、输出所有权、并发隔离与失败。纯 C++ [接口测试](../../../tests/native/emd_contract.cpp) 检查公开/执行一致、大小规模复用及失败后复用。
+维护测试 [test_compute_emd.py](../../../tests/test_compute_emd.py) 对照所选 `emd 0.8.1`，覆盖默认及可选停止/插值/延拓、输入保留、输出所有权、并发隔离与失败。纯 C++ [接口测试](../../../tests/native/emd_contract.cpp) 检查公开/执行一致、大小规模复用及失败后复用。
 
 [测量工具](../../../scripts/benchmark_emd.py) 在独立进程中交错三块执行参考与原生入口，包含 RNG/输入准备/输出布局成本，记录原始耗时、中位数/P95、OS 高水位和构建信息。输出保存在新建忽略目录或库外；这是本地受控比较，不复用旧同公式候选的生产采用门槛，也不替代真实数据效果和目标 ECS 2C2G 验收。
