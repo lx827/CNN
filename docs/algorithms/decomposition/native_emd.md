@@ -26,7 +26,7 @@ Rilling 与抛物线极值组合在参考中不能合法索引，原生公开拒
 
 `mask_sift` 和 `get_next_imf_mask` 的相位生成、去 mask、均值、模态循环都在 C++；支持显式归一化频率、首频几何递减、过零估频和 NHT 幅值加权瞬时频率估计。幅值可以是绝对量、原信号标准差比例或前一 IMF 标准差比例，也可逐模态指定。mask 的结果不额外追加残差列，不能沿用基础 sift 的末列解释。
 
-独立 `cnn_compute.transforms` 提供一维解析信号、幅度归一化和 Hilbert/NHT 的相位、瞬时频率、幅值输出。NHT 使用三轮 combined/PCHIP 包络归一化后做 Hilbert，幅值取原信号的上包络；相位采用参考的升零相位、零填充中值滤波和一阶 Savitzky-Golay 导数。FFT 由 Eigen 后端执行，工作区保存计划与复数临时量，不为包络或相位分别重做 FFT。
+独立 `cnn_compute.transforms` 提供一维解析信号、幅度归一化和 Hilbert/NHT 的相位、瞬时频率、幅值输出。NHT 使用三轮 combined/PCHIP 包络归一化后做 Hilbert，幅值通过包络模块的单侧执行接口取原信号上包络，不生成下包络；极值与延拓共用同一模块实现。相位采用参考的升零相位、零填充中值滤波和一阶 Savitzky-Golay 导数。FFT 由 Eigen 后端执行，工作区保存计划与复数临时量，不为包络或相位分别重做 FFT。
 
 `iterated_mask_sift` 的频率权重、边缘排除、收敛判据和收敛后平均在 C++。Python 仅在选择随机初始 mask 时用局部 `RandomState` 生成初始频率，不修改全局 RNG。保留参考 0.8.1 的结果单位差异：收敛后平均返回 Hz，外层达到 `max_iter` 返回归一化 cycles/sample。详细结果中的 `converged` 区分这两种退出；外层迭代上限保留最后有效模态，内部 IMF 筛分耗尽仍是失败。
 
