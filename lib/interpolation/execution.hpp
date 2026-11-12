@@ -9,7 +9,6 @@ namespace cnn_compute::interpolation {
 struct Workspace {
     core::Array h, slope, derivative, diagonal, lower, upper, rhs;
     core::Array coefficients, knots, band, fit_rhs;
-    core::Array dx, a, b, c, d, power;
     void prepare(std::size_t nodes, std::size_t queries);
 };
 

@@ -136,15 +136,13 @@ void derivatives(std::span<const double> x, std::span<const double> y, Method me
 }
 }
 
-void Workspace::prepare(std::size_t nodes, std::size_t queries) {
+void Workspace::prepare(std::size_t nodes, std::size_t) {
     if (static_cast<std::size_t>(derivative.size()) < nodes) {
         for (auto* item : {&h, &slope, &derivative, &diagonal, &lower, &upper, &rhs,
                            &coefficients, &fit_rhs}) item->resize(nodes);
         knots.resize(nodes + 4);
         band.resize(nodes * 7);
     }
-    if (static_cast<std::size_t>(dx.size()) < queries)
-        for (auto* item : {&dx, &a, &b, &c, &d, &power}) item->resize(queries);
 }
 
 namespace execution {
