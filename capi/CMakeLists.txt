@@ -1,4 +1,4 @@
-add_library(cnn_compute_c SHARED basic.cpp decomposition.cpp analysis.cpp fourier_plan.cpp filtering_plan.cpp result.cpp)
+add_library(cnn_compute_c SHARED basic.cpp decomposition.cpp legacy_emd.cpp analysis.cpp fourier_plan.cpp filtering_plan.cpp result.cpp)
 add_library(CNN::c ALIAS cnn_compute_c)
 target_compile_definitions(cnn_compute_c PRIVATE CNN_COMPUTE_C_EXPORTS)
 if(MSVC)
