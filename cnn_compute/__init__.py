@@ -3,12 +3,12 @@
 import numpy as np
 from numpy.typing import NDArray
 
-from . import core
+from . import core, emd, envelope, interpolation
 from ._native import sift_imf as _sift_imf
 from ._native import sift_pchip_sd as _sift_pchip_sd
 from .core import build_info
 
-__all__ = ["build_info", "core", "sift_imf", "sift_pchip_sd"]
+__all__ = ["build_info", "core", "emd", "envelope", "interpolation", "sift_imf", "sift_pchip_sd"]
 
 
 def sift_pchip_sd(
