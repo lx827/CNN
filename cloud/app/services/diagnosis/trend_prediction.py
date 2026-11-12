@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from cnn_compute import sequence as native
+
 import numpy as np
 
 
@@ -143,89 +145,13 @@ def holt_winters_forecast(
             "confidence": 0.3,  # 低置信度
         }
 
-    # ──── 标准 Holt-Winters 计算 ────
-    has_season = season_length is not None and season_length >= 2
-
-    # 时间步长（假设近似均匀采样）
     dt = float(np.mean(np.diff(t)))
-
-    # 初始化
-    level = np.zeros(n, dtype=np.float64)
-    trend = np.zeros(n, dtype=np.float64)
-    season = np.zeros(n, dtype=np.float64)
-
-    # 水平初始值：前几个点的均值
     init_window = min(season_length or 4, n)
-    level[0] = float(np.mean(y[:init_window]))
-
-    # 趋势初始值：前几个点的线性回归斜率
-    if n >= 2:
-        slope_init, _ = _simple_linear_regression(t[:init_window], y[:init_window])
-        trend[0] = slope_init
-    else:
-        trend[0] = 0.0
-
-    # 季节初始值（仅在季节性模式时）
-    if has_season:
-        m = season_length
-        # 至少需要 2 个完整季节周期来初始化
-        if n >= 2 * m:
-            # 用前两个周期的平均值差来估计季节分量
-            season_init = np.zeros(m, dtype=np.float64)
-            avg1 = float(np.mean(y[:m]))
-            avg2 = float(np.mean(y[m : 2 * m]))
-            overall_avg = float(np.mean(y[: 2 * m]))
-            for j in range(m):
-                season_init[j] = (y[j] - avg1 + y[m + j] - avg2) / 2.0
-            # 归一化季节分量使得总和为 0
-            season_init -= np.mean(season_init)
-            season[:m] = season_init
-        else:
-            # 不够两个完整周期，季节分量初始为 0
-            season[:m] = 0.0
-
-    # ──── 递推计算 ────
-    fitted = np.zeros(n, dtype=np.float64)
-    for i in range(1, n):
-        if has_season:
-            m = season_length
-            # Holt-Winters 加法模型
-            season_offset = season[i - m] if i >= m else season[i % m]
-            level[i] = alpha * (y[i] - season_offset) + (1 - alpha) * (
-                level[i - 1] + trend[i - 1]
-            )
-            trend[i] = beta * (level[i] - level[i - 1]) + (1 - beta) * trend[i - 1]
-            season_idx = i - m if i >= m else i
-            season[i] = gamma * (y[i] - level[i]) + (1 - gamma) * season[season_idx]
-            fitted[i] = level[i - 1] + trend[i - 1] + season_offset
-        else:
-            # Holt 双指数平滑（无季节性）
-            level[i] = alpha * y[i] + (1 - alpha) * (level[i - 1] + trend[i - 1])
-            trend[i] = beta * (level[i] - level[i - 1]) + (1 - beta) * trend[i - 1]
-            fitted[i] = level[i - 1] + trend[i - 1]
-
-    # 第 0 步拟合值
-    fitted[0] = level[0] + trend[0] + (season[0] if has_season else 0.0)
-
-    # ──── 预测 ────
-    forecast_vals = []
-    forecast_ts = []
-    last_level = float(level[-1])
-    last_trend = float(trend[-1])
-
-    for h in range(1, forecast_steps + 1):
-        if has_season:
-            m = season_length
-            # 季节分量取最近一个周期对应位置的值
-            season_idx = (n - m + h) % m if n >= m else h % m
-            s_val = float(season[n - m + season_idx]) if n >= m else 0.0
-            f_val = last_level + h * last_trend + s_val
-        else:
-            f_val = last_level + h * last_trend
-        # 限制预测值在 0-100
-        f_val = max(0.0, min(100.0, f_val))
-        forecast_vals.append(f_val)
-        forecast_ts.append(float(t[-1] + dt * h))
+    initial_slope, _ = _simple_linear_regression(t[:init_window], y[:init_window])
+    level, trend, season, fitted, forecasts = native.holt(y, forecast_steps, alpha, beta, gamma,
+        season_length if season_length is not None and season_length >= 2 else 0, initial_slope)
+    forecast_vals = [max(0.0, min(100.0, float(v))) for v in forecasts]
+    forecast_ts = [float(t[-1] + dt * h) for h in range(1, forecast_steps + 1)]
 
     # ──── 残差与置信度 ────
     residuals = y - fitted
@@ -340,88 +266,18 @@ def kalman_smooth_health_scores(
             "current_trend": trend,
         }
 
-    # ──── 标准 Kalman 滤波 ────
-    # 时间步长（假设均匀采样，dt=1 为单位时间步）
-    dt = 1.0
-
-    # 状态转移矩阵 F
-    F = np.array(
-        [
-            [1.0, dt],
-            [0.0, 1.0],
-        ],
-        dtype=np.float64,
-    )
-
-    # 观测矩阵 H
-    H = np.array([[1.0, 0.0]], dtype=np.float64)
-
-    # 过程噪声协方差 Q
-    # Q 的结构：health_score 过程噪声小，退化速率过程噪声稍大
-    q_health = process_noise**2
-    q_rate = process_noise**2 * 2.0  # 速率估计不确定性更大
-    Q = np.array(
-        [
-            [q_health, 0.0],
-            [0.0, q_rate],
-        ],
-        dtype=np.float64,
-    )
-
-    # 观测噪声协方差 R
-    R = np.array([[measurement_noise**2]], dtype=np.float64)
-
-    # 初始化状态
-    x = np.array([float(y[0]), 0.0], dtype=np.float64)  # [health, rate]
-    P = np.array(
-        [
-            [measurement_noise**2, 0.0],
-            [0.0, 10.0],  # 速率初始不确定性较大
-        ],
-        dtype=np.float64,
-    )
-
-    smoothed_scores = []
-    estimated_rates = []
-
-    for i in range(n):
-        # ──── 预测步骤 ────
-        if i > 0:
-            x_pred = F @ x
-            P_pred = F @ P @ F.T + Q
-        else:
-            x_pred = x.copy()
-            P_pred = P.copy()
-
-        # ──── 更新步骤 ────
-        # 观测值
-        z = np.array([float(y[i])], dtype=np.float64)
-
-        # Kalman 增益
-        S = H @ P_pred @ H.T + R  # 创新协方差
-        K = P_pred @ H.T @ np.linalg.inv(S)  # Kalman 增益
-
-        # 状态更新
-        innovation = z - H @ x_pred  # 创新（观测 - 预测）
-        x = x_pred + K @ innovation
-
-        # 协方差更新
-        I_KH = np.eye(2) - K @ H
-        P = I_KH @ P_pred @ I_KH.T + K @ R @ K.T  # Joseph 形式（数值稳定）
-
-        # 记录平滑结果
-        smoothed_scores.append(round(float(x[0]), 2))
-        estimated_rates.append(round(float(x[1]), 4))
+    scores, rates, final_health_var = native.kalman(y, process_noise, measurement_noise)
+    smoothed_scores = [round(float(v), 2) for v in scores]
+    estimated_rates = [round(float(v), 4) for v in rates]
 
     # ──── 最终协方差 → 预测置信度 ────
     # 用最终状态协方差的 health 分量来衡量置信度
     # P[0,0] 越小 → 置信度越高
-    final_health_var = float(P[0, 0])
     # 标准化到 0-1：var < 5 → 高置信度，var > 50 → 低置信度
     confidence = max(0.0, min(1.0, 1.0 - final_health_var / 50.0))
 
     # ──── 当前趋势 ────
-    current_rate = float(x[1])
+    current_rate = float(rates[-1])
     if current_rate < -1.0:
         current_trend = "degrading"
     elif current_rate > 1.0:
@@ -451,21 +307,6 @@ def _simple_linear_regression(
 
     用于短序列的退化预测和 Holt-Winters 趋势初始化。
     """
-    n = len(x)
-    if n < 2:
-        return 0.0, float(y[0]) if n == 1 else 0.0
-
-    x_mean = float(np.mean(x))
-    y_mean = float(np.mean(y))
-
-    # 协方差与方差
-    x_var = float(np.sum((x - x_mean) ** 2))
-    xy_cov = float(np.sum((x - x_mean) * (y - y_mean)))
-
-    if x_var == 0:
-        return 0.0, y_mean
-
-    slope = xy_cov / x_var
-    intercept = y_mean - slope * x_mean
-
-    return slope, intercept
+    if len(x) < 2:
+        return 0.0, float(y[0]) if len(y) else 0.0
+    return native.regression(x, y)
