@@ -1,4 +1,4 @@
-// emd 0.8.1 sift.py 的集成算法适配；GPL-2.0-or-later，归属见 lib/LICENSE.emd。
+// emd 0.8.1 sift.py 的集成算法适配；实际随包许可证与归属见 lib/LICENSE.emd。
 #include <emd/ensemble.hpp>
 
 #include <algorithm>
