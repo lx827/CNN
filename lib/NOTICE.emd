@@ -1,9 +1,11 @@
 EMD reference implementation attribution
 ======================================
 
-The behavior adaptations in envelope/envelope.cpp and emd/decomposition.cpp
+The behavior adaptations in envelope/envelope.cpp, emd/decomposition.cpp,
+emd/mask.cpp, emd/second_layer.cpp and transforms/hilbert.cpp
 are based on the locally supplied emd 0.8.1 Python package, specifically
-emd/_sift_core.py and emd/sift.py, by Andrew Quinn and the emd contributors.
+emd/_sift_core.py, emd/sift.py, emd/spectra.py and emd/imftools.py,
+by Andrew Quinn and the emd contributors.
 
 Upstream source: https://gitlab.com/emd-dev/emd
 Upstream documentation: https://emd.readthedocs.io/
@@ -13,6 +15,10 @@ emd/sift.py
 6981e40393f3d14c6c27cf86aacebd8f9955b1b65d7a8520a1d366d6c6e8802e
 emd/_sift_core.py
 c3364ca59284f42d88f690487fbadd6d759f665583f25d257c62d86ae52ae76d
+emd/spectra.py
+1948eab50fe84f430548c5d37845036db14c27a0b2452972e2724ba1c4c36322
+emd/imftools.py
+ef2abb53896ca47533ca8fe6d73513f0d2aeb741e920e8f190fff7e7ff6c8d7f
 
 The distribution metadata identifies GPLv2 or later; its supplied LICENSE.txt
 contains the GNU General Public License version 3. That original license text
