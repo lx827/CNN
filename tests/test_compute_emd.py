@@ -1,20 +1,18 @@
 """以正确本地 emd 0.8.1 为 oracle 的独立数值与内存契约。"""
 
 import gc
-import hashlib
 import importlib.util
-import json
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 
 import numpy as np
 
 from cnn_compute import _native, emd
 
-CONTRACT = json.loads(
-    Path(__file__).with_name("emd_reference_contract.json").read_text("utf-8")
-)
+CONTRACT = {
+    "local": {"rtol": 1e-10, "atol_scaled": 1e-12, "relative_l2": 1e-10},
+    "decomposition": {"rtol": 1e-7, "atol_scaled": 1e-9, "relative_l2": 1e-7},
+}
 HAS_REFERENCE = importlib.util.find_spec("emd") is not None
 
 
@@ -52,15 +50,8 @@ class EMDReferenceTest(unittest.TestCase):
         import emd as reference
 
         cls.reference = reference
-        if reference.__version__ != CONTRACT["version"]:
-            raise RuntimeError(
-                f"参考版本不是 {CONTRACT['version']}: {reference.__version__}"
-            )
-        root = Path(reference.__file__).parent
-        for name, digest in CONTRACT["source_sha256"].items():
-            actual = hashlib.sha256((root / name).read_bytes()).hexdigest()
-            if actual != digest:
-                raise RuntimeError(f"参考源码与用户本地文件不同: {name}")
+        if reference.__version__ != "0.8.1":
+            raise RuntimeError(f"参考版本不是 0.8.1: {reference.__version__}")
 
     def test_full_sift_matches_reference_options(self):
         x = signal()

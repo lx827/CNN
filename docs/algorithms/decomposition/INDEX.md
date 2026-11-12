@@ -74,6 +74,7 @@ DWT 约 O(N)，WP 随层数保留更多节点；VMD 为迭代数、模态数与 
 - Huang et al. (1998)，EMD；Wu & Huang (2009)，EEMD；Torres et al. (2011)，CEEMDAN。
 - Dragomiretskiy & Zosso (2014)，VMD。
 - 生产 EMD 族为仓库内 NumPy/SciPy 实现；原生候选以同公式 Python 实现与冻结预算对照。EMD-signal/PyEMD 1.9.0 仅作为可选 benchmark 组中的离线不同公式参照，不作为同语义替换或生产默认，区别见 [性能运行说明](../../benchmarks/diagnosis_performance.md)。
+- 用户指定的另一个原生候选以 `emd 0.8.1` 的 `emd.sift` 为参考，版本/源码身份、独立模块和失败边界见 [原生 EMD 契约](native_emd.md)；与上条旧候选的公式与验证预算分别维护，不静默替换生产。
 - [理论与历史示例](../wavelet_and_modality_decomposition.md) 不承担当前签名或实现状态。
 
 ## 验证向量与验证状态

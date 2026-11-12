@@ -8,11 +8,8 @@ emd/_sift_core.py and emd/sift.py, by Andrew Quinn and the emd contributors.
 Upstream source: https://gitlab.com/emd-dev/emd
 Upstream documentation: https://emd.readthedocs.io/
 
-Reference source SHA256:
-emd/sift.py
-6981e40393f3d14c6c27cf86aacebd8f9955b1b65d7a8520a1d366d6c6e8802e
-emd/_sift_core.py
-c3364ca59284f42d88f690487fbadd6d759f665583f25d257c62d86ae52ae76d
+Reference package: emd 0.8.1, module emd.sift.
+Local source supplied by the user: D:/Python/Lib/site-packages/emd.
 
 The distribution metadata identifies GPLv2 or later; its supplied LICENSE.txt
 contains the GNU General Public License version 3. That original license text
