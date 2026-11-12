@@ -1,22 +1,25 @@
 # 诊断计算库构建与安装
 
-根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。当前提供构建信息和 PCHIP/cubic、SD/Rilling 四种组合的单 IMF 原生筛分候选，EMD/EEMD/CEEMDAN 外层保持 Python；生产分解默认仍为 Python。技术路线见 [ADR 0006](adr/0006-native-diagnosis-compute-package.md)。
+根目录的 `cnn-compute` 分发包使用 CMake、scikit-build-core、pybind11 与 Eigen。旧原生筛分候选仍复用仓库 Python EMD 族外层；另增以本地 `emd.sift 0.8.1` 为参考的完整基础 EMD C++ 候选，契约见 [原生 EMD](algorithms/decomposition/native_emd.md) 与 [ADR 0008](adr/0008-local-emd-reference-native-family.md)。生产分解默认仍为 Python。
 
-新增或重组 C++ 加速算法遵循 [cpp-accelerate skill](../.claude/skills/cpp-accelerate/SKILL.md) 与 [ADR 0007](adr/0007-native-algorithm-module-interfaces.md)：公开入口与内部加速执行接口分工，算法模块独立于公共基础结构。以下目录描述当前实现，不表示已迁移到目标组织。
+新增或重组 C++ 加速算法遵循 [cpp-accelerate skill](../.claude/skills/cpp-accelerate/SKILL.md) 与 [ADR 0007](adr/0007-native-algorithm-module-interfaces.md)：公开入口与内部加速执行接口分工，算法模块独立于公共基础结构。
 
 ## 模块与导出
 
 ```text
 lib/
-├── core/          # 数组类型、PCHIP/cubic 插值、三对角求解、构建信息
-└── emd/           # 极值、镜像、包络、停止准则、单 IMF 筛分
+├── core/          # 数组类型、旧兼容头、构建信息
+├── solvers/       # 三对角求解、直接写入的内部执行接口
+├── interpolation/ # splrep/PCHIP/cubic、旧数值兼容实现
+├── envelope/      # 独立极值插值包络及工作区
+└── emd/           # 完整 sift 和旧单 IMF 筛分候选
 bind/              # 独立 pybind11 绑定与 NumPy 所有权转换
 cnn_compute/       # Python 入口、core 公共接口及内联类型注解
 ```
 
-依赖方向为 `CNN::emd → CNN::core → Eigen3::Eigen`；两个纯 C++ target 都不依赖 Python。EMD 的包络直接调用公共插值，cubic 插值调用公共三对角求解。绑定单独链接这些 target，集中处理 Python 参数检查、GIL 释放和输出 capsule。各算法在 `lib/` 复用公共模块，绑定在 `bind/` 按模块注册，根目录不再设置 `src/`。
+依赖方向为 `CNN::emd → CNN::envelope → CNN::interpolation → CNN::solvers`，各数值模块使用 core/Eigen，纯 C++ target 不依赖 Python。公开入口准备拥有型结果与工作区，内部执行接口用于直接写输出和跨算法组合。绑定单独链接这些 target，处理 Python 布局、GIL 释放和输出 capsule；根目录不设置 `src/`。
 
-Python 公共数值接口由 `cnn_compute.core` 导出；原生模块按 `cnn_compute._native.core` 与 `cnn_compute._native.emd` 分组。既有筛分入口和下划线差分入口继续作为同一函数的别名保留。输入、输出及失败契约见 [公共数值源码 docstring](../cnn_compute/core.py) 与 [筛分源码 docstring](../cnn_compute/__init__.py)。
+Python 独立模块为 `cnn_compute.emd`、`envelope`、`interpolation`；既有 `core` 数值入口和下划线差分别名保留兼容。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
 
 ### 编辑器类型检查
 

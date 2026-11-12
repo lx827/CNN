@@ -141,6 +141,7 @@ def main(args):
             ["git", "check-ignore", relative + "/probe.json"],
             cwd=ROOT,
             capture_output=True,
+            check=False,
         )
         if check.returncode:
             raise ValueError("输出必须位于 Git 忽略目录或仓库外")
@@ -187,16 +188,17 @@ def main(args):
                     text=True,
                     encoding="utf-8",
                     errors="replace",
+                    check=False,
                 )
                 if run.returncode:
                     raise RuntimeError(
-                        f"{backend}/{algorithm} failed:\n{run.stdout}\n{run.stderr}"
+                        f"{backend}/{algorithm} failed ({run.returncode}):\n{run.stdout}\n{run.stderr}"
                     )
                 records[algorithm][backend].append(
                     json.loads(target.read_text("utf-8"))
                 )
-            a = np.load((output / f"{algorithm}-native-{block}.npy"))
-            b = np.load((output / f"{algorithm}-reference-{block}.npy"))
+            a = np.load(output / f"{algorithm}-native-{block}.npy")
+            b = np.load(output / f"{algorithm}-reference-{block}.npy")
             scale = max(
                 abs(make_signal(args.samples)).max(), abs(b).max(), np.finfo(float).tiny
             )
