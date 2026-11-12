@@ -14,11 +14,11 @@ struct BuildInfo {
     std::string_view arch_policy;
     std::string_view compile_options;
     std::string_view simd;
-    int eigen_major;
-    int eigen_minor;
-    int eigen_patch;
+    int              eigen_major;
+    int              eigen_minor;
+    int              eigen_patch;
 };
 
-BuildInfo build_info();
+BuildInfo build_info( );
 
-}  // namespace cnn_compute::core
+}    // namespace cnn_compute::core
