@@ -85,10 +85,14 @@ def operation(backend, algorithm, x, trials):
     options = {"max_imfs": 3}
     if algorithm in {"ensemble_sift", "complete_ensemble_sift"}:
         options.update(nensembles=trials, noise_seed=20261112, nprocesses=1)
+        if backend == "reference" and algorithm == "complete_ensemble_sift":
+            # emd 0.8.1 的边界检查晚一层；请求2得到3个IMF，匹配原生上限3。
+            options["max_imfs"] = 2
     elif algorithm == "mask_sift":
         options.update(mask_freqs=[0.12, 0.045, 0.012])
     elif algorithm == "iterated_mask_sift":
         options.update(mask_0=[0.12, 0.045, 0.012], max_iter=3, sample_rate=1.0)
+    info["requested_max_imfs"] = options["max_imfs"]
     return lambda: getattr(module, algorithm)(x, **options), info
 
 
