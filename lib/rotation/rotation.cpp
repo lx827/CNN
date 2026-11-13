@@ -245,13 +245,16 @@ AMFMResult amfm(std::span< const double > x, double fs) {
         minimum         = std::min(minimum, a);
     }
     if (maximum == 0 || minimum <= 64 * std::numeric_limits< double >::epsilon( ) * maximum) throw std::invalid_argument("undefined_instantaneous_phase_at_amplitude_null");
+    double previous = std::arg(analytic[0]);
     for (std::size_t i = 1; i < x.size( ); ++i) {
-        double d = std::arg(analytic[i]) - std::arg(analytic[i - 1]);
+        double current = std::arg(analytic[i]);
+        double d       = current - previous;
         if (d > pi)
             d -= 2 * pi;
         else if (d < -pi)
             d += 2 * pi;
         out.frequency[i - 1] = d * fs / (2 * pi);
+        previous             = current;
     }
     return out;
 }
@@ -419,6 +422,7 @@ CVSResult cvs(std::span< const double > x, std::span< const double > carrier, st
             continue;
         }
         std::size_t start = i;
+        ++i;    // 首点已确真，直接推进后再判窗口，省一次重复 remainder
         while (i < x.size( ) && inside(i)) ++i;
         std::size_t stop = i;
         if (stop - start < 3) continue;
