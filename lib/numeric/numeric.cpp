@@ -19,17 +19,24 @@ namespace {
     void rate(double fs) {
         if (!std::isfinite(fs) || fs <= 0) throw std::invalid_argument("sample rate must be positive");
     }
-    Statistics stats(std::span< const double > x, double floor) {
+    // abs/centered 物化一次（发现7）：各统计量复用同一份数据，调用方提供窗长临时，
+    // 帧循环可跨帧复用；归约次序不变，与逐次求值的表达式逐位一致。
+    Statistics stats(std::span< const double > x, double floor, std::span< double > abs_store,
+                     std::span< double > centered_store) {
         const Eigen::Map< const Array > a(x.data( ), x.size( ));
-        const auto                      abs  = a.abs( );
-        const double                    peak = abs.maxCoeff( ), rms = std::sqrt(a.square( ).mean( ));
-        const double                    mean_abs = abs.mean( ), mean_sqrt = (abs + floor).sqrt( ).mean( );
-        const double                    mean = a.mean( ), variance = (a - mean).square( ).mean( );
-        const double                    threshold = std::numeric_limits< double >::epsilon( ) * std::abs(mean);
-        double                          kurt = std::numeric_limits< double >::quiet_NaN( ), skew = kurt;
+        const double                    mean = a.mean( );
+        Eigen::Map< Array >             abs(abs_store.data( ), x.size( ));
+        Eigen::Map< Array >             centered(centered_store.data( ), x.size( ));
+        abs               = a.abs( );
+        centered          = a - mean;
+        const double peak = abs.maxCoeff( ), rms = std::sqrt(a.square( ).mean( ));
+        const double mean_abs = abs.mean( ), mean_sqrt = (abs + floor).sqrt( ).mean( );
+        const double variance  = centered.square( ).mean( );
+        const double threshold = std::numeric_limits< double >::epsilon( ) * std::abs(mean);
+        double       kurt = std::numeric_limits< double >::quiet_NaN( ), skew = kurt;
         if (variance > threshold * threshold) {
-            kurt = (a - mean).square( ).square( ).mean( ) / (variance * variance);
-            skew = (a - mean).cube( ).mean( ) / std::pow(variance, 1.5);
+            kurt = centered.square( ).square( ).mean( ) / (variance * variance);
+            skew = centered.cube( ).mean( ) / std::pow(variance, 1.5);
         }
         return { peak, rms, kurt, skew, mean_sqrt > 1e-12 ? peak / (mean_sqrt * mean_sqrt) : 0,
                  mean_abs > 1e-12 ? rms / mean_abs : 0, mean_abs > 1e-12 ? peak / mean_abs : 0, rms > 1e-12 ? peak / rms : 0 };
@@ -54,17 +61,19 @@ Spectrum spectrum(std::span< const double > x, double fs, bool remove_mean) {
     check(x, 2);
     rate(fs);
     const auto                      n = x.size( ), bins = n / 2 + 1;
-    auto                            window = filtering::hann(n);
+    auto                            window = filtering::hann_table(n);    // 全长 Hann 进程槽（发现1）
     std::vector< double >           buffer(n);
     std::vector< fourier::Complex > transformed(bins);
-    fourier::Plan                   plan(n);
+    fourier::Plan                   plan(n);    // 计划进程槽，同尺寸零重建（发现1/4）
     Spectrum                        out{ Array(bins), Array(bins), Array(bins) };
-    execution::amplitude_spectrum(x, { out.amplitude.data( ), bins }, window, buffer, transformed, plan, remove_mean);
-    for (std::size_t k = 0; k < bins; ++k) {
-        const bool edge  = k == 0 || (n % 2 == 0 && k == n / 2);
-        out.frequency[k] = static_cast< double >(k) * fs / n;
-        out.power[k]     = out.amplitude[k] * out.amplitude[k] / (edge ? 1 : 2);
-    }
+    execution::amplitude_spectrum(x, { out.amplitude.data( ), bins }, window->values, buffer,
+                                  transformed, plan, remove_mean);
+    // 频率 (k*fs)/n 与幂 a²/2（DC/偶 Nyquist 端点覆写）元素级一次生成（发现7）。
+    out.frequency = Array::LinSpaced(bins, 0.0, static_cast< double >(bins - 1)) * fs
+                    / static_cast< double >(n);
+    out.power     = out.amplitude * out.amplitude / 2.0;
+    out.power[0]  = out.amplitude[0] * out.amplitude[0];
+    if (n % 2 == 0) out.power[n / 2] = out.amplitude[n / 2] * out.amplitude[n / 2];
     return out;
 }
 Stft stft(std::span< const double > x, double fs, int window, int overlap, int nfft) {
@@ -80,12 +89,16 @@ Stft stft(std::span< const double > x, double fs, int window, int overlap, int n
     fourier::Plan                   plan(nfft);
     std::vector< double >           buffer(nfft);
     std::vector< fourier::Complex > fft(bins);
+    // 循环前一次清零（发现6）：nfft 尾部恒为零；帧内越界位置——首部由初值保持、
+    // 尾部随右端收缩逐帧回零，替代原先的每帧全量清零。
+    std::fill(buffer.begin( ), buffer.end( ), 0.0);
+    const auto size = static_cast< std::ptrdiff_t >(x.size( ));
     for (std::size_t frame = 0; frame < frames; ++frame) {
-        std::fill(buffer.begin( ), buffer.end( ), 0.0);
-        for (int j = 0; j < window; ++j) {
-            const auto index = static_cast< std::ptrdiff_t >(frame * hop + j) - static_cast< std::ptrdiff_t >(edge);
-            if (index >= 0 && index < static_cast< std::ptrdiff_t >(x.size( ))) buffer[j] = x[index] * w[j];
-        }
+        const auto base = static_cast< std::ptrdiff_t >(frame * hop) - static_cast< std::ptrdiff_t >(edge);
+        const auto lo   = std::max< std::ptrdiff_t >(0, -base);
+        const auto hi   = std::min< std::ptrdiff_t >(window, size - base);
+        if (hi < window) std::fill(buffer.begin( ) + hi, buffer.begin( ) + window, 0.0);
+        for (auto j = lo; j < hi; ++j) buffer[j] = x[base + j] * w[j];
         plan.forward_half(buffer, fft);
         out.time[frame] = static_cast< double >(frame * hop) / fs;
         for (std::size_t k = 0; k < bins; ++k) {
@@ -93,41 +106,44 @@ Stft stft(std::span< const double > x, double fs, int window, int overlap, int n
             out.amplitude(k, frame) = std::abs(fft[k]) * (terminal ? 1 : 2) / gain;
         }
     }
-    for (std::size_t k = 0; k < bins; ++k) out.frequency[k] = static_cast< double >(k) * fs / nfft;
+    out.frequency = Array::LinSpaced(bins, 0.0, static_cast< double >(bins - 1)) * fs
+                    / static_cast< double >(nfft);
     return out;
 }
 Array cepstrum(std::span< const double > x) {
     check(x, 2);
-    auto                  window = filtering::hann(x.size( ));
-    std::vector< double > a(x.size( )), y(x.size( ));
-    for (std::size_t i = 0; i < x.size( ); ++i) a[i] = x[i] * window[i];
-    fourier::Plan                   plan(x.size( ));
-    std::vector< fourier::Complex > f(x.size( ));
+    const auto            n      = x.size( );
+    auto                  window = filtering::hann_table(n);    // 全长 Hann 进程槽（发现1）
+    std::vector< double > a(n), y(n);
+    Eigen::Map< Array >(a.data( ), n) = Eigen::Map< const Array >(x.data( ), n)
+                                        * Eigen::Map< const Array >(window->values.data( ), n);    // 窗乘元素级（发现7）
+    fourier::Plan                   plan(n);
+    std::vector< fourier::Complex > f(n);
     plan.forward(a, f);
     double mean = 0;
-    for (std::size_t i = 0; i < x.size( ); ++i) {
+    for (std::size_t i = 0; i < n; ++i) {
         a[i] = std::log(std::abs(f[i]) + 1e-10);
         mean += a[i];
     }
-    mean /= x.size( );
-    for (std::size_t i = 0; i < x.size( ); ++i) f[i] = a[i] - mean;
+    mean /= n;
+    for (std::size_t i = 0; i < n; ++i) f[i] = a[i] - mean;
     plan.inverse_real(f, y);
-    return Eigen::Map< Array >(y.data( ), x.size( ) / 2);
+    return Eigen::Map< Array >(y.data( ), n / 2);
 }
 Array hilbert_envelope(std::span< const double > x) {
     check(x);
     transforms::HilbertWorkspace w;
     w.prepare(x.size( ));
-    std::vector< fourier::Complex > z(x.size( ));
-    transforms::execution::analytic_signal(x, z, w);
-    Array out(x.size( ));
+    const auto z = transforms::execution::analytic_signal(x, w);    // 工作区 analytic 缓冲，免局部 z（发现5）
+    Array      out(x.size( ));
     for (std::size_t i = 0; i < x.size( ); ++i) out[i] = std::abs(z[i]);
     return out;
 }
 Statistics statistics(std::span< const double > x, double floor) {
     check(x);
     if (!std::isfinite(floor) || floor < 0) throw std::invalid_argument("margin floor must be finite and nonnegative");
-    return stats(x, floor);
+    std::vector< double > abs(x.size( )), centered(x.size( ));
+    return stats(x, floor, abs, centered);
 }
 TimeDomain time_domain(std::span< const double > x, double fs, int window, int step) {
     check(x);
@@ -136,12 +152,14 @@ TimeDomain time_domain(std::span< const double > x, double fs, int window, int s
     window                       = std::min(window, static_cast< int >(x.size( )));
     step                         = step ? std::min(step, window) : std::max(1, window / 2);
     const std::size_t     frames = 1 + (x.size( ) - window) / step;
-    TimeDomain            out{ stats(x, 1e-12), Array(frames), Matrix(frames, 8), window, step };
+    std::vector< double > abs(x.size( )), centered(x.size( ));    // 总体与帧统计共用（发现7）
+    TimeDomain            out{ stats(x, 1e-12, abs, centered), Array(frames), Matrix(frames, 8), window, step };
     auto                  w = filtering::hann(window);
     std::vector< double > buffer(window);
     for (std::size_t k = 0; k < frames; ++k) {
         Eigen::Map< Array >(buffer.data( ), window) = Eigen::Map< const Array >(x.data( ) + k * step, window) * Eigen::Map< const Array >(w.data( ), window);
-        const auto result                           = stats(buffer, 1e-12);
+        const auto result                           = stats(buffer, 1e-12, { abs.data( ), static_cast< std::size_t >(window) },
+                                                            { centered.data( ), static_cast< std::size_t >(window) });
         out.time[k]                                 = static_cast< double >(k * step) / fs;
         for (int j = 0; j < 8; ++j) out.values(k, j) = result[j];
     }
@@ -190,7 +208,7 @@ Array autocorrelation(std::span< const double > x, bool demean) {
     std::vector< double > input(n, 0), output(n);
     const double          mean = demean ? Eigen::Map< const Array >(x.data( ), x.size( )).mean( ) : 0;
     for (std::size_t i = 0; i < x.size( ); ++i) input[i] = x[i] - mean;
-    fourier::Plan                   plan(n);
+    fourier::Plan                   plan(n);    // 计划进程槽（发现1）；逆变换经原位打包（发现8）
     std::vector< fourier::Complex > f(n / 2 + 1);
     plan.forward_half(input, f);
     for (auto &v : f) v = std::norm(v);
