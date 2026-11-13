@@ -119,21 +119,25 @@ Stft stft(std::span< const double > x, double fs, int window, int overlap, int n
 Array cepstrum(std::span< const double > x) {
     check(x, 2);
     const auto            n      = x.size( );
+    const auto            bins   = n / 2 + 1;
     auto                  window = filtering::hann_table(n);    // 全长 Hann 进程槽（发现1）
     std::vector< double > a(n), y(n);
     Eigen::Map< Array >(a.data( ), n) = Eigen::Map< const Array >(x.data( ), n)
                                         * Eigen::Map< const Array >(window->values.data( ), n);    // 窗乘元素级（发现7）
     fourier::Plan                   plan(n);
-    std::vector< fourier::Complex > f(n);
-    plan.forward(a, f);
+    std::vector< fourier::Complex > f(bins);
+    // 实信号 |F| 严格对称（工单A4，#144-发现3）：abs+log 只算 n/2+1，镜像值
+    // |F[n-i]|=|F[i]| 逐位相等后复制；mean 保持原全 n 次序累加，与全谱写法逐位一致。
+    plan.forward_half({ a.data( ), n }, f);
+    for (std::size_t i = 0; i < bins; ++i) a[i] = std::log(std::sqrt(std::norm(f[i])) + 1e-10);
+    for (std::size_t i = bins; i < n; ++i) a[i] = a[n - i];
     double mean = 0;
-    for (std::size_t i = 0; i < n; ++i) {
-        a[i] = std::log(std::sqrt(std::norm(f[i])) + 1e-10);
-        mean += a[i];
-    }
+    for (std::size_t i = 0; i < n; ++i) mean += a[i];
     mean /= n;
-    for (std::size_t i = 0; i < n; ++i) f[i] = a[i] - mean;
-    plan.inverse_real(f, y);
+    for (std::size_t i = 0; i < bins; ++i) f[i] = a[i] - mean;
+    // Hermitian 谱逆变换换 c2r 半谱路径（[数值微变]，pocketfft c2c 与 c2r 舍入不同），
+    // 省约一半逆变换工作量；正变换与 log 半谱镜像部分保持逐位一致。
+    plan.inverse_half(f, y);
     return Eigen::Map< Array >(y.data( ), n / 2);
 }
 Array hilbert_envelope(std::span< const double > x) {
