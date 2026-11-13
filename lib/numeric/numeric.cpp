@@ -53,10 +53,12 @@ namespace execution {
         plan.forward_half(buffer, transformed.first(x.size( ) / 2 + 1));
         // 幅值统一 sqrt(re²+im²)（工单A1，#144-发现2）：MSVC 的 abs(complex) 走 hypot，
         // 2-5× 于 sqrt；物理幅值不涉溢保护区（|x|>~1e154），末位差异在冻结预算内。
-        for (std::size_t k = 0; k < amplitude.size( ); ++k) {
-            const bool edge = k == 0 || (n % 2 == 0 && k == n / 2);
-            amplitude[k]    = std::sqrt(std::norm(transformed[k])) * (edge ? 1 : 2) / gain;
-        }
+        // 除法→倒数乘（工单A2）：inv/inv2 循环外预计算；k=0 与偶 N 的 Nyquist 事后覆写。
+        const double inv = 1. / gain, inv2 = 2. / gain;
+        for (std::size_t k = 0; k < amplitude.size( ); ++k)
+            amplitude[k] = std::sqrt(std::norm(transformed[k])) * inv2;
+        amplitude[0] = std::sqrt(std::norm(transformed[0])) * inv;
+        if (n % 2 == 0) amplitude[n / 2] = std::sqrt(std::norm(transformed[n / 2])) * inv;
     }
 }    // namespace execution
 Spectrum spectrum(std::span< const double > x, double fs, bool remove_mean) {
@@ -88,6 +90,7 @@ Stft stft(std::span< const double > x, double fs, int window, int overlap, int n
     Stft                            out{ Array(frames), Array(bins), Matrix(bins, frames) };
     const auto                      w    = filtering::hann(window);
     const double                    gain = std::accumulate(w.begin( ), w.end( ), 0.0);
+    const double                    inv = 1. / gain, inv2 = 2. / gain;    // 除法→倒数乘（工单A2）
     fourier::Plan                   plan(nfft);
     std::vector< double >           buffer(nfft);
     std::vector< fourier::Complex > fft(bins);
@@ -103,10 +106,11 @@ Stft stft(std::span< const double > x, double fs, int window, int overlap, int n
         for (auto j = lo; j < hi; ++j) buffer[j] = x[base + j] * w[j];
         plan.forward_half(buffer, fft);
         out.time[frame] = static_cast< double >(frame * hop) / fs;
-        for (std::size_t k = 0; k < bins; ++k) {
-            const bool terminal     = k == 0 || (nfft % 2 == 0 && k == static_cast< std::size_t >(nfft / 2));
-            out.amplitude(k, frame) = std::sqrt(std::norm(fft[k])) * (terminal ? 1 : 2) / gain;
-        }
+        for (std::size_t k = 0; k < bins; ++k)
+            out.amplitude(k, frame) = std::sqrt(std::norm(fft[k])) * inv2;
+        out.amplitude(0, frame) = std::sqrt(std::norm(fft[0])) * inv;    // 端点单边不翻倍
+        if (nfft % 2 == 0)
+            out.amplitude(static_cast< std::size_t >(nfft / 2), frame) = std::sqrt(std::norm(fft[nfft / 2])) * inv;
     }
     out.frequency = Array::LinSpaced(bins, 0.0, static_cast< double >(bins - 1)) * fs
                     / static_cast< double >(nfft);
