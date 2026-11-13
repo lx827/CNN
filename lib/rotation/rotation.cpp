@@ -112,7 +112,7 @@ core::Array angle_resample(std::span< const double > x, std::span< const double 
 }
 core::Array amplitude_spectrum(std::span< const double > x, bool center) {
     validate(x, 2);
-    // 公开入口层的持有者（发现1）：全长 Hann 与 FFT 计划走进程级单槽，
+    // 公开入口层的持有者（发现1）：全长 Hann 与 FFT 计划走进程级有界缓存，
     // 可写缓冲本调用独占；不再为无状态调用物化整个 Workspace。
     auto                            window = filtering::hann_table(x.size( ));
     fourier::Plan                   plan(x.size( ));
@@ -186,7 +186,7 @@ core::Array zoom_spectrum(std::span< const double > x, double fs, double low, do
     if (!std::isfinite(fs) || !std::isfinite(low) || !std::isfinite(high) || fs <= 0 || low < 0 || high > fs / 2 || high <= low || points < 1) throw std::invalid_argument("invalid Chirp-Z band");
     std::size_t n = x.size( ), m = points, length = 1;
     while (length < n + m - 1) length *= 2;
-    auto                            window = filtering::hann_table(n);    // 全长 Hann 进程槽
+    auto                            window = filtering::hann_table(n);    // 全长 Hann 缓存
     std::vector< fourier::Complex > a(length), b(length), fa(length), fb(length);
     double                          step = (high - low) / points, gain = 0.;
     for (std::size_t j = 0; j < n; ++j) {
@@ -212,8 +212,8 @@ core::Array real_cepstrum(std::span< const double > x) {
     validate(x, 64);
     const auto                      n      = x.size( );
     const auto                      bins   = n / 2 + 1;
-    auto                            window = filtering::hann_table(n);    // 全长 Hann 进程槽
-    fourier::Plan                   plan(n);                              // 计划进程槽；缓冲本调用独占
+    auto                            window = filtering::hann_table(n);    // 全长 Hann 缓存
+    fourier::Plan                   plan(n);                              // 计划缓存；缓冲本调用独占
     std::vector< double >           real(n);
     std::vector< fourier::Complex > spectrum(n);
     double                          mean = core::Map(x.data( ), n).mean( ), maximum = 0.;

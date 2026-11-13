@@ -36,7 +36,7 @@ HilbertWorkspace::~HilbertWorkspace( )                                      = de
 HilbertWorkspace::HilbertWorkspace(HilbertWorkspace &&) noexcept            = default;
 HilbertWorkspace &HilbertWorkspace::operator=(HilbertWorkspace &&) noexcept = default;
 void              HilbertWorkspace::prepare(std::size_t samples) {
-    // 只登记 FFT 尺寸（计划经进程级单槽复用）；其余缓冲在使用处按需准备，
+    // 只登记 FFT 尺寸（计划经进程级有界缓存复用）；其余缓冲在使用处按需准备，
     // analytic-only 调用不再物化 normalised/envelope/unwrapped/smoothed 与极值工作区。
     impl->fft.prepare(samples);
 }

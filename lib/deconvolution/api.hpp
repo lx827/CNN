@@ -45,7 +45,8 @@ core::Array mckd_update(std::span< const double > matrix, std::size_t rows, std:
                         std::span< const double > filter, int period, int shift_order, double ridge);
 namespace execution {
     // 先 prepare；output 长N、filter长L、history容量>=max_iterations；三者与工作区
-    // 互不重叠，计算直接写最终存储。history前info.iterations项有效，无分配迭代。
+    // 互不重叠，计算直接写最终存储。history 前 info.iterations 项有效。
+    // 迭代复用分解与已准备向量；Eigen 反射应用仍可能分配内部临时。
     Info med(const Options &options, std::span< double > output, std::span< double > filter,
              std::span< double > history, Workspace &workspace);
     Info mckd(int period, int shift_order, const Options &options,

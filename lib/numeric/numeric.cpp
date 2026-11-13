@@ -59,10 +59,10 @@ Spectrum spectrum(std::span< const double > x, double fs, bool remove_mean) {
     check(x, 2);
     rate(fs);
     const auto                      n = x.size( ), bins = n / 2 + 1;
-    auto                            window = filtering::hann_table(n);    // 全长 Hann 进程槽（发现1）
+    auto                            window = filtering::hann_table(n);    // 全长 Hann 缓存
     std::vector< double >           buffer(n);
     std::vector< fourier::Complex > transformed(bins);
-    fourier::Plan                   plan(n);    // 计划进程槽，同尺寸零重建（发现1/4）
+    fourier::Plan                   plan(n);    // 有界缓存中的计划
     Spectrum                        out{ Array(bins), Array(bins), Array(bins) };
     execution::amplitude_spectrum(x, { out.amplitude.data( ), bins }, window->values, buffer,
                                   transformed, plan, remove_mean);
@@ -113,7 +113,7 @@ Array cepstrum(std::span< const double > x) {
     check(x, 2);
     const auto            n      = x.size( );
     const auto            bins   = n / 2 + 1;
-    auto                  window = filtering::hann_table(n);    // 全长 Hann 进程槽（发现1）
+    auto                  window = filtering::hann_table(n);    // 全长 Hann 缓存
     std::vector< double > a(n), y(n);
     Eigen::Map< Array >(a.data( ), n) = Eigen::Map< const Array >(x.data( ), n)
                                         * Eigen::Map< const Array >(window->values.data( ), n);    // 窗乘元素级（发现7）
@@ -208,7 +208,7 @@ Array autocorrelation(std::span< const double > x, bool demean) {
     std::vector< double > input(n, 0), output(n);
     const double          mean = demean ? Eigen::Map< const Array >(x.data( ), x.size( )).mean( ) : 0;
     for (std::size_t i = 0; i < x.size( ); ++i) input[i] = x[i] - mean;
-    fourier::Plan                   plan(n);    // 计划进程槽（发现1）；逆变换经原位打包（发现8）
+    fourier::Plan                   plan(n);    // 有界缓存中的计划；逆变换经原位打包（发现8）
     std::vector< fourier::Complex > f(n / 2 + 1);
     plan.forward_half(input, f);
     for (auto &v : f) v = std::norm(v);
