@@ -68,6 +68,21 @@ pub struct CnnResult {
     _private: [u8; 0],
 }
 
+/// 头文件 L245-252 cnn_vmd_options（cnn_vmd 的 NULL 即取 cnn_vmd_defaults）。
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CnnVmdOptions {
+    pub modes: c_int,
+    pub alpha: f64,
+    pub tau: f64,
+    pub tolerance: f64,
+    pub max_iterations: c_int,
+    pub dc: c_int,
+    pub max_samples: usize,
+    pub initialization: c_int,
+    pub seed: u64,
+}
+
 extern "C" {
     // 结果生命周期与字段访问（L81、L85）
     fn cnn_result_free(result: *mut CnnResult);
@@ -102,6 +117,45 @@ extern "C" {
         harmonics: c_int,
         bandwidth: f64,
         smoothing: f64,
+        error: *mut CnnError,
+    ) -> *mut CnnResult;
+    // 二期管线原语（L144、L244、L256、L294、L299、L301、L302、L305）
+    fn cnn_cepstrum(x: CnnSpan, error: *mut CnnError) -> *mut CnnResult;
+    fn cnn_wavelet_denoise(
+        x: CnnSpan,
+        wavelet: *const c_char,
+        mode: *const c_char,
+        level: c_int,
+        threshold: *const c_char,
+        scale: f64,
+        error: *mut CnnError,
+    ) -> *mut CnnResult;
+    fn cnn_filter_bank_kurtogram(
+        x: CnnSpan,
+        fs: f64,
+        max_level: c_int,
+        minimum_frequency: f64,
+        order: c_int,
+        error: *mut CnnError,
+    ) -> *mut CnnResult;
+    fn cnn_vmd(
+        x: CnnSpan,
+        fs: f64,
+        options: *const CnnVmdOptions,
+        error: *mut CnnError,
+    ) -> *mut CnnResult;
+    fn cnn_integrate(time: CnnSpan, speed: CnnSpan, error: *mut CnnError) -> *mut CnnResult;
+    fn cnn_angle_resample(
+        x: CnnSpan,
+        phase: CnnSpan,
+        samples_per_revolution: c_int,
+        error: *mut CnnError,
+    ) -> *mut CnnResult;
+    fn cnn_amplitude_spectrum(x: CnnSpan, center: c_int, error: *mut CnnError) -> *mut CnnResult;
+    fn cnn_tsa(
+        x: CnnSpan,
+        samples_per_revolution: c_int,
+        minimum_revolutions: c_int,
         error: *mut CnnError,
     ) -> *mut CnnResult;
 }
@@ -166,6 +220,14 @@ impl OwnedResult {
         })
     }
 
+    /// CNN_F64 字段的 (rows, columns)；行结构的矩阵字段（bands/modes）配合 f64s。
+    pub fn rows_columns(&self, name: &str) -> Result<(usize, usize)> {
+        let field = self
+            .field(name)
+            .ok_or_else(|| anyhow!("结果缺少字段 {name}"))?;
+        Ok((field.rows, field.columns))
+    }
+
     /// CNN_TEXT 字段：rows 为字节长度（适配层 text() 以 UTF-8 写入）。
     pub fn text(&self, name: &str) -> Result<&str> {
         let field = self
@@ -183,7 +245,7 @@ impl OwnedResult {
             .field(name)
             .ok_or_else(|| anyhow!("结果缺少字段 {name}"))?;
         let count = field.rows * field.columns; // 复数元素数
-        // safety: 同上；交错 double 缓冲长度为 2*count（头文件 L27-28）
+                                                // safety: 同上；交错 double 缓冲长度为 2*count（头文件 L27-28）
         let raw = unsafe { std::slice::from_raw_parts(field.data as *const f64, count * 2) };
         Ok(raw
             .chunks_exact(2)
@@ -270,7 +332,138 @@ pub fn spectrum_speed(
     let mut error = fresh_error();
     call(
         "cnn_spectrum_speed",
-        unsafe { cnn_spectrum_speed(span(x), fs, low, high, harmonics, bandwidth, smoothing, &mut error) },
+        unsafe {
+            cnn_spectrum_speed(
+                span(x),
+                fs,
+                low,
+                high,
+                harmonics,
+                bandwidth,
+                smoothing,
+                &mut error,
+            )
+        },
+        &error,
+    )
+}
+
+/// L144：numeric 族实倒谱（周期 Hann、去均值 log 幅度，前 N/2 点），字段名 values。
+pub fn cepstrum(x: &[f64]) -> Result<OwnedResult> {
+    let mut error = fresh_error();
+    call(
+        "cnn_cepstrum",
+        unsafe { cnn_cepstrum(span(x), &mut error) },
+        &error,
+    )
+}
+
+/// L244：小波阈值去噪，参数全默认——名称传 NULL（db8/symmetric/soft），
+/// level=0 为最大允许层数，scale=1.0（头文件 L238-239 与 pybind denoise 默认一致）。
+/// 字段名 values（去噪后信号）。
+pub fn wavelet_denoise(x: &[f64]) -> Result<OwnedResult> {
+    let mut error = fresh_error();
+    call(
+        "cnn_wavelet_denoise",
+        unsafe {
+            cnn_wavelet_denoise(
+                span(x),
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                1.0,
+                &mut error,
+            )
+        },
+        &error,
+    )
+}
+
+/// L294：谱峭度滤波器组；字段名 bands，每行 low_hz,high_hz,level,
+/// spectral_kurtosis,impulsiveness,signal_to_background（适配层 L30-34）。
+pub fn filter_bank_kurtogram(
+    x: &[f64],
+    fs: f64,
+    max_level: i32,
+    minimum_frequency: f64,
+    order: i32,
+) -> Result<OwnedResult> {
+    let mut error = fresh_error();
+    call(
+        "cnn_filter_bank_kurtogram",
+        unsafe {
+            cnn_filter_bank_kurtogram(span(x), fs, max_level, minimum_frequency, order, &mut error)
+        },
+        &error,
+    )
+}
+
+/// L256：VMD 分解，options 传 NULL 取 cnn_vmd_defaults（与 pybind decompose
+/// 默认一致）。字段 modes 为 K×valid_length 行优先，另有 input_length/
+/// valid_length/iterations/converged/status/reason。
+pub fn vmd(x: &[f64], fs: f64) -> Result<OwnedResult> {
+    let mut error = fresh_error();
+    call(
+        "cnn_vmd",
+        unsafe { cnn_vmd(span(x), fs, std::ptr::null(), &mut error) },
+        &error,
+    )
+}
+
+/// L299：时间-转速梯形积分，累计转数从零开始；云端 order 管线同源相位入口，
+/// 字段名 values（单位：转）。
+pub fn integrate(time: &[f64], speed: &[f64]) -> Result<OwnedResult> {
+    let mut error = fresh_error();
+    call(
+        "cnn_integrate",
+        unsafe { cnn_integrate(span(time), span(speed), &mut error) },
+        &error,
+    )
+}
+
+/// L301：累计转数相位上的等角重采样，输出长度 floor(phase.back()*spr+1e-9)，
+/// 字段名 values。
+pub fn angle_resample(
+    x: &[f64],
+    phase: &[f64],
+    samples_per_revolution: i32,
+) -> Result<OwnedResult> {
+    let mut error = fresh_error();
+    call(
+        "cnn_angle_resample",
+        unsafe { cnn_angle_resample(span(x), span(phase), samples_per_revolution, &mut error) },
+        &error,
+    )
+}
+
+/// L302：周期 Hann 单边峰值幅值谱（阶次域同入口），字段名 values。
+pub fn amplitude_spectrum(x: &[f64], center: bool) -> Result<OwnedResult> {
+    let mut error = fresh_error();
+    call(
+        "cnn_amplitude_spectrum",
+        unsafe { cnn_amplitude_spectrum(span(x), c_int::from(center), &mut error) },
+        &error,
+    )
+}
+
+/// L305：完整转数算术同步平均，字段 cycle 为单圈平均、repeated 为平铺信号。
+pub fn tsa(
+    x: &[f64],
+    samples_per_revolution: i32,
+    minimum_revolutions: i32,
+) -> Result<OwnedResult> {
+    let mut error = fresh_error();
+    call(
+        "cnn_tsa",
+        unsafe {
+            cnn_tsa(
+                span(x),
+                samples_per_revolution,
+                minimum_revolutions,
+                &mut error,
+            )
+        },
         &error,
     )
 }
