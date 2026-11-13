@@ -18,9 +18,11 @@ namespace detail {
             right_axis = maxima.locations[maxima.locations.size( ) - 1];
         else if (signal[signal.size( ) - 1] > minima.values[minima.values.size( ) - 1])
             right_axis = minima.locations[minima.locations.size( ) - 1];
-        const Array query = Array::LinSpaced(signal.size( ), 0.0, static_cast< double >(signal.size( ) - 1));
-        return Envelopes{ interpolate(mirror(maxima, left_axis, right_axis, width), query, method),
-                          interpolate(mirror(minima, left_axis, right_axis, width), query, method) };
+        // 常量查询 0..N-1 与信号无关，规模不变时复用工作区缓存。
+        if (workspace.query.size( ) != signal.size( ))
+            workspace.query = Array::LinSpaced(signal.size( ), 0.0, static_cast< double >(signal.size( ) - 1));
+        return Envelopes{ interpolate(mirror(maxima, left_axis, right_axis, width, workspace), workspace.query, method),
+                          interpolate(mirror(minima, left_axis, right_axis, width, workspace), workspace.query, method) };
     }
 }    // namespace detail
 

@@ -46,10 +46,11 @@ Extrema refine(const Array &signal, const std::vector< Eigen::Index > &indices, 
     return result;
 }
 
-Extrema mirror(const Extrema &extrema, double left_axis, double right_axis, int width) {
-    std::vector< std::pair< double, double > > points;
-    const auto                                 n     = extrema.locations.size( );
-    const auto                                 count = std::min< Eigen::Index >(n, static_cast< Eigen::Index >(width) + 1);
+Extrema mirror(const Extrema &extrema, double left_axis, double right_axis, int width, Workspace &work) {
+    auto      &points = work.mirror_points;
+    const auto n     = extrema.locations.size( );
+    const auto count = std::min< Eigen::Index >(n, static_cast< Eigen::Index >(width) + 1);
+    points.clear( );
     points.reserve(static_cast< std::size_t >(n + 2 * count));
     auto distinct = [](double a, double b) { return std::abs(a - b) > 1e-8 + 1e-5 * std::abs(b); };
     for (Eigen::Index i = 0; i < count; ++i) {
