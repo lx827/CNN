@@ -2,10 +2,11 @@
 
 > 最后更新: 2026-11-13 | #125 补充原生 SOS 配对与 LMS 更新上限修复；PR #90/#92 已合 main;Bug #25(设置页首渲染崩溃)修复见已修复表,未声明部署生产。历史效果数字保留当时数据与实现语境。
 
-## 未修复 (2)
+## 未修复 (3)
 
 | # | 文件 | 描述 |
 |---|------|------|
+| 142a | `cloud/tests/diagnosis/algorithms/`（test_research_limit_serialization_*） | **基线即失败：`KeyError: 'fault_indicators'`** — #143 验证轮发现，基线 main 同样失败，与 lib/deconvolution 本轮改动无关；根因与修复待查 |
 | 11d | 历史 ensemble/评分实验 | 旧 D-S 未生效的 0/30 实验需按 #78 新 Evidence 重建效果；旧实现已删除，不把结构修复等同于真实检出恢复 |
 | 13d | 历史 WTG 五分类实验 | 断齿检出 0% 的旧标签/实验协议已退役，新对象 Pipeline 不直接命名断齿；新分类效果仍归 #78，未宣称已解决 |
 
