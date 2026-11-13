@@ -12,6 +12,7 @@
 | C ABI 动态库、C++ 安装消费与 ARM64 构建 | [独立分发说明](native_compute_distribution.md)、[ADR 0009](adr/0009-c-abi-native-distribution.md) |
 | C++ 加速算法的模块、接口与内存规则 | [cpp-accelerate skill](../.claude/skills/cpp-accelerate/SKILL.md)、[ADR 0007](adr/0007-native-algorithm-module-interfaces.md) |
 | 本地 emd.sift 参考的原生算法契约 | [原生 EMD](algorithms/decomposition/native_emd.md)、[ADR 0008](adr/0008-local-emd-reference-native-family.md) |
+| 云端默认完整业务 EMD 族与原生随机数 | [完整原生业务 EMD](algorithms/decomposition/native_business_emd.md)、[ADR 0010](adr/0010-complete-business-emd-native.md) |
 | 整体系统结构 | [系统架构](系统架构.md) |
 | 域词汇 | [GLOSSARY](../GLOSSARY.md) |
 | 云端、DC24、脚本说明 | [cloud README](../cloud/README.md)、[dc24 README](../dc24/README.md)、[scripts README](../scripts/README.md) |

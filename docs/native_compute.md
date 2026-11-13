@@ -16,7 +16,7 @@ lib/
 ├── filtering/     # Butterworth SOS、零相位、SG、Hann、去趋势
 ├── transforms/    # 独立解析信号、幅度归一化与 Hilbert/NHT
 ├── numeric/       # 频谱/STFT/倒谱、统计、抽点、自相关
-├── emd/           # 完整 sift、集成、mask/迭代/二层组合与旧筛分候选
+├── emd/           # 完整业务 EMD 族，以及独立 sift/mask/二层参照族
 ├── wavelet/ vmd/  # 内置离散小波与 ADMM 分解
 ├── deconvolution/ ica/ adaptive/ # MED/MCKD、FastICA、LMS 族
 └── diagnostic/ rotation/ sequence/ # 高阶谱、相位阶次/TSA、趋势与序列
@@ -28,7 +28,7 @@ cnn_compute/       # Python 入口、core 公共接口及内联类型注解
 
 依赖方向为 `CNN::emd → CNN::envelope → CNN::interpolation → CNN::solvers`，各数值模块使用 core/Eigen，纯 C++ target 不依赖 Python。公开入口准备拥有型结果与工作区，内部执行接口用于直接写输出和跨算法组合。绑定单独链接这些 target，处理 Python 布局、GIL 释放和输出 capsule；根目录不设置 `src/`。
 
-Python 独立模块包括 `cnn_compute.fourier`、`filtering`、`numeric`、`wavelet`、`vmd`、`diagnostic`、`rotation`、`sequence` 及既有 `emd`、`envelope`、`interpolation`、`transforms`。MED/MCKD、ICA 与自适应滤波的 Python 数值函数聚合于 `diagnostic`，对应 C++ 目录和 targets 仍按数学族独立。既有 `core` 数值入口和下划线差分别名保留兼容。`CNN::emd` 的 mask 路径使用 `CNN::transforms`，NHT 再组合包络与插值，依赖无环。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
+Python 独立模块包括 `cnn_compute.fourier`、`filtering`、`numeric`、`wavelet`、`vmd`、`diagnostic`、`rotation`、`sequence`、业务 `emd_family` 及独立参照 `emd`、`envelope`、`interpolation`、`transforms`。MED/MCKD、ICA 与自适应滤波的 Python 数值函数聚合于 `diagnostic`，对应 C++ 目录和 targets 仍按数学族独立。既有 `core` 数值入口和下划线差分别名保留兼容。`CNN::emd` 的 mask 路径使用 `CNN::transforms`，NHT 再组合包络与插值，依赖无环。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
 
 ### mask 分支本地受控结果（2026-11-12）
 
@@ -84,7 +84,7 @@ wheel 仅包含 `cnn_compute`、其原生扩展、生成存根、类型标记及
 
 ## 原生筛分候选
 
-候选通过 `NativeEMDImplementation` 显式传入现有 EMD/EEMD/CEEMDAN 公开分解入口；该 adapter 复用 Python 外层，仅将一次完整 IMF 筛分交给原生核。默认及可选的插值/停止组合均走同一筛分循环，NumPy 噪声生成、种子顺序及 Torres 2011 集成公式保持原样。包级通用筛分入口及已有 PCHIP/SD 兼容入口的签名和所有权见源码 docstring；合规 float64 连续输入只读借用，非连续视图最多显式连续化一次，输出由 capsule 持有独立缓冲区。计算期间释放 GIL，不新增线程池。
+历史筛分候选只将完整单 IMF 交给原生核，Python 保留外层与 NumPy 噪声；#106 冻结测量仍显式维持此边界。2026-11-14 默认 `NativeEMDImplementation` 改为 [完整原生业务 EMD](algorithms/decomposition/native_business_emd.md)，归一化、多 IMF、随机噪声及集成都在 C++。同构建种子可复现，不承诺旧 NumPy 噪声序列相同。包级通用筛分及已有 PCHIP/SD 兼容入口继续保留；合规 float64 连续输入只读借用，非连续视图最多连续化一次，输出 capsule 独立持有缓冲。计算释放 GIL，不新增线程池。
 
 极值差分掩码、抛物线精化、PCHIP 斜率与系数、分段多项式求值、信号更新及平方和使用 Eigen 数组表达式，索引压缩、镜像排序与区间查找保留专用流程。工作区按记录和节点数线性增长，输入只在单次筛分开始时复制为工作数组，不在每轮重复制输入或重做边界校验；数值产生非有限包络时明确抛错。
 

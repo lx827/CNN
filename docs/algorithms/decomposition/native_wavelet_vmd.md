@@ -12,7 +12,7 @@ cloud EMD/EEMD/CEEMDAN → 既有 Python 族编排 → 同公式原生单 IMF �
 
 小波和 VMD 的默认分解切换为原生 adapter；PyWavelets 与 NumPy adapter 仍可显式注入作数学参考，不在原生失败时静默回退。阈值评估、敏感分量选择、机械故障判定继续消费既有领域结果。小波阈值收缩本身属于数值计算，在 C++ 中执行。
 
-EMD 默认使用既有 `NativeEMDImplementation`，保留 Python 外层的归一化、随机序列、EEMD 与 Torres CEEMDAN 公式；独立 `emd.sift 0.8.1` 原生家族是另一公式参照，没有被自动替换为业务默认。
+EMD 默认 `NativeEMDImplementation` 已将归一化、多 IMF、原生随机数与 EEMD/Torres CEEMDAN 全部移入 C++，数学公式保留，随机序列兼容范围见 [完整原生业务 EMD](native_business_emd.md)。独立 `emd.sift 0.8.1` 家族是另一公式参照，没有被替换为业务默认。
 
 ## 小波数学与结果成本
 
