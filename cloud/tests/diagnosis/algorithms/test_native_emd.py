@@ -13,6 +13,7 @@ from app.algorithms.decomposition.emd import (
     EMDParameters,
     EnsembleParameters,
     NativeEMDImplementation,
+    PythonEMDImplementation,
     decompose_ceemdan,
     decompose_eemd,
     decompose_emd,
@@ -47,7 +48,9 @@ class NativeEMDTests(unittest.TestCase):
                         max_imfs=4, max_sifts=max_sifts, sd_threshold=threshold
                     )
                     original = signal.copy()
-                    expected = decompose_emd(signal, 512, parameters)
+                    expected = decompose_emd(
+                        signal, 512, parameters, PythonEMDImplementation()
+                    )
                     actual = decompose_emd(signal, 512, parameters, implementation)
                     assert_result_close(self, actual, expected, signal)
                     np.testing.assert_array_equal(signal, original)
@@ -140,7 +143,9 @@ class NativeEMDTests(unittest.TestCase):
                         parameters = EMDParameters(
                             max_imfs=4, interpolation=method, stopping_rule=rule
                         )
-                        expected = decompose_emd(signal, 512, parameters)
+                        expected = decompose_emd(
+                            signal, 512, parameters, PythonEMDImplementation()
+                        )
                         actual = decompose_emd(
                             signal, 512, parameters, NativeEMDImplementation()
                         )
@@ -231,7 +236,7 @@ class NativeEMDTests(unittest.TestCase):
         upper[:2], lower[:2] = 1.1, -0.9
         self.assertFalse(_native._rilling_stop(upper, lower, thresholds))
 
-    def test_ensemble_candidates_keep_fixed_seed_formulas_and_repeatability(self):
+    def test_native_ensembles_all_configurations_repeatability_and_reconstruction(self):
         signal = reference_signals()["trend"]
         for method in ("pchip", "cubic"):
             for rule in ("sd", "rilling"):
@@ -251,9 +256,6 @@ class NativeEMDTests(unittest.TestCase):
                         stopping_rule=rule,
                         method=decompose.__name__,
                     ):
-                        expected = decompose(
-                            signal, 512, seed=20261112, parameters=parameters
-                        )
                         actual = decompose(
                             signal,
                             512,
@@ -268,7 +270,13 @@ class NativeEMDTests(unittest.TestCase):
                             parameters=parameters,
                             implementation=NativeEMDImplementation(),
                         )
-                        assert_result_close(self, actual, expected, signal)
+                        self.assertEqual(actual.status, "valid")
+                        np.testing.assert_allclose(
+                            actual.reconstructed, signal, atol=1e-12
+                        )
+                        self.assertEqual(len(actual.imfs), len(actual.sift_iterations))
+                        self.assertEqual(len(actual.imfs), len(actual.converged))
+                        self.assertEqual(len(actual.imfs), len(repeated.imfs))
                         for first, second in zip(actual.imfs, repeated.imfs):
                             np.testing.assert_array_equal(first, second)
                         np.testing.assert_array_equal(
@@ -356,12 +364,19 @@ class NativeEMDFixedVectorTests(unittest.TestCase):
                         stopping_rule=rule,
                         family="emd",
                     ):
-                        expected = decompose_emd(vector, fs, parameters)
+                        expected = decompose_emd(
+                            vector, fs, parameters, PythonEMDImplementation()
+                        )
                         actual = decompose_emd(
                             vector, fs, parameters, NativeEMDImplementation()
                         )
                         assert_result_close(self, actual, expected, vector)
-                    ensemble = EnsembleParameters(emd=parameters, **config["ensemble"])
+                    # 新原生随机源不承担旧 NumPy 序列兼容；冻结数组预算只比较
+                    # 确定性分解与零噪声分支，随机集成公式由 C++ 独立 oracle 检查。
+                    ensemble = replace(
+                        EnsembleParameters(emd=parameters, **config["ensemble"]),
+                        noise_scale=0,
+                    )
                     for decompose in (decompose_eemd, decompose_ceemdan):
                         with self.subTest(
                             vector=entry["id"],
@@ -370,7 +385,11 @@ class NativeEMDFixedVectorTests(unittest.TestCase):
                             family=decompose.__name__,
                         ):
                             expected = decompose(
-                                vector, fs, seed=config["seed"], parameters=ensemble
+                                vector,
+                                fs,
+                                seed=config["seed"],
+                                parameters=ensemble,
+                                implementation=PythonEMDImplementation(),
                             )
                             actual = decompose(
                                 vector,
@@ -401,7 +420,9 @@ class NativeEMDFixedVectorTests(unittest.TestCase):
                 self.assertEqual(digest, entry["sha256_float64_le"])
                 self.assertEqual(len(vector), 4096)
                 fs = entry["sample_rate_hz"]
-                expected = decompose_emd(vector, fs, parameters)
+                expected = decompose_emd(
+                    vector, fs, parameters, PythonEMDImplementation()
+                )
                 actual = decompose_emd(
                     vector, fs, parameters, NativeEMDImplementation()
                 )

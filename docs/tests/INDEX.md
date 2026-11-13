@@ -48,7 +48,7 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 | 阶次 | `algorithms/test_order_pipeline.py`、`test_order_integration.py` | 解析积分、快扫频、幅值与谱轴、Engine、HTTP 与持久化 |
 | 分解 | `algorithms/test_decomposition_*.py` | 小波/EMD/VMD 数学参考、频率序、质量门控、反例与实际消费者 |
 | EMD 筛分替换 | `algorithms/test_emd_sift_contract.py` | 公开入口注入、固定随机序列、四种配置组合、冻结预算与模态伪等价负例 |
-| EMD 原生候选 | `algorithms/test_native_emd.py` | PCHIP/cubic × SD/Rilling 的 EMD/EEMD/CEEMDAN 差分、局部误差预算、所有权与失败边界；显式数据根下核对五条固定短向量 |
+| EMD 原生 | `algorithms/test_native_emd.py`、`test_native_emd_family.py` | 确定性四配置差分、原生集成复现、完整云端入口/owner/失败；显式数据根下五条固定向量只作确定性/零噪声对照 |
 | EMD 性能准入规则 | `benchmarks/test_native_performance.py` | 冻结时间边界、零容差峰值、MAD/块间噪声、漏块与重复块；不执行性能测量 |
 | 复合研究 | `algorithms/test_composite_pipelines.py`、`test_composite_research_api.py` | 已知解、阶段串联、消融、五组合 HTTP 与生产隔离 |
 | 引擎回归 | `algorithms/test_engine_regressions.py` | 无参数、TSA、噪声转频和零信号不可判定，全部合成信号 |
@@ -72,6 +72,8 @@ uv run python -m unittest tests.diagnosis.algorithms.test_emd_sift_contract -v
 ```
 
 [冻结契约](../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json) 与 [手写对照资产](../../cloud/tests/diagnosis/algorithms/emd_reference_contract.py) 供后续 Python/原生差分复用；测试本身不生成需要提交的波形或 golden 数组，不表示已有原生性能结论。
+
+完整原生业务族可在 `cloud/` 运行 `uv run --no-sync python -m unittest tests.diagnosis.algorithms.test_native_emd_family`，纯 C++ 对应 `emd_business_contract` CTest。该契约用相同原生白噪声独立组合基础 EMD 调用验证 EEMD/Torres CEEMDAN；不要求不同随机源的 IMF 逐点一致。公式、所有权与验证边界见 [完整原生业务 EMD](../algorithms/decomposition/native_business_emd.md)。
 
 已安装计算扩展后，四种插值/停止组合的 EMD 族原生候选在 `cloud/` 执行：
 
@@ -108,6 +110,8 @@ uv run python -m tests.diagnosis.real_data.effectiveness --data-root $env:CNN_DA
 ## 本地性能基准
 
 #106 的同公式 Python/原生 EMD 族入口为 `cloud/tests/diagnosis/benchmarks/native_performance.py`，冻结配置为同目录 `native_performance_config.json`。五条原 SHA256 短向量 × 两档参数 × 三个算法族共 30 项，固定 PCHIP/SD；先 `prepare`、`check`，再 `measure`、`profile`、`report`。三块顺序为 AB/BA/AB，各后端每块五次计时，独立正确性/质量与 profile worker 不混入计时或 OS 峰值门槛。Windows/WSL 全矩阵、Linux 源码构建与 ECS 资源子集的命令及采用边界见 [性能基准说明](../benchmarks/diagnosis_performance.md)。
+
+#106 显式固定在旧 Python 外层/NumPy 噪声加 C++ 单 IMF 筛分，业务默认切换不改变该历史测量。完整业务族在根目录运行 `uv run --no-sync python scripts/benchmark_emd_family.py`，每算法/后端独立进程报告端到端耗时和 OS 高水位；原生 RNG 与旧 NumPy 不同，结果不冒充 #106 的同噪声冻结准入。生成报告保存在忽略目录或库外。
 
 冻结准入计算可在 `cloud/` 独立验证，不运行基准：
 

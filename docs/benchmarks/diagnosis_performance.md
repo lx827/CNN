@@ -139,11 +139,9 @@ PCHIP、镜像数量、IMF/筛分上限可对齐，但 PyEMD 多停止测试不�
 
 ## 原生接口与内存所有权草案
 
-下表完整分解等接口仍是后续候选草案，不能视为已实现 ABI。当前 EMD 原生计算采用 C++/Eigen 单 IMF 完整筛分核，后续候选粒度继续以实测热点为依据。比较重复分解、固定矩阵求解复用、STFT/FFT 调用次数、数组驻留与窗口顺序，原始证据和采纳决定留在数据根详报。
+本节保留 #79/#106 的历史接口草案，下表名称不代表现行 ABI。EMD 首批按 [ADR 0006](../adr/0006-native-diagnosis-compute-package.md) 实现 C++ 单 IMF 筛分；#106 仍显式选用 Python 外层、NumPy 噪声与原生筛分，不随业务默认改变。
 
-当前候选支持 PCHIP/cubic × SD/Rilling 四种单 IMF 筛分组合，经 `NativeEMDImplementation` 显式选择；Python 保留多 IMF、归一化、随机数及 EEMD/Torres 2011 CEEMDAN 外层。原生核的包络、单 IMF 和三个公开算法族按既有冻结预算验收，输入准备可能的连续化与原生工作数组需在正式测量中单独核算。[计算库说明](../native_compute.md) 记录 Eigen 计算基座、插值适配、cubic 带状求解及 FP 策略。正确性与构建验证不能替代 #106 的端到端成本或生产采用证据。
-
-EMD 首批实施已按 [ADR 0006](../adr/0006-native-diagnosis-compute-package.md) 收敛为单 IMF 完整筛分核。当前 Python adapter 通过实例核复用外层算法，仍以 Python 为默认；下表完整分解的原生 ABI 是后续候选，不能视为当前已实现接口。比较前冻结的 [数值契约](../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json) 区分局部与完整分解误差预算；手写对照信号和公开入口断言见 [对照资产](../../cloud/tests/diagnosis/algorithms/emd_reference_contract.py) 与 [筛分替换测试](../../cloud/tests/diagnosis/algorithms/test_emd_sift_contract.py)。既有固定 SHA256 输入和参数身份继续复用，不提交生成数组或数值结果。
+2026-11-14 云端默认已迁移到 [完整原生业务 EMD](../algorithms/decomposition/native_business_emd.md)，支持 PCHIP/cubic × SD/Rilling 的完整 EMD/EEMD/Torres CEEMDAN。随机生成也在 C++，同种子不保证旧 NumPy 数组相同，因此独立测量脚本为 `scripts/benchmark_emd_family.py`，不能套用 #106 的同噪声逐数组门槛。原生数学公式使用独立同噪声组合核验，确定性 EMD 和局部筛分继续保持原 [冻结预算](../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json)。构建验证、本地成本与生产 ECS 资源验收分别记录；既有固定输入清单保留，不提交生成数组或数值报告。
 
 | 候选粒度 | 输入与单位 | 输出与工作区 |
 |---|---|---|

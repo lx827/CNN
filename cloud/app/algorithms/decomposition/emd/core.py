@@ -10,7 +10,6 @@ from numpy.typing import NDArray
 
 from ..types import ValidInterval
 
-
 FloatArray = NDArray[np.float64]
 
 
@@ -112,8 +111,6 @@ def _validate_signal(signal: FloatArray, sample_rate_hz: float) -> FloatArray:
     arr = np.asarray(signal, dtype=np.float64)
     if arr.ndim != 1 or len(arr) < 8:
         raise ValueError("EMD 输入必须是一维且至少包含 8 个采样点")
-    if not np.all(np.isfinite(arr)):
-        raise ValueError("输入信号不能包含 NaN 或无穷值")
     if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0.0:
         raise ValueError("采样率必须是有限正数")
     return arr
@@ -153,7 +150,10 @@ def decompose_eemd(
     parameters: EnsembleParameters | None = None,
     implementation: EMDImplementation | None = None,
 ) -> EMDResult:
-    """EEMD；相同输入、参数和种子逐数组可复现。"""
+    """EEMD；同一实现/构建的相同输入、参数和种子逐数组可复现。
+
+    默认完整原生族使用 C++ 随机源，与显式 Python 参考的 NumPy 序列不同。
+    """
     arr = _validate_signal(signal, sample_rate_hz)
     _validate_seed(seed)
     return _implementation(implementation).eemd(

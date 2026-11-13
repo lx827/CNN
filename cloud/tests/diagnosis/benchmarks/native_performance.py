@@ -271,9 +271,17 @@ def build_call(config, case, signal, backend):
     )
     implementation = PythonEMDImplementation()
     if backend == "native":
-        from app.algorithms.decomposition.emd import NativeEMDImplementation
+        from dataclasses import asdict
+        from cnn_compute import sift_imf
 
-        implementation = NativeEMDImplementation()
+        # #106 冻结的是 NumPy 噪声 + C++ 单 IMF 筛分，不随业务默认迁移。
+        # 完整 C++ 族使用独立原生随机源，测量入口为 scripts/benchmark_emd_family.py。
+        def legacy_sift(values, parameters):
+            options = asdict(parameters)
+            options.pop("max_imfs")
+            return sift_imf(values, **options)
+
+        implementation = PythonEMDImplementation(sift_kernel=legacy_sift)
         # 计时排除导入，内存包含真实原生扩展驻留；Python 基线不强制加载该扩展。
         import cnn_compute  # noqa: F401
     fs = case["vector"]["sample_rate_hz"]
