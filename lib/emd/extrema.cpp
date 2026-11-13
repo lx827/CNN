@@ -57,37 +57,32 @@ void refine(const Array &signal, const std::vector< Eigen::Index > &indices, Wor
 
 std::size_t mirror(std::span< const double > locations, std::span< const double > values,
                    double left_axis, double right_axis, int width, Workspace &work) {
-    auto      &points = work.mirror_points;
-    const auto n      = static_cast< Eigen::Index >(locations.size( ));
-    const auto count  = std::min< Eigen::Index >(n, static_cast< Eigen::Index >(width) + 1);
-    points.clear( );
-    points.reserve(static_cast< std::size_t >(n + 2 * count));
-    auto distinct = [](double a, double b) { return std::abs(a - b) > 1e-8 + 1e-5 * std::abs(b); };
-    for (Eigen::Index i = 0; i < count; ++i) {
+    const auto n        = static_cast< Eigen::Index >(locations.size( ));
+    const auto count    = std::min< Eigen::Index >(n, static_cast< Eigen::Index >(width) + 1);
+    const auto capacity = n + 2 * count;
+    if (work.mirror_locations.size( ) < capacity) {
+        work.mirror_locations.resize(capacity);
+        work.mirror_values.resize(capacity);
+    }
+    auto        distinct = [](double a, double b) { return std::abs(a - b) > 1e-8 + 1e-5 * std::abs(b); };
+    std::size_t total    = 0;
+    auto        append   = [&](double location, double value) {
+        work.mirror_locations[total] = location;
+        work.mirror_values[total]    = value;
+        ++total;
+    };
+    // 左侧反射随原节点递减，反向遍历后递增；筛选使三段严格分离，无需排序。
+    for (Eigen::Index i = count; i-- > 0;) {
         const double location = 2.0 * left_axis - locations[i];
         if (location < locations[0] && distinct(location, locations[0]))
-            points.emplace_back(location, values[i]);
+            append(location, values[i]);
     }
-    for (Eigen::Index i = 0; i < n; ++i) points.emplace_back(locations[i], values[i]);
+    for (Eigen::Index i = 0; i < n; ++i) append(locations[i], values[i]);
     for (Eigen::Index offset = 0; offset < count; ++offset) {
         const auto   i        = n - 1 - offset;
         const double location = 2.0 * right_axis - locations[i];
         if (location > locations[n - 1] && distinct(location, locations[n - 1]))
-            points.emplace_back(location, values[i]);
-    }
-    std::stable_sort(points.begin( ), points.end( ), [](auto a, auto b) { return a.first < b.first; });
-    points.erase(std::unique(points.begin( ), points.end( ), [](auto a, auto b) {
-                     return a.first == b.first;
-                 }),
-                 points.end( ));
-    const auto total = points.size( );
-    if (static_cast< std::size_t >(work.mirror_locations.size( )) < total) {
-        work.mirror_locations.resize(static_cast< Eigen::Index >(total));
-        work.mirror_values.resize(static_cast< Eigen::Index >(total));
-    }
-    for (std::size_t i = 0; i < total; ++i) {
-        work.mirror_locations[i] = points[i].first;
-        work.mirror_values[i]    = points[i].second;
+            append(location, values[i]);
     }
     return total;
 }
