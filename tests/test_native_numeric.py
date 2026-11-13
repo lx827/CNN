@@ -24,15 +24,20 @@ class NativeNumericTests(unittest.TestCase):
         assert_allclose(fourier.convolve(x, x[:7]), np.convolve(x, x[:7]), atol=2e-13)
 
     def test_stft_odd_even_frames_and_amplitude(self):
-        x = np.random.default_rng(1).normal(size=103)
-        for window, nfft in ((31, 47), (32, 64)):
+        for size, window, overlap, nfft in (
+            (103, 31, 13, 47),
+            (103, 32, 13, 64),
+            (5, 4, 0, 4),
+            (7, 5, 0, 7),
+        ):
+            x = np.random.default_rng(1).normal(size=size)
             freq, time, z = signal.stft(
-                x, fs=1000, nperseg=window, noverlap=13, nfft=nfft
+                x, fs=1000, nperseg=window, noverlap=overlap, nfft=nfft
             )
             amp = np.abs(z)
             amp[1 : -(1 if nfft % 2 == 0 else 0) or None] *= 2
             actual_time, actual_freq, actual_amp = numeric.stft(
-                x, 1000, window, 13, nfft
+                x, 1000, window, overlap, nfft
             )
             assert_allclose(actual_time, time, atol=1e-15)
             assert_allclose(actual_freq, freq, atol=1e-12)

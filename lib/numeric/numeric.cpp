@@ -19,24 +19,18 @@ namespace {
     void rate(double fs) {
         if (!std::isfinite(fs) || fs <= 0) throw std::invalid_argument("sample rate must be positive");
     }
-    // abs/centered 物化一次（发现7）：各统计量复用同一份数据，调用方提供窗长临时，
-    // 帧循环可跨帧复用；归约次序不变，与逐次求值的表达式逐位一致。
-    Statistics stats(std::span< const double > x, double floor, std::span< double > abs_store,
-                     std::span< double > centered_store) {
+    // abs 与中心化只保留惰性表达式，归约直接读取输入，不物化全长临时数组。
+    Statistics stats(std::span< const double > x, double floor) {
         const Eigen::Map< const Array > a(x.data( ), x.size( ));
-        const double                    mean = a.mean( );
-        Eigen::Map< Array >             abs(abs_store.data( ), x.size( ));
-        Eigen::Map< Array >             centered(centered_store.data( ), x.size( ));
-        abs               = a.abs( );
-        centered          = a - mean;
-        const double peak = abs.maxCoeff( ), rms = std::sqrt(a.square( ).mean( ));
-        const double mean_abs = abs.mean( ), mean_sqrt = (abs + floor).sqrt( ).mean( );
-        const double variance  = centered.square( ).mean( );
-        const double threshold = std::numeric_limits< double >::epsilon( ) * std::abs(mean);
-        double       kurt = std::numeric_limits< double >::quiet_NaN( ), skew = kurt;
+        const auto                      abs  = a.abs( );
+        const double                    peak = abs.maxCoeff( ), rms = std::sqrt(a.square( ).mean( ));
+        const double                    mean_abs = abs.mean( ), mean_sqrt = (abs + floor).sqrt( ).mean( );
+        const double                    mean = a.mean( ), variance = (a - mean).square( ).mean( );
+        const double                    threshold = std::numeric_limits< double >::epsilon( ) * std::abs(mean);
+        double                          kurt = std::numeric_limits< double >::quiet_NaN( ), skew = kurt;
         if (variance > threshold * threshold) {
-            kurt = centered.square( ).square( ).mean( ) / (variance * variance);
-            skew = centered.cube( ).mean( ) / std::pow(variance, 1.5);
+            kurt = (a - mean).square( ).square( ).mean( ) / (variance * variance);
+            skew = (a - mean).cube( ).mean( ) / std::pow(variance, 1.5);
         }
         return { peak, rms, kurt, skew, mean_sqrt > 1e-12 ? peak / (mean_sqrt * mean_sqrt) : 0,
                  mean_abs > 1e-12 ? rms / mean_abs : 0, mean_abs > 1e-12 ? peak / mean_abs : 0, rms > 1e-12 ? peak / rms : 0 };
@@ -94,14 +88,13 @@ Stft stft(std::span< const double > x, double fs, int window, int overlap, int n
     fourier::Plan                   plan(nfft);
     std::vector< double >           buffer(nfft);
     std::vector< fourier::Complex > fft(bins);
-    // 循环前一次清零（发现6）：nfft 尾部恒为零；帧内越界位置——首部由初值保持、
-    // 尾部随右端收缩逐帧回零，替代原先的每帧全量清零。
-    std::fill(buffer.begin( ), buffer.end( ), 0.0);
+    // buffer 初始为零，nfft 尾部不再改写；左端补零随帧推进缩短，
+    // 右端只清除有效交集之后的部分，完全越出输入的尾帧交集为空。
     const auto size = static_cast< std::ptrdiff_t >(x.size( ));
     for (std::size_t frame = 0; frame < frames; ++frame) {
         const auto base = static_cast< std::ptrdiff_t >(frame * hop) - static_cast< std::ptrdiff_t >(edge);
         const auto lo   = std::max< std::ptrdiff_t >(0, -base);
-        const auto hi   = std::min< std::ptrdiff_t >(window, size - base);
+        const auto hi   = std::clamp< std::ptrdiff_t >(size - base, 0, window);
         if (hi < window) std::fill(buffer.begin( ) + hi, buffer.begin( ) + window, 0.0);
         for (auto j = lo; j < hi; ++j) buffer[j] = x[base + j] * w[j];
         plan.forward_half(buffer, fft);
@@ -152,8 +145,7 @@ Array hilbert_envelope(std::span< const double > x) {
 Statistics statistics(std::span< const double > x, double floor) {
     check(x);
     if (!std::isfinite(floor) || floor < 0) throw std::invalid_argument("margin floor must be finite and nonnegative");
-    std::vector< double > abs(x.size( )), centered(x.size( ));
-    return stats(x, floor, abs, centered);
+    return stats(x, floor);
 }
 TimeDomain time_domain(std::span< const double > x, double fs, int window, int step) {
     check(x);
@@ -162,14 +154,12 @@ TimeDomain time_domain(std::span< const double > x, double fs, int window, int s
     window                       = std::min(window, static_cast< int >(x.size( )));
     step                         = step ? std::min(step, window) : std::max(1, window / 2);
     const std::size_t     frames = 1 + (x.size( ) - window) / step;
-    std::vector< double > abs(x.size( )), centered(x.size( ));    // 总体与帧统计共用（发现7）
-    TimeDomain            out{ stats(x, 1e-12, abs, centered), Array(frames), Matrix(frames, 8), window, step };
+    TimeDomain            out{ stats(x, 1e-12), Array(frames), Matrix(frames, 8), window, step };
     auto                  w = filtering::hann(window);
     std::vector< double > buffer(window);
     for (std::size_t k = 0; k < frames; ++k) {
         Eigen::Map< Array >(buffer.data( ), window) = Eigen::Map< const Array >(x.data( ) + k * step, window) * Eigen::Map< const Array >(w.data( ), window);
-        const auto result                           = stats(buffer, 1e-12, { abs.data( ), static_cast< std::size_t >(window) },
-                                                            { centered.data( ), static_cast< std::size_t >(window) });
+        const auto result                           = stats(buffer, 1e-12);
         out.time[k]                                 = static_cast< double >(k * step) / fs;
         for (int j = 0; j < 8; ++j) out.values(k, j) = result[j];
     }
