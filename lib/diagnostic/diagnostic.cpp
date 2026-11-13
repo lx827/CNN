@@ -48,6 +48,7 @@ void Workspace::prepare(std::size_t n) {
     modulated.resize(n);
     first.resize(n);
     second.resize(n);
+    phases.resize(n);
     temporary.resize(n);
     low_power.resize(n / 2 + 1);
     high_power.resize(n / 2 + 1);
@@ -116,7 +117,11 @@ namespace execution {
         // PSD只需两条carrier轴；复结果直接累加到最终拥有者。
         auto &low_power  = w.low_power;
         auto &high_power = w.high_power;
+        if (w.phases.size( ) != x.size( )) w.phases.resize(x.size( ));    // 相位表按信号全长准备
         for (std::size_t a = 0; a < alpha.size( ); ++a) {
+            // 相位角只依赖全局采样序号：一次建 n 长表，段循环查表（表达式与逐次
+            // polar 完全相同，逐位一致）；sincos 从 alpha×count×l 降为 alpha×n。
+            for (std::size_t i = 0; i < x.size( ); ++i) w.phases[i] = std::polar(1.0, pi * alpha[a] * i / fs);
             std::fill(low_power.begin( ), low_power.end( ), 0);
             std::fill(high_power.begin( ), high_power.end( ), 0);
             auto *corr = out.correlation.data( ) + a * bins;
@@ -124,7 +129,7 @@ namespace execution {
                 const auto start = segment * step;
                 for (std::size_t j = 0; j < l; ++j) {
                     double  value  = (x[start + j] - offset) * (input_scale > 0 ? 1 / input_scale : 1) * w.window[j];
-                    Complex phase  = std::polar(1.0, pi * alpha[a] * (start + j) / fs);
+                    Complex phase  = w.phases[start + j];
                     w.modulated[j] = value * phase;
                     w.temporary[j] = value * std::conj(phase);
                 }
