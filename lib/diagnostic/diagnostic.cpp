@@ -49,7 +49,7 @@ namespace {
         scale = 0;
         for (std::size_t i = 0; i < x.size( ); ++i) {
             if (!std::isfinite(x[i].real( )) || !std::isfinite(x[i].imag( ))) throw std::invalid_argument("复输入必须有限");
-            const double magnitude = std::abs(x[i]);
+            const double magnitude = std::sqrt(std::norm(x[i]));    // hypot→sqrt（工单A1，#145-发现3(d)）
             if (i < magnitudes.size( )) magnitudes[i] = magnitude;
             scale = std::max(scale, magnitude);
         }

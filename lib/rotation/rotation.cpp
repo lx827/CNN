@@ -218,10 +218,11 @@ core::Array real_cepstrum(std::span< const double > x) {
     double                          mean = core::Map(x.data( ), n).mean( ), maximum = 0.;
     for (std::size_t i = 0; i < n; ++i) real[i] = (x[i] - mean) * window->values[i];
     plan.forward({ real.data( ), n }, spectrum);
-    for (auto v : spectrum) maximum = std::max(maximum, std::abs(v));
+    // 幅值统一 sqrt(re²+im²)（工单A1，#145-发现5）：hypot→sqrt，末位差异在冻结预算内。
+    for (auto v : spectrum) maximum = std::max(maximum, std::sqrt(std::norm(v)));
     double floor = std::max(maximum * 1e-12, std::numeric_limits< double >::min( )), logmean = 0.;
     for (std::size_t i = 0; i < n; ++i) {
-        real[i] = std::log(std::max(std::abs(spectrum[i]), floor));
+        real[i] = std::log(std::max(std::sqrt(std::norm(spectrum[i])), floor));
         logmean += real[i];
     }
     logmean /= n;
@@ -239,7 +240,7 @@ AMFMResult amfm(std::span< const double > x, double fs) {
     AMFMResult out{ core::Array(x.size( )), core::Array(x.size( ) - 1) };
     double     maximum = 0., minimum = std::numeric_limits< double >::infinity( );
     for (std::size_t i = 0; i < x.size( ); ++i) {
-        double a        = std::abs(analytic[i]);
+        double a        = std::sqrt(std::norm(analytic[i]));
         out.envelope[i] = a;
         maximum         = std::max(maximum, a);
         minimum         = std::min(minimum, a);
@@ -269,7 +270,7 @@ core::Array band_envelope(std::span< const double > x, double fs, double low, do
     hilbert.prepare(x.size( ));
     auto        z = transforms::execution::analytic_signal({ filtered.data( ), x.size( ) }, hilbert);
     core::Array out(x.size( ));
-    for (std::size_t j = 0; j < x.size( ); ++j) out[j] = std::abs(z[j]);
+    for (std::size_t j = 0; j < x.size( ); ++j) out[j] = std::sqrt(std::norm(z[j]));
     return out;
 }
 core::Array window_peaks(std::span< const double > axis, std::span< const double > amp, std::span< const double > centers, double width, bool disjoint) {

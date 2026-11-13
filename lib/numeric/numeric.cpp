@@ -51,9 +51,11 @@ namespace execution {
         const double mean                            = remove_mean ? Eigen::Map< const core::Array >(x.data( ), n).mean( ) : 0.;
         Eigen::Map< core::Array >(buffer.data( ), n) = (Eigen::Map< const core::Array >(x.data( ), n) - mean) * Eigen::Map< const core::Array >(window.data( ), n);
         plan.forward_half(buffer, transformed.first(x.size( ) / 2 + 1));
+        // 幅值统一 sqrt(re²+im²)（工单A1，#144-发现2）：MSVC 的 abs(complex) 走 hypot，
+        // 2-5× 于 sqrt；物理幅值不涉溢保护区（|x|>~1e154），末位差异在冻结预算内。
         for (std::size_t k = 0; k < amplitude.size( ); ++k) {
             const bool edge = k == 0 || (n % 2 == 0 && k == n / 2);
-            amplitude[k]    = std::abs(transformed[k]) * (edge ? 1 : 2) / gain;
+            amplitude[k]    = std::sqrt(std::norm(transformed[k])) * (edge ? 1 : 2) / gain;
         }
     }
 }    // namespace execution
@@ -103,7 +105,7 @@ Stft stft(std::span< const double > x, double fs, int window, int overlap, int n
         out.time[frame] = static_cast< double >(frame * hop) / fs;
         for (std::size_t k = 0; k < bins; ++k) {
             const bool terminal     = k == 0 || (nfft % 2 == 0 && k == static_cast< std::size_t >(nfft / 2));
-            out.amplitude(k, frame) = std::abs(fft[k]) * (terminal ? 1 : 2) / gain;
+            out.amplitude(k, frame) = std::sqrt(std::norm(fft[k])) * (terminal ? 1 : 2) / gain;
         }
     }
     out.frequency = Array::LinSpaced(bins, 0.0, static_cast< double >(bins - 1)) * fs
@@ -122,7 +124,7 @@ Array cepstrum(std::span< const double > x) {
     plan.forward(a, f);
     double mean = 0;
     for (std::size_t i = 0; i < n; ++i) {
-        a[i] = std::log(std::abs(f[i]) + 1e-10);
+        a[i] = std::log(std::sqrt(std::norm(f[i])) + 1e-10);
         mean += a[i];
     }
     mean /= n;
@@ -136,7 +138,7 @@ Array hilbert_envelope(std::span< const double > x) {
     w.prepare(x.size( ));
     const auto z = transforms::execution::analytic_signal(x, w);    // 工作区 analytic 缓冲，免局部 z（发现5）
     Array      out(x.size( ));
-    for (std::size_t i = 0; i < x.size( ); ++i) out[i] = std::abs(z[i]);
+    for (std::size_t i = 0; i < x.size( ); ++i) out[i] = std::sqrt(std::norm(z[i]));
     return out;
 }
 Statistics statistics(std::span< const double > x, double floor) {
