@@ -176,3 +176,7 @@ npm run build
 | 原始 reader 或选样 | 格式合同 + 原始记录显式串行验收 |
 | 前端 | 对应 Node 生命周期/契约测试 + 构建 |
 | 文档 | `bash docs/internal/check_markdown_links.sh` |
+
+## 原生性能修复的定向回归
+
+PR #149 的回归沿实际入口验证 STFT 奇偶窗口与零重叠尾帧、跨信号 EMD 工作区复用，以及谱峭度在极小/极大有限幅值下的缩放不变性。既有 `tests/test_native_numeric.py`、`tests/test_native_diagnostic.py` 和原生 numeric/emd/diagnostic 契约包含这些向量。`tests/native/cache_contract.cpp` 另验证组合长度的有界缓存复用、逐出及 owner 生命周期，随原生 CTest 一起构建运行；不以计时阈值作为正确性测试。
