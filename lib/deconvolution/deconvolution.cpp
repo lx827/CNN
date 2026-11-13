@@ -22,36 +22,45 @@ namespace {
     std::span< double > writable(Array &x) {
         return { x.data( ), static_cast< std::size_t >(x.size( )) };
     }
+    // 无校验内部核：有限性由公开入口或调用方（迭代内 y 由本模块产出）保证；
+    // 零能量是算法自身状态，保留抛出。
+    double kurtosis_kernel(std::span< const double > x) {
+        const double scale = magnitude(x);
+        if (scale == 0) throw std::domain_error("零能量输出无法计算峭度");
+        double p = 0, q = 0;
+        for (double v : x) {
+            double z = v / scale, z2 = z * z;
+            p += z2;
+            q += z2 * z2;
+        }
+        return x.size( ) * q / (p * p);
+    }
+    // 前提：period >= 1、order >= 1、period*order < x.size()（run 入口已保证）。
+    double correlated_kurtosis_kernel(std::span< const double > x, int period, int order) {
+        double scale = magnitude(x);
+        if (scale == 0) throw std::domain_error("零能量输出无法计算相关峭度");
+        double energy = 0, numerator = 0;
+        for (double v : x) {
+            double z = v / scale;
+            energy += z * z;
+        }
+        for (std::size_t i = static_cast< std::size_t >(period) * order; i < x.size( ); ++i) {
+            double product = 1;
+            for (int m = 0; m <= order; ++m) product *= x[i - m * period] / scale;
+            numerator += product * product;
+        }
+        return numerator / std::pow(energy, order + 1);
+    }
 }    // namespace
 double normalized_kurtosis(std::span< const double > x) {
     valid(x);
-    const double scale = magnitude(x);
-    if (scale == 0) throw std::domain_error("零能量输出无法计算峭度");
-    double p = 0, q = 0;
-    for (double v : x) {
-        double z = v / scale, z2 = z * z;
-        p += z2;
-        q += z2 * z2;
-    }
-    return x.size( ) * q / (p * p);
+    return kurtosis_kernel(x);
 }
 double correlated_kurtosis(std::span< const double > x, int period, int order) {
     valid(x);
     if (period <= 0 || order < 1 || static_cast< std::size_t >(period) * order >= x.size( ))
         throw std::invalid_argument("相关峭度周期或移位阶数无效");
-    double scale = magnitude(x);
-    if (scale == 0) throw std::domain_error("零能量输出无法计算相关峭度");
-    double energy = 0, numerator = 0;
-    for (double v : x) {
-        double z = v / scale;
-        energy += z * z;
-    }
-    for (std::size_t i = static_cast< std::size_t >(period) * order; i < x.size( ); ++i) {
-        double product = 1;
-        for (int m = 0; m <= order; ++m) product *= x[i - m * period] / scale;
-        numerator += product * product;
-    }
-    return numerator / std::pow(energy, order + 1);
+    return correlated_kurtosis_kernel(x, period, order);
 }
 struct Workspace::Impl {
     Eigen::MatrixXd                         matrix;
@@ -83,7 +92,8 @@ namespace {
         w.target.resize(rows);
         w.transformed.resize(rows);
     }
-    void mckd_target(Workspace::Impl &w, int period, int order) {
+    // energy 为调用方对 w.y 已算好的 squaredNorm（同一确定性归约，复用不重扫）。
+    void mckd_target(Workspace::Impl &w, int period, int order, double energy) {
         const auto rows  = w.matrix.rows( );
         const auto start = static_cast< Eigen::Index >(period) * order;
         w.target.setZero( );
@@ -100,10 +110,10 @@ namespace {
             }
         }
         if (!std::isfinite(beta_energy) || beta_energy == 0) throw std::runtime_error("MCKD周期乘积数值退化");
-        w.target *= w.y.squaredNorm( ) / (2 * beta_energy);
+        w.target *= energy / (2 * beta_energy);
     }
+    // target 发散最终由 updated 的 norm 检查兜底，迭代内不做全数组有限性扫描。
     void solve(Workspace::Impl &w) {
-        if (!w.target.allFinite( )) throw std::runtime_error("解卷积更新目标非有限");
         w.transformed.noalias( ) = w.qr.householderQ( ).adjoint( ) * w.target;
         w.projected.noalias( )   = w.decomposition.matrixU( ).transpose( ) * w.transformed.head(w.matrix.cols( ));
         w.projected.array( ) *= w.factors.array( );
@@ -147,7 +157,7 @@ namespace execution {
         for (int it = 0; it < o.max_iterations; ++it) {
             w.y.noalias( ) = w.matrix * w.coefficients;
             const std::span< const double > y(w.y.data( ), rows);
-            double                          objective = period ? correlated_kurtosis(y, period, order) : normalized_kurtosis(y);
+            double                          objective = period ? correlated_kurtosis_kernel(y, period, order) : kurtosis_kernel(y);
             history[it]                               = objective;
             info.iterations                           = it + 1;
             if (objective > best) {
@@ -164,7 +174,7 @@ namespace execution {
                 if (!std::isfinite(fourth) || fourth == 0) throw std::runtime_error("MED四阶矩数值退化");
                 w.target.array( ) = energy / fourth * w.y.array( ).cube( );
             } else
-                mckd_target(w, period, order);
+                mckd_target(w, period, order, energy);
             solve(w);
             const double norm = w.updated.norm( );
             if (!std::isfinite(norm) || norm == 0) throw std::runtime_error("解卷积滤波器更新数值退化");
@@ -172,14 +182,25 @@ namespace execution {
         }
         std::copy(w.best.data( ), w.best.data( ) + l, filter.begin( ));
         // 与反转FIR的same卷积等价，短FIR直接计算避免FFT额外缓冲。
-        const auto n      = w.centered.size( );
-        const int  offset = (l - 1) / 2;
-        for (Eigen::Index i = 0; i < n; ++i) {
+        // 首/尾边界段只覆盖有效下标，主体段无分支；j 升序求和次序不变。
+        const auto          n        = w.centered.size( );
+        const int           offset   = (l - 1) / 2;
+        const Eigen::Index head_end = l - offset, body_end = n - offset;
+        for (Eigen::Index i = 0; i < head_end; ++i) {
+            double       sum = 0;
+            const int    jhi = static_cast< int >(i) + offset;
+            for (int j = 0; j <= jhi; ++j) sum += w.centered[i + offset - j] * w.best[l - 1 - j];
+            output[i] = sum;
+        }
+        for (Eigen::Index i = head_end; i < body_end; ++i) {
             double sum = 0;
-            for (int j = 0; j < l; ++j) {
-                auto index = i + offset - j;
-                if (index >= 0 && index < n) sum += w.centered[index] * w.best[l - 1 - j];
-            }
+            for (int j = 0; j < l; ++j) sum += w.centered[i + offset - j] * w.best[l - 1 - j];
+            output[i] = sum;
+        }
+        for (Eigen::Index i = body_end; i < n; ++i) {
+            double       sum = 0;
+            const int    jlo = static_cast< int >(i + offset - n + 1);
+            for (int j = jlo; j < l; ++j) sum += w.centered[i + offset - j] * w.best[l - 1 - j];
             output[i] = sum;
         }
         return info;
@@ -225,7 +246,7 @@ core::Array mckd_update(std::span< const double > matrix, std::size_t rows, std:
     factorize(w, ridge);
     w.coefficients = Eigen::Map< const Eigen::VectorXd >(filter.data( ), columns);
     w.y.noalias( ) = w.matrix * w.coefficients;
-    mckd_target(w, period, order);
+    mckd_target(w, period, order, w.y.squaredNorm( ));
     solve(w);
     return w.updated.array( );
 }
