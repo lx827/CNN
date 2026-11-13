@@ -8,6 +8,8 @@
 
 namespace cnn_compute::wavelet {
 
+struct Workspace;
+
 // 不可变滤波器和延拓方式可共享；不依赖 Python，包含 PyWavelets 全部内置离散族。
 class Plan {
 public:
@@ -18,10 +20,15 @@ public:
     std::size_t coefficient_size(std::size_t input) const;
     std::size_t reconstruction_size(std::size_t coefficients) const;
     int         max_level(std::size_t samples) const;
-    // 库内执行入口：借用等长 a/d，输出与输入不重叠。形状由调用者预先建立。
-    // a 或 d 可为空，表示该支为零；以下执行不分配、不保存输入 view。
-    void analyze(std::span< const double > input, std::span< double > a, std::span< double > d) const;
-    void synthesize(std::span< const double > a, std::span< const double > d, std::span< double > output) const;
+    std::size_t filter_length( ) const;
+    // 库内执行入口：借用等长 a/d，输出与输入不重叠。形状由调用者按同一 Plan
+    // 预先建立，输入长度不低于滤波器长度（有效层数门控下每级自动满足）。
+    // 借用 ws 的相位拆分/边界窗口/聚合缓冲，全部只在 Workspace::prepare 分配，
+    // 逐级执行零分配。a 或 d 可为空，表示该支为零；不保存输入 view。
+    void analyze(std::span< const double > input, std::span< double > a, std::span< double > d,
+                 Workspace &ws) const;
+    void synthesize(std::span< const double > a, std::span< const double > d, std::span< double > output,
+                    Workspace &ws) const;
 
 private:
     struct Impl;
@@ -40,6 +47,10 @@ struct Coefficients {
 struct Workspace {
     std::vector< core::Array > nodes;
     core::Array                first, second, median;
+    // 多相卷积支撑：even/odd 为当前级输入的偶/奇相位半长缓冲，fake 为边界
+    // 窗口（滤波器长度前缀 + 同奇偶后缀），edge 为其卷积输出；中心段与 IDWT
+    // 聚合都在寄存器分块内完成，不落这些缓冲。只在准备阶段分配，逐级复用。
+    core::Array even, odd, fake, edge;
     // 只在准备阶段分配；同形状执行复用全部节点和重构 scratch。
     void prepare(const Plan &plan, std::size_t samples, int level, bool packet);
 };

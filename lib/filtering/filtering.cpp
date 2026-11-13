@@ -1,4 +1,5 @@
 #include "api.hpp"
+#include <core/cache.hpp>
 #include <Eigen/Core>
 #include <Eigen/QR>
 #include <algorithm>
@@ -157,6 +158,12 @@ std::vector< double > hann(std::size_t n) {
     if (n > 1)
         for (std::size_t i = 0; i < n; ++i) w[i] = 0.5 - 0.5 * std::cos(2 * pi * i / n);
     return w;
+}
+HannTable::HannTable(std::size_t n) : samples(n), values(hann(n)) {}
+std::shared_ptr< const HannTable > hann_table(std::size_t n) {
+    // 全长表与 Welch 段窗可同时驻留；最多四项、合计 2^19 个 double（4 MiB）。
+    static core::BoundedCache< HannTable > cache(1 << 19);
+    return cache.obtain(n);
 }
 std::vector< double > detrend(std::span< const double > x, bool linear) {
     finite(x);

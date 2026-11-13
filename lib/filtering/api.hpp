@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <cstddef>
+#include <memory>
 #include <span>
 #include <vector>
 
@@ -23,7 +24,19 @@ std::vector< double > sosfiltfilt(std::span< const double > input,
                                   std::span< const Sos > sos, int padlen = -1);
 // 周期 Hann，N=1 时为 1；输出由返回值拥有。
 std::vector< double > hann(std::size_t samples);
-std::vector< double > detrend(std::span< const double > input, bool linear = false);
+// 进程级有界缓存的周期 Hann 表（与 hann 同一公式），构后只读，可跨线程共享。
+// 最多四项、总长度不超过 2^19（表数据 4 MiB）；超预算表不驻留。
+// 命中不重建，LRU 逐出后在用 owner 仍有效。仅单次使用的短窗可直接 hann。
+struct HannTable {
+    std::size_t           samples;
+    std::vector< double > values;
+    explicit HannTable(std::size_t n);
+    std::size_t size( ) const {
+        return samples;
+    }
+};
+std::shared_ptr< const HannTable > hann_table(std::size_t samples);
+std::vector< double >              detrend(std::span< const double > input, bool linear = false);
 // Savitzky-Golay：奇数窗口，interp 端点，delta 为导数间隔；系数预计算后复用。
 std::vector< double > savgol(std::span< const double > input, int window, int order,
                              int derivative = 0, double delta = 1.0);

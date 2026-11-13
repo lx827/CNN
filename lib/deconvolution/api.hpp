@@ -18,8 +18,9 @@ struct Result {
     std::vector< double > objective_history;
     Info                  info;
 };
-// 每个活跃任务独占工作区；prepare 借用输入到返回，并保存必要的去均值副本、
-// N×L 卷积矩阵及一次 QR/小R的SVD。相同输入的迭代复用分解，不物化薄U。
+// 每个活跃任务独占工作区；prepare 借用输入到返回，保存必要的去均值/归一信号
+// 副本与唯一一份 N×L 存储（滑窗设计矩阵，随即被 QR 原地分解覆盖，无第二份
+// 拷贝），以及小 R 的 SVD。相同输入的迭代复用分解，不物化薄U。
 // prepare 可能分配；失败后可再次 prepare。输出不借用工作区。
 class Workspace {
 public:
@@ -44,7 +45,8 @@ core::Array mckd_update(std::span< const double > matrix, std::size_t rows, std:
                         std::span< const double > filter, int period, int shift_order, double ridge);
 namespace execution {
     // 先 prepare；output 长N、filter长L、history容量>=max_iterations；三者与工作区
-    // 互不重叠，计算直接写最终存储。history前info.iterations项有效，无分配迭代。
+    // 互不重叠，计算直接写最终存储。history 前 info.iterations 项有效。
+    // 迭代复用分解与已准备向量；Eigen 反射应用仍可能分配内部临时。
     Info med(const Options &options, std::span< double > output, std::span< double > filter,
              std::span< double > history, Workspace &workspace);
     Info mckd(int period, int shift_order, const Options &options,

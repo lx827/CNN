@@ -10,8 +10,10 @@ namespace cnn_compute::fourier {
 using Complex = std::complex< double >;
 
 // 同步变换；正变换不归一化，逆变换除以 N，频率按未 fftshift 的顺序。
-// 输入输出长度均为 size()，不重叠；借用不逃逸。每个活跃调用独占 Plan。
-// prepare 可分配 FFT 后端缓存；同规模执行复用缓存和实数适配缓冲区。
+// 输入输出长度均为 size()，不重叠；借用不逃逸。每个活跃调用独占 Plan 的可写缓冲。
+// pocketfft 计划由进程级有界 LRU 共享只读：实/复各最多四项、总长度各不超过 2^20；
+// 超预算计划仅由当前调用持有。逐出不使活跃 Plan 失效；执行缓冲仍属于本 Plan。
+// c2c 与 r2c 计划及各自缓冲按方向惰性准备，纯实/纯复路径不付另一方向的构建与内存。
 class Plan {
 public:
     explicit Plan(std::size_t samples = 0);
@@ -23,8 +25,12 @@ public:
     void        forward(std::span< const double > input, std::span< Complex > output);
     // 实输入专用：输出 N/2+1 个非负频点，直接使用缓存的 pocketfft real plan。
     void forward_half(std::span< const double > input, std::span< Complex > output);
+    // forward_half 的零填充变体：input 给出有效长度 valid ≤ size()，[valid, size()) 视为零；
+    // 直接装填内部缓冲，调用方无需物化零填充临时数组（convolve 场景）。
+    void forward_half_padded(const double *input, std::size_t valid, std::span< Complex > output);
     // 仅用于 Hermitian 频谱的 N/2+1 个非负频点；DC/偶数 Nyquist 虚部为零。
     // 任意复谱取实部必须使用 inverse_real，不能用此入口替代。
+    // 打包与执行直接发生在调用者输出存储上，不产生额外拷贝。
     void inverse_half(std::span< const Complex > input, std::span< double > output);
     void forward(std::span< const Complex > input, std::span< Complex > output);
     void inverse(std::span< const Complex > input, std::span< Complex > output);

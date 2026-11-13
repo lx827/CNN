@@ -10,10 +10,9 @@
 
 namespace cnn_compute::vmd {
 namespace {
-    using Complex         = fourier::Complex;
-    using ComplexArray    = Eigen::ArrayXcd;
-    using ComplexMap      = Eigen::Map< ComplexArray >;
-    using ConstComplexMap = Eigen::Map< const ComplexArray >;
+    using Complex      = fourier::Complex;
+    using RealMap      = Eigen::Map< core::Array >;
+    using ConstRealMap = Eigen::Map< const core::Array >;
     std::size_t valid_size(std::size_t input, const Parameters &p) {
         return p.max_samples ? std::min(input, p.max_samples) : input;
     }
@@ -37,11 +36,16 @@ void Workspace::prepare(std::size_t samples, int modes) {
     const auto length = samples + 2 * (samples / 2);
     const auto bins   = (length + 1) / 2;
     fft.prepare(length);
-    previous.resize(bins * modes);
-    current.resize(bins * modes);
-    spectrum.resize(bins);
-    dual.resize(bins);
-    sum.resize(bins);
+    previous_re.resize(bins * modes);
+    previous_im.resize(bins * modes);
+    current_re.resize(bins * modes);
+    current_im.resize(bins * modes);
+    spectrum_re.resize(bins);
+    spectrum_im.resize(bins);
+    dual_re.resize(bins);
+    dual_im.resize(bins);
+    sum_re.resize(bins);
+    sum_im.resize(bins);
     transform.resize(length);
     mirrored.resize(length);
     inverse.resize(length);
@@ -85,11 +89,18 @@ void execute(std::span< const double > input, double fs, const Parameters &p, Re
         ws.mirrored[left + n + i] = input[n - i - 1] / scale;
     }
     ws.fft.forward({ ws.mirrored.data( ), length }, ws.transform);
-    std::copy_n(ws.transform.begin( ), bins, ws.spectrum.begin( ));
-    std::fill(ws.previous.begin( ), ws.previous.end( ), Complex{});
-    std::fill(ws.current.begin( ), ws.current.end( ), Complex{});
-    std::fill(ws.dual.begin( ), ws.dual.end( ), Complex{});
-    std::fill(ws.sum.begin( ), ws.sum.end( ), Complex{});
+    for (std::size_t k = 0; k < bins; ++k) {
+        ws.spectrum_re[k] = ws.transform[k].real( );
+        ws.spectrum_im[k] = ws.transform[k].imag( );
+    }
+    ws.previous_re.setZero( );
+    ws.previous_im.setZero( );
+    ws.current_re.setZero( );
+    ws.current_im.setZero( );
+    ws.dual_re.setZero( );
+    ws.dual_im.setZero( );
+    ws.sum_re.setZero( );
+    ws.sum_im.setZero( );
     std::mt19937_64                          rng(p.seed);
     std::uniform_real_distribution< double > uniform(0.0, 1.0);
     for (int k = 0; k < p.modes; ++k) {
@@ -104,30 +115,64 @@ void execute(std::span< const double > input, double fs, const Parameters &p, Re
     }
     if (p.initialization == 2) std::sort(ws.centers.data( ), ws.centers.data( ) + p.modes);
     if (p.dc) ws.centers[0] = 0;
-    const ConstComplexMap spectrum(ws.spectrum.data( ), bins);
-    ComplexMap            dual(ws.dual.data( ), bins), sum(ws.sum.data( ), bins);
+    const ConstRealMap spectrum_re(ws.spectrum_re.data( ), bins), spectrum_im(ws.spectrum_im.data( ), bins);
+    RealMap            sum_re(ws.sum_re.data( ), bins), sum_im(ws.sum_im.data( ), bins);
     for (int iteration = 0; iteration < p.max_iterations; ++iteration) {
         double difference = std::numeric_limits< double >::epsilon( );
         for (int k = 0; k < p.modes; ++k) {
-            const ConstComplexMap old(ws.previous.data( ) + static_cast< std::size_t >(k) * bins, bins);
-            ComplexMap            current(ws.current.data( ) + static_cast< std::size_t >(k) * bins, bins);
-            const Complex        *adjacent = k == 0 ? ws.previous.data( ) + static_cast< std::size_t >(p.modes - 1) * bins
-                                                    : ws.current.data( ) + static_cast< std::size_t >(k - 1) * bins;
-            sum += ConstComplexMap(adjacent, bins) - old;
-            // 分母严格为实数；避免把它提升为 complex 后执行通用复数除法。
-            current = (spectrum - sum - dual * 0.5) / (1.0 + p.alpha * (ws.frequencies - ws.centers[k]).square( ));
-            if (k != 0 || !p.dc) {
-                const double power = current.abs2( ).sum( );
-                if (power > std::numeric_limits< double >::min( ))
-                    ws.centers[k] = (ws.frequencies * current.abs2( )).sum( ) / power;
+            const auto    base = static_cast< std::size_t >(k) * bins;
+            ConstRealMap  old_re(ws.previous_re.data( ) + base, bins), old_im(ws.previous_im.data( ) + base, bins);
+            RealMap       current_re(ws.current_re.data( ) + base, bins), current_im(ws.current_im.data( ) + base, bins);
+            const double *adjacent_re = k == 0
+                                            ? ws.previous_re.data( ) + static_cast< std::size_t >(p.modes - 1) * bins
+                                            : ws.current_re.data( ) + static_cast< std::size_t >(k - 1) * bins;
+            const double *adjacent_im = k == 0
+                                            ? ws.previous_im.data( ) + static_cast< std::size_t >(p.modes - 1) * bins
+                                            : ws.current_im.data( ) + static_cast< std::size_t >(k - 1) * bins;
+            // Σû 增量维护：分量加减与复数逐元素同值同序。
+            sum_re += ConstRealMap(adjacent_re, bins) - old_re;
+            sum_im += ConstRealMap(adjacent_im, bins) - old_im;
+            // 主更新写成纯实数组表达式：operator/(complex,T) 即 complex(re/rhs,
+            // im/rhs)，实/实商走 packet 除法；分母在表达式内逐元素求值，
+            // 不物化——每模态一趟物化要额外读写两个 bins 平面的流量。
+            const auto denominator = 1.0 + p.alpha * (ws.frequencies - ws.centers[k]).square( );
+            if (p.tau == 0) {
+                // dual 恒为 +0.0，x-(+0.0)≡x（含 -0.0），直接省去该项。
+                current_re = (spectrum_re - sum_re) / denominator;
+                current_im = (spectrum_im - sum_im) / denominator;
+            } else {
+                current_re = (spectrum_re - sum_re - ws.dual_re * 0.5) / denominator;
+                current_im = (spectrum_im - sum_im - ws.dual_im * 0.5) / denominator;
             }
-            difference += (current - old).abs2( ).sum( ) / length;
+            // 三归约融合单趟（工单A5，#146-发现7）：power/moment/drift 三条独立顺序
+            // 累加链各自保持元素累加次序，(re*re+im*im) 在 power 与 moment 间是同一
+            // 表达式值、逐位不变；moment 原条件求值改为恒算——其结果只在 power 过
+            // 门时被消费，不改变输出。省 2/3 读带宽；改归约树仍禁止（会翻转收敛轮数）。
+            double power = 0, moment = 0, drift = 0;
+            for (std::size_t t = 0; t < bins; ++t) {
+                const double re = current_re[t], im = current_im[t];
+                const double magnitude = re * re + im * im;
+                power += magnitude;
+                moment += ws.frequencies[t] * magnitude;
+                const double gap_re = re - old_re[t], gap_im = im - old_im[t];
+                drift += gap_re * gap_re + gap_im * gap_im;
+            }
+            if ((k != 0 || !p.dc) && power > std::numeric_limits< double >::min( ))
+                ws.centers[k] = moment / power;
+            difference += drift / length;
         }
-        const ConstComplexMap last(ws.current.data( ) + static_cast< std::size_t >(p.modes - 1) * bins, bins);
-        dual += p.tau * (sum + last - spectrum);
+        // tau==0（Python 默认）时 dual 全程 +0.0，整趟对偶更新跳过。
+        if (p.tau != 0) {
+            const auto   tail = static_cast< std::size_t >(p.modes - 1) * bins;
+            ConstRealMap last_re(ws.current_re.data( ) + tail, bins), last_im(ws.current_im.data( ) + tail, bins);
+            RealMap      dual_re(ws.dual_re.data( ), bins), dual_im(ws.dual_im.data( ), bins);
+            dual_re += p.tau * (sum_re + last_re - spectrum_re);
+            dual_im += p.tau * (sum_im + last_im - spectrum_im);
+        }
         for (int k = 0; k < p.modes; ++k)
             result.center_frequency_history_hz[static_cast< std::size_t >(iteration) * p.modes + k] = ws.centers[k] * fs;
-        ws.previous.swap(ws.current);
+        ws.previous_re.swap(ws.current_re);
+        ws.previous_im.swap(ws.current_im);
         result.iterations = iteration + 1;
         if (!std::isfinite(difference) || !ws.centers.isFinite( ).all( )) {
             result.status = "numerical_failure";
@@ -148,11 +193,12 @@ void execute(std::span< const double > input, double fs, const Parameters &p, Re
         const auto source_mode                    = ws.order[output_mode];
         result.center_frequencies_hz[output_mode] = ws.centers[source_mode] * fs;
         std::fill(ws.transform.begin( ), ws.transform.end( ), Complex{});
-        const auto *source = ws.previous.data( ) + source_mode * bins;
-        ws.transform[0]    = source[0].real( );
+        const double *source_re = ws.previous_re.data( ) + source_mode * bins;
+        const double *source_im = ws.previous_im.data( ) + source_mode * bins;
+        ws.transform[0]         = source_re[0];
         for (std::size_t k = 1; k < bins; ++k) {
-            ws.transform[k]          = source[k];
-            ws.transform[length - k] = std::conj(source[k]);
+            ws.transform[k]          = Complex(source_re[k], source_im[k]);
+            ws.transform[length - k] = Complex(source_re[k], -source_im[k]);
         }
         ws.fft.inverse_real(ws.transform, { ws.inverse.data( ), length });
         Eigen::Map< core::Array > mode(result.modes.data( ) + static_cast< std::size_t >(output_mode) * n, n);

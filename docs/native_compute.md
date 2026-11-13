@@ -121,6 +121,37 @@ MSVC 的 `/showIncludes` 探测由 `cmake/msvc_include_probe.ps1` 使用系统 P
 
 Windows 的构建回归在根目录执行 `uv run --with cmake==4.4.4 --with ninja==1.13.2 --no-sync python tests/test_msvc_ninja_build.py -v`：使用根配置的工具链部分和真实 MSVC/Ninja，分别在代码页 936、65001 下验证全新生成、编译及间接头文件修改后的重编。此测试只构建最小库；计算包完整安装另以普通 `uv sync` 验证。
 
+## 进程级有界预计算缓存
+
+跨调用复用的 FFT 计划和周期 Hann 表由 [lib/core/cache.hpp](../lib/core/cache.hpp) 的小型 LRU 持有。每类最多四项，同时限制表的总长度：real/complex FFT 计划各不超过 `2^20` 点，Hann 表不超过 `2^19` 个 double（表数据 4 MiB）。超过预算的单表仍可执行，但只由当前调用持有，不驻留缓存。FFT 后端表的每点字节数因分解方案不同，不把点数预算写成精确字节数；活跃调用持有的已逐出表、执行临时和输出另计。
+
+四项覆盖转速组合调用的原长、Welch 段长、补零自相关长度，并留一个常用尺寸位置。原单槽在一次 `spectrum_speed` 内就会被这三种长度轮流逐出，同规模下次调用仍须重建，因此改为固定容量的小缓存；不使用按任意长度无限增长的 map。Hann 全长表与 Welch 段窗也可同时保留。
+
+缓存索引的查找和 LRU 更新由短互斥区保护，表的构造及 FFT 执行均在锁外。并发未命中可以重复构造，提交缓存时重新查找，只保留一个 owner。表构后只读，pocketfft 执行没有共享可写状态；可写缓冲仍由每个活跃 Plan/Workspace 独占，不新增线程。逐出只释放缓存的引用，在用调用方的 `shared_ptr` 保证原表继续有效。
+
+real/complex 计划及可写缓冲仍按首次使用方向准备；仅使用实方向的调用不创建复方向资源。`numeric`、`rotation` 的全长表示和 Welch 段窗使用该缓存，单次使用的小段窗可直接构造。
+
+2026-11-14 在 WSL Ubuntu 22.04、GCC 11.4 x64 baseline 上，真实 `spectrum_speed` 连续两次公开调用的原长计划从每次被逐出改为保留同一 owner。C++ 缓存契约另覆盖三尺寸重复命中、超预算不驻留、容量/总长度逐出、在用 owner 生命周期和两个活跃线程共享；验证限于本机，不代表 ECS 整机资源验收。
+
+## Eigen packet 中间层采用记录
+
+Eigen 3.4.0 对混合标量表达式（`complex*double`、`complex/double`）把 `PacketAccess` 置 false，整棵赋值表达式树退化为标量循环；double 的超越函数包也只覆盖部分运算。以下路径已改走 `Eigen::internal` packet 中间层，重写时均以位级 golden 验证逐元素运算次序不变；这是已实现状态记录，不表示全库 packet 化，未列出的路径仍走表达式层或专用标量流程：
+
+- 小波多相内核：DWT/IDWT 中心卷积按奇偶相位拆分滤波器与输入，tap-major 累加让逐包累加器驻留寄存器，tap 序与 vendor 标量链一致（`lib/wavelet`）。
+- VMD SoA 分量：ADMM 频域状态拆成实/虚实平面，主更新与对偶更新是纯实数组表达式，`operator/(complex,T)` 即分量除法，实/实商走 packet 除法（`lib/vmd`）。
+- 插值求值内核：求值循环按 lane 并行推进，B 样条基的节点与值包驻留寄存器；查询点严格单增时推进指针摊还区间查找，splrep 基函数同样 packet 化（`lib/interpolation`）。
+- EMD 停止与归约：pairwise 八路累加器按 packet 宽度分组进包（SSE2 四包、AVX2 两包），最终树归约保持标量；rilling_stop 的对称比逐元素比较走 packet（`lib/emd/decomposition.cpp`）。
+
+SLEEF 引入、FastICA tanh 自写 SIMD 等仍为缓议项，不在已采用列表。
+
+## PR #149 审查修复（2026-11-14）
+
+审查未把原优化 Issue 的建议当作正确性依据。统计函数的 `abs` / `centered` 原为 Eigen 惰性表达式和直接归约，没有所称的每帧临时数组；物化成两份全长缓冲实际增加分配和内存流量，现已撤回。WSL GCC 11.4、Release `-O3 -ffp-contract=off`、x64 baseline SSE2，128k 点公开调用在同机定向对照中，statistics 约 996→251 µs，1024 点窗/512 步长的 time_domain 约 1562→732 µs。记录包含输入检查和调用内准备；这是本地回退修复，不能外推 Windows 或生产倍数。
+
+旧筛分镜像节点按左镜像倒序、原节点、右镜像顺序直接写最终数组，删除 `stable_sort`、pair 容器和二次搬运；预热后相同节点调用的 `operator new` 计数由一次降为零。完整 EMD 的外层 Rilling 仅把当次已算包络交给紧邻的 IMF 提取，不再把输入指针身份保存在工作区。STFT 尾帧按输入交集计算范围，覆盖奇偶窗的零重叠尾帧。谱峭度在求平方模之前按分量缩放，保留极小/极大有限输入的尺度不变性；MED/MCKD 删除不必要的反射序列 owner，实际 Eigen 内部临时分配仍如实保留。
+
+本轮构建和定向验证覆盖原生 CTest 七项、Python 数值/诊断与包元数据、EMD 工作区/owner 生命周期、`emd.sift 0.8.1` 三项参考差分以及 cloud P0 三件；新增缓存合同包含两个活跃线程共享。ASan 在旧 STFT 核复现左越界，修复后通过。验证不代表 ARM64 或 ECS 2C2G 整机验收。
+
 ## C++ 排版
 
 dev 组固定 `clang-format==23.1.5`，排版由根目录 `.clang-format` 管理。完成正常环境同步后，在根目录执行：

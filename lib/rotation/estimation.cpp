@@ -2,7 +2,6 @@
 #include <filtering/api.hpp>
 #include <sequence/api.hpp>
 #include <transforms/hilbert.hpp>
-#include <numeric/api.hpp>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -11,6 +10,32 @@
 
 namespace cnn_compute::rotation {
 namespace {
+    // 一次调用内全部候选共享的执行资源：n 长半谱计划与缓冲、2^k 自相关计划与
+    // 缓冲、带通/Hilbert 工作区。构造处按信号长度一次准备，候选间零重复计划/
+    // 缓冲构建；实例为单个活跃调用独占，不跨调用共享可写状态。
+    struct SpeedWorkspace {
+        fourier::Plan                   plan;           // n：三处幅值谱
+        fourier::Plan                   correlation;    // 2^k：自相关
+        filtering::Workspace            filtering;      // 带通候选共用
+        transforms::HilbertWorkspace    hilbert;        // 包络候选共用
+        std::size_t                     samples = 0, padded = 0;
+        std::vector< fourier::Complex > half, analytic, correlation_half;
+        std::vector< double >           amplitude, band, correlation_buffer;
+        void                            prepare(std::size_t n) {
+            samples = n;
+            plan.prepare(n);
+            half.resize(n / 2 + 1);
+            amplitude.resize(n / 2 + 1);
+            analytic.resize(n);
+            band.resize(n);
+            hilbert.prepare(n);
+            padded = 1;
+            while (padded < 2 * n - 1) padded *= 2;
+            correlation.prepare(padded);
+            correlation_buffer.resize(padded);
+            correlation_half.resize(padded / 2 + 1);
+        }
+    };
     double median(std::vector< double > &a) {
         if (a.empty( )) return 0.;
         auto k = a.size( ) / 2;
@@ -31,20 +56,18 @@ namespace {
     void search_range(double low, double high) {
         if (!std::isfinite(low) || !std::isfinite(high) || low <= 0 || high <= low) throw std::invalid_argument("invalid speed search range");
     }
-    std::vector< double > bandpass(std::span< const double > x, double fs, double low, double high) {
-        if (x.size( ) < 28 || low <= 0 || high >= fs / 2 || low >= high) return { x.begin( ), x.end( ) };
-        auto                  sos = filtering::butterworth(4, low, high, fs);
-        std::vector< double > output(x.size( ));
-        filtering::Workspace  workspace;
-        workspace.prepare(x.size( ), sos.size( ));
-        filtering::execution::sosfiltfilt(x, sos, output, workspace);
-        return output;
+    // 4 阶双向带通写入共享 band 缓冲；带通条件不满足时原样借用输入（只读）。
+    std::span< const double > bandpass(std::span< const double > x, double fs, double low, double high, SpeedWorkspace &w) {
+        if (x.size( ) < 28 || low <= 0 || high >= fs / 2 || low >= high) return x;
+        auto sos = filtering::butterworth(4, low, high, fs);
+        filtering::execution::sosfiltfilt(x, sos, { w.band.data( ), x.size( ) }, w.filtering);
+        return { w.band.data( ), x.size( ) };
     }
-    std::vector< double > magnitude(std::span< const double > x) {
-        auto                  spectrum = fourier::fft(x);
-        std::vector< double > a(x.size( ) / 2 + 1);
-        for (std::size_t i = 0; i < a.size( ); ++i) a[i] = std::abs(spectrum[i]);
-        return a;
+    // 半谱幅值：与全谱 forward 的前半逐位相同，幅值循环只读 n/2+1；out 与 half/x 不重叠。
+    void magnitude(std::span< const double > x, std::span< double > out, SpeedWorkspace &w) {
+        w.plan.forward_half(x, { w.half.data( ), out.size( ) });
+        // 幅值统一 sqrt(re²+im²)（工单A1，#145-发现5）：hypot→sqrt，末位差异在冻结预算内。
+        for (std::size_t i = 0; i < out.size( ); ++i) out[i] = std::sqrt(std::norm(w.half[i]));
     }
     int peak(std::span< const double > a, double df, double low, double high) {
         int start = std::max(0, static_cast< int >(std::ceil(low / df))), stop = std::min(static_cast< int >(a.size( )) - 1, static_cast< int >(std::floor(high / df)));
@@ -62,31 +85,37 @@ namespace {
     }
 }    // namespace
 namespace {
-    // 上层已建立有限、中心化输入及搜索范围；组合候选不再反复验证/减均值。
-    SpeedResult envelope_prepared(std::span< const double > x, double fs, double carrier, double low, double high, double bandwidth) {
+    // 上层已建立有限、中心化输入及搜索范围；组合候选共享同一 SpeedWorkspace，
+    // 不再反复验证/减均值，也不再逐候选重建计划、工作区与全谱缓冲。
+    SpeedResult envelope_prepared(std::span< const double > x, double fs, double carrier, double low, double high, double bandwidth, SpeedWorkspace &w) {
         double l = std::max(low, carrier - bandwidth), h = std::min(fs / 2 - 1e-6, carrier + bandwidth);
         if (x.size( ) < 32 || l >= h) return { 0, "envelope", "包络频带或信号长度无效" };
-        auto                            envelope = bandpass(x, fs, l, h);
-        std::vector< fourier::Complex > z(x.size( ));
-        transforms::HilbertWorkspace    workspace;
-        workspace.prepare(x.size( ));
-        transforms::execution::analytic_signal(envelope, z, workspace);
-        double mean = 0.;
+        auto filtered = bandpass(x, fs, l, h, w);
+        transforms::execution::analytic_signal(filtered, { w.analytic.data( ), x.size( ) }, w.hilbert);
+        auto   envelope = std::span< double >(w.band.data( ), x.size( ));    // 包络写回带通缓冲，与原实现同块复用
+        double mean     = 0.;
         for (std::size_t i = 0; i < x.size( ); ++i) {
-            envelope[i] = std::abs(z[i]);
+            envelope[i] = std::sqrt(std::norm(w.analytic[i]));
             mean += envelope[i];
         }
         mean /= x.size( );
         for (double &v : envelope) v -= mean;
-        auto a     = magnitude(envelope);
-        int  index = peak(a, fs / x.size( ), low, high);
-        if (index < 0 || a[index] <= std::numeric_limits< double >::epsilon( )) return { 0, "envelope", "包络谱搜索范围内无谱峰" };
+        magnitude(envelope, { w.amplitude.data( ), w.amplitude.size( ) }, w);
+        int index = peak({ w.amplitude.data( ), w.amplitude.size( ) }, fs / x.size( ), low, high);
+        if (index < 0 || w.amplitude[index] <= std::numeric_limits< double >::epsilon( )) return { 0, "envelope", "包络谱搜索范围内无谱峰" };
         return { index * fs / x.size( ), "envelope", {} };
     }
-    SpeedResult autocorrelation_prepared(std::span< const double > x, double fs, double low, double high) {
+    SpeedResult autocorrelation_prepared(std::span< const double > x, double fs, double low, double high, SpeedWorkspace &w) {
         double h = std::min(fs / 2 - 1e-6, std::max(high * 6, high + 20)), l = std::max(1e-6, low * .5);
-        auto   y      = bandpass(x, fs, l, h);
-        auto   padded = numeric::autocorrelation(y, false);
+        auto   y = bandpass(x, fs, l, h, w);
+        // 与 numeric::autocorrelation(y,false) 同式：2^k 零填充、半谱模平方、逆半变换；
+        // 计划与缓冲来自共享工作区，免公开入口的重复 finite 扫描与逐次重建。
+        std::copy(y.begin( ), y.end( ), w.correlation_buffer.begin( ));
+        std::fill(w.correlation_buffer.data( ) + y.size( ), w.correlation_buffer.data( ) + w.padded, 0.);
+        w.correlation.forward_half({ w.correlation_buffer.data( ), w.padded }, { w.correlation_half.data( ), w.correlation_half.size( ) });
+        for (auto &v : w.correlation_half) v = std::norm(v);
+        w.correlation.inverse_half(w.correlation_half, { w.correlation_buffer.data( ), w.padded });
+        auto padded = std::span< double >(w.correlation_buffer.data( ), y.size( ));
         if (padded[0] <= 0) return { 0, "autocorrelation", "零滞后自相关无效" };
         double normalization = padded[0];
         for (std::size_t i = 0; i < y.size( ); ++i) padded[i] /= normalization;
@@ -115,21 +144,29 @@ namespace {
 SpeedResult envelope_speed(std::span< const double > x, double fs, double carrier, double low, double high, double bandwidth) {
     if (!std::isfinite(carrier) || !std::isfinite(bandwidth) || bandwidth <= 0) throw std::invalid_argument("invalid envelope carrier or bandwidth");
     search_range(low, high);
-    auto y = centered(x, fs);
-    return envelope_prepared(y, fs, carrier, low, high, bandwidth);
+    auto           y = centered(x, fs);
+    SpeedWorkspace w;
+    w.prepare(y.size( ));
+    return envelope_prepared(y, fs, carrier, low, high, bandwidth, w);
 }
 SpeedResult autocorrelation_speed(std::span< const double > x, double fs, double low, double high) {
     search_range(low, high);
     auto y = centered(x, fs);
     if (y.size( ) < 16 || no_variation(y)) return { 0, "autocorrelation", "信号过短或没有有效变化" };
-    return autocorrelation_prepared(y, fs, low, high);
+    SpeedWorkspace w;
+    w.prepare(y.size( ));
+    return autocorrelation_prepared(y, fs, low, high, w);
 }
 SpeedResult spectrum_speed(std::span< const double > x, double fs, double low, double high, int harmonics, double bandwidth, double smooth) {
     search_range(low, high);
     auto y = centered(x, fs);
     if (y.size( ) < 32 || no_variation(y)) return { 0, "spectrum_arbitration", "信号过短或没有有效变化" };
     if (harmonics < 1 || !std::isfinite(bandwidth) || !std::isfinite(smooth) || bandwidth <= 0 || smooth < 0) throw std::invalid_argument("invalid spectral speed parameters");
-    auto   a      = magnitude(y);
+    // 初谱全程参与仲裁（supported/背景中位数），候选的幅值谱走共享缓冲。
+    SpeedWorkspace resources;
+    resources.prepare(y.size( ));
+    std::vector< double > a(y.size( ) / 2 + 1);
+    magnitude(y, a, resources);
     double df     = fs / y.size( );
     int    kernel = std::max(1, static_cast< int >(std::nearbyint(smooth / df)));
     if (kernel > 1) {
@@ -185,7 +222,7 @@ SpeedResult spectrum_speed(std::span< const double > x, double fs, double low, d
     int                        mid = peak(a, df, 200, std::min(500., fs / 2)), hi = peak(a, df, 100, fs / 4);
     for (auto [j, source] : { std::pair{ mid, "envelope_mesh" }, std::pair{ hi, "envelope_high" } }) {
         if (j < 0) continue;
-        auto e = envelope_prepared(y, fs, j * df, low, high, 60);
+        auto e = envelope_prepared(y, fs, j * df, low, high, 60, resources);
         if (e.reason.empty( )) {
             e.source = source;
             candidates.push_back(e);
@@ -193,19 +230,21 @@ SpeedResult spectrum_speed(std::span< const double > x, double fs, double low, d
     }
     // Welch: periodic Hann, per-segment constant detrend, 50% overlap. A common
     // positive density scale cannot change the selected peak, so omit it.
-    std::size_t seg = std::min(y.size( ), static_cast< std::size_t >(std::max(256, static_cast< int >(fs)))), hop = std::max< std::size_t >(1, seg / 2);
-    Workspace   w;
-    w.prepare(seg);
-    std::vector< double > power(seg / 2 + 1);
+    // 段窗取进程级 Hann 表，半谱只填 seg/2+1（与全谱 forward 前半逐位相同）。
+    std::size_t                     seg = std::min(y.size( ), static_cast< std::size_t >(std::max(256, static_cast< int >(fs)))), hop = std::max< std::size_t >(1, seg / 2);
+    const auto                      window = filtering::hann_table(seg);
+    fourier::Plan                   plan(seg);
+    std::vector< double >           buffer(seg), power(seg / 2 + 1);
+    std::vector< fourier::Complex > transformed(seg / 2 + 1);
     for (std::size_t begin = 0; begin + seg <= y.size( ); begin += hop) {
         double m = core::Map(y.data( ) + begin, seg).mean( );
-        for (std::size_t j = 0; j < seg; ++j) w.real[j] = (y[begin + j] - m) * w.window[j];
-        w.plan.forward({ w.real.data( ), seg }, w.spectrum);
-        for (std::size_t j = 0; j < power.size( ); ++j) power[j] += std::norm(w.spectrum[j]);
+        for (std::size_t j = 0; j < seg; ++j) buffer[j] = (y[begin + j] - m) * window->values[j];
+        plan.forward_half({ buffer.data( ), seg }, { transformed.data( ), transformed.size( ) });
+        for (std::size_t j = 0; j < power.size( ); ++j) power[j] += std::norm(transformed[j]);
     }
     int welch = peak(power, fs / seg, low, high);
     if (welch >= 0 && power[welch] > 0) candidates.push_back({ welch * fs / seg, "welch", {} });
-    auto ac = autocorrelation_prepared(y, fs, low, high);
+    auto ac = autocorrelation_prepared(y, fs, low, high, resources);
     if (ac.reason.empty( )) candidates.push_back(ac);
     std::vector< double > search(a.begin( ) + start, a.begin( ) + stop + 1);
     double                background = median(search);
@@ -267,7 +306,7 @@ RidgeResult speed_ridge(std::span< const double > x, double fs, double low, doub
     for (int column = 0; column < frames; ++column) {
         for (int j = 0; j < window; ++j) w.real[j] = y[column * hop + j] * w.window[j];
         w.plan.forward({ w.real.data( ), static_cast< std::size_t >(window) }, w.spectrum);
-        for (std::size_t j = 0; j < a.size( ); ++j) a[j] = std::abs(w.spectrum[j]) / (window * .5);
+        for (std::size_t j = 0; j < a.size( ); ++j) a[j] = std::sqrt(std::norm(w.spectrum[j])) / (window * .5);
         int    j        = static_cast< int >(std::max_element(a.begin( ) + start, a.begin( ) + stop + 1) - a.begin( ));
         double f        = parabolic(a, j, df);
         auto   power    = [&](int l, int h) {double s=0.;for(int k=std::max(0,l);k<std::min(static_cast<int>(a.size()),h);++k)s+=a[k]*a[k];return s; };

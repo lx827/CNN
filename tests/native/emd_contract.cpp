@@ -1,4 +1,5 @@
 #include <emd/execution.hpp>
+#include <emd/extrema.hpp>
 #include <cmath>
 #include <future>
 #include <iostream>
@@ -62,6 +63,39 @@ void check_workspace_reuse( ) {
     }
     require(preserved.imf.isFinite( ).all( ), "result owner did not outlive workspace");
 }
+void check_sift_reuse_after_outer_rilling( ) {
+    core::Array first(256), second(256);
+    for (Eigen::Index i = 0; i < first.size( ); ++i) {
+        first[i]  = std::sin(.4 * i) + .8 * std::sin(.03 * i);
+        second[i] = std::sin(.65 * i) + .5 * std::sin(.06 * i);
+    }
+    auto config           = options( );
+    config.max_imfs       = 1;
+    config.imf.max_iters  = 1;
+    config.rilling_thresh = std::array< double, 3 >{ .05, .5, .05 };
+    emd::Workspace workspace;
+    emd::execution::sift(view(first), config, workspace);
+    config.rilling_thresh.reset( );
+    const auto actual   = emd::execution::sift(view(second), config, workspace);
+    const auto expected = emd::sift(view(second), config);
+    require(actual.components.size( ) == expected.components.size( ), "outer Rilling leaked mode count");
+    for (std::size_t i = 0; i < actual.components.size( ); ++i)
+        equal(actual.components[i], expected.components[i], "outer Rilling leaked envelopes into another sift");
+}
+void check_mirror_order( ) {
+    const std::array< double, 4 >  locations{ 1, 3, 6, 9 }, values{ 2, 4, 5, 7 };
+    const std::array< double, 10 > expected_locations{ -6, -3, -1, 1, 3, 6, 9, 11, 14, 17 };
+    const std::array< double, 10 > expected_values{ 5, 4, 2, 2, 4, 5, 7, 7, 5, 4 };
+    emd::detail::Workspace         workspace;
+    for (int repeat = 0; repeat < 2; ++repeat) {
+        const auto count = emd::detail::mirror(locations, values, 0, 10, 2, workspace);
+        require(count == expected_locations.size( ), "mirror node count changed");
+        for (std::size_t i = 0; i < count; ++i) {
+            require(workspace.mirror_locations[i] == expected_locations[i], "mirror order changed");
+            require(workspace.mirror_values[i] == expected_values[i], "mirror values changed");
+        }
+    }
+}
 void check_failure_recovery( ) {
     auto           input  = signal(512);
     auto           config = options( );
@@ -106,6 +140,8 @@ void check_decomposition_and_concurrency( ) {
 int main( ) {
     try {
         check_workspace_reuse( );
+        check_sift_reuse_after_outer_rilling( );
+        check_mirror_order( );
         check_failure_recovery( );
         check_decomposition_and_concurrency( );
         std::cout << "PASS: C++ public/execution, ownership, workspace reuse, failure recovery, concurrency\n";

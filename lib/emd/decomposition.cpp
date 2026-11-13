@@ -2,11 +2,16 @@
 
 // 行为参照本地 emd 0.8.1 sift.py；GPL 归属见 ../LICENSE.emd。
 #include <algorithm>
+#include <bit>
 #include <cmath>
+#include <cstdint>
 #include <stdexcept>
 
 namespace cnn_compute::emd {
 namespace {
+    using Packet         = Eigen::internal::packet_traits< double >::type;
+    constexpr auto lanes = Eigen::internal::unpacket_traits< Packet >::size;
+
     std::span< const double > view(const Array &x) {
         return { x.data( ), static_cast< std::size_t >(x.size( )) };
     }
@@ -14,7 +19,9 @@ namespace {
         return { x.data( ), static_cast< std::size_t >(x.size( )) };
     }
 
-    // 与 NumPy 连续 double 归约的八路累加/128点分块次序一致。
+    // 与 NumPy 连续 double 归约的八路累加/128点分块次序一致；八路累加器
+    // 按 packet 宽度分组进包（SSE2 四包、AVX2 两包），各 lane 的加法序列
+    // 与标量八路相同，树归约保持标量。
     template < class F >
     double pairwise(std::size_t n, const F &value, std::size_t offset = 0) {
         if (n < 8) {
@@ -23,11 +30,23 @@ namespace {
             return result;
         }
         if (n <= 128) {
+            constexpr auto groups = 8 / lanes;
+            static_assert(8 % lanes == 0, "八路累加器须整除 packet 宽度");
             double r[8];
             for (int i = 0; i < 8; ++i) r[i] = value(offset + i);
+            Packet accumulators[groups];
+            for (int g = 0; g < groups; ++g)
+                accumulators[g] = Eigen::internal::ploadu< Packet >(r + g * lanes);
+            double      block[8];
             std::size_t i = 8;
-            for (; i + 7 < n; i += 8)
-                for (int j = 0; j < 8; ++j) r[j] += value(offset + i + j);
+            for (; i + 7 < n; i += 8) {
+                for (int b = 0; b < 8; ++b) block[b] = value(offset + i + b);
+                for (int g = 0; g < groups; ++g)
+                    accumulators[g] = Eigen::internal::padd(
+                        accumulators[g], Eigen::internal::ploadu< Packet >(block + g * lanes));
+            }
+            for (int g = 0; g < groups; ++g)
+                Eigen::internal::pstoreu(r + g * lanes, accumulators[g]);
             double result = ((r[0] + r[1]) + (r[2] + r[3])) + ((r[4] + r[5]) + (r[6] + r[7]));
             for (; i < n; ++i) result += value(offset + i);
             return result;
@@ -43,9 +62,32 @@ namespace {
     }
     bool rilling_stop(std::span< const double > upper, std::span< const double > lower,
                       const std::array< double, 3 > &threshold) {
-        std::size_t above = 0;
-        bool        high  = false;
-        for (std::size_t i = 0; i < upper.size( ); ++i) {
+        // packet 层无 double pcmp_gt；ratio>t 等价 t<ratio，两序 NaN 均为假。
+        // 掩码 lane 为全 1 或全 0，按整数位计数。
+        const Packet two            = Eigen::internal::pset1< Packet >(2.0);
+        const Packet low            = Eigen::internal::pset1< Packet >(threshold[0]);
+        const Packet high_threshold = Eigen::internal::pset1< Packet >(threshold[1]);
+        double       mask[lanes];
+        std::size_t  above = 0;
+        bool         high  = false;
+        const auto   count = upper.size( );
+        const auto   full  = count / lanes * lanes;
+        std::size_t  i     = 0;
+        for (; i + lanes <= count; i += lanes) {
+            const Packet u         = Eigen::internal::ploadu< Packet >(upper.data( ) + i);
+            const Packet l         = Eigen::internal::ploadu< Packet >(lower.data( ) + i);
+            const Packet mean      = Eigen::internal::pdiv(Eigen::internal::padd(u, l), two);
+            const Packet amplitude = Eigen::internal::pdiv(
+                Eigen::internal::pabs(Eigen::internal::psub(u, l)), two);
+            const Packet ratio = Eigen::internal::pdiv(Eigen::internal::pabs(mean), amplitude);
+            Eigen::internal::pstoreu(mask, Eigen::internal::pcmp_lt(low, ratio));
+            for (int lane = 0; lane < lanes; ++lane)
+                above += std::bit_cast< std::int64_t >(mask[lane]) != 0;
+            Eigen::internal::pstoreu(mask, Eigen::internal::pcmp_lt(high_threshold, ratio));
+            for (int lane = 0; lane < lanes; ++lane)
+                high = high || std::bit_cast< std::int64_t >(mask[lane]) != 0;
+        }
+        for (; i < count; ++i) {
             const double mean      = (upper[i] + lower[i]) / 2.0;
             const double amplitude = std::abs(upper[i] - lower[i]) / 2.0;
             const double ratio     = std::abs(mean) / amplitude;
@@ -108,9 +150,10 @@ namespace execution {
         return 20.0 * std::log10(squares(signal)) - 20.0 * std::log10(squares(residual));
     }
 
-    NextInfo get_next_imf(std::span< const double > signal, std::span< double > output,
-                          const IMFOptions &options, const envelope::Options &envelope_options,
-                          Workspace &w) {
+    // envelopes_ready 只由同一 sift 调用中紧邻的继续检查提供；不把有效性存入工作区。
+    static NextInfo extract_imf(std::span< const double > signal, std::span< double > output,
+                                const IMFOptions &options, const envelope::Options &envelope_options,
+                                Workspace &w, bool envelopes_ready) {
         w.prepare(signal.size( ), envelope_options.pad_width);
         w.current = core::Map(signal.data( ), signal.size( ));
         NextInfo info;
@@ -121,8 +164,11 @@ namespace execution {
                 break;
             }
             ++info.iterations;
-            if (!envelope::execution::extrema_envelopes(view(w.current), write(w.upper), write(w.lower),
-                                                        envelope_options, w.envelope)) {
+            const bool envelopes = envelopes_ready;
+            envelopes_ready      = false;
+            if (!envelopes
+                && !envelope::execution::extrema_envelopes(view(w.current), write(w.upper), write(w.lower),
+                                                           envelope_options, w.envelope)) {
                 info.continue_flag = false;
                 info.status        = Status::insufficient_extrema;
                 break;
@@ -151,6 +197,12 @@ namespace execution {
         return info;
     }
 
+    NextInfo get_next_imf(std::span< const double > signal, std::span< double > output,
+                          const IMFOptions &options, const envelope::Options &envelope_options,
+                          Workspace &w) {
+        return extract_imf(signal, output, options, envelope_options, w, false);
+    }
+
     bool check_continue(std::span< const double > original, std::span< const double > residual,
                         int layer, const Options &options, Workspace &w, bool initial) {
         const auto [maxima, minima] = envelope::execution::count_extrema(residual);
@@ -159,7 +211,7 @@ namespace execution {
             if (options.sift_thresh && absolute_sum(residual) < *options.sift_thresh) result = false;
             if (options.energy_thresh && energy_difference(original, residual) > *options.energy_thresh) result = false;
         }
-        if (options.rilling_thresh && maxima >= 2 && minima >= 2) {
+        if (result && options.rilling_thresh) {
             envelope::execution::extrema_envelopes(residual, write(w.upper), write(w.lower), options.envelope, w.envelope);
             // emd 0.8.1 check_sift_continue 忽略用户阈值内容，使用默认Rilling值，且反向使用stop标志。
             result = result && rilling_stop(view(w.upper), view(w.lower), { 0.05, 0.5, 0.05 });
@@ -180,7 +232,8 @@ namespace execution {
         }
         while (more) {
             Array          next(signal.size( ));
-            const NextInfo info = get_next_imf(view(w.residual), write(next), options.imf, options.envelope, w);
+            const NextInfo info = extract_imf(view(w.residual), write(next), options.imf,
+                                              options.envelope, w, options.rilling_thresh.has_value( ));
             result.components.push_back(std::move(next));
             result.iterations.push_back(info.iterations);
             if (info.status == Status::iteration_limit || info.status == Status::numerical_failure) {

@@ -36,27 +36,34 @@ HilbertWorkspace::~HilbertWorkspace( )                                      = de
 HilbertWorkspace::HilbertWorkspace(HilbertWorkspace &&) noexcept            = default;
 HilbertWorkspace &HilbertWorkspace::operator=(HilbertWorkspace &&) noexcept = default;
 void              HilbertWorkspace::prepare(std::size_t samples) {
+    // 只登记 FFT 尺寸（计划经进程级有界缓存复用）；其余缓冲在使用处按需准备，
+    // analytic-only 调用不再物化 normalised/envelope/unwrapped/smoothed 与极值工作区。
     impl->fft.prepare(samples);
-    impl->spectrum.resize(samples);
-    impl->analytic.resize(samples);
-    for (auto *array : { &impl->normalised, &impl->envelope,
-                         &impl->unwrapped, &impl->smoothed }) array->resize(samples);
-    impl->extrema.prepare(samples, 2);
 }
 namespace execution {
     void analytic_signal(std::span< const double > signal, std::span< std::complex< double > > output,
                          HilbertWorkspace &workspace) {
         auto      &work = *workspace.impl;
         const auto n    = signal.size( );
+        if (work.spectrum.size( ) != n) work.spectrum.resize(n);
         work.fft.forward(signal, work.spectrum);
         // 与 scipy.signal.hilbert 一致：DC 和偶数长度 Nyquist 保留，正频加倍。
         for (std::size_t k = 1; k < (n + 1) / 2; ++k) work.spectrum[k] *= 2.0;
         for (std::size_t k = n / 2 + 1; k < n; ++k) work.spectrum[k] = 0.0;
         work.fft.inverse(work.spectrum, output);
     }
+    std::span< const std::complex< double > > analytic_signal(std::span< const double > signal,
+                                                              HilbertWorkspace         &workspace) {
+        auto &work = *workspace.impl;
+        if (work.analytic.size( ) != signal.size( )) work.analytic.resize(signal.size( ));
+        analytic_signal(signal, work.analytic, workspace);
+        return { work.analytic.data( ), work.analytic.size( ) };
+    }
     void amplitude_normalise(std::span< const double > signal, std::span< double > output,
                              HilbertWorkspace &workspace) {
         auto &work = *workspace.impl;
+        if (work.envelope.size( ) != signal.size( )) work.envelope.resize(signal.size( ));
+        work.extrema.prepare(signal.size( ), 2);
         std::copy(signal.begin( ), signal.end( ), output.begin( ));
         envelope::Options options;
         options.padding       = envelope::Padding::numpypad;
@@ -80,6 +87,11 @@ namespace execution {
                              int smooth_frequency, HilbertWorkspace &workspace) {
         auto             &work = *workspace.impl;
         const std::size_t n    = signal.size( );
+        if (work.analytic.size( ) != n) work.analytic.resize(n);
+        if (static_cast< std::size_t >(work.unwrapped.size( )) != n) work.unwrapped.resize(n);
+        if (static_cast< std::size_t >(work.smoothed.size( )) != n) work.smoothed.resize(n);
+        if (normalised && static_cast< std::size_t >(work.normalised.size( )) != n)
+            work.normalised.resize(n);
         if (normalised) {
             amplitude_normalise(signal, writable(work.normalised), workspace);
             analytic_signal(readonly(work.normalised), work.analytic, workspace);
