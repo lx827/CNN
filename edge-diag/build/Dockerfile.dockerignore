@@ -1,0 +1,12 @@
+# Dockerfile.dockerignore —— 与 edge-diag/build/Dockerfile 同名匹配(BuildKit 特性),
+# 作用于构建上下文(仓库根目录),不是本目录。
+# 白名单:只送交叉构建所需的最小源集进容器;
+# cloud/ 前端/数据/文档/.git/ 本地构建目录一律不进上下文。
+*
+!lib
+!lib/**
+!capi
+!capi/**
+!cmake
+!cmake/**
+!CMakeLists.txt
