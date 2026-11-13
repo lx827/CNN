@@ -3,6 +3,8 @@
 用法: uv run python scripts/edge_diag_compare.py <ref.json> <edge.json>
 
 逐字段比较 metrics 五个标量、speed_hz 标量与 spectrum/envelope_spectrum 数组,
+以及二期新增的六个标量(wavelet.residual_rms/denoised_rms、kurtogram 三项、
+vmd.n_input)与四个数组(cepstrum、vmd.mode_energy_ratio、order_spectrum、tsa),
 容差 rtol=1e-6、atol=1e-8(元素判据 |ref-edge| <= atol + rtol*|ref|);
 输出每字段 max 绝对/相对偏差与总结 PASS/FAIL,任一字段 FAIL 时退出码 1。
 
@@ -30,8 +32,21 @@ SCALAR_FIELDS = (
     "metrics.kurtosis",
     "metrics.skewness",
     "speed_hz",
+    "wavelet.residual_rms",
+    "wavelet.denoised_rms",
+    "kurtogram.best_low_hz",
+    "kurtogram.best_high_hz",
+    "kurtogram.max_kurtosis",
+    "vmd.n_input",
 )
-ARRAY_FIELDS = ("spectrum", "envelope_spectrum")
+ARRAY_FIELDS = (
+    "spectrum",
+    "envelope_spectrum",
+    "cepstrum",
+    "vmd.mode_energy_ratio",
+    "order_spectrum",
+    "tsa",
+)
 
 
 def load_field(document: dict, name: str):
