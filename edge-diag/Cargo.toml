@@ -1,0 +1,11 @@
+[package]
+name = "edge-diag"
+version = "0.1.0"
+edition = "2021"
+description = "树莓派边端诊断 POC：无参数表示层指标 CLI（数值内核经 libcnn_compute C ABI）"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
