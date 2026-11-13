@@ -29,8 +29,15 @@ struct Result {
     std::string status     = "valid", reason;
 };
 struct Workspace {
-    fourier::Plan                   fft;
-    std::vector< fourier::Complex > previous, current, spectrum, dual, sum, transform;
+    fourier::Plan fft;
+    // ADMM 频域状态按实部/虚部分平面存储：Eigen 3.4 对 complex*double、
+    // complex/double 置 PacketAccess=false，交织存储的分量访问又是跨步标量；
+    // SoA 使主更新与对偶更新成为纯实数组表达式（SIMD）。分母在表达式内
+    // 逐元素求值，无独立缓冲。
+    core::Array previous_re, previous_im, current_re, current_im;
+    core::Array spectrum_re, spectrum_im, dual_re, dual_im, sum_re, sum_im;
+    // FFT 输入输出保持交织复数（pocketfft 契约）。
+    std::vector< fourier::Complex > transform;
     core::Array                     mirrored, inverse, frequencies, centers, temporary_centers;
     std::vector< std::size_t >      order;
     // 唯一分配阶段；镜像长度 M=N+2*floor(N/2)，仅存 ceil(M/2) 非负频点。
