@@ -4,11 +4,16 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace cnn_compute::interpolation {
 namespace {
     using core::Array;
+    // Eigen packet 中间层：求值循环按 lane 并行，逐元素运算次序与标量一致。
+    namespace ei         = Eigen::internal;
+    using Packet         = ei::packet_traits< double >::type;
+    constexpr auto lanes = ei::unpacket_traits< Packet >::size;
 
     double endpoint(double h0, double h1, double m0, double m1) {
         double d    = ((2.0 * h0 + h1) * m0 - h0 * m1) / (h0 + h1);
@@ -35,11 +40,6 @@ namespace {
         return values;
     }
 
-    std::ptrdiff_t interval(const double *knots, std::size_t n, double query) {
-        const auto span = std::upper_bound(knots + 3, knots + n + 1, query) - knots - 1;
-        return std::clamp< std::ptrdiff_t >(span, 3, static_cast< std::ptrdiff_t >(n) - 1);
-    }
-
     void fit_spline(std::span< const double > x, std::span< const double > y, Workspace &w) {
         const std::size_t n = x.size( );
         for (int j = 0; j < 4; ++j) {
@@ -51,10 +51,66 @@ namespace {
         auto band = [&](std::ptrdiff_t row, std::ptrdiff_t column) -> double & {
             return w.band[row * 7 + column - row + 3];
         };
-        for (std::size_t row = 0; row < n; ++row) {
-            const auto span   = interval(w.knots.data( ), n, x[row]);
+        // 节点严格递增：span 单调推进，与逐点 interval() 二分结果一致；
+        // 基函数按 lane 并行递推后散布进带内，每 lane 运算序列与标量
+        // basis() 相同；span 不变时节点零重复装载。
+        const auto     limit  = static_cast< std::ptrdiff_t >(n);
+        const double  *kn     = w.knots.data( );
+        std::ptrdiff_t span   = 2;
+        auto           locate = [&](double q) {
+            while (span < limit && kn[span + 1] <= q) ++span;
+            return std::clamp< std::ptrdiff_t >(span, 3, limit - 1);
+        };
+        double         ks[6][lanes], vs[4][lanes];
+        std::ptrdiff_t span_of[lanes] = {};
+        bool           fresh          = true;
+        Packet         knot[6];
+        for (auto &k : knot) k = ei::pset1< Packet >(0.0);
+        const auto full = n / lanes * lanes;
+        for (std::size_t row = 0; row < full; row += lanes) {
+            bool changed = false;
+            for (int lane = 0; lane < lanes; ++lane) {
+                const auto s = locate(x[row + lane]);
+                if (fresh || s != span_of[lane]) {
+                    span_of[lane] = s;
+                    for (int k = 0; k < 6; ++k) ks[k][lane] = kn[s - 2 + k];
+                    changed = true;
+                }
+            }
+            if (changed) {
+                for (int k = 0; k < 6; ++k) knot[k] = ei::ploadu< Packet >(ks[k]);
+                fresh = false;
+            }
+            Packet values[4], left[4], right[4];
+            values[0] = ei::pset1< Packet >(1.0);
+            values[1] = values[2] = values[3] = ei::pset1< Packet >(0.0);
+            const Packet qp                   = ei::ploadu< Packet >(x.data( ) + row);
+            left[1]                           = ei::psub(qp, knot[2]);
+            right[1]                          = ei::psub(knot[3], qp);
+            left[2]                           = ei::psub(qp, knot[1]);
+            right[2]                          = ei::psub(knot[4], qp);
+            left[3]                           = ei::psub(qp, knot[0]);
+            right[3]                          = ei::psub(knot[5], qp);
+            for (int degree = 1; degree <= 3; ++degree) {
+                Packet saved = ei::pset1< Packet >(0.0);
+                for (int r = 0; r < degree; ++r) {
+                    const Packet temp = ei::pdiv(values[r], ei::padd(right[r + 1], left[degree - r]));
+                    values[r]         = ei::padd(saved, ei::pmul(right[r + 1], temp));
+                    saved             = ei::pmul(left[degree - r], temp);
+                }
+                values[degree] = saved;
+            }
+            for (int j = 0; j < 4; ++j) {
+                ei::pstoreu(vs[j], values[j]);
+                for (int lane = 0; lane < lanes; ++lane)
+                    band(static_cast< std::ptrdiff_t >(row + lane), span_of[lane] - 3 + j) = vs[j][lane];
+            }
+            for (int lane = 0; lane < lanes; ++lane) w.fit_rhs[row + lane] = y[row + lane];
+        }
+        for (std::size_t row = full; row < n; ++row) {
+            const auto span   = locate(x[row]);
             const auto values = basis(w.knots.data( ), span, x[row]);
-            for (int j = 0; j < 4; ++j) band(row, span - 3 + j) = values[j];
+            for (int j = 0; j < 4; ++j) band(static_cast< std::ptrdiff_t >(row), span - 3 + j) = values[j];
             w.fit_rhs[row] = y[row];
         }
         // 有序节点的 B 样条配置矩阵全正，带宽固定；无需通用稠密求解。
@@ -152,8 +208,74 @@ namespace execution {
         w.prepare(n, query.size( ));
         if (method == Method::splrep) {
             fit_spline(x, y, w);
-            for (std::size_t i = 0; i < query.size( ); ++i) {
-                const auto span   = interval(w.knots.data( ), n, query[i]);
+            // 区间选择：查询不降时推进指针摊还 O(1)，回退则二分；两者均与
+            // interval() 的逐点 upper_bound 完全一致。基函数递推按 lane
+            // 并行，每 lane 的除/乘/加序列与标量 basis() 一致；节点与
+            // 系数只随 span 变化，span 不变的查询零重复装载。
+            const double  *kn       = w.knots.data( );
+            const auto     limit    = static_cast< std::ptrdiff_t >(n);
+            std::ptrdiff_t span     = 2;
+            double         previous = -std::numeric_limits< double >::infinity( );
+            auto           locate   = [&](double q) {
+                if (q < previous)
+                    span = std::upper_bound(kn + 3, kn + limit + 1, q) - kn - 1;
+                else
+                    while (span < limit && kn[span + 1] <= q) ++span;
+                previous = q;
+                return std::clamp< std::ptrdiff_t >(span, 3, limit - 1);
+            };
+            const auto     count = query.size( );
+            double         ks[6][lanes], cs[4][lanes], qs[lanes];
+            std::ptrdiff_t span_of[lanes] = {};
+            bool           fresh          = true;
+            Packet         knot[6], coefficient[4];
+            for (auto &k : knot) k = ei::pset1< Packet >(0.0);
+            for (auto &c : coefficient) c = ei::pset1< Packet >(0.0);
+            std::size_t i = 0;
+            for (; i + lanes <= count; i += lanes) {
+                bool changed = false;
+                for (int lane = 0; lane < lanes; ++lane) {
+                    const auto s = locate(query[i + lane]);
+                    qs[lane]     = query[i + lane];
+                    if (fresh || s != span_of[lane]) {
+                        span_of[lane] = s;
+                        for (int k = 0; k < 6; ++k) ks[k][lane] = kn[s - 2 + k];
+                        for (int j = 0; j < 4; ++j) cs[j][lane] = w.coefficients[s - 3 + j];
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    for (int k = 0; k < 6; ++k) knot[k] = ei::ploadu< Packet >(ks[k]);
+                    for (int j = 0; j < 4; ++j) coefficient[j] = ei::ploadu< Packet >(cs[j]);
+                    fresh = false;
+                }
+                const Packet qp = ei::ploadu< Packet >(qs);
+                // left[d]=x-knots[span+1-d]，right[d]=knots[span+d]-x。
+                Packet values[4], left[4], right[4];
+                values[0] = ei::pset1< Packet >(1.0);
+                values[1] = values[2] = values[3] = ei::pset1< Packet >(0.0);
+                left[1]                           = ei::psub(qp, knot[2]);
+                right[1]                          = ei::psub(knot[3], qp);
+                left[2]                           = ei::psub(qp, knot[1]);
+                right[2]                          = ei::psub(knot[4], qp);
+                left[3]                           = ei::psub(qp, knot[0]);
+                right[3]                          = ei::psub(knot[5], qp);
+                for (int degree = 1; degree <= 3; ++degree) {
+                    Packet saved = ei::pset1< Packet >(0.0);
+                    for (int r = 0; r < degree; ++r) {
+                        const Packet temp = ei::pdiv(values[r], ei::padd(right[r + 1], left[degree - r]));
+                        values[r]         = ei::padd(saved, ei::pmul(right[r + 1], temp));
+                        saved             = ei::pmul(left[degree - r], temp);
+                    }
+                    values[degree] = saved;
+                }
+                Packet value = ei::pset1< Packet >(0.0);
+                for (int j = 0; j < 4; ++j)
+                    value = ei::padd(value, ei::pmul(coefficient[j], values[j]));
+                ei::pstoreu(output.data( ) + i, value);
+            }
+            for (; i < count; ++i) {
+                const auto span   = locate(query[i]);
                 const auto values = basis(w.knots.data( ), span, query[i]);
                 double     value  = 0.0;
                 for (int j = 0; j < 4; ++j) value += w.coefficients[span - 3 + j] * values[j];
@@ -162,12 +284,68 @@ namespace execution {
         } else {
             derivatives(x, y, method, w);
             // 分段求值沿用 SciPy PPoly 常数到三次项的累加次序，不重排表达式。
-            for (std::size_t i = 0; i < query.size( ); ++i) {
-                const auto   found = std::upper_bound(x.begin( ), x.end( ), query[i]) - x.begin( ) - 1;
-                const auto   j     = std::clamp< std::ptrdiff_t >(found, 0, n - 2);
+            // 区间选择同 splrep 路径：单调推进 + 乱序回退二分，与逐点
+            // upper_bound 一致。Horner 的区间不变量（t/c0/c1 等）只随
+            // j 变化重算——纯函数同输入同位级结果；每个查询的求值序列
+            // 保持 y+d0·dx+c1·dx²+c0·dx³ 不变。
+            const double  *nodes    = x.data( );
+            const auto     limit    = static_cast< std::ptrdiff_t >(n);
+            std::ptrdiff_t found    = -1;
+            double         previous = -std::numeric_limits< double >::infinity( );
+            auto           locate   = [&](double q) {
+                if (q < previous)
+                    found = std::upper_bound(nodes, nodes + limit, q) - nodes - 1;
+                else
+                    while (found + 1 < limit && nodes[found + 1] <= q) ++found;
+                previous = q;
+                return std::clamp< std::ptrdiff_t >(found, 0, limit - 2);
+            };
+            const auto     count = query.size( );
+            double         hs[lanes], ss[lanes], d0s[lanes], d1s[lanes], xs[lanes], ys[lanes];
+            std::ptrdiff_t interval_of[lanes] = {};
+            bool           fresh              = true;
+            Packet         hp = ei::pset1< Packet >(0.0), sp = hp, d0 = hp, xp = hp, yp = hp, t = hp,
+                           c0 = hp, c1 = hp;
+            std::size_t    i = 0;
+            for (; i + lanes <= count; i += lanes) {
+                bool changed = false;
+                for (int lane = 0; lane < lanes; ++lane) {
+                    const auto j = locate(query[i + lane]);
+                    if (fresh || j != interval_of[lane]) {
+                        interval_of[lane] = j;
+                        hs[lane]          = w.h[j];
+                        ss[lane]          = w.slope[j];
+                        d0s[lane]         = w.derivative[j];
+                        d1s[lane]         = w.derivative[j + 1];
+                        xs[lane]          = nodes[j];
+                        ys[lane]          = y[j];
+                        changed           = true;
+                    }
+                }
+                if (changed) {
+                    hp    = ei::ploadu< Packet >(hs);
+                    sp    = ei::ploadu< Packet >(ss);
+                    d0    = ei::ploadu< Packet >(d0s);
+                    xp    = ei::ploadu< Packet >(xs);
+                    yp    = ei::ploadu< Packet >(ys);
+                    t     = ei::pdiv(ei::psub(ei::padd(d0, ei::ploadu< Packet >(d1s)), ei::pmul(ei::pset1< Packet >(2.0), sp)), hp);
+                    c0    = ei::pdiv(t, hp);
+                    c1    = ei::psub(ei::pdiv(ei::psub(sp, d0), hp), t);
+                    fresh = false;
+                }
+                const Packet dx    = ei::psub(ei::ploadu< Packet >(query.data( ) + i), xp);
+                Packet       value = ei::padd(yp, ei::pmul(d0, dx));
+                Packet       power = ei::pmul(dx, dx);
+                value              = ei::padd(value, ei::pmul(c1, power));
+                power              = ei::pmul(power, dx);
+                value              = ei::padd(value, ei::pmul(c0, power));
+                ei::pstoreu(output.data( ) + i, value);
+            }
+            for (; i < count; ++i) {
+                const auto   j = locate(query[i]);
                 const double h = w.h[j], slope = w.slope[j];
                 const double t  = (w.derivative[j] + w.derivative[j + 1] - 2.0 * slope) / h;
-                const double dx = query[i] - x[j];
+                const double dx = query[i] - nodes[j];
                 const double c0 = t / h, c1 = (slope - w.derivative[j]) / h - t;
                 double       value = y[j];
                 value += w.derivative[j] * dx;
