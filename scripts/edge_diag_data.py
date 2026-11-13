@@ -2,6 +2,7 @@
 
 产出 <data_root>/edge_diag/ 下:
 - synth_L{n}_fs10000.f64        确定性合成信号,float64 小端裸二进制,n=5000/50000/128000
+- synth_L128000_ramp_fs10000.f64  变转速合成档:基频 20→30 Hz 线性升速(二期阶次链测试)
 - hustbear_L128000_fs25600.f64  HUSTbear X 通道真实切段 128000 点
 - manifest.json                 文件、采样率、点数、来源与生成时间
 
@@ -25,14 +26,21 @@ import numpy as np
 FS_SYNTH = 10_000.0
 SEED = 42
 LENGTHS = (5_000, 50_000, 128_000)
-F0 = 25.0  # 基频,Hz
+F0 = 25.0  # 恒速档基频,Hz
 HARMONIC_ORDERS = (1, 2, 3, 4)  # 基频及 2/3/4 次谐波
+HARMONIC_AMPLITUDES = [1.0 / k for k in HARMONIC_ORDERS]  # 幅值随谐波次序递减
 NOISE_POWER_RATIO = 0.1  # 噪声方差 = 谐波总功率 / 10
 # 轴承冲击串(确定性,重复率与 25 Hz 不成整数比)
 IMPACT_RATE_HZ = 107.3
 IMPACT_RESONANCE_HZ = 1_500.0
 IMPACT_TAU_S = 0.004  # 冲击指数衰减时间常数
 IMPACT_AMPLITUDE = 0.15
+
+# ---------- 变转速档参数(二期阶次链测试) ----------
+RAMP_F_START = 20.0  # 基频线性升速起点,Hz
+RAMP_F_END = 30.0  # 基频线性升速终点,Hz
+RAMP_LENGTH = 128_000
+RAMP_FILE = "synth_L128000_ramp_fs10000.f64"
 
 # ---------- HUSTbear 真实切段参数 ----------
 # 格式与采样率见 docs/datasets.md:文本头 + TSV,time/Speed/X/Y/Z 五列,25600 Hz
@@ -45,21 +53,56 @@ HUST_FILE = "hustbear_L128000_fs25600.f64"
 
 
 def synth_signal(n: int, impacts: bool) -> np.ndarray:
-    """一段合成信号:谐波 + 高斯噪声 + 可选轴承冲击串。
+    """恒速合成信号:谐波 + 高斯噪声 + 可选轴承冲击串。
 
     每个文件独立以 SEED 播种,内容只由 (n, impacts) 决定,同参数重跑逐位一致。
     """
     rng = np.random.default_rng(SEED)
     t = np.arange(n) / FS_SYNTH
-    amplitudes = np.array([1.0 / k for k in HARMONIC_ORDERS])  # 幅值随谐波次序递减
+    amplitudes = np.array(HARMONIC_AMPLITUDES)
     phases = rng.uniform(0.0, 2.0 * np.pi, len(HARMONIC_ORDERS))
     signal = np.zeros(n)
     for amplitude, order, phase in zip(amplitudes, HARMONIC_ORDERS, phases):
         signal += amplitude * np.sin(2.0 * np.pi * order * F0 * t + phase)
-    harmonic_power = float(np.sum(amplitudes**2)) / 2.0
-    signal += rng.normal(0.0, np.sqrt(harmonic_power * NOISE_POWER_RATIO), n)
+    return add_noise_and_impacts(signal, rng, impacts)
+
+
+def synth_signal_ramp(n: int, impacts: bool) -> np.ndarray:
+    """变转速合成档:基频 RAMP_F_START→RAMP_F_END 线性升速,谐波挂在积分相位上。
+
+    谐波次序 k 的瞬时频率为 k·f(t),相位 k·φ(t)+随机初相;同样独立以 SEED 播种,
+    内容只由 (n, impacts) 决定,同参数重跑逐位一致。
+    """
+    rng = np.random.default_rng(SEED)
+    base_phase = ramp_base_phase(n)
+    amplitudes = np.array(HARMONIC_AMPLITUDES)
+    phases = rng.uniform(0.0, 2.0 * np.pi, len(HARMONIC_ORDERS))
+    signal = np.zeros(n)
+    for amplitude, order, phase in zip(amplitudes, HARMONIC_ORDERS, phases):
+        signal += amplitude * np.sin(order * base_phase + phase)
+    return add_noise_and_impacts(signal, rng, impacts)
+
+
+def ramp_base_phase(n: int) -> np.ndarray:
+    """线性升速基频的积分相位,rad。
+
+    f(t) = RAMP_F_START + Δf·t/T,T = n/FS_SYNTH,Δf = RAMP_F_END - RAMP_F_START;
+    φ(t) = 2π∫f dt = 2π(RAMP_F_START·t + Δf·t²/(2T)),解析积分保证相位连续且确定。
+    """
+    t = np.arange(n) / FS_SYNTH
+    duration = n / FS_SYNTH
+    drift = RAMP_F_END - RAMP_F_START
+    return 2.0 * np.pi * (RAMP_F_START * t + 0.5 * drift * t**2 / duration)
+
+
+def add_noise_and_impacts(
+    signal: np.ndarray, rng: np.random.Generator, impacts: bool
+) -> np.ndarray:
+    """恒速/变转速共用尾部:高斯噪声(方差 = 谐波总功率 × NOISE_POWER_RATIO)+ 可选冲击串。"""
+    harmonic_power = float(np.sum(np.array(HARMONIC_AMPLITUDES) ** 2)) / 2.0
+    signal = signal + rng.normal(0.0, np.sqrt(harmonic_power * NOISE_POWER_RATIO), signal.size)
     if impacts:
-        signal += impact_train(n)
+        signal += impact_train(signal.size)
     return signal
 
 
@@ -120,10 +163,22 @@ def main() -> None:
         synth_files.append({"file": name, "fs_hz": FS_SYNTH, "n": n, "dtype": "<f8", "bytes": size})
         print(f"{name}: {n} 点, {size} 字节")
 
+    ramp_size = write_f64(out_dir / RAMP_FILE, synth_signal_ramp(RAMP_LENGTH, impacts))
+    ramp_files = [
+        {"file": RAMP_FILE, "fs_hz": FS_SYNTH, "n": RAMP_LENGTH, "dtype": "<f8", "bytes": ramp_size}
+    ]
+    print(f"{RAMP_FILE}: {RAMP_LENGTH} 点, {ramp_size} 字节")
+
     hust_path = data_root / HUST_SOURCE
     size = write_f64(out_dir / HUST_FILE, hustbear_segment(hust_path))
     print(f"{HUST_FILE}: {HUST_LENGTH} 点, {size} 字节 (源 {hust_path} 偏移 {HUST_OFFSET})")
 
+    impacts_spec = None if not impacts else {
+        "rate_hz": IMPACT_RATE_HZ,
+        "resonance_hz": IMPACT_RESONANCE_HZ,
+        "decay_tau_s": IMPACT_TAU_S,
+        "amplitude": IMPACT_AMPLITUDE,
+    }
     manifest = {
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "synthetic": {
@@ -131,17 +186,27 @@ def main() -> None:
             "fs_hz": FS_SYNTH,
             "f0_hz": F0,
             "harmonic_orders": list(HARMONIC_ORDERS),
-            "harmonic_amplitudes": [1.0 / k for k in HARMONIC_ORDERS],
+            "harmonic_amplitudes": HARMONIC_AMPLITUDES,
             "noise_power_ratio": NOISE_POWER_RATIO,
-            "bearing_impacts": None
-            if not impacts
-            else {
-                "rate_hz": IMPACT_RATE_HZ,
-                "resonance_hz": IMPACT_RESONANCE_HZ,
-                "decay_tau_s": IMPACT_TAU_S,
-                "amplitude": IMPACT_AMPLITUDE,
-            },
+            "bearing_impacts": impacts_spec,
             "files": synth_files,
+        },
+        "synthetic_ramp": {
+            "seed": SEED,
+            "fs_hz": FS_SYNTH,
+            "recipe": (
+                "基频 20→30 Hz 线性升速,相位为瞬时频率的连续积分"
+                " φ(t)=2π(f0·t+Δf·t²/(2T));谐波次序 k 瞬时频率 k·f(t)、"
+                "相位 k·φ(t)+随机初相;噪声方差与恒速档一致;轴承冲击串 107.3 Hz 不变"
+            ),
+            "f_start_hz": RAMP_F_START,
+            "f_end_hz": RAMP_F_END,
+            "frequency_law": "linear-ramp",
+            "harmonic_orders": list(HARMONIC_ORDERS),
+            "harmonic_amplitudes": HARMONIC_AMPLITUDES,
+            "noise_power_ratio": NOISE_POWER_RATIO,
+            "bearing_impacts": impacts_spec,
+            "files": ramp_files,
         },
         "hustbear": {
             "source_path": HUST_SOURCE.as_posix(),
