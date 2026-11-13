@@ -40,6 +40,26 @@ namespace {
         std::nth_element(values.begin( ) + lo + 1, values.begin( ) + hi, values.end( ));
         return a + (values[hi] - a) * (position - lo);
     }
+    // 谱峭度双遍执行核，公开入口与 kurtogram 共用：第一遍有限检查与 |z| 最大值
+    // （magnitudes 非空时同步填充幅值数组，scale 同时就是 kurtogram 的谱峰），
+    // 第二遍按元素序累加 power/fourth，各累加次序与逐遍写法一致。
+    double spectral_kurtosis(std::span< const Complex > x, std::span< double > magnitudes, double &scale) {
+        scale = 0;
+        for (std::size_t i = 0; i < x.size( ); ++i) {
+            if (!std::isfinite(x[i].real( )) || !std::isfinite(x[i].imag( ))) throw std::invalid_argument("复输入必须有限");
+            const double magnitude = std::abs(x[i]);
+            if (i < magnitudes.size( )) magnitudes[i] = magnitude;
+            scale = std::max(scale, magnitude);
+        }
+        if (scale == 0) throw std::domain_error("零能量频带无法估计谱峭度");
+        double power = 0, fourth = 0;
+        for (std::size_t i = 0; i < x.size( ); ++i) {
+            double p = std::norm(x[i] / scale);
+            power += p;
+            fourth += p * p;
+        }
+        return x.size( ) * fourth / (power * power) - 2;
+    }
 }    // namespace
 void Workspace::prepare(std::size_t n) {
     plan.prepare(n);
@@ -218,18 +238,7 @@ core::Array teager(std::span< const double > x) {
 double complex_spectral_kurtosis(std::span< const Complex > x) {
     if (x.size( ) < 2) throw std::invalid_argument("谱峭度至少两个复样本");
     double scale = 0;
-    for (auto z : x) {
-        if (!std::isfinite(z.real( )) || !std::isfinite(z.imag( ))) throw std::invalid_argument("复输入必须有限");
-        scale = std::max(scale, std::abs(z));
-    }
-    if (scale == 0) throw std::domain_error("零能量频带无法估计谱峭度");
-    double power = 0, fourth = 0;
-    for (auto z : x) {
-        double p = std::norm(z / scale);
-        power += p;
-        fourth += p * p;
-    }
-    return x.size( ) * fourth / (power * power) - 2;
+    return spectral_kurtosis(x, {}, scale);
 }
 core::Array cepstral_prewhiten(std::span< const double > x, double fs, std::span< const double > comb, double width) {
     valid(x, 256);
@@ -298,17 +307,16 @@ std::vector< BandStatistics > filter_bank_kurtogram(std::span< const double > x,
             double peak = 0;
             for (double value : filtered) peak = std::max(peak, std::abs(value));
             if (peak == 0) continue;
-            w.plan.forward(filtered, w.first);
+            // 半谱即可：forward 的共轭填充半谱随即被清零，纯浪费的 2n 复写。
+            w.plan.forward_half(filtered, { w.first.data( ), n / 2 + 1 });
             for (std::size_t k = 1; k < (n + 1) / 2; ++k) w.first[k] *= 2;
             for (std::size_t k = n / 2 + 1; k < n; ++k) w.first[k] = 0;
             w.plan.inverse(w.first, w.second);
             std::span< const Complex > core(w.second.data( ) + edge, n - 2 * edge);
-            const double               sk = complex_spectral_kurtosis(core);
-            peak                          = 0;
-            for (std::size_t j = 0; j < core.size( ); ++j) {
-                magnitude[j] = std::abs(core[j]);
-                peak         = std::max(peak, magnitude[j]);
-            }
+            double scale = 0;
+            // |z| 的最大值、幅值数组与谱峰同遍产出，power/fourth 第二遍按元素序累加。
+            const double sk = spectral_kurtosis(core, { magnitude.data( ), core.size( ) }, scale);
+            peak              = scale;
             double median     = std::max(quantile(magnitude, 0.5), peak * std::numeric_limits< double >::epsilon( ));
             double percentile = quantile(magnitude, 0.95);
             out.push_back({ low, high, level, sk, peak / median, percentile / median });
