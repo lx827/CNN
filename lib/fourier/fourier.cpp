@@ -1,5 +1,5 @@
 #include "api.hpp"
-#include <core/slot.hpp>
+#include <core/cache.hpp>
 #include <pocketfft_hdronly.h>
 #include <algorithm>
 #include <cmath>
@@ -18,7 +18,8 @@ namespace {
         }
     }
     // pocketfft 计划构后只读、exec 为 const 且无共享可变状态，允许跨线程共享；
-    // 每方向一个进程级单槽：同尺寸零重建，尺寸变化才重建，内存有界。
+    // 实/复计划各保留最多四种长度、合计最多 2^20 点；容纳原长/段长/补零
+    // 三种计划，避免 spectrum_speed 在同规模公开调用之间互相逐出。
     struct RealPlan {
         std::size_t                              samples;
         pocketfft::detail::pocketfft_r< double > plan;
@@ -36,12 +37,12 @@ namespace {
         }
     };
     std::shared_ptr< const RealPlan > real_plan(std::size_t n) {
-        static core::SingleSlot< RealPlan > slot;
-        return slot.obtain(n);
+        static core::BoundedCache< RealPlan > cache(1 << 20);
+        return cache.obtain(n);
     }
     std::shared_ptr< const ComplexPlan > complex_plan(std::size_t n) {
-        static core::SingleSlot< ComplexPlan > slot;
-        return slot.obtain(n);
+        static core::BoundedCache< ComplexPlan > cache(1 << 20);
+        return cache.obtain(n);
     }
 }    // namespace
 struct Plan::Impl {

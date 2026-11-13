@@ -19,3 +19,7 @@ add_test(NAME diagnostic_contract COMMAND cnn_compute_diagnostic_contract)
 add_executable(cnn_compute_numeric_contract numeric_contract.cpp)
 target_link_libraries(cnn_compute_numeric_contract PRIVATE CNN::numeric)
 add_test(NAME numeric_contract COMMAND cnn_compute_numeric_contract)
+
+add_executable(cnn_compute_cache_contract cache_contract.cpp)
+target_link_libraries(cnn_compute_cache_contract PRIVATE CNN::core Threads::Threads)
+add_test(NAME precomputation_cache_contract COMMAND cnn_compute_cache_contract)

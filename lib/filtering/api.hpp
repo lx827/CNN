@@ -24,9 +24,9 @@ std::vector< double > sosfiltfilt(std::span< const double > input,
                                   std::span< const Sos > sos, int padlen = -1);
 // 周期 Hann，N=1 时为 1；输出由返回值拥有。
 std::vector< double > hann(std::size_t samples);
-// 进程级单槽缓存的周期 Hann 表（与 hann 同一公式）：同尺寸重复调用零重建零分配；
-// 尺寸变化时原子置换槽，旧表由在用调用方持有至调用结束。表构建后只读，可跨线程共享。
-// 面向频谱/倒谱等全长窗复用；窗长很短的调用方直接 hann 即可，不占槽。
+// 进程级有界缓存的周期 Hann 表（与 hann 同一公式），构后只读，可跨线程共享。
+// 最多四项、总长度不超过 2^19（表数据 4 MiB）；超预算表不驻留。
+// 命中不重建，LRU 逐出后在用 owner 仍有效。仅单次使用的短窗可直接 hann。
 struct HannTable {
     std::size_t           samples;
     std::vector< double > values;

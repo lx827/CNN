@@ -1,5 +1,5 @@
 #include "api.hpp"
-#include <core/slot.hpp>
+#include <core/cache.hpp>
 #include <Eigen/Core>
 #include <Eigen/QR>
 #include <algorithm>
@@ -161,9 +161,9 @@ std::vector< double > hann(std::size_t n) {
 }
 HannTable::HannTable(std::size_t n) : samples(n), values(hann(n)) {}
 std::shared_ptr< const HannTable > hann_table(std::size_t n) {
-    // 进程级单槽：同一公式确定性构建，同尺寸命中只做原子读。
-    static core::SingleSlot< HannTable > slot;
-    return slot.obtain(n);
+    // 全长表与 Welch 段窗可同时驻留；最多四项、合计 2^19 个 double（4 MiB）。
+    static core::BoundedCache< HannTable > cache(1 << 19);
+    return cache.obtain(n);
 }
 std::vector< double > detrend(std::span< const double > x, bool linear) {
     finite(x);
