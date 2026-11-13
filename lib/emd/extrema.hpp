@@ -1,26 +1,42 @@
 #pragma once
 
 #include <core/interpolation.hpp>
+#include <interpolation/execution.hpp>
+#include <span>
 #include <utility>
 #include <vector>
 
 namespace cnn_compute::emd::detail {
 
 using core::Array;
-using Extrema = core::Knots;
 
+// 一次筛分持有的工作区：极值检测/精化、镜像延拓、包络输出与插值子工作区
+// 跨迭代复用，容量只增不减；同规模迭代除首次准备外不再分配。
 struct Workspace {
-    Array                                   difference, left, center, right, denominator, shift, refined;
-    Eigen::Array< bool, Eigen::Dynamic, 1 > maxima, minima;
-    std::vector< Eigen::Index >             max_indices, min_indices;
-    // 常量查询 0..N-1 与镜像延拓点集：规模不变时跨迭代复用容量。
-    Array                                   query;
+    Array                                      difference, left, center, right, denominator, shift, refined;
+    Eigen::Array< bool, Eigen::Dynamic, 1 >    maxima, minima, accepted;
+    std::vector< Eigen::Index >                max_indices, min_indices;
+    Array                                      max_locations, max_values, min_locations, min_values;
+    Array                                      mirror_locations, mirror_values;
     std::vector< std::pair< double, double > > mirror_points;
+    Array                                      query, upper, lower;
+    interpolation::Workspace                   interpolation;
+
+    // 为一次包络计算准备全部节点级缓冲：参数取上下两侧极值数的最大值，
+    // 在两次 refine 之前调用一次。refine 不再自行扩容——中途 resize 会
+    // 重新分配并丢弃已写入的另一侧节点。
+    void reserve(std::size_t nodes);
 };
 
-// 工作区由一次筛分持有，在各轮极值检测与精化之间复用。
-void    locate(const Array &signal, Workspace &workspace);
-Extrema refine(const Array &signal, const std::vector< Eigen::Index > &indices, Workspace &work);
-Extrema mirror(const Extrema &extrema, double left_axis, double right_axis, int width, Workspace &work);
+void locate(const Array &signal, Workspace &workspace);
+
+// 抛物线精化结果写入 locations/values；容量已由调用方 reserve 建立，
+// head(indices.size()) 生效。
+void refine(const Array &signal, const std::vector< Eigen::Index > &indices, Workspace &work,
+            Array &locations, Array &values);
+
+// 镜像延拓节点写入 work.mirror_locations/values，返回节点数；容器容量复用。
+std::size_t mirror(std::span< const double > locations, std::span< const double > values,
+                   double left_axis, double right_axis, int width, Workspace &work);
 
 }    // namespace cnn_compute::emd::detail

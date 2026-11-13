@@ -17,15 +17,16 @@ std::optional< SiftResult > sift(std::span< const double > signal, const SiftPar
             if (iteration == 1) return std::nullopt;
             return SiftResult{ std::move(current), iteration - 1, true };
         }
-        updated                  = current - (envelope->upper + envelope->lower) / 2.0;
+        updated                  = current
+                                   - (Map(envelope->upper.data( ), envelope->upper.size( ))
+                                      + Map(envelope->lower.data( ), envelope->lower.size( )))
+                                         / 2.0;
         const double denominator = current.square( ).sum( );
         const double numerator   = (updated - current).square( ).sum( );
         current.swap(updated);
         const bool stop = parameters.stopping_rule == StoppingRule::sd
                               ? numerator / denominator < parameters.sd_threshold
-                              : rilling_stop({ envelope->upper.data( ), static_cast< std::size_t >(envelope->upper.size( )) },
-                                             { envelope->lower.data( ), static_cast< std::size_t >(envelope->lower.size( )) },
-                                             parameters.rilling_thresholds);
+                              : rilling_stop(envelope->upper, envelope->lower, parameters.rilling_thresholds);
         if (denominator <= std::numeric_limits< double >::min( ) || stop)
             return SiftResult{ std::move(current), iteration, true };
     }
