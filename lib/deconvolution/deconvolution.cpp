@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 
 namespace cnn_compute::deconvolution {
@@ -63,25 +64,37 @@ double correlated_kurtosis(std::span< const double > x, int period, int order) {
     return correlated_kurtosis_kernel(x, period, order);
 }
 struct Workspace::Impl {
-    Eigen::MatrixXd                         matrix;
-    Eigen::HouseholderQR< Eigen::MatrixXd > qr;
+    // 唯一的 N×L 存储：prepare 先按滑窗填入设计矩阵，随后被 QR 原地分解覆盖
+    //（下区为 Householder 反射、上三角为 R），全程不存在第二份矩阵拷贝。
+    Eigen::MatrixXd qr_storage;
+    Eigen::VectorXd scaled;  // 去均值信号/最大幅值：迭代内 FIR 与设计矩阵列的公共源
+    std::optional< Eigen::HouseholderQR< Eigen::Ref< Eigen::MatrixXd > > > qr;  // 借用 qr_storage
+    // Qᵀ 的反射序列（reverse 次序），prepare 时缓存一次；系数 Nested 按值持有，
+    // 避免每迭代 householderQ().adjoint() 重新物化系数副本。
+    std::optional< Eigen::HouseholderSequence< Eigen::Ref< Eigen::MatrixXd >, Eigen::VectorXd, Eigen::OnTheLeft > > adjoint;
     Eigen::BDCSVD< Eigen::MatrixXd >        decomposition;
     Eigen::VectorXd                         factors, coefficients, best, y, target, transformed, projected, updated;
     Array                                   centered;
+    Eigen::Index                            rows = 0;    // 设计矩阵行数（矩阵转QR存储后仍需）
+    int                                     columns = 0; // 滤波器长度 L
 };
 namespace {
+    // QR 已由调用方在 qr_storage 上原地完成（w.qr 有效）；此处提取小 R 的 SVD
+    // 并准备全部迭代向量容量。
     void factorize(Workspace::Impl &w, double ridge) {
-        const auto rows = w.matrix.rows( ), l = w.matrix.cols( );
+        const auto rows = w.qr_storage.rows( ), l = w.qr_storage.cols( );
+        w.rows           = rows;
+        w.columns        = static_cast< int >(l);
         // X=QR，SVD只作用于L×L的R。Q以Householder反射存储，不物化N×L的U；
         // 奇异值仍来自X的正交等价变换，不形成会平方条件数的XᵀX。
-        w.qr.compute(w.matrix);
-        Eigen::MatrixXd triangular = w.qr.matrixQR( ).topLeftCorner(l, l).template triangularView< Eigen::Upper >( );
+        Eigen::MatrixXd triangular = w.qr->matrixQR( ).topLeftCorner(l, l).template triangularView< Eigen::Upper >( );
         w.decomposition.compute(triangular, Eigen::ComputeFullU | Eigen::ComputeFullV);
         const auto &s = w.decomposition.singularValues( );
         if (w.decomposition.info( ) != Eigen::Success || !s.allFinite( ) || s[0] == 0)
             throw std::runtime_error("解卷积矩阵 SVD 数值退化");
         const double cutoff = std::numeric_limits< double >::epsilon( ) * std::max(rows, l) * s[0];
         if (ridge == 0 && (s.array( ) > cutoff).count( ) != l) throw std::runtime_error("无正则化解卷积矩阵数值秩亏");
+        w.adjoint.emplace(w.qr->householderQ( ).adjoint( ));
         w.factors.resize(l);
         for (Eigen::Index j = 0; j < l; ++j) w.factors[j] = ridge == 0 ? 1 / s[j] : s[j] / (s[j] * s[j] + ridge);
         w.coefficients.resize(l);
@@ -94,7 +107,7 @@ namespace {
     }
     // energy 为调用方对 w.y 已算好的 squaredNorm（同一确定性归约，复用不重扫）。
     void mckd_target(Workspace::Impl &w, int period, int order, double energy) {
-        const auto rows  = w.matrix.rows( );
+        const auto rows  = w.rows;
         const auto start = static_cast< Eigen::Index >(period) * order;
         w.target.setZero( );
         double beta_energy = 0;
@@ -114,8 +127,11 @@ namespace {
     }
     // target 发散最终由 updated 的 norm 检查兜底，迭代内不做全数组有限性扫描。
     void solve(Workspace::Impl &w) {
-        w.transformed.noalias( ) = w.qr.householderQ( ).adjoint( ) * w.target;
-        w.projected.noalias( )   = w.decomposition.matrixU( ).transpose( ) * w.transformed.head(w.matrix.cols( ));
+        // Qᵀ·target：缓存的反射序列原地左乘，与 householderQ().adjoint()*target
+        // 是同一反射应用路径，免每迭代物化系数副本与 target 临时拷贝。
+        w.transformed = w.target;
+        w.adjoint->applyThisOnTheLeft(w.transformed);
+        w.projected.noalias( )   = w.decomposition.matrixU( ).transpose( ) * w.transformed.head(w.columns);
         w.projected.array( ) *= w.factors.array( );
         w.updated.noalias( ) = w.decomposition.matrixV( ) * w.projected;
     }
@@ -136,17 +152,22 @@ void       Workspace::prepare(std::span< const double > signal, const Options &o
     w.centered -= w.centered.mean( );
     const double scale = w.centered.abs( ).maxCoeff( );
     if (scale == 0) throw std::domain_error("零能量信号无法解卷积");
+    w.scaled = (w.centered / scale).matrix( );
     const auto rows = n - l + 1;
-    w.matrix.resize(rows, l);
-    for (int j = 0; j < l; ++j) w.matrix.col(j) = w.centered.segment(j, rows).matrix( ) / scale;
+    w.qr.reset( );      // 旧 Ref 借用的缓冲即将重建
+    w.adjoint.reset( ); // 旧序列引用的 QR 存储随之上重建
+    w.qr_storage.resize(rows, l);
+    for (int j = 0; j < l; ++j) w.qr_storage.col(j) = w.scaled.segment(j, rows);
     // 固定设计矩阵只分解一次；保持基于X的SVD秩判定，不形成XᵀX。
+    // 全程仅此一份 N×L：QR 经 Ref 在存储上原地分解，无 compute() 的整体拷贝。
+    w.qr.emplace(w.qr_storage);
     factorize(w, o.ridge);
 }
 namespace execution {
     Info run(int period, int order, const Options &o, std::span< double > output,
              std::span< double > filter, std::span< double > history, Workspace &workspace) {
         auto      &w    = *workspace.impl;
-        const auto rows = w.matrix.rows( );
+        const auto rows = w.rows;
         const int  l    = o.filter_length;
         if (period && (period < 0 || order < 1 || static_cast< std::size_t >(period) * order + 1 >= static_cast< std::size_t >(rows)))
             throw std::invalid_argument("输入长度不足以覆盖MCKD周期和移位阶数");
@@ -155,7 +176,10 @@ namespace execution {
         double best           = -std::numeric_limits< double >::infinity( );
         Info   info;
         for (int it = 0; it < o.max_iterations; ++it) {
-            w.y.noalias( ) = w.matrix * w.coefficients;
+            // y=X·f 的流式 FIR：设计矩阵第 j 列即 scaled 的滑窗段，j 升序逐列
+            // AXPY，输入常驻缓存，替代每迭代流经整份 N×L 矩阵的 GEMV。
+            w.y = w.scaled.segment(0, rows) * w.coefficients[0];
+            for (int j = 1; j < l; ++j) w.y += w.scaled.segment(j, rows) * w.coefficients[j];
             const std::span< const double > y(w.y.data( ), rows);
             double                          objective = period ? correlated_kurtosis_kernel(y, period, order) : kurtosis_kernel(y);
             history[it]                               = objective;
@@ -239,14 +263,18 @@ core::Array mckd_update(std::span< const double > matrix, std::size_t rows, std:
     Workspace workspace;
     auto     &w        = *workspace.impl;
     using Row          = Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor >;
-    w.matrix           = Eigen::Map< const Row >(matrix.data( ), rows, columns);
-    const double scale = w.matrix.cwiseAbs( ).maxCoeff( );
+    w.qr_storage       = Eigen::Map< const Row >(matrix.data( ), rows, columns);
+    const double scale = w.qr_storage.cwiseAbs( ).maxCoeff( );
     if (scale == 0) throw std::runtime_error("MCKD输入矩阵零能量");
-    w.matrix /= scale;
-    factorize(w, ridge);
+    w.qr_storage /= scale;
     w.coefficients = Eigen::Map< const Eigen::VectorXd >(filter.data( ), columns);
-    w.y.noalias( ) = w.matrix * w.coefficients;
-    mckd_target(w, period, order, w.y.squaredNorm( ));
+    // X 为任意行优先矩阵而非滑窗信号，此处保留通用 GEMV；
+    // 须在 QR 原地覆盖 qr_storage 之前完成。
+    w.y.noalias( ) = w.qr_storage * w.coefficients;
+    const double energy = w.y.squaredNorm( );
+    w.qr.emplace(w.qr_storage);
+    factorize(w, ridge);
+    mckd_target(w, period, order, energy);
     solve(w);
     return w.updated.array( );
 }

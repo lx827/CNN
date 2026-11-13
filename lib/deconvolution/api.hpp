@@ -18,8 +18,9 @@ struct Result {
     std::vector< double > objective_history;
     Info                  info;
 };
-// 每个活跃任务独占工作区；prepare 借用输入到返回，并保存必要的去均值副本、
-// N×L 卷积矩阵及一次 QR/小R的SVD。相同输入的迭代复用分解，不物化薄U。
+// 每个活跃任务独占工作区；prepare 借用输入到返回，保存必要的去均值/归一信号
+// 副本与唯一一份 N×L 存储（滑窗设计矩阵，随即被 QR 原地分解覆盖，无第二份
+// 拷贝），以及小 R 的 SVD。相同输入的迭代复用分解，不物化薄U。
 // prepare 可能分配；失败后可再次 prepare。输出不借用工作区。
 class Workspace {
 public:
