@@ -7,6 +7,16 @@ from cnn_compute import diagnostic
 
 
 class NativeDiagnosticContracts(unittest.TestCase):
+    def test_spectral_kurtosis_is_invariant_across_finite_amplitude_scales(self):
+        signal = np.array([1 + 2j, 3 + 1j, 2 - 4j, 0.5 + 0.25j])
+        power = np.abs(signal) ** 2
+        expected = len(signal) * np.sum(power**2) / np.sum(power) ** 2 - 2
+        for scale in (1.0, 1e-200, 1e160):
+            with self.subTest(scale=scale):
+                self.assertAlmostEqual(
+                    diagnostic.complex_spectral_kurtosis(signal * scale), expected, places=13
+                )
+
     def test_adaptive_one_update_uses_final_weights_for_remaining_samples(self):
         signal = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
         # L=1、delay=1，第一轮e=2，w=0.1*2*1=0.2；之后不再更新。

@@ -42,24 +42,25 @@ namespace {
         std::nth_element(values.begin( ) + lo + 1, values.begin( ) + hi, values.end( ));
         return a + (values[hi] - a) * (position - lo);
     }
-    // 谱峭度双遍执行核，公开入口与 kurtogram 共用：第一遍有限检查与 |z| 最大值
-    // （magnitudes 非空时同步填充幅值数组，scale 同时就是 kurtogram 的谱峰），
-    // 第二遍按元素序累加 power/fourth，各累加次序与逐遍写法一致。
-    double spectral_kurtosis(std::span< const Complex > x, std::span< double > magnitudes, double &scale) {
-        scale = 0;
+    // 公开入口与 kurtogram 共用两遍统计：先按最大实/虚分量缩放，再求平方模，
+    // 保持谱峭度的幅值缩放不变性，避免有限输入在缩放前平方溢出或下溢。
+    // magnitudes 非空时写回真实幅值，peak 同时返回其最大值，供 kurtogram 使用。
+    double spectral_kurtosis(std::span< const Complex > x, std::span< double > magnitudes, double &peak) {
+        double scale = 0;
         for (std::size_t i = 0; i < x.size( ); ++i) {
             if (!std::isfinite(x[i].real( )) || !std::isfinite(x[i].imag( ))) throw std::invalid_argument("复输入必须有限");
-            const double magnitude = std::sqrt(std::norm(x[i]));    // hypot→sqrt（工单A1，#145-发现3(d)）
-            if (i < magnitudes.size( )) magnitudes[i] = magnitude;
-            scale = std::max(scale, magnitude);
+            scale = std::max({ scale, std::abs(x[i].real( )), std::abs(x[i].imag( )) });
         }
         if (scale == 0) throw std::domain_error("零能量频带无法估计谱峭度");
-        double power = 0, fourth = 0;
+        double power = 0, fourth = 0, maximum = 0;
         for (std::size_t i = 0; i < x.size( ); ++i) {
-            double p = std::norm(x[i] / scale);
+            const double p = std::norm(x[i] / scale);
+            if (!magnitudes.empty( )) magnitudes[i] = scale * std::sqrt(p);
+            maximum = std::max(maximum, p);
             power += p;
             fourth += p * p;
         }
+        peak = scale * std::sqrt(maximum);
         return x.size( ) * fourth / (power * power) - 2;
     }
 }    // namespace
