@@ -8,6 +8,14 @@
 
 int main( ) {
     using namespace cnn_compute;
+    const std::vector< diagnostic::Complex > spectral_signal{ { 1, 2 }, { 3, 1 }, { 2, -4 }, { 0.5, 0.25 } };
+    for (double scale : { 1.0, 1e-200, 1e160 }) {
+        auto scaled = spectral_signal;
+        for (auto &value : scaled) value *= scale;
+        const double kurtosis = diagnostic::complex_spectral_kurtosis(scaled);
+        if (!std::isfinite(kurtosis) || std::abs(kurtosis - (-0.31560811339963957)) > 1e-13)
+            throw std::runtime_error("spectral kurtosis lost amplitude scale invariance");
+    }
     adaptive::Workspace aw;
     for (std::size_t n : { 256, 384, 128 }) {
         std::vector< double > x(n), out(n);
