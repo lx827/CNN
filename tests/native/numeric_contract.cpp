@@ -19,6 +19,11 @@ int main( ) {
     plan.inverse_half(half, real);
     for (std::size_t i = 0; i < real.size( ); ++i)
         if (std::abs(real[i] - samples[i]) > 1e-13) throw std::runtime_error("odd real FFT contract");
+    // 低重叠的最后一帧可以完全落在输入之后；该帧必须是零谱。
+    const auto tail = numeric::stft(samples, 1000, 4, 0, 4);
+    if (tail.time.size( ) != 3 || tail.amplitude.cols( ) != 3
+        || !tail.amplitude.col(2).isZero( ))
+        throw std::runtime_error("STFT empty tail frame must be zero");
     // 同规模重复执行，先前返回的拥有型结果不受 Plan 后续使用影响。
     const auto spectrum = numeric::spectrum(samples, 1000);
     plan.forward_half(samples, half);
