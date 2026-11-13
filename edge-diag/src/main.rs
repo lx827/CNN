@@ -6,7 +6,9 @@
 mod ffi;
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
-use edge_diag::{params, InputInfo, Metrics, OutputReport, Timings};
+use edge_diag::{
+    params, InputInfo, KurtogramInfo, Metrics, OutputReport, Timings, VmdInfo, WaveletInfo,
+};
 use std::time::Instant;
 
 /// 每 stage 计时（毫秒），写入共享契约的 timings_ms。
@@ -18,8 +20,7 @@ fn main() -> Result<()> {
     let cli = parse_args()?;
     let fs_hz = f64::from(cli.fs);
 
-    let bytes =
-        std::fs::read(&cli.input).with_context(|| format!("读取输入文件 {}", cli.input))?;
+    let bytes = std::fs::read(&cli.input).with_context(|| format!("读取输入文件 {}", cli.input))?;
     ensure!(
         bytes.len() % 8 == 0,
         "输入 {} 长度 {} 字节，不是 float64（8 字节小端）的整数倍",
@@ -96,6 +97,113 @@ fn main() -> Result<()> {
     let speed_hz = (reason.is_empty() && frequency.is_finite()).then_some(frequency);
     let speed_ms = elapsed_ms(stage);
 
+    // 7. 小波阈值去噪：参数全默认（NULL→db8/symmetric/soft，level 0=最大层数，
+    //    scale 1.0）；残差=原始−去噪（逐点相减为边界运算），RMS 复用 cnn_statistics
+    let stage = Instant::now();
+    let denoised = ffi::wavelet_denoise(&signal)?;
+    let denoised = denoised.f64s("values")?;
+    let residual: Vec<f64> = signal
+        .iter()
+        .zip(denoised)
+        .map(|(raw, clean)| raw - clean)
+        .collect();
+    let residual_rms =
+        ffi::statistics(&residual, params::STATS_MARGIN_FLOOR)?.f64s("statistics")?[1];
+    let denoised_rms =
+        ffi::statistics(denoised, params::STATS_MARGIN_FLOOR)?.f64s("statistics")?[1];
+    let wavelet_ms = elapsed_ms(stage);
+
+    // 8. 实倒谱：numeric 族入口，数组原样输出
+    let stage = Instant::now();
+    let cepstrum = ffi::cepstrum(&signal)?;
+    let cepstrum = cepstrum.f64s("values")?.to_vec();
+    let cepstrum_ms = elapsed_ms(stage);
+
+    // 9. 谱峭度选带：bands 每行 low,high,level,sk,impulsiveness,s2b，
+    //    取谱峭度（列 3）最大行为 best（行选取为边界运算）
+    let stage = Instant::now();
+    let kurtogram_result = ffi::filter_bank_kurtogram(
+        &signal,
+        fs_hz,
+        params::KURTOGRAM_MAX_LEVEL,
+        params::KURTOGRAM_MIN_FREQUENCY,
+        params::KURTOGRAM_FILTER_ORDER,
+    )?;
+    let bands = kurtogram_result.f64s("bands")?;
+    let best = bands
+        .chunks_exact(6)
+        .max_by(|a, b| a[3].total_cmp(&b[3]))
+        .ok_or_else(|| anyhow!("cnn_filter_bank_kurtogram 未返回任何频带"))?;
+    let kurtogram = KurtogramInfo {
+        best_low_hz: best[0],
+        best_high_hz: best[1],
+        max_kurtosis: best[3],
+    };
+    let kurtogram_ms = elapsed_ms(stage);
+
+    // 10. VMD：契约显式输入截断（前 min(n,51200) 点），options=NULL 全默认；
+    //     各模态能量占 K 个模态总能量之比（平方和归一，边界归约）
+    let stage = Instant::now();
+    let n_vmd = signal.len().min(params::VMD_MAX_SAMPLES);
+    let vmd_result = ffi::vmd(&signal[..n_vmd], fs_hz)?;
+    let (mode_count, mode_length) = vmd_result.rows_columns("modes")?;
+    let modes = vmd_result.f64s("modes")?;
+    let mut energies = Vec::with_capacity(mode_count);
+    for row in 0..mode_count {
+        let mode = &modes[row * mode_length..(row + 1) * mode_length];
+        energies.push(mode.iter().map(|value| value * value).sum::<f64>());
+    }
+    let total_energy: f64 = energies.iter().sum();
+    let vmd_info = VmdInfo {
+        mode_energy_ratio: energies
+            .iter()
+            .map(|energy| energy / total_energy)
+            .collect(),
+        n_input: n_vmd,
+    };
+    let vmd_ms = elapsed_ms(stage);
+
+    // 11. 阶次谱：连续相位用 cnn_integrate（云端 order 管线同源，梯形积分，
+    //     单位转）；恒速输入下与线性相位 2π·f·t 严格等价，无降级。
+    //     speed_hz 为 null 时本 stage 与 tsa 均为 null
+    let stage = Instant::now();
+    let (order_spectrum, resampled, order_skip_reason) = match speed_hz {
+        None => (None, None, Some("speed_null")),
+        Some(speed) => {
+            let time: Vec<f64> = (0..signal.len())
+                .map(|index| index as f64 / fs_hz)
+                .collect();
+            let speed_samples = vec![speed; signal.len()];
+            let phase = ffi::integrate(&time, &speed_samples)?;
+            let resampled = ffi::angle_resample(
+                &signal,
+                phase.f64s("values")?,
+                params::ORDER_SAMPLES_PER_REVOLUTION,
+            )?;
+            let resampled = resampled.f64s("values")?.to_vec();
+            let amplitude = ffi::amplitude_spectrum(&resampled, true)?;
+            let order_spectrum = amplitude.f64s("values")?[..=params::ORDER_MAX_ORDER].to_vec();
+            (Some(order_spectrum), Some(resampled), None)
+        }
+    };
+    let order_ms = elapsed_ms(stage);
+
+    // 12. TSA：纯转平均入口 cnn_tsa，作用于阶次重采样后信号，取单圈平均 cycle
+    let stage = Instant::now();
+    let tsa = match &resampled {
+        Some(resampled) => Some(
+            ffi::tsa(
+                resampled,
+                params::ORDER_SAMPLES_PER_REVOLUTION,
+                params::TSA_MINIMUM_REVOLUTIONS,
+            )?
+            .f64s("cycle")?
+            .to_vec(),
+        ),
+        None => None,
+    };
+    let tsa_ms = elapsed_ms(stage);
+
     let report = OutputReport {
         input: InputInfo {
             file: cli.input.clone(),
@@ -106,6 +214,16 @@ fn main() -> Result<()> {
         spectrum,
         envelope_spectrum,
         speed_hz,
+        wavelet: WaveletInfo {
+            residual_rms,
+            denoised_rms,
+        },
+        cepstrum,
+        kurtogram,
+        vmd: vmd_info,
+        order_spectrum,
+        tsa,
+        order_skip_reason,
         timings_ms: Timings {
             detrend: detrend_ms,
             stats: stats_ms,
@@ -113,6 +231,12 @@ fn main() -> Result<()> {
             spectrum: spectrum_ms,
             envelope: envelope_ms,
             speed: speed_ms,
+            wavelet: wavelet_ms,
+            cepstrum: cepstrum_ms,
+            kurtogram: kurtogram_ms,
+            vmd: vmd_ms,
+            order: order_ms,
+            tsa: tsa_ms,
         },
         peak_rss_kb: peak_rss_kb(),
     };
@@ -142,7 +266,11 @@ fn parse_args() -> Result<Cli> {
         match args[index].as_str() {
             "--input" => input = Some(value),
             "--fs" => {
-                fs = Some(value.parse().with_context(|| format!("解析 --fs 的值 {value}"))?)
+                fs = Some(
+                    value
+                        .parse()
+                        .with_context(|| format!("解析 --fs 的值 {value}"))?,
+                )
             }
             "--out" => out = Some(value),
             other => bail!(
