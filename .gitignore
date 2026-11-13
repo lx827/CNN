@@ -163,3 +163,8 @@ check_api_docs_report.md
 cloud/tests/**/output/
 
 .ruff_cache
+
+# edge-diag aarch64 交叉构建:封装入库,产物目录不入库
+# (上方 Python 段的 build/ 通配会吞掉 edge-diag/build/,需显式豁免)
+!edge-diag/build/
+edge-diag/build/out/
