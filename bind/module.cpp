@@ -11,6 +11,7 @@ PYBIND11_MODULE(_native, module) {
     auto transforms    = module.def_submodule("transforms", "解析信号、幅度归一化和 Hilbert/NHT 变换");
     cnn_compute::bind::bind_core(core);
     cnn_compute::bind::bind_emd(emd);
+    cnn_compute::bind::bind_emd_business(emd);
     cnn_compute::bind::bind_emd_family(emd, envelope, interpolation);
     cnn_compute::bind::bind_emd_mask(emd, transforms);
     cnn_compute::bind::bind_emd_ensemble(emd);

@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from app.algorithms.decomposition.emd import (
     EMDParameters,
     EnsembleParameters,
+    PythonEMDImplementation,
     decompose_emd,
     decompose_ceemdan,
 )
@@ -141,15 +142,22 @@ class DecompositionBusinessTest(unittest.TestCase):
             result = pipeline.evaluate(analysis)
         self.assertEqual(result.status, "indeterminate")  # 未提供真实轴承几何和转频
 
-    def test_ceemdan_first_imf_matches_torres_ensemble_mean(self):
+    def test_python_reference_ceemdan_first_imf_matches_torres_ensemble_mean(self):
         arr = signal(256)
         params = EnsembleParameters(EMDParameters(max_imfs=1, max_sifts=20), 3, 0.15)
-        actual = decompose_ceemdan(arr, FS, seed=23, parameters=params)
+        # NumPy 噪声的数学参照；完整原生族的同公式 oracle 位于 C++ 契约测试。
+        reference = PythonEMDImplementation()
+        actual = decompose_ceemdan(
+            arr, FS, seed=23, parameters=params, implementation=reference
+        )
         rng = np.random.default_rng(23)
         scale = np.std(arr)
         firsts = [
             decompose_emd(
-                arr / scale + 0.15 * rng.normal(size=len(arr)), FS, params.emd
+                arr / scale + 0.15 * rng.normal(size=len(arr)),
+                FS,
+                params.emd,
+                reference,
             ).imfs[0]
             for _ in range(3)
         ]

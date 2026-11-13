@@ -263,6 +263,8 @@ class PythonEMDImplementation:
     def emd(
         self, signal: FloatArray, sample_rate_hz: float, parameters: EMDParameters
     ) -> EMDResult:
+        if not np.all(np.isfinite(signal)):
+            raise ValueError("输入信号不能包含 NaN 或无穷值")
         return _emd(signal, sample_rate_hz, parameters, sift_kernel=self._sift_kernel)
 
     def eemd(
@@ -272,6 +274,8 @@ class PythonEMDImplementation:
         parameters: EnsembleParameters,
         seed: int,
     ) -> EMDResult:
+        if not np.all(np.isfinite(signal)):
+            raise ValueError("输入信号不能包含 NaN 或无穷值")
         scale = float(np.std(signal))
         if scale == 0.0:
             return _indeterminate("eemd", signal, sample_rate_hz, "zero_variance", seed)
@@ -332,6 +336,8 @@ class PythonEMDImplementation:
         parameters: EnsembleParameters,
         seed: int,
     ) -> EMDResult:
+        if not np.all(np.isfinite(signal)):
+            raise ValueError("输入信号不能包含 NaN 或无穷值")
         scale = float(np.std(signal))
         if scale == 0.0:
             return _indeterminate(

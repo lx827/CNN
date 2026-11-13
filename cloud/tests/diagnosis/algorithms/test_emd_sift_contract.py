@@ -26,6 +26,8 @@ from tests.diagnosis.algorithms.emd_reference_contract import (
 
 def run_family(method, signal, parameters, implementation=None, *, noise_scale=0.15):
     """所有对照都经过现有公开分解入口和参数校验。"""
+    if implementation is None:
+        implementation = PythonEMDImplementation()
     if method == "emd":
         return decompose_emd(signal, SAMPLE_RATE_HZ, parameters, implementation)
     entry = decompose_eemd if method == "eemd" else decompose_ceemdan

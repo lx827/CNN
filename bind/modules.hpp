@@ -11,6 +11,7 @@ void bind_wavelet(pybind11::module_ &module);
 void bind_vmd(pybind11::module_ &module);
 void bind_diagnostic(pybind11::module_ &module);
 void bind_emd(pybind11::module_ &module);
+void bind_emd_business(pybind11::module_ &module);
 void bind_emd_ensemble(pybind11::module_ &module);
 void bind_emd_family(pybind11::module_ &module, pybind11::module_ &envelope,
                      pybind11::module_ &interpolation);
