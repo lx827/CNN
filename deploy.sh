@@ -7,6 +7,10 @@
 #   bash /opt/CNN/deploy.sh --skip-frontend   同上
 #   bash /opt/CNN/deploy.sh --dry-run    只打印将要执行的步骤,不改动任何东西(演练/核对用)
 #
+# 停机语义:部署在服务停止的窗口内完成(2G 机器上 C++ 扩展编译与前端构建都需要
+# 服务占用的内存余量,边跑边部会触发 swap 颠簸导致部署假死);窗口内任一步失败
+# 中止时,EXIT trap 会尽力恢复启动服务。
+#
 # 环境变量(一般无需修改;本地演练时可覆盖):
 #   CNN_DEPLOY_ROOT  部署目录,默认 /opt/CNN
 #   CNN_SERVICE      systemd 服务名,默认 CNN
@@ -55,15 +59,39 @@ else
         || { echo "uv 安装失败或不可用;请手动安装后重试(https://docs.astral.sh/uv/)"; exit 1; }
 fi
 
-# 2) 同步代码(保留 main 分支直进的方式;--ff-only 避免意外合并提交)
+# 2) 停止后端,进入部署窗口(2G 红线:编译与前端构建必须拿到服务占用的内存
+#    余量,否则与运行中的服务互相挤压触发 swap 颠簸,部署假死——2026-11-13
+#    生产 uv sync 卡死诱因)。窗口内任一步失败经 EXIT trap 尽力恢复服务;
+#    成功路径在服务确认启动后解除恢复。
+SERVICE_STOPPED=false
+restore_service_on_abort() {
+    if [ "$SERVICE_STOPPED" = true ]; then
+        echo "!! 部署中止,尝试恢复 ${SERVICE}(环境为中止时的实际状态)"
+        if sudo systemctl start "$SERVICE" 2>/dev/null && sudo systemctl is-active --quiet "$SERVICE"; then
+            echo "==> ${SERVICE} 已恢复运行"
+        else
+            echo "!! ${SERVICE} 恢复失败,保持停止;排查后重跑 deploy.sh 或手动 systemctl start ${SERVICE}"
+        fi
+    fi
+}
+trap restore_service_on_abort EXIT
+echo "==> 停止后端,进入部署窗口(完成前服务不可用)"
+if $DRY_RUN; then
+    echo "[dry-run] systemctl stop $SERVICE"
+else
+    sudo systemctl stop "$SERVICE"
+    SERVICE_STOPPED=true
+fi
+
+# 3) 同步代码(保留 main 分支直进的方式;--ff-only 避免意外合并提交)
 run git switch main
 run git pull --ff-only
 
-# 3) 根项目按锁文件同步运行依赖并从源码构建计算扩展；目标需 C++20 工具链。
+# 4) 根项目按锁文件同步运行依赖并从源码构建计算扩展；目标需 C++20 工具链。
 #    构建后端版本在根配置固定，CMake 管理原生依赖，编译并行度为 1。
 run uv sync --frozen
 
-# 3.1) 断言根项目解释器确实生成。2026-11-11 生产事故:uv sync 正常返回但
+# 4.1) 断言根项目解释器确实生成。2026-11-11 生产事故:uv sync 正常返回但
 #      /opt/CNN/.venv 未生成,服务被切到不存在的解释器上进入崩溃循环;此断言让
 #      该类失效在部署期响亮失败,绝不带病重启。
 VENV_PY="$DEPLOY_ROOT/.venv/bin/python"
@@ -74,7 +102,7 @@ else
     echo "==> 依赖就绪: $VENV_PY"
 fi
 
-# 4) systemd 服务:首次安装 / 与模板不一致时备份更新 CNN.service
+# 5) systemd 服务:首次安装 / 与模板不一致时备份更新 CNN.service
 #    (ExecStart 直指 .venv 解释器,模板见 deploy/cloud/CNN.service)
 SERVICE_SRC="$DEPLOY_ROOT/deploy/cloud/CNN.service"
 SERVICE_DST="/etc/systemd/system/${SERVICE}.service"
@@ -96,7 +124,7 @@ else
     install_service
 fi
 
-# 4.1) 断言磁盘上的 unit 确实指向 workspace 解释器。cmp "一致"只说明与模板相等,
+# 5.1) 断言磁盘上的 unit 确实指向 workspace 解释器。cmp "一致"只说明与模板相等,
 #      不能兜住"模板与现状都被污染/未被替换"的组合;2026-11-11 生产事故中旧单元
 #      残留 venv 时代路径,服务一直跑在 /opt/CNN/cloud/venv 上。不指向 .venv 即强制覆盖。
 if ! $DRY_RUN; then
@@ -107,25 +135,8 @@ if ! $DRY_RUN; then
     fi
 fi
 
-# 5) 重启后端(2G 红线:重启前后均不引入额外并发,单服务单进程)
-echo "==> 重启后端"
-run sudo systemctl restart "$SERVICE"
-# 5.1) 等待真正进入 active(2G 机器冷启动可达数秒;systemctl restart 返回≠服务已就绪)
-if ! $DRY_RUN; then
-    waited=""
-    for _ in $(seq 1 30); do
-        if sudo systemctl is-active --quiet "$SERVICE"; then waited=1; break; fi
-        sleep 1
-    done
-    if [ -z "$waited" ]; then
-        echo "!! $SERVICE 重启后 30 秒未进入 active,最近日志:"
-        sudo journalctl -u "$SERVICE" -n 15 --no-pager || true
-        exit 1
-    fi
-    echo "==> $SERVICE 已 active"
-fi
-
-# 6) 前端构建(默认执行;传 -s / --skip-frontend 跳过)
+# 6) 前端构建(默认执行;传 -s / --skip-frontend 跳过)。仍在停机窗口内完成:
+#    Node/Vite 构建同为内存大户,失败时 EXIT trap 恢复后端(此时依赖已就绪)
 if [ "$SKIP_FRONTEND" = false ]; then
     echo "==> 构建前端"
     run npm --prefix "$DEPLOY_ROOT/wind-turbine-diagnosis" run build
@@ -133,7 +144,26 @@ else
     echo "==> 跳过前端构建"
 fi
 
-# 7) 查看状态
+# 7) 启动后端,退出部署窗口(2G 红线:启动前后均不引入额外并发,单服务单进程)
+echo "==> 启动后端"
+run sudo systemctl start "$SERVICE"
+SERVICE_STOPPED=false
+# 7.1) 等待真正进入 active(2G 机器冷启动可达数秒;systemctl start 返回≠服务已就绪)
+if ! $DRY_RUN; then
+    waited=""
+    for _ in $(seq 1 30); do
+        if sudo systemctl is-active --quiet "$SERVICE"; then waited=1; break; fi
+        sleep 1
+    done
+    if [ -z "$waited" ]; then
+        echo "!! $SERVICE 启动后 30 秒未进入 active,最近日志:"
+        sudo journalctl -u "$SERVICE" -n 15 --no-pager || true
+        exit 1
+    fi
+    echo "==> $SERVICE 已 active"
+fi
+
+# 8) 查看状态
 echo "==> 查看服务状态"
 run sudo systemctl status "$SERVICE" --no-pager
 
