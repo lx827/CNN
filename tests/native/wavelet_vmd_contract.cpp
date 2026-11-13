@@ -44,15 +44,15 @@ int main( ) {
     workspace.prepare(signal.size( ), parameters.modes);
     vmd::Result result;
     vmd::prepare_result(result, signal.size( ), parameters);
-    auto *current  = workspace.current.data( );
-    auto *previous = workspace.previous.data( );
+    auto *current  = workspace.current_re.data( );
+    auto *previous = workspace.previous_re.data( );
     vmd::execute(signal, 1024, parameters, result, workspace);
     const auto saved  = result.modes;
     auto      *output = result.modes.data( );
     vmd::execute(signal, 1024, parameters, result, workspace);
     require(result.modes.data( ) == output);
-    require((workspace.current.data( ) == current || workspace.current.data( ) == previous)
-            && (workspace.previous.data( ) == current || workspace.previous.data( ) == previous));
+    require((workspace.current_re.data( ) == current || workspace.current_re.data( ) == previous)
+            && (workspace.previous_re.data( ) == current || workspace.previous_re.data( ) == previous));
     require((result.modes - saved).abs( ).maxCoeff( ) == 0);
     const auto public_result = vmd::decompose(signal, 1024, parameters);
     require((result.modes - public_result.modes).abs( ).maxCoeff( ) == 0);

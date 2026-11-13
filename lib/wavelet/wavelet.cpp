@@ -1,6 +1,7 @@
 #include "api.hpp"
 extern "C" {
 #include "vendor/pywt/wt.h"
+#include "vendor/pywt/convolution.h"
 }
 #include <algorithm>
 #include <charconv>
@@ -18,8 +19,8 @@ namespace {
     }
     void valid_input(std::span< const double > input) {
         if (input.size( ) < 2) throw std::invalid_argument("小波输入至少为两个采样点");
-        for (double x : input)
-            if (!std::isfinite(x)) throw std::invalid_argument("小波输入必须有限");
+        if (!Eigen::Map< const core::Array >(input.data( ), input.size( )).isFinite( ).all( ))
+            throw std::invalid_argument("小波输入必须有限");
     }
     MODE extension(const std::string &mode) {
         if (mode == "zero" || mode == "zpd") return MODE_ZEROPAD;
@@ -94,13 +95,13 @@ namespace {
     }
     // IDWT 在奇数原长时多返回一点；只裁尾，不补零，不改变时间轴。
     void synthesize_crop(const Plan &plan, std::span< const double > a, std::span< const double > d,
-                         std::span< double > target, core::Array &scratch) {
+                         std::span< double > target, Workspace &ws) {
         const auto full = plan.reconstruction_size(a.empty( ) ? d.size( ) : a.size( ));
         if (full == target.size( ))
-            plan.synthesize(a, d, target);
+            plan.synthesize(a, d, target, ws);
         else {
-            auto temporary = view(scratch).first(full);
-            plan.synthesize(a, d, temporary);
+            auto temporary = view(ws.first).first(full);
+            plan.synthesize(a, d, temporary, ws);
             std::copy_n(temporary.begin( ), target.size( ), target.begin( ));
         }
     }
@@ -115,8 +116,25 @@ namespace {
 struct Plan::Impl {
     std::unique_ptr< DiscreteWavelet, decltype(&free_discrete_wavelet) > wavelet;
     MODE                                                                 mode;
+    // 滤波器奇偶相位（fe[m] = filter[2m]、fo[m] = filter[2m+1]），构造期拆分一次。
+    std::vector< double > dec_lo_even, dec_lo_odd, dec_hi_even, dec_hi_odd;
+    std::vector< double > rec_lo_even, rec_lo_odd, rec_hi_even, rec_hi_odd;
+    static void           split(const double *source, std::size_t length,
+                                std::vector< double > &even, std::vector< double > &odd) {
+        even.resize(length / 2);
+        odd.resize(length / 2);
+        for (std::size_t m = 0; m < length / 2; ++m) {
+            even[m] = source[2 * m];
+            odd[m]  = source[2 * m + 1];
+        }
+    }
     Impl(const std::string &name, const std::string &extension_mode)
-        : wavelet(filter(name), free_discrete_wavelet), mode(extension(extension_mode)) {}
+        : wavelet(filter(name), free_discrete_wavelet), mode(extension(extension_mode)) {
+        split(wavelet->dec_lo_double, wavelet->dec_len, dec_lo_even, dec_lo_odd);
+        split(wavelet->dec_hi_double, wavelet->dec_len, dec_hi_even, dec_hi_odd);
+        split(wavelet->rec_lo_double, wavelet->rec_len, rec_lo_even, rec_lo_odd);
+        split(wavelet->rec_hi_double, wavelet->rec_len, rec_hi_even, rec_hi_odd);
+    }
 };
 Plan::Plan(const std::string &wavelet, const std::string &mode) : impl_(std::make_unique< Impl >(wavelet, mode)) {}
 Plan::~Plan( )                                = default;
@@ -131,16 +149,125 @@ std::size_t Plan::reconstruction_size(std::size_t coefficients) const {
 int Plan::max_level(std::size_t samples) const {
     return dwt_max_level(samples, impl_->wavelet->dec_len);
 }
-void Plan::analyze(std::span< const double > input, std::span< double > a, std::span< double > d) const {
-    if (double_dec_a(input.data( ), input.size( ), impl_->wavelet.get( ), a.data( ), a.size( ), impl_->mode)
-        || double_dec_d(input.data( ), input.size( ), impl_->wavelet.get( ), d.data( ), d.size( ), impl_->mode))
-        throw std::runtime_error("小波分解失败");
+std::size_t Plan::filter_length( ) const {
+    return impl_->wavelet->dec_len;
 }
-void Plan::synthesize(std::span< const double > a, std::span< const double > d, std::span< double > output) const {
+void Plan::analyze(std::span< const double > input, std::span< double > a, std::span< double > d,
+                   Workspace &ws) const {
+    if (impl_->mode == MODE_PERIODIZATION) {
+        // 周期化的 padding 位置与自回绕次序 vendor 专有，整段保留其标量内核。
+        if (double_dec_a(input.data( ), input.size( ), impl_->wavelet.get( ), a.data( ), a.size( ), impl_->mode)
+            || double_dec_d(input.data( ), input.size( ), impl_->wavelet.get( ), d.data( ), d.size( ), impl_->mode))
+            throw std::runtime_error("小波分解失败");
+        return;
+    }
+    const auto n     = input.size( );
+    const auto flen  = impl_->wavelet->dec_len;
+    const auto half  = flen / 2;
+    const auto o_lo  = half;     // 左边界输出数 = F/2（i = 1,3,..,F-1）
+    const auto o_hi  = n / 2;    // 中心段右端（i < N 的奇数计数）
+    const auto count = o_hi - o_lo;
+    // 偶/奇相位拆分，两个滤波器共用一趟。
+    for (std::size_t t = 0; t < n / 2; ++t) {
+        ws.even[t] = input[2 * t];
+        ws.odd[t]  = input[2 * t + 1];
+    }
+    if (n % 2) ws.even[n / 2] = input[n - 1];
+    // 边界窗口 = 输入前缀 F + 与 N 同奇偶的输入后缀：vendor 对窗口两端的延拓
+    // 算术与对全长输入一致（N>=F 时 k<N 界不触发），一次调用同时覆盖左右边界。
+    const auto window  = 2 * flen + (n & 1);
+    const auto trailer = window - flen;
+    std::copy_n(input.data( ), flen, ws.fake.data( ));
+    std::copy_n(input.data( ) + (n - trailer), trailer, ws.fake.data( ) + flen);
+    auto convolve = [&](const double *filter, const double *fe, const double *fo, std::span< double > out) {
+        double_downsampling_convolution(ws.fake.data( ), window, filter, flen, ws.edge.data( ), 2,
+                                        impl_->mode);
+        std::copy_n(ws.edge.data( ), o_lo, out.data( ));
+        std::copy_n(ws.edge.data( ) + flen, out.size( ) - o_hi, out.data( ) + o_hi);
+        if (count == 0) return;
+        // 中心段多相卷积：output[o] = Σ fe[m]·odd[o-m] + Σ fo[m]·even[o-m]。
+        // 逐包输出的累加器驻留寄存器（Eigen packet 中间层，宽度随目标 ISA），
+        // 逐 tap 乘加免掉目的地重放；每个元素的加法序列严格保持 j = 0,1,2,…
+        // 升序，与 vendor 中心循环逐位一致；尾部逐元素同序标量。
+        using Packet         = Eigen::internal::packet_traits< double >::type;
+        constexpr auto lanes = Eigen::internal::unpacket_traits< Packet >::size;
+        const auto     full  = count / lanes * lanes;
+        for (std::size_t offset = 0; offset < full; offset += lanes) {
+            const double *odd_p  = ws.odd.data( ) + o_lo + offset;
+            const double *even_p = ws.even.data( ) + o_lo + offset;
+            Packet        acc    = Eigen::internal::pset1< Packet >(0.0);
+            for (std::size_t m = 0; m < half; ++m) {
+                acc = Eigen::internal::padd(
+                    acc, Eigen::internal::pmul(Eigen::internal::pset1< Packet >(fe[m]),
+                                               Eigen::internal::ploadu< Packet >(odd_p - m)));
+                acc = Eigen::internal::padd(
+                    acc, Eigen::internal::pmul(Eigen::internal::pset1< Packet >(fo[m]),
+                                               Eigen::internal::ploadu< Packet >(even_p - m)));
+            }
+            Eigen::internal::pstoreu(out.data( ) + o_lo + offset, acc);
+        }
+        for (std::size_t o = o_lo + full; o < o_hi; ++o) {
+            double sum = 0;
+            for (std::size_t m = 0; m < half; ++m) {
+                sum += fe[m] * ws.odd[o - m];
+                sum += fo[m] * ws.even[o - m];
+            }
+            out[o] = sum;
+        }
+    };
+    convolve(impl_->wavelet->dec_lo_double, impl_->dec_lo_even.data( ), impl_->dec_lo_odd.data( ), a);
+    convolve(impl_->wavelet->dec_hi_double, impl_->dec_hi_even.data( ), impl_->dec_hi_odd.data( ), d);
+}
+void Plan::synthesize(std::span< const double > a, std::span< const double > d, std::span< double > output,
+                      Workspace &ws) const {
+    // vendor 上采样卷积向输出累加，先整体清零一次（契约要求）。
     std::fill(output.begin( ), output.end( ), 0.0);
-    if (double_idwt(a.empty( ) ? nullptr : a.data( ), a.size( ), d.empty( ) ? nullptr : d.data( ), d.size( ),
-                    output.data( ), output.size( ), impl_->wavelet.get( ), impl_->mode))
-        throw std::runtime_error("小波重构失败");
+    if (impl_->mode == MODE_PERIODIZATION) {
+        if (double_idwt(a.empty( ) ? nullptr : a.data( ), a.size( ), d.empty( ) ? nullptr : d.data( ), d.size( ),
+                        output.data( ), output.size( ), impl_->wavelet.get( ), impl_->mode))
+            throw std::runtime_error("小波重构失败");
+        return;
+    }
+    // 非周期化的上采样有效段卷积覆盖全部输出，无边界特判。sum_even/sum_odd
+    // 链在寄存器包内按 m 升序聚合完毕后，一次累进输出——直接 tap-major 累进
+    // 输出会改变 (0+SE_lo)+SE_hi 的加法分组。
+    const auto coeffs   = a.empty( ) ? d.size( ) : a.size( );
+    const auto half     = impl_->wavelet->rec_len / 2;
+    const auto pairs    = coeffs - half + 1;
+    auto       upsample = [&](const double *fe, const double *fo, std::span< const double > source) {
+        using Packet         = Eigen::internal::packet_traits< double >::type;
+        constexpr auto lanes = Eigen::internal::unpacket_traits< Packet >::size;
+        const auto     full  = pairs / lanes * lanes;
+        double         block[lanes];
+        for (std::size_t offset = 0; offset < full; offset += lanes) {
+            const double *taps_p   = source.data( ) + half - 1 + offset;
+            Packet        sum_even = Eigen::internal::pset1< Packet >(0.0);
+            Packet        sum_odd  = Eigen::internal::pset1< Packet >(0.0);
+            for (std::size_t m = 0; m < half; ++m) {
+                const Packet taps = Eigen::internal::ploadu< Packet >(taps_p - m);
+                sum_even          = Eigen::internal::padd(
+                    sum_even, Eigen::internal::pmul(Eigen::internal::pset1< Packet >(fe[m]), taps));
+                sum_odd = Eigen::internal::padd(
+                    sum_odd, Eigen::internal::pmul(Eigen::internal::pset1< Packet >(fo[m]), taps));
+            }
+            Eigen::internal::pstoreu(block, sum_even);
+            for (std::size_t k = 0; k < lanes; ++k) output[2 * (offset + k)] += block[k];
+            Eigen::internal::pstoreu(block, sum_odd);
+            for (std::size_t k = 0; k < lanes; ++k) output[2 * (offset + k) + 1] += block[k];
+        }
+        for (std::size_t t = full; t < pairs; ++t) {
+            double sum_even = 0, sum_odd = 0;
+            for (std::size_t m = 0; m < half; ++m) {
+                const double taps = source[half - 1 - m + t];
+                sum_even += fe[m] * taps;
+                sum_odd += fo[m] * taps;
+            }
+            output[2 * t] += sum_even;
+            output[2 * t + 1] += sum_odd;
+        }
+    };
+    if (!a.empty( )) upsample(impl_->rec_lo_even.data( ), impl_->rec_lo_odd.data( ), a);
+    if (!d.empty( )) upsample(impl_->rec_hi_even.data( ), impl_->rec_hi_odd.data( ), d);
 }
 void Workspace::prepare(const Plan &plan, std::size_t samples, int level, bool packet) {
     const auto sizes = lengths(plan, samples, level);
@@ -154,6 +281,13 @@ void Workspace::prepare(const Plan &plan, std::size_t samples, int level, bool p
     first.resize(samples + 1);
     second.resize(samples + 1);
     median.resize(sizes[1]);
+    // 多相支撑缓冲：相位拆分按最长一级输入（原始长度）取半；边界窗口与边界
+    // 卷积输出只依赖滤波器长度；IDWT 的 sum_even/sum_odd 聚合在寄存器完成。
+    const auto flen = plan.filter_length( );
+    even.resize(samples / 2 + 1);
+    odd.resize(samples / 2 + 1);
+    fake.resize(2 * flen + 1);
+    edge.resize(3 * flen / 2 + 1);
 }
 void prepare_coefficients(Coefficients &output, const Plan &plan, std::size_t samples, int level, bool packet) {
     output.lengths = lengths(plan, samples, level);
@@ -170,7 +304,7 @@ void decompose_into(std::span< const double > input, const Plan &plan, Coefficie
                 const auto source = j == 1 ? input : view(ws.nodes[node_index(j - 1, k)]);
                 auto      &a      = j == output.level ? output.bands[k * 2] : ws.nodes[node_index(j, k * 2)];
                 auto      &d      = j == output.level ? output.bands[k * 2 + 1] : ws.nodes[node_index(j, k * 2 + 1)];
-                plan.analyze(source, view(a), view(d));
+                plan.analyze(source, view(a), view(d), ws);
             }
         }
     } else {
@@ -178,7 +312,7 @@ void decompose_into(std::span< const double > input, const Plan &plan, Coefficie
         for (int j = 1; j <= output.level; ++j) {
             auto &a = j == output.level ? output.bands[0] : ws.nodes[j - 1];
             auto &d = output.bands[output.level - j + 1];
-            plan.analyze(source, view(a), view(d));
+            plan.analyze(source, view(a), view(d), ws);
             source = view(a);
         }
     }
@@ -190,14 +324,14 @@ void reconstruct_into(const Coefficients &c, const Plan &plan, std::span< double
                 const auto &a      = j == c.level ? c.bands[k * 2] : ws.nodes[node_index(j, k * 2)];
                 const auto &d      = j == c.level ? c.bands[k * 2 + 1] : ws.nodes[node_index(j, k * 2 + 1)];
                 auto        target = j == 1 ? output : view(ws.nodes[node_index(j - 1, k)]);
-                synthesize_crop(plan, view(a), view(d), target, ws.first);
+                synthesize_crop(plan, view(a), view(d), target, ws);
             }
         }
     } else {
         auto a = view(c.bands[0]);
         for (int j = c.level; j >= 1; --j) {
             auto target = j == 1 ? output : view(ws.nodes[j - 2]);
-            synthesize_crop(plan, a, view(c.bands[c.level - j + 1]), target, ws.first);
+            synthesize_crop(plan, a, view(c.bands[c.level - j + 1]), target, ws);
             a = target;
         }
     }
@@ -230,7 +364,7 @@ void reconstruct_component_into(const Coefficients &c, std::size_t k, const Plan
         const auto full   = plan.reconstruction_size(source.size( ));
         auto       target = j == 1 && full == c.lengths[0] ? output : view(buffer).first(full);
         plan.synthesize(detail ? std::span< const double >{} : source,
-                        detail ? source : std::span< const double >{}, target);
+                        detail ? source : std::span< const double >{}, target, ws);
         source = target.first(c.lengths[j - 1]);
         first  = false;
     }
@@ -274,8 +408,7 @@ core::Array denoise(std::span< const double > input, const Plan &plan, int level
     prepare_coefficients(coefficients, plan, input.size( ), level, false);
     Workspace ws;
     ws.prepare(plan, input.size( ), level, false);
-    double amplitude = 0;
-    for (double x : input) amplitude = std::max(amplitude, std::abs(x));
+    double      amplitude = Eigen::Map< const core::Array >(input.data( ), input.size( )).cwiseAbs( ).maxCoeff( );
     core::Array normalized(input.size( ));
     core::Array result(input.size( ));
     if (amplitude == 0) {
@@ -290,16 +423,32 @@ core::Array denoise(std::span< const double > input, const Plan &plan, int level
     ws.median              = (finest - center).abs( );
     const double sigma     = median(view(ws.median)) / 0.6744897501960817;
     const double threshold = threshold_scale * sigma * std::sqrt(2 * std::log(static_cast< double >(input.size( ))));
+    // 模式循环外解析一次；hard/soft 用向量化表达式，improved 保留逐元素 exp。
+    // sign(band)*max(|band|-t,0) 与 copysign(max(|band|-shrink,0),band) 在有限
+    // 输入下逐位等价（x=0 时两侧同为该符号的零）。
+    enum class Shrink { hard,
+                        soft,
+                        improved };
+    const Shrink shrink = threshold_mode == "hard"   ? Shrink::hard
+                          : threshold_mode == "soft" ? Shrink::soft
+                                                     : Shrink::improved;
     for (std::size_t k = 1; k < coefficients.bands.size( ); ++k) {
-        auto &band = coefficients.bands[k];
-        for (Eigen::Index i = 0; i < band.size( ); ++i) {
-            const double absolute = std::abs(band[i]);
-            if (threshold_mode == "hard") {
-                if (absolute <= threshold) band[i] = 0;
-            } else {
-                const double shrink = threshold_mode == "soft" ? threshold : threshold / (1 + std::exp(2 * (absolute - threshold)));
-                band[i]             = std::copysign(std::max(absolute - shrink, 0.0), band[i]);
-            }
+        auto                     &band = coefficients.bands[k];
+        Eigen::Map< core::Array > values(band.data( ), band.size( ));
+        switch (shrink) {
+            case Shrink::hard:
+                values = (values.cwiseAbs( ) > threshold).select(values, 0.0);
+                break;
+            case Shrink::soft:
+                values = values.sign( ) * (values.cwiseAbs( ) - threshold).max(0.0);
+                break;
+            case Shrink::improved:
+                for (Eigen::Index i = 0; i < values.size( ); ++i) {
+                    const double absolute = std::abs(values[i]);
+                    const double factor   = threshold / (1 + std::exp(2 * (absolute - threshold)));
+                    values[i]             = std::copysign(std::max(absolute - factor, 0.0), values[i]);
+                }
+                break;
         }
     }
     reconstruct_into(coefficients, plan, view(result), ws);
