@@ -210,9 +210,9 @@ core::Array zoom_spectrum(std::span< const double > x, double fs, double low, do
 }
 core::Array real_cepstrum(std::span< const double > x) {
     validate(x, 64);
-    const auto                      n = x.size( );
+    const auto                      n      = x.size( );
     auto                            window = filtering::hann_table(n);    // 全长 Hann 进程槽
-    fourier::Plan                   plan(n);    // 计划进程槽；缓冲本调用独占
+    fourier::Plan                   plan(n);                              // 计划进程槽；缓冲本调用独占
     std::vector< double >           real(n);
     std::vector< fourier::Complex > spectrum(n);
     double                          mean = core::Map(x.data( ), n).mean( ), maximum = 0.;

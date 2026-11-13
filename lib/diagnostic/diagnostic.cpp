@@ -315,9 +315,9 @@ std::vector< BandStatistics > filter_bank_kurtogram(std::span< const double > x,
             for (std::size_t k = n / 2 + 1; k < n; ++k) w.first[k] = 0;
             w.plan.inverse(w.first, w.second);
             std::span< const Complex > core(w.second.data( ) + edge, n - 2 * edge);
-            double scale = 0;
+            double                     scale = 0;
             // |z| 的最大值、幅值数组与谱峰同遍产出，power/fourth 第二遍按元素序累加。
-            const double sk = spectral_kurtosis(core, { magnitude.data( ), core.size( ) }, scale);
+            const double sk   = spectral_kurtosis(core, { magnitude.data( ), core.size( ) }, scale);
             peak              = scale;
             double median     = std::max(quantile(magnitude, 0.5), peak * std::numeric_limits< double >::epsilon( ));
             double percentile = quantile(magnitude, 0.95);

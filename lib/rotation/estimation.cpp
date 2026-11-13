@@ -14,10 +14,10 @@ namespace {
     // 缓冲、带通/Hilbert 工作区。构造处按信号长度一次准备，候选间零重复计划/
     // 缓冲构建；实例为单个活跃调用独占，不跨调用共享可写状态。
     struct SpeedWorkspace {
-        fourier::Plan                   plan;         // n：三处幅值谱
-        fourier::Plan                   correlation;  // 2^k：自相关
-        filtering::Workspace            filtering;    // 带通候选共用
-        transforms::HilbertWorkspace    hilbert;      // 包络候选共用
+        fourier::Plan                   plan;           // n：三处幅值谱
+        fourier::Plan                   correlation;    // 2^k：自相关
+        filtering::Workspace            filtering;      // 带通候选共用
+        transforms::HilbertWorkspace    hilbert;        // 包络候选共用
         std::size_t                     samples = 0, padded = 0;
         std::vector< fourier::Complex > half, analytic, correlation_half;
         std::vector< double >           amplitude, band, correlation_buffer;
@@ -106,7 +106,7 @@ namespace {
     }
     SpeedResult autocorrelation_prepared(std::span< const double > x, double fs, double low, double high, SpeedWorkspace &w) {
         double h = std::min(fs / 2 - 1e-6, std::max(high * 6, high + 20)), l = std::max(1e-6, low * .5);
-        auto   y  = bandpass(x, fs, l, h, w);
+        auto   y = bandpass(x, fs, l, h, w);
         // 与 numeric::autocorrelation(y,false) 同式：2^k 零填充、半谱模平方、逆半变换；
         // 计划与缓冲来自共享工作区，免公开入口的重复 finite 扫描与逐次重建。
         std::copy(y.begin( ), y.end( ), w.correlation_buffer.begin( ));
@@ -143,7 +143,7 @@ namespace {
 SpeedResult envelope_speed(std::span< const double > x, double fs, double carrier, double low, double high, double bandwidth) {
     if (!std::isfinite(carrier) || !std::isfinite(bandwidth) || bandwidth <= 0) throw std::invalid_argument("invalid envelope carrier or bandwidth");
     search_range(low, high);
-    auto y = centered(x, fs);
+    auto           y = centered(x, fs);
     SpeedWorkspace w;
     w.prepare(y.size( ));
     return envelope_prepared(y, fs, carrier, low, high, bandwidth, w);
@@ -162,7 +162,7 @@ SpeedResult spectrum_speed(std::span< const double > x, double fs, double low, d
     if (y.size( ) < 32 || no_variation(y)) return { 0, "spectrum_arbitration", "信号过短或没有有效变化" };
     if (harmonics < 1 || !std::isfinite(bandwidth) || !std::isfinite(smooth) || bandwidth <= 0 || smooth < 0) throw std::invalid_argument("invalid spectral speed parameters");
     // 初谱全程参与仲裁（supported/背景中位数），候选的幅值谱走共享缓冲。
-    SpeedWorkspace      resources;
+    SpeedWorkspace resources;
     resources.prepare(y.size( ));
     std::vector< double > a(y.size( ) / 2 + 1);
     magnitude(y, a, resources);
@@ -230,10 +230,10 @@ SpeedResult spectrum_speed(std::span< const double > x, double fs, double low, d
     // Welch: periodic Hann, per-segment constant detrend, 50% overlap. A common
     // positive density scale cannot change the selected peak, so omit it.
     // 段窗取进程级 Hann 表，半谱只填 seg/2+1（与全谱 forward 前半逐位相同）。
-    std::size_t              seg = std::min(y.size( ), static_cast< std::size_t >(std::max(256, static_cast< int >(fs)))), hop = std::max< std::size_t >(1, seg / 2);
-    const auto               window = filtering::hann_table(seg);
-    fourier::Plan            plan(seg);
-    std::vector< double >    buffer(seg), power(seg / 2 + 1);
+    std::size_t                     seg = std::min(y.size( ), static_cast< std::size_t >(std::max(256, static_cast< int >(fs)))), hop = std::max< std::size_t >(1, seg / 2);
+    const auto                      window = filtering::hann_table(seg);
+    fourier::Plan                   plan(seg);
+    std::vector< double >           buffer(seg), power(seg / 2 + 1);
     std::vector< fourier::Complex > transformed(seg / 2 + 1);
     for (std::size_t begin = 0; begin + seg <= y.size( ); begin += hop) {
         double m = core::Map(y.data( ) + begin, seg).mean( );
