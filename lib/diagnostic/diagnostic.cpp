@@ -25,7 +25,9 @@ namespace {
         return { x.data( ), static_cast< std::size_t >(x.size( )) };
     }
     void window(Workspace &w, std::size_t n) {
-        for (std::size_t i = 0; i < n; ++i) w.window[i] = 0.5 - 0.5 * std::cos(2 * pi * i / n);
+        // 与 filtering::hann 同一公式源（0.5-0.5*cos(2πi/n)）；sc_scoh/MSB 的段长远短
+        // 于全长窗，按 filtering 契约直接取 hann，不占进程级 Hann 表槽。
+        w.window = filtering::hann(n);
     }
     std::size_t segments(std::size_t n, std::size_t l, std::size_t step, std::size_t minimum) {
         if (l < 32 || l > n || !step || (n - l) / step + 1 < minimum) throw std::invalid_argument("insufficient_segments");

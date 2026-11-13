@@ -186,10 +186,11 @@ core::Array zoom_spectrum(std::span< const double > x, double fs, double low, do
     if (!std::isfinite(fs) || !std::isfinite(low) || !std::isfinite(high) || fs <= 0 || low < 0 || high > fs / 2 || high <= low || points < 1) throw std::invalid_argument("invalid Chirp-Z band");
     std::size_t n = x.size( ), m = points, length = 1;
     while (length < n + m - 1) length *= 2;
+    auto                            window = filtering::hann_table(n);    // 全长 Hann 进程槽
     std::vector< fourier::Complex > a(length), b(length), fa(length), fb(length);
     double                          step = (high - low) / points, gain = 0.;
     for (std::size_t j = 0; j < n; ++j) {
-        double w = .5 - .5 * std::cos(2 * pi * j / n);
+        double w = window->values[j];
         gain += w;
         a[j] = x[j] * w * std::polar(1., -2 * pi * low * j / fs - pi * step * j * j / fs);
     }
@@ -210,11 +211,12 @@ core::Array zoom_spectrum(std::span< const double > x, double fs, double low, do
 core::Array real_cepstrum(std::span< const double > x) {
     validate(x, 64);
     const auto                      n = x.size( );
-    fourier::Plan                   plan(n);    // 计划进程槽（发现1）；缓冲本调用独占
+    auto                            window = filtering::hann_table(n);    // 全长 Hann 进程槽
+    fourier::Plan                   plan(n);    // 计划进程槽；缓冲本调用独占
     std::vector< double >           real(n);
     std::vector< fourier::Complex > spectrum(n);
     double                          mean = core::Map(x.data( ), n).mean( ), maximum = 0.;
-    for (std::size_t i = 0; i < n; ++i) real[i] = (x[i] - mean) * (.5 - .5 * std::cos(2 * pi * i / n));
+    for (std::size_t i = 0; i < n; ++i) real[i] = (x[i] - mean) * window->values[i];
     plan.forward({ real.data( ), n }, spectrum);
     for (auto v : spectrum) maximum = std::max(maximum, std::abs(v));
     double floor = std::max(maximum * 1e-12, std::numeric_limits< double >::min( )), logmean = 0.;
