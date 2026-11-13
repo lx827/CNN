@@ -10,3 +10,9 @@
 !cmake
 !cmake/**
 !CMakeLists.txt
+# edge-diag crate 源码(rust-builder 只 COPY 这棵子树);
+# 其本地构建缓存 target/ 与本管线自身目录 build/ 不进上下文
+!edge-diag
+!edge-diag/**
+edge-diag/build
+edge-diag/target
