@@ -12,10 +12,11 @@ struct Workspace {
     fourier::Plan          plan;
     std::vector< double >  window, real, low_power, high_power;
     std::vector< int >     center_bins, upper_bins, lower_bins;
-    std::vector< Complex > modulated, first, second, temporary;
+    std::vector< Complex > modulated, first, second, phases, temporary;
     filtering::Workspace   filtering;
     // 每个活跃调用独占；prepare可分配/准备FFT，同规模执行复用。
     // 不保存输入借用，结果和外部输出不受后续复用影响。
+    // phases 为信号全长相位表，sc_scoh 按循环频率逐行重建，长度随最大信号增长。
     void prepare(std::size_t samples);
 };
 struct CyclicResult {

@@ -186,10 +186,11 @@ core::Array zoom_spectrum(std::span< const double > x, double fs, double low, do
     if (!std::isfinite(fs) || !std::isfinite(low) || !std::isfinite(high) || fs <= 0 || low < 0 || high > fs / 2 || high <= low || points < 1) throw std::invalid_argument("invalid Chirp-Z band");
     std::size_t n = x.size( ), m = points, length = 1;
     while (length < n + m - 1) length *= 2;
+    auto                            window = filtering::hann_table(n);    // 全长 Hann 进程槽
     std::vector< fourier::Complex > a(length), b(length), fa(length), fb(length);
     double                          step = (high - low) / points, gain = 0.;
     for (std::size_t j = 0; j < n; ++j) {
-        double w = .5 - .5 * std::cos(2 * pi * j / n);
+        double w = window->values[j];
         gain += w;
         a[j] = x[j] * w * std::polar(1., -2 * pi * low * j / fs - pi * step * j * j / fs);
     }
@@ -209,12 +210,13 @@ core::Array zoom_spectrum(std::span< const double > x, double fs, double low, do
 }
 core::Array real_cepstrum(std::span< const double > x) {
     validate(x, 64);
-    const auto                      n = x.size( );
-    fourier::Plan                   plan(n);    // 计划进程槽（发现1）；缓冲本调用独占
+    const auto                      n      = x.size( );
+    auto                            window = filtering::hann_table(n);    // 全长 Hann 进程槽
+    fourier::Plan                   plan(n);                              // 计划进程槽；缓冲本调用独占
     std::vector< double >           real(n);
     std::vector< fourier::Complex > spectrum(n);
     double                          mean = core::Map(x.data( ), n).mean( ), maximum = 0.;
-    for (std::size_t i = 0; i < n; ++i) real[i] = (x[i] - mean) * (.5 - .5 * std::cos(2 * pi * i / n));
+    for (std::size_t i = 0; i < n; ++i) real[i] = (x[i] - mean) * window->values[i];
     plan.forward({ real.data( ), n }, spectrum);
     for (auto v : spectrum) maximum = std::max(maximum, std::abs(v));
     double floor = std::max(maximum * 1e-12, std::numeric_limits< double >::min( )), logmean = 0.;
@@ -243,13 +245,16 @@ AMFMResult amfm(std::span< const double > x, double fs) {
         minimum         = std::min(minimum, a);
     }
     if (maximum == 0 || minimum <= 64 * std::numeric_limits< double >::epsilon( ) * maximum) throw std::invalid_argument("undefined_instantaneous_phase_at_amplitude_null");
+    double previous = std::arg(analytic[0]);
     for (std::size_t i = 1; i < x.size( ); ++i) {
-        double d = std::arg(analytic[i]) - std::arg(analytic[i - 1]);
+        double current = std::arg(analytic[i]);
+        double d       = current - previous;
         if (d > pi)
             d -= 2 * pi;
         else if (d < -pi)
             d += 2 * pi;
         out.frequency[i - 1] = d * fs / (2 * pi);
+        previous             = current;
     }
     return out;
 }
@@ -417,6 +422,7 @@ CVSResult cvs(std::span< const double > x, std::span< const double > carrier, st
             continue;
         }
         std::size_t start = i;
+        ++i;    // 首点已确真，直接推进后再判窗口，省一次重复 remainder
         while (i < x.size( ) && inside(i)) ++i;
         std::size_t stop = i;
         if (stop - start < 3) continue;
