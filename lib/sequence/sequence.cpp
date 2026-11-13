@@ -26,10 +26,22 @@ namespace {
             if (scale == 0) return { 0, 0 };
         }
         double moment = 0, variance = 0;
-        for (double v : x) {
-            double d = (v - m) / scale;
-            moment += std::pow(d, degree);
-            variance += d * d;
+        // 小偶数次幂用平方式链（工单A3，#145-发现6）：d2=d*d; d4=d2*d2; … 连乘链
+        // 对每元素确定性一致，替代逐元素 libm pow；累加次序不变。齿轮指标
+        // FM4/M6A/M8A/NA4 与 window_moments 消费 degree=4/6/8，其余幂次保留 pow。
+        if (degree == 4 || degree == 6 || degree == 8) {
+            for (double v : x) {
+                double d = (v - m) / scale, d2 = d * d, d4 = d2 * d2;
+                moment += degree == 4 ? d4 : degree == 6 ? d4 * d2
+                                                         : d4 * d4;
+                variance += d2;
+            }
+        } else {
+            for (double v : x) {
+                double d = (v - m) / scale;
+                moment += std::pow(d, degree);
+                variance += d * d;
+            }
         }
         return { moment / x.size( ), variance / x.size( ) };
     }
