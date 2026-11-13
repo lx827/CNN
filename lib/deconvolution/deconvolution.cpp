@@ -63,17 +63,13 @@ double correlated_kurtosis(std::span< const double > x, int period, int order) {
         throw std::invalid_argument("相关峭度周期或移位阶数无效");
     return correlated_kurtosis_kernel(x, period, order);
 }
-using QRInPlace      = Eigen::HouseholderQR< Eigen::Ref< Eigen::MatrixXd > >;
-using ReflectorApply = Eigen::HouseholderSequence< Eigen::Ref< Eigen::MatrixXd >, Eigen::VectorXd, Eigen::OnTheLeft >;
+using QRInPlace = Eigen::HouseholderQR< Eigen::Ref< Eigen::MatrixXd > >;
 struct Workspace::Impl {
     // 唯一的 N×L 存储：prepare 先按滑窗填入设计矩阵，随后被 QR 原地分解覆盖
     // （下区为 Householder 反射、上三角为 R），全程不存在第二份矩阵拷贝。
-    Eigen::MatrixXd            qr_storage;
-    Eigen::VectorXd            scaled;    // 去均值信号/最大幅值：迭代内 FIR 与设计矩阵列的公共源
-    std::optional< QRInPlace > qr;        // 借用 qr_storage
-    // Qᵀ 的反射序列（reverse 次序），prepare 时缓存一次；系数 Nested 按值持有，
-    // 避免每迭代 householderQ().adjoint() 重新物化系数副本。
-    std::optional< ReflectorApply >  adjoint;
+    Eigen::MatrixXd                  qr_storage;
+    Eigen::VectorXd                  scaled;    // 去均值信号/最大幅值：迭代内 FIR 与设计矩阵列的公共源
+    std::optional< QRInPlace >       qr;        // 借用 qr_storage
     Eigen::BDCSVD< Eigen::MatrixXd > decomposition;
     Eigen::VectorXd                  factors, coefficients, best, y, target, transformed, projected, updated;
     Array                            centered;
@@ -96,7 +92,6 @@ namespace {
             throw std::runtime_error("解卷积矩阵 SVD 数值退化");
         const double cutoff = std::numeric_limits< double >::epsilon( ) * std::max(rows, l) * s[0];
         if (ridge == 0 && (s.array( ) > cutoff).count( ) != l) throw std::runtime_error("无正则化解卷积矩阵数值秩亏");
-        w.adjoint.emplace(w.qr->householderQ( ).adjoint( ));
         w.factors.resize(l);
         for (Eigen::Index j = 0; j < l; ++j) w.factors[j] = ridge == 0 ? 1 / s[j] : s[j] / (s[j] * s[j] + ridge);
         w.coefficients.resize(l);
@@ -129,10 +124,10 @@ namespace {
     }
     // target 发散最终由 updated 的 norm 检查兜底，迭代内不做全数组有限性扫描。
     void solve(Workspace::Impl &w) {
-        // Qᵀ·target：缓存的反射序列原地左乘，与 householderQ().adjoint()*target
-        // 是同一反射应用路径，免每迭代物化系数副本与 target 临时拷贝。
+        // Qᵀ 的表达式只借用 QR 存储和实系数，不物化系数副本；直接应用于
+        // 已准备的 transformed，避免乘积表达式另建目标向量。
         w.transformed = w.target;
-        w.adjoint->applyThisOnTheLeft(w.transformed);
+        w.qr->householderQ( ).adjoint( ).applyThisOnTheLeft(w.transformed);
         w.projected.noalias( ) = w.decomposition.matrixU( ).transpose( ) * w.transformed.head(w.columns);
         w.projected.array( ) *= w.factors.array( );
         w.updated.noalias( ) = w.decomposition.matrixV( ) * w.projected;
@@ -156,8 +151,7 @@ void       Workspace::prepare(std::span< const double > signal, const Options &o
     if (scale == 0) throw std::domain_error("零能量信号无法解卷积");
     w.scaled        = (w.centered / scale).matrix( );
     const auto rows = n - l + 1;
-    w.qr.reset( );         // 旧 Ref 借用的缓冲即将重建
-    w.adjoint.reset( );    // 旧序列引用的 QR 存储随之上重建
+    w.qr.reset( );    // 旧 Ref 借用的缓冲即将重建
     w.qr_storage.resize(rows, l);
     for (int j = 0; j < l; ++j) w.qr_storage.col(j) = w.scaled.segment(j, rows);
     // 固定设计矩阵只分解一次；保持基于X的SVD秩判定，不形成XᵀX。
