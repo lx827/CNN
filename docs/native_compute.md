@@ -121,6 +121,27 @@ MSVC 的 `/showIncludes` 探测由 `cmake/msvc_include_probe.ps1` 使用系统 P
 
 Windows 的构建回归在根目录执行 `uv run --with cmake==4.4.4 --with ninja==1.13.2 --no-sync python tests/test_msvc_ninja_build.py -v`：使用根配置的工具链部分和真实 MSVC/Ninja，分别在代码页 936、65001 下验证全新生成、编译及间接头文件修改后的重编。此测试只构建最小库；计算包完整安装另以普通 `uv sync` 验证。
 
+## 进程级不可变单槽缓存
+
+跨调用复用的预计算数据（FFT twiddle 表、全长周期 Hann 窗）由 [lib/core/slot.hpp](../lib/core/slot.hpp) 的 `SingleSlot` 进程级持有：实例放函数级 magic static 等进程位置，每个实例只有一个槽——命中同尺寸只做一次原子读，尺寸变化才重建并原子置换指针，在用调用方持有的 `shared_ptr` 保证旧表存活至其调用结束。设计理由：
+
+- 构好后只读、pocketfft `exec` 为 const 且无共享可变状态，计划与窗属于 [cpp-accelerate skill](../.claude/skills/cpp-accelerate/SKILL.md) 允许跨线程共享的不可变预计算数据，因此用进程级槽而不是 thread_local——skill 明确"线程本地存储不是隐式默认"，生产 `max_workers=2` 下也没有按线程复制表的收益。
+- 单槽 last-size，不做按任意 N 的无界 map：重新诊断逐批输入长度可变，无界缓存会累积内存触碰 2G 红线；交替尺寸每次重建是显式代价，换来内存有界。
+- 表内容按尺寸确定性构建：并发未命中时重复构建再置换槽不改变数值结果，只是多付一次构建；可写缓冲不进槽，仍由每次活跃调用独占。
+
+已落地状态（以源码为准）：`lib/fourier` 的实/复计划各一个进程槽，按方向惰性获取，纯实或纯复路径不付另一方向的构建与内存；`filtering::hann_table` 提供全长 Hann 槽，`numeric` 的 spectrum/cepstrum、`rotation` 的 amplitude_spectrum/real_cepstrum/zoom_spectrum 与 `estimation` 的 Welch 段窗经它取窗；`diagnostic::Workspace` 的段窗按 filtering 契约直接取 `hann`，不占进程槽。
+
+## Eigen packet 中间层采用记录
+
+Eigen 3.4.0 对混合标量表达式（`complex*double`、`complex/double`）把 `PacketAccess` 置 false，整棵赋值表达式树退化为标量循环；double 的超越函数包也只覆盖部分运算。以下路径已改走 `Eigen::internal` packet 中间层，重写时均以位级 golden 验证逐元素运算次序不变；这是已实现状态记录，不表示全库 packet 化，未列出的路径仍走表达式层或专用标量流程：
+
+- 小波多相内核：DWT/IDWT 中心卷积按奇偶相位拆分滤波器与输入，tap-major 累加让逐包累加器驻留寄存器，tap 序与 vendor 标量链一致（`lib/wavelet`）。
+- VMD SoA 分量：ADMM 频域状态拆成实/虚实平面，主更新与对偶更新是纯实数组表达式，`operator/(complex,T)` 即分量除法，实/实商走 packet 除法（`lib/vmd`）。
+- 插值求值内核：求值循环按 lane 并行推进，B 样条基的节点与值包驻留寄存器；查询点严格单增时推进指针摊还区间查找，splrep 基函数同样 packet 化（`lib/interpolation`）。
+- EMD 停止与归约：pairwise 八路累加器按 packet 宽度分组进包（SSE2 四包、AVX2 两包），最终树归约保持标量；rilling_stop 的对称比逐元素比较走 packet（`lib/emd/decomposition.cpp`）。
+
+SLEEF 引入、FastICA tanh 自写 SIMD 等仍为缓议项，不在已采用列表。
+
 ## C++ 排版
 
 dev 组固定 `clang-format==23.1.5`，排版由根目录 `.clang-format` 管理。完成正常环境同步后，在根目录执行：

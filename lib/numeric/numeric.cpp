@@ -51,10 +51,14 @@ namespace execution {
         const double mean                            = remove_mean ? Eigen::Map< const core::Array >(x.data( ), n).mean( ) : 0.;
         Eigen::Map< core::Array >(buffer.data( ), n) = (Eigen::Map< const core::Array >(x.data( ), n) - mean) * Eigen::Map< const core::Array >(window.data( ), n);
         plan.forward_half(buffer, transformed.first(x.size( ) / 2 + 1));
-        for (std::size_t k = 0; k < amplitude.size( ); ++k) {
-            const bool edge = k == 0 || (n % 2 == 0 && k == n / 2);
-            amplitude[k]    = std::abs(transformed[k]) * (edge ? 1 : 2) / gain;
-        }
+        // 幅值统一 sqrt(re²+im²)（工单A1，#144-发现2）：MSVC 的 abs(complex) 走 hypot，
+        // 2-5× 于 sqrt；物理幅值不涉溢保护区（|x|>~1e154），末位差异在冻结预算内。
+        // 除法→倒数乘（工单A2）：inv/inv2 循环外预计算；k=0 与偶 N 的 Nyquist 事后覆写。
+        const double inv = 1. / gain, inv2 = 2. / gain;
+        for (std::size_t k = 0; k < amplitude.size( ); ++k)
+            amplitude[k] = std::sqrt(std::norm(transformed[k])) * inv2;
+        amplitude[0] = std::sqrt(std::norm(transformed[0])) * inv;
+        if (n % 2 == 0) amplitude[n / 2] = std::sqrt(std::norm(transformed[n / 2])) * inv;
     }
 }    // namespace execution
 Spectrum spectrum(std::span< const double > x, double fs, bool remove_mean) {
@@ -86,6 +90,7 @@ Stft stft(std::span< const double > x, double fs, int window, int overlap, int n
     Stft                            out{ Array(frames), Array(bins), Matrix(bins, frames) };
     const auto                      w    = filtering::hann(window);
     const double                    gain = std::accumulate(w.begin( ), w.end( ), 0.0);
+    const double                    inv = 1. / gain, inv2 = 2. / gain;    // 除法→倒数乘（工单A2）
     fourier::Plan                   plan(nfft);
     std::vector< double >           buffer(nfft);
     std::vector< fourier::Complex > fft(bins);
@@ -101,10 +106,11 @@ Stft stft(std::span< const double > x, double fs, int window, int overlap, int n
         for (auto j = lo; j < hi; ++j) buffer[j] = x[base + j] * w[j];
         plan.forward_half(buffer, fft);
         out.time[frame] = static_cast< double >(frame * hop) / fs;
-        for (std::size_t k = 0; k < bins; ++k) {
-            const bool terminal     = k == 0 || (nfft % 2 == 0 && k == static_cast< std::size_t >(nfft / 2));
-            out.amplitude(k, frame) = std::abs(fft[k]) * (terminal ? 1 : 2) / gain;
-        }
+        for (std::size_t k = 0; k < bins; ++k)
+            out.amplitude(k, frame) = std::sqrt(std::norm(fft[k])) * inv2;
+        out.amplitude(0, frame) = std::sqrt(std::norm(fft[0])) * inv;    // 端点单边不翻倍
+        if (nfft % 2 == 0)
+            out.amplitude(static_cast< std::size_t >(nfft / 2), frame) = std::sqrt(std::norm(fft[nfft / 2])) * inv;
     }
     out.frequency = Array::LinSpaced(bins, 0.0, static_cast< double >(bins - 1)) * fs
                     / static_cast< double >(nfft);
@@ -113,21 +119,25 @@ Stft stft(std::span< const double > x, double fs, int window, int overlap, int n
 Array cepstrum(std::span< const double > x) {
     check(x, 2);
     const auto            n      = x.size( );
+    const auto            bins   = n / 2 + 1;
     auto                  window = filtering::hann_table(n);    // 全长 Hann 进程槽（发现1）
     std::vector< double > a(n), y(n);
     Eigen::Map< Array >(a.data( ), n) = Eigen::Map< const Array >(x.data( ), n)
                                         * Eigen::Map< const Array >(window->values.data( ), n);    // 窗乘元素级（发现7）
     fourier::Plan                   plan(n);
-    std::vector< fourier::Complex > f(n);
-    plan.forward(a, f);
+    std::vector< fourier::Complex > f(bins);
+    // 实信号 |F| 严格对称（工单A4，#144-发现3）：abs+log 只算 n/2+1，镜像值
+    // |F[n-i]|=|F[i]| 逐位相等后复制；mean 保持原全 n 次序累加，与全谱写法逐位一致。
+    plan.forward_half({ a.data( ), n }, f);
+    for (std::size_t i = 0; i < bins; ++i) a[i] = std::log(std::sqrt(std::norm(f[i])) + 1e-10);
+    for (std::size_t i = bins; i < n; ++i) a[i] = a[n - i];
     double mean = 0;
-    for (std::size_t i = 0; i < n; ++i) {
-        a[i] = std::log(std::abs(f[i]) + 1e-10);
-        mean += a[i];
-    }
+    for (std::size_t i = 0; i < n; ++i) mean += a[i];
     mean /= n;
-    for (std::size_t i = 0; i < n; ++i) f[i] = a[i] - mean;
-    plan.inverse_real(f, y);
+    for (std::size_t i = 0; i < bins; ++i) f[i] = a[i] - mean;
+    // Hermitian 谱逆变换换 c2r 半谱路径（[数值微变]，pocketfft c2c 与 c2r 舍入不同），
+    // 省约一半逆变换工作量；正变换与 log 半谱镜像部分保持逐位一致。
+    plan.inverse_half(f, y);
     return Eigen::Map< Array >(y.data( ), n / 2);
 }
 Array hilbert_envelope(std::span< const double > x) {
@@ -136,7 +146,7 @@ Array hilbert_envelope(std::span< const double > x) {
     w.prepare(x.size( ));
     const auto z = transforms::execution::analytic_signal(x, w);    // 工作区 analytic 缓冲，免局部 z（发现5）
     Array      out(x.size( ));
-    for (std::size_t i = 0; i < x.size( ); ++i) out[i] = std::abs(z[i]);
+    for (std::size_t i = 0; i < x.size( ); ++i) out[i] = std::sqrt(std::norm(z[i]));
     return out;
 }
 Statistics statistics(std::span< const double > x, double floor) {

@@ -211,19 +211,22 @@ core::Array zoom_spectrum(std::span< const double > x, double fs, double low, do
 core::Array real_cepstrum(std::span< const double > x) {
     validate(x, 64);
     const auto                      n      = x.size( );
+    const auto                      bins   = n / 2 + 1;
     auto                            window = filtering::hann_table(n);    // 全长 Hann 进程槽
     fourier::Plan                   plan(n);                              // 计划进程槽；缓冲本调用独占
     std::vector< double >           real(n);
     std::vector< fourier::Complex > spectrum(n);
     double                          mean = core::Map(x.data( ), n).mean( ), maximum = 0.;
     for (std::size_t i = 0; i < n; ++i) real[i] = (x[i] - mean) * window->values[i];
-    plan.forward({ real.data( ), n }, spectrum);
-    for (auto v : spectrum) maximum = std::max(maximum, std::abs(v));
+    // 实信号共轭对称（工单A4，#145-发现9）：maximum 扫描与 abs+log 只算 n/2+1，
+    // 镜像值 |X[n-i]|=|X[i]| 逐位相等后复制；logmean 保持原全 n 次序累加；
+    // 逆变换仍吃镜像补全后的全谱（c2c 输入逐位相同 → 输出逐位相同）。
+    plan.forward_half({ real.data( ), n }, { spectrum.data( ), bins });
+    for (std::size_t i = 0; i < bins; ++i) maximum = std::max(maximum, std::sqrt(std::norm(spectrum[i])));
     double floor = std::max(maximum * 1e-12, std::numeric_limits< double >::min( )), logmean = 0.;
-    for (std::size_t i = 0; i < n; ++i) {
-        real[i] = std::log(std::max(std::abs(spectrum[i]), floor));
-        logmean += real[i];
-    }
+    for (std::size_t i = 0; i < bins; ++i) real[i] = std::log(std::max(std::sqrt(std::norm(spectrum[i])), floor));
+    for (std::size_t i = bins; i < n; ++i) real[i] = real[n - i];
+    for (std::size_t i = 0; i < n; ++i) logmean += real[i];
     logmean /= n;
     for (std::size_t i = 0; i < n; ++i) spectrum[i] = { real[i] - logmean, 0. };
     plan.inverse_real(spectrum, { real.data( ), n });
@@ -239,7 +242,7 @@ AMFMResult amfm(std::span< const double > x, double fs) {
     AMFMResult out{ core::Array(x.size( )), core::Array(x.size( ) - 1) };
     double     maximum = 0., minimum = std::numeric_limits< double >::infinity( );
     for (std::size_t i = 0; i < x.size( ); ++i) {
-        double a        = std::abs(analytic[i]);
+        double a        = std::sqrt(std::norm(analytic[i]));
         out.envelope[i] = a;
         maximum         = std::max(maximum, a);
         minimum         = std::min(minimum, a);
@@ -269,7 +272,7 @@ core::Array band_envelope(std::span< const double > x, double fs, double low, do
     hilbert.prepare(x.size( ));
     auto        z = transforms::execution::analytic_signal({ filtered.data( ), x.size( ) }, hilbert);
     core::Array out(x.size( ));
-    for (std::size_t j = 0; j < x.size( ); ++j) out[j] = std::abs(z[j]);
+    for (std::size_t j = 0; j < x.size( ); ++j) out[j] = std::sqrt(std::norm(z[j]));
     return out;
 }
 core::Array window_peaks(std::span< const double > axis, std::span< const double > amp, std::span< const double > centers, double width, bool disjoint) {

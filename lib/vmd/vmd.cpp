@@ -144,25 +144,21 @@ void execute(std::span< const double > input, double fs, const Parameters &p, Re
                 current_re = (spectrum_re - sum_re - ws.dual_re * 0.5) / denominator;
                 current_im = (spectrum_im - sum_im - ws.dual_im * 0.5) / denominator;
             }
-            // 三个归约保持逐元素 (re*re+im*im) 的顺序标量累加：Eigen 复数 abs2
-            // 无 packet，原实现即顺序链；改归约树会变末位并可能翻转收敛轮数。
-            if (k != 0 || !p.dc) {
-                double power = 0;
-                for (std::size_t t = 0; t < bins; ++t)
-                    power += current_re[t] * current_re[t] + current_im[t] * current_im[t];
-                if (power > std::numeric_limits< double >::min( )) {
-                    double moment = 0;
-                    for (std::size_t t = 0; t < bins; ++t)
-                        moment += ws.frequencies[t]
-                                  * (current_re[t] * current_re[t] + current_im[t] * current_im[t]);
-                    ws.centers[k] = moment / power;
-                }
-            }
-            double drift = 0;
+            // 三归约融合单趟（工单A5，#146-发现7）：power/moment/drift 三条独立顺序
+            // 累加链各自保持元素累加次序，(re*re+im*im) 在 power 与 moment 间是同一
+            // 表达式值、逐位不变；moment 原条件求值改为恒算——其结果只在 power 过
+            // 门时被消费，不改变输出。省 2/3 读带宽；改归约树仍禁止（会翻转收敛轮数）。
+            double power = 0, moment = 0, drift = 0;
             for (std::size_t t = 0; t < bins; ++t) {
-                const double gap_re = current_re[t] - old_re[t], gap_im = current_im[t] - old_im[t];
+                const double re = current_re[t], im = current_im[t];
+                const double magnitude = re * re + im * im;
+                power += magnitude;
+                moment += ws.frequencies[t] * magnitude;
+                const double gap_re = re - old_re[t], gap_im = im - old_im[t];
                 drift += gap_re * gap_re + gap_im * gap_im;
             }
+            if ((k != 0 || !p.dc) && power > std::numeric_limits< double >::min( ))
+                ws.centers[k] = moment / power;
             difference += drift / length;
         }
         // tau==0（Python 默认）时 dual 全程 +0.0，整趟对偶更新跳过。

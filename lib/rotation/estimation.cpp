@@ -66,7 +66,8 @@ namespace {
     // 半谱幅值：与全谱 forward 的前半逐位相同，幅值循环只读 n/2+1；out 与 half/x 不重叠。
     void magnitude(std::span< const double > x, std::span< double > out, SpeedWorkspace &w) {
         w.plan.forward_half(x, { w.half.data( ), out.size( ) });
-        for (std::size_t i = 0; i < out.size( ); ++i) out[i] = std::abs(w.half[i]);
+        // 幅值统一 sqrt(re²+im²)（工单A1，#145-发现5）：hypot→sqrt，末位差异在冻结预算内。
+        for (std::size_t i = 0; i < out.size( ); ++i) out[i] = std::sqrt(std::norm(w.half[i]));
     }
     int peak(std::span< const double > a, double df, double low, double high) {
         int start = std::max(0, static_cast< int >(std::ceil(low / df))), stop = std::min(static_cast< int >(a.size( )) - 1, static_cast< int >(std::floor(high / df)));
@@ -94,7 +95,7 @@ namespace {
         auto   envelope = std::span< double >(w.band.data( ), x.size( ));    // 包络写回带通缓冲，与原实现同块复用
         double mean     = 0.;
         for (std::size_t i = 0; i < x.size( ); ++i) {
-            envelope[i] = std::abs(w.analytic[i]);
+            envelope[i] = std::sqrt(std::norm(w.analytic[i]));
             mean += envelope[i];
         }
         mean /= x.size( );
@@ -305,7 +306,7 @@ RidgeResult speed_ridge(std::span< const double > x, double fs, double low, doub
     for (int column = 0; column < frames; ++column) {
         for (int j = 0; j < window; ++j) w.real[j] = y[column * hop + j] * w.window[j];
         w.plan.forward({ w.real.data( ), static_cast< std::size_t >(window) }, w.spectrum);
-        for (std::size_t j = 0; j < a.size( ); ++j) a[j] = std::abs(w.spectrum[j]) / (window * .5);
+        for (std::size_t j = 0; j < a.size( ); ++j) a[j] = std::sqrt(std::norm(w.spectrum[j])) / (window * .5);
         int    j        = static_cast< int >(std::max_element(a.begin( ) + start, a.begin( ) + stop + 1) - a.begin( ));
         double f        = parabolic(a, j, df);
         auto   power    = [&](int l, int h) {double s=0.;for(int k=std::max(0,l);k<std::min(static_cast<int>(a.size()),h);++k)s+=a[k]*a[k];return s; };
