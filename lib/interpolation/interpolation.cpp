@@ -75,6 +75,7 @@ namespace {
         }
     }
 
+    // PCHIP/cubic 导数、分段系数与求值兼容 SciPy 1.18.1；BSD 见 ../LICENSE.scipy。
     void derivatives(std::span< const double > x, std::span< const double > y, Method method,
                      Workspace &w) {
         const std::size_t n = x.size( );
@@ -160,6 +161,7 @@ namespace execution {
             }
         } else {
             derivatives(x, y, method, w);
+            // 分段求值沿用 SciPy PPoly 常数到三次项的累加次序，不重排表达式。
             for (std::size_t i = 0; i < query.size( ); ++i) {
                 const auto   found = std::upper_bound(x.begin( ), x.end( ), query[i]) - x.begin( ) - 1;
                 const auto   j     = std::clamp< std::ptrdiff_t >(found, 0, n - 2);
