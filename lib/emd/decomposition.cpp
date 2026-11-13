@@ -150,14 +150,12 @@ namespace execution {
         return 20.0 * std::log10(squares(signal)) - 20.0 * std::log10(squares(residual));
     }
 
-    NextInfo get_next_imf(std::span< const double > signal, std::span< double > output,
-                          const IMFOptions &options, const envelope::Options &envelope_options,
-                          Workspace &w) {
+    // envelopes_ready 只由同一 sift 调用中紧邻的继续检查提供；不把有效性存入工作区。
+    static NextInfo extract_imf(std::span< const double > signal, std::span< double > output,
+                                const IMFOptions &options, const envelope::Options &envelope_options,
+                                Workspace &w, bool envelopes_ready) {
         w.prepare(signal.size( ), envelope_options.pad_width);
         w.current = core::Map(signal.data( ), signal.size( ));
-        // sift 的 check_continue 可能已对同一残差算好包络；首轮直接复用。
-        bool reuse        = w.envelope_source == signal.data( );
-        w.envelope_source = nullptr;
         NextInfo info;
         while (true) {
             // 上游先判断 niters>max_iters，再递增，故最多执行 max_iters+1 轮。
@@ -166,8 +164,8 @@ namespace execution {
                 break;
             }
             ++info.iterations;
-            bool envelopes = reuse;
-            reuse          = false;
+            const bool envelopes = envelopes_ready;
+            envelopes_ready      = false;
             if (!envelopes
                 && !envelope::execution::extrema_envelopes(view(w.current), write(w.upper), write(w.lower),
                                                            envelope_options, w.envelope)) {
@@ -199,6 +197,12 @@ namespace execution {
         return info;
     }
 
+    NextInfo get_next_imf(std::span< const double > signal, std::span< double > output,
+                          const IMFOptions &options, const envelope::Options &envelope_options,
+                          Workspace &w) {
+        return extract_imf(signal, output, options, envelope_options, w, false);
+    }
+
     bool check_continue(std::span< const double > original, std::span< const double > residual,
                         int layer, const Options &options, Workspace &w, bool initial) {
         const auto [maxima, minima] = envelope::execution::count_extrema(residual);
@@ -207,9 +211,8 @@ namespace execution {
             if (options.sift_thresh && absolute_sum(residual) < *options.sift_thresh) result = false;
             if (options.energy_thresh && energy_difference(original, residual) > *options.energy_thresh) result = false;
         }
-        if (options.rilling_thresh && maxima >= 2 && minima >= 2) {
+        if (result && options.rilling_thresh) {
             envelope::execution::extrema_envelopes(residual, write(w.upper), write(w.lower), options.envelope, w.envelope);
-            w.envelope_source = residual.data( );
             // emd 0.8.1 check_sift_continue 忽略用户阈值内容，使用默认Rilling值，且反向使用stop标志。
             result = result && rilling_stop(view(w.upper), view(w.lower), { 0.05, 0.5, 0.05 });
         }
@@ -229,7 +232,8 @@ namespace execution {
         }
         while (more) {
             Array          next(signal.size( ));
-            const NextInfo info = get_next_imf(view(w.residual), write(next), options.imf, options.envelope, w);
+            const NextInfo info = extract_imf(view(w.residual), write(next), options.imf,
+                                              options.envelope, w, options.rilling_thresh.has_value( ));
             result.components.push_back(std::move(next));
             result.iterations.push_back(info.iterations);
             if (info.status == Status::iteration_limit || info.status == Status::numerical_failure) {

@@ -8,11 +8,7 @@ namespace cnn_compute::emd {
 struct Workspace {
     Array               current, updated, upper, lower, average, residual;
     envelope::Workspace envelope;
-    // check_continue 算好外层 Rilling 包络后记录残差来源缓冲；get_next_imf
-    // 首轮作用于同一缓冲（sift 的残差递推形态）时复用 upper/lower 免重算。
-    // 前提是两次调用的包络参数一致（sift 内成立）；消费即清空。
-    const double *envelope_source = nullptr;
-    void          prepare(std::size_t samples, int pad_width = 2);
+    void                prepare(std::size_t samples, int pad_width = 2);
 };
 namespace execution {
     // 输入有限、参数已验证；output 长度等于输入且不与工作区重叠。
