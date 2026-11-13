@@ -3,7 +3,8 @@
 薄 Rust CLI 壳，动态链接 `libcnn_compute.so`，对单通道信号文件计算"无参数
 表示层"指标并输出 JSON。数值算法全部经 C ABI（`capi/include/cnn_compute.h`）
 完成；Rust 侧不实现任何数学，仅做边界换算与归约：复数输出逐元素取模、
-残差逐点相减、模态能量比归一、kurtogram 频带行选取、阶次谱 ≤50 阶截断
+残差逐点相减、模态能量比归一、kurtogram 频带行选取、阶次谱按云端
+分辨率动态截取
 （与参照脚本在同一 C 输出上的 NumPy 运算一一对应）。
 
 ## 用法
@@ -34,7 +35,7 @@ edge-diag --input signal.f64 --fs 10000 --out result.json
 | 8 实倒谱 | `cnn_cepstrum`（L144，numeric 族） | 原始 | 无参数；`values` 数组原样输出 |
 | 9 谱峭度选带 | `cnn_filter_bank_kurtogram`（L294） | 原始 + fs | max_level=4，min_frequency=100.0，order=4（pybind `diagnostic.filter_bank_kurtogram` 默认） |
 | 10 VMD 分解 | `cnn_vmd`（L256） | 原始前 min(n,51200) 点（契约显式） + fs | options=NULL → `cnn_vmd_defaults`（与 pybind `vmd.decompose` 默认一致） |
-| 11 阶次谱 | `cnn_integrate`（L299）→ `cnn_angle_resample`（L301）→ `cnn_amplitude_spectrum`（L302） | 原始 + 一期 speed_hz | spr=1024；幅值谱取 bins 0..=50（≤50 阶，含） |
+| 11 阶次谱 | `cnn_integrate`（L299）→ `cnn_angle_resample`（L301）→ `cnn_amplitude_spectrum`（L302） | 原始 + 一期 speed_hz | spr=1024；按云端 `compute_order_spectrum` 动态截取：resolution=spr/重采样长度，retained=min(谱长, floor(50.0/resolution+1e-9)+1)，取前 retained 个值 |
 | 12 TSA | `cnn_tsa`（L305） | 步骤 11 的等角重采样信号 | spr=1024，minimum_revolutions=4（pybind `rotation.tsa` 默认） |
 
 步骤 3/6 作用于原始输入信号：契约未标注中间信号（步骤 2/4/5 显式标注
@@ -61,8 +62,10 @@ cnn_compute Python 包（`numeric.statistics`、`filtering.sosfiltfilt`、
   管线 `cloud/app/algorithms/order/resampling.py` 的
   `integrate_speed_trajectory` 同一 C++ 入口；梯形积分，单位转）。恒速输入
   下梯形积分与线性相位 phase(t)=2π·f·t 严格等价，**未触发恒速近似降级**。
-  等角重采样 spr=1024 后取 `cnn_amplitude_spectrum`（center=1）的 bins
-  0..=50。
+  等角重采样 spr=1024 后取 `cnn_amplitude_spectrum`（center=1）输出，截取
+  逐字对齐云端 `compute_order_spectrum`（cloud/app/algorithms/order/
+  resampling.py）：resolution = spr/重采样长度（f64 除法），
+  retained = min(谱长, floor(50.0/resolution+1e-9)+1)，输出前 retained 个值。
 - `tsa`：`cnn_tsa_components` 签名强制 mesh_orders/regular_orders 齿轮参数，
   不适用；采用同族纯转平均入口 `cnn_tsa`（完整转数算术平均），输出取
   `cycle`（单圈平均波形），无缺口。

@@ -182,7 +182,15 @@ fn main() -> Result<()> {
             )?;
             let resampled = resampled.f64s("values")?.to_vec();
             let amplitude = ffi::amplitude_spectrum(&resampled, true)?;
-            let order_spectrum = amplitude.f64s("values")?[..=params::ORDER_MAX_ORDER].to_vec();
+            let spectrum = amplitude.f64s("values")?;
+            // 云端 compute_order_spectrum 同公式：resolution = spr/重采样长度
+            // （f64 除法），retained = min(谱长, floor(50.0/resolution+1e-9)+1)，
+            // 输出前 retained 个值（floor 为 f64 语义）
+            let resolution =
+                f64::from(params::ORDER_SAMPLES_PER_REVOLUTION) / resampled.len() as f64;
+            let retained = ((params::ORDER_MAX_ORDER / resolution + 1e-9).floor() as usize + 1)
+                .min(spectrum.len());
+            let order_spectrum = spectrum[..retained].to_vec();
             (Some(order_spectrum), Some(resampled), None)
         }
     };

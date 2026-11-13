@@ -43,8 +43,9 @@ pub mod params {
     pub const VMD_MAX_SAMPLES: usize = 51200;
     /// 等角重采样每转点数（契约固定 samples_per_revolution=1024）。
     pub const ORDER_SAMPLES_PER_REVOLUTION: i32 = 1024;
-    /// 阶次谱保留的最大阶次（含，即幅值谱 bins 0..=50）。
-    pub const ORDER_MAX_ORDER: usize = 50;
+    /// 阶次谱保留的最大阶次（云端 compute_order_spectrum 默认 max_order=50.0；
+    /// 截取按其分辨率动态公式，非固定 bin 数）。
+    pub const ORDER_MAX_ORDER: f64 = 50.0;
     /// TSA 最少完整转数（cnn_compute.rotation.tsa 默认 minimum_revolutions）。
     pub const TSA_MINIMUM_REVOLUTIONS: i32 = 4;
 }
