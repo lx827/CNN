@@ -112,10 +112,14 @@ core::Array angle_resample(std::span< const double > x, std::span< const double 
 }
 core::Array amplitude_spectrum(std::span< const double > x, bool center) {
     validate(x, 2);
-    Workspace w;
-    w.prepare(x.size( ));
-    core::Array out(x.size( ) / 2 + 1);
-    execution::amplitude_spectrum(x, view(out), w, center);
+    // 公开入口层的持有者（发现1）：全长 Hann 与 FFT 计划走进程级单槽，
+    // 可写缓冲本调用独占；不再为无状态调用物化整个 Workspace。
+    auto                            window = filtering::hann_table(x.size( ));
+    fourier::Plan                   plan(x.size( ));
+    std::vector< double >           buffer(x.size( ));
+    std::vector< fourier::Complex > transformed(x.size( ) / 2 + 1);
+    core::Array                     out(x.size( ) / 2 + 1);
+    numeric::execution::amplitude_spectrum(x, view(out), window->values, buffer, transformed, plan, center);
     return out;
 }
 core::Array periodic_components(std::span< const double > x, std::span< const double > orders) {
@@ -205,21 +209,23 @@ core::Array zoom_spectrum(std::span< const double > x, double fs, double low, do
 }
 core::Array real_cepstrum(std::span< const double > x) {
     validate(x, 64);
-    Workspace w;
-    w.prepare(x.size( ));
-    double mean = core::Map(x.data( ), x.size( )).mean( ), maximum = 0.;
-    for (std::size_t i = 0; i < x.size( ); ++i) w.real[i] = (x[i] - mean) * (.5 - .5 * std::cos(2 * pi * i / x.size( )));
-    w.plan.forward({ w.real.data( ), x.size( ) }, w.spectrum);
-    for (auto v : w.spectrum) maximum = std::max(maximum, std::abs(v));
+    const auto                      n = x.size( );
+    fourier::Plan                   plan(n);    // 计划进程槽（发现1）；缓冲本调用独占
+    std::vector< double >           real(n);
+    std::vector< fourier::Complex > spectrum(n);
+    double                          mean = core::Map(x.data( ), n).mean( ), maximum = 0.;
+    for (std::size_t i = 0; i < n; ++i) real[i] = (x[i] - mean) * (.5 - .5 * std::cos(2 * pi * i / n));
+    plan.forward({ real.data( ), n }, spectrum);
+    for (auto v : spectrum) maximum = std::max(maximum, std::abs(v));
     double floor = std::max(maximum * 1e-12, std::numeric_limits< double >::min( )), logmean = 0.;
-    for (std::size_t i = 0; i < x.size( ); ++i) {
-        w.real[i] = std::log(std::max(std::abs(w.spectrum[i]), floor));
-        logmean += w.real[i];
+    for (std::size_t i = 0; i < n; ++i) {
+        real[i] = std::log(std::max(std::abs(spectrum[i]), floor));
+        logmean += real[i];
     }
-    logmean /= x.size( );
-    for (std::size_t i = 0; i < x.size( ); ++i) w.spectrum[i] = { w.real[i] - logmean, 0. };
-    w.plan.inverse_real(w.spectrum, { w.real.data( ), x.size( ) });
-    return w.real.head(x.size( ) / 2 + 1).eval( );
+    logmean /= n;
+    for (std::size_t i = 0; i < n; ++i) spectrum[i] = { real[i] - logmean, 0. };
+    plan.inverse_real(spectrum, { real.data( ), n });
+    return Eigen::Map< core::Array >(real.data( ), n / 2 + 1).eval( );
 }
 AMFMResult amfm(std::span< const double > x, double fs) {
     validate(x, 64);
@@ -227,8 +233,7 @@ AMFMResult amfm(std::span< const double > x, double fs) {
     core::Array                  centered = core::Map(x.data( ), x.size( )) - core::Map(x.data( ), x.size( )).mean( );
     transforms::HilbertWorkspace hilbert;
     hilbert.prepare(x.size( ));
-    std::vector< fourier::Complex > analytic(x.size( ));
-    transforms::execution::analytic_signal({ centered.data( ), x.size( ) }, analytic, hilbert);
+    auto       analytic = transforms::execution::analytic_signal({ centered.data( ), x.size( ) }, hilbert);
     AMFMResult out{ core::Array(x.size( )), core::Array(x.size( ) - 1) };
     double     maximum = 0., minimum = std::numeric_limits< double >::infinity( );
     for (std::size_t i = 0; i < x.size( ); ++i) {
@@ -257,8 +262,7 @@ core::Array band_envelope(std::span< const double > x, double fs, double low, do
     filtering::execution::sosfiltfilt(x, sos, { filtered.data( ), x.size( ) }, filter);
     transforms::HilbertWorkspace hilbert;
     hilbert.prepare(x.size( ));
-    std::vector< fourier::Complex > z(x.size( ));
-    transforms::execution::analytic_signal({ filtered.data( ), x.size( ) }, z, hilbert);
+    auto        z = transforms::execution::analytic_signal({ filtered.data( ), x.size( ) }, hilbert);
     core::Array out(x.size( ));
     for (std::size_t j = 0; j < x.size( ); ++j) out[j] = std::abs(z[j]);
     return out;
