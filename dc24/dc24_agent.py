@@ -112,7 +112,7 @@ class Agent:
             "input_configuration": dict(INPUT_CONFIGURATION),
         }
         if not replay_dir:
-            self.state["transport"] = "jmserver" if self.vendor_root else "python_tcp"
+            self.state["transport"] = create_driver(self.vendor_root).transport
         self.picker = None
         self.picker_id = None
         if replay_dir:

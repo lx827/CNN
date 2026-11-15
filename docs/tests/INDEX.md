@@ -154,12 +154,13 @@ DC24 工具链在 `dc24/` 直跑：
 
 ```bash
 uv run python tests/test_dc24_driver_interface.py -v
+uv run python tests/test_dc24_driver_rust.py -v
 uv run python tests/test_dc24_start.py -v
 uv run python tests/test_dc24_vendor.py -v
 uv run python tests/test_dc24_edge_pi.py -v
 ```
 
-`test_dc24_driver_interface.py` 用公共接口假驱动穿过单次采集与连续示波宿主，核对四路 int32 样本、帧序号、停止和既有保存/上传结果，不测试驱动内部函数。start 实际调用 Windows 批处理的 `--check`。vendor 需要配置原厂 DLL，使用回环模拟器，未配置时跳过。edge_pi 的纯逻辑测试验证窗口、缺口与重试；集成测试加载真实 cdylib，使用假设备和假云端核对完整收件，无 Rust 工具链时可跳过。MSVC 编译遵守根 AGENTS 的 `vsdev` 约定。
+`test_dc24_driver_interface.py` 用公共接口假驱动穿过单次采集与连续示波宿主，核对四路 int32 样本、帧序号、停止和既有保存/上传结果，不测试驱动内部函数。`test_dc24_driver_rust.py` 在安装 `dc24-rust` 组后加载 wheel 内真实 cdylib，以回环模拟设备穿过同一单次采集宿主，逐字节核对原始 `80` 帧、四路计数与事件；它不是实机验收。start 实际调用 Windows 批处理的 `--check`。vendor 需要配置原厂 DLL，使用回环模拟器，未配置时跳过。edge_pi 的纯逻辑测试验证窗口、缺口与重试；集成测试加载真实 cdylib，使用假设备和假云端核对完整收件，无 Rust 工具链时可跳过。MSVC 编译遵守根 AGENTS 的 `vsdev` 约定。
 
 ## 前端
 

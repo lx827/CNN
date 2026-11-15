@@ -340,6 +340,9 @@ dc24 = [
 dc24-python = [
     { name = "dc24-driver-python" },
 ]
+dc24-rust = [
+    { name = "dc24-driver-rust" },
+]
 dc24-vendor = [
     { name = "dc24-driver-vendor" },
 ]
@@ -397,6 +400,7 @@ dc24 = [
     { name = "requests", specifier = "==2.32.3" },
 ]
 dc24-python = [{ name = "dc24-driver-python", editable = "drivers/dc24-python" }]
+dc24-rust = [{ name = "dc24-driver-rust", directory = "drivers/dc24-rust" }]
 dc24-vendor = [{ name = "dc24-driver-vendor", editable = "drivers/dc24-vendor" }]
 dev = [
     { name = "clang-format", specifier = "==23.1.5" },
@@ -557,6 +561,17 @@ requires-dist = [{ name = "numpy", specifier = ">=1.26.4" }]
 name = "dc24-driver-python"
 version = "0.1.0"
 source = { editable = "drivers/dc24-python" }
+dependencies = [
+    { name = "dc24-driver" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "dc24-driver", specifier = "==0.1.0" }]
+
+[[package]]
+name = "dc24-driver-rust"
+version = "0.1.0"
+source = { directory = "drivers/dc24-rust" }
 dependencies = [
     { name = "dc24-driver" },
 ]

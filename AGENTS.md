@@ -27,14 +27,15 @@ uv sync                        # 根目录:构建计算扩展,安装 cloud + dc2
 uv run <命令>                   # 保持各模块工作目录,自动向上发现根项目(见 §3)
 uv add --group cloud <包名>     # 应用依赖写入根目录对应组(dc24/dev/benchmark 同理)
 uv sync --no-default-groups --group local --group dc24-python   # 本地工作站 + Python TCP
+uv sync --no-default-groups --group local --group dc24-rust     # 本地工作站 + Rust FFI
 uv sync --no-default-groups --group local --group dc24-vendor   # 本地工作站 + 原厂 DLL
 ```
 
 - `cnn-compute` 是独立可安装计算包，只有其运行依赖进入 wheel；cloud、dc24、dev 和 benchmark 分组管理，benchmark 显式启用
-- `local` 汇集应用后端与采集宿主依赖；`dc24-python` / `dc24-vendor` 分别选择独立驱动发行包，二者都依赖公共 `dc24-driver`。`dc24-rust` 留待后续任务，不在当前配置中占位
+- `local` 汇集应用后端与采集宿主依赖；`dc24-python` / `dc24-rust` / `dc24-vendor` 分别选择独立驱动发行包，三者都依赖公共 `dc24-driver`。Rust 包携带 `dc24_edge_core`，wheel 构建由后端调用 cargo 完成
 - Windows 首次构建和源码变更后的重建使用 Git Bash 的 `vsdev uv sync`；本机默认 `bash` 是 WSL，显式选择 Git Bash。原生构建、目标 ISA 与缓存规则见 [计算库构建说明](docs/native_compute.md)
 - 原生构建依赖在根配置固定版本，Eigen 在 CMake 固定来源和 SHA256，通过 target 链接；编译并行度固定为 1
-- Rust 边端 `edge/` 由 cargo 管理,不经 uv
+- Rust 边端 `edge/` 由 cargo 管理；`drivers/dc24-rust` 的 Python 构建后端只调用其 cargo 构建并打包，不复制 Rust 核心
 - Python 版本锁定 `.python-version`(3.13),由 uv 自动下载托管,不依赖系统 Python
 
 ## 3. 开发命令
@@ -72,7 +73,7 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 ## 6. 配置
 
 - `cloud/.env`(不入库):云端配置,键定义以 `cloud/app/core/config.py` 为准;生产必改 `ADMIN_PASSWORD`、`SECRET_KEY`、`EDGE_API_KEY`。`DEPLOYMENT_MODE` 默认 `cloud`;本地工作站由 `scripts/dc24_start.py` 强制设为 `local` 并仅监听 `127.0.0.1`,网页及 HTTP/WS 免登录且不创建演示设备,不要在云端改为 `local`。可选键 `CORS_ORIGINS`(逗号分隔跨域白名单,默认含 localhost:3000/4173 与生产 IP)
-- `dc24/.env`(不入库):DC24 边端本机配置,由 `dc24/dc24_agent.py` 读取——`DC24_VENDOR_ROOT`(原厂软件目录,配了走 DLL、留空走纯 Python TCP)、`CLOUD_BASE_URL`、`EDGE_API_KEY`,详见 `dc24/README.md`
+- `dc24/.env`(不入库):DC24 边端本机配置,由 `dc24/dc24_agent.py` 读取——`DC24_DRIVER`(`python`/`rust`/`vendor`,未设置时保持原厂目录优先、否则 Python)、`DC24_VENDOR_ROOT`(原厂软件目录,DLL 驱动必填)、`CLOUD_BASE_URL`、`EDGE_API_KEY`,详见 `dc24/README.md`
 - `ACQUISITION_DATA_DIR`:可选环境变量,采集任务落盘根目录(默认 `<仓库根>/data/acquisitions`),读取处 `cloud/app/api/acquisition.py`
 - 生产部署(`CNN.service`、Nginx、dry-run 演练)见 `docs/部署指南.md`
 
@@ -119,6 +120,7 @@ dc24/                       # DC24 共用采集宿主(根项目 dc24 依赖组,W
 drivers/                    # 独立 DC24 驱动发行包(根 uv sources 集中管理)
 ├── dc24/                   # dc24-driver:窄接口、样本块、链路状态、协议与12档配置
 ├── dc24-python/            # dc24-driver-python:默认纯 Python TCP 适配器
+├── dc24-rust/              # dc24-driver-rust:打包 edge cdylib 的薄适配器
 └── dc24-vendor/            # dc24-driver-vendor:原厂 DLL 与32位桥接,不捆绑原厂软件
 
 edge/                       # Rust 边端(开发稿,目标树莓派;cargo 管理,不经 uv)
