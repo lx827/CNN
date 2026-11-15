@@ -12,11 +12,17 @@ const script = compileScript(descriptor, { id: 'live-test' }).content.replace(/^
 const renderer = vue.createRenderer({ createElement: () => ({ children: [] }), createText: text => ({ text }), createComment: () => ({}), insert: (c, p) => p.children.push(c), remove() {}, setText() {}, setElementText() {}, parentNode: () => null, nextSibling: () => null, patchProp() {} })
 const flush = async () => { await new Promise(resolve => setImmediate(resolve)); await vue.nextTick() }
 const copy = x => JSON.parse(JSON.stringify(x))
+// 视图脚本在 vm 沙箱中运行（import 已剥离），图表主题与语义色以全局注入
+let chartTheme, COLORS
+test.before(async () => {
+  chartTheme = await import('../src/utils/chartTheme.js')
+  ;({ COLORS } = await import('../src/utils/constants.js'))
+})
 
 function harness(overrides = {}) {
   const timers = new Set(), listeners = new Set(), charts = [], records = [], views = [], sessions = []
   let current = null, stops = 0, recordStops = 0
-  const context = { ...vue, console, Date,
+  const context = { ...vue, console, Date, ...chartTheme, COLORS,
     setTimeout(fn) { timers.add(fn); return fn }, clearTimeout(fn) { timers.delete(fn) },
     window: { addEventListener: (_, fn) => listeners.add(fn), removeEventListener: (_, fn) => listeners.delete(fn) },
     ElMessage: { success() {}, warning() {} },
