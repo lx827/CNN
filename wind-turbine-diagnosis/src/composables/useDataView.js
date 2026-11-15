@@ -37,7 +37,17 @@ import {
   significantBearingFaults,
   bearingMethodLabel,
 } from '../utils/bearingDiagnosis'
+import { COLORS } from '../utils/constants'
+import { baseCartesianOption, AXIS_STYLE, TOOLTIP_STYLE, CHART_PALETTE } from '../utils/chartTheme'
 
+// 读取 CSS 设计令牌（variables.css），保证图表配色与全局令牌一致
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+
+// 十六进制颜色叠加透明度（面积填充等半透明效果）
+const withAlpha = (hex, alpha) => {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+}
 
 export const dc24ChannelOptions = Object.freeze([1, 2, 3, 4])
 
@@ -481,7 +491,7 @@ export function useDataView() {
         name: `${labelPrefix} ${ann.name}(${ann.freq.toFixed(1)}Hz)`,
         lineStyle: {
           type: isDetected ? 'solid' : 'dashed',
-          color: isDetected ? '#F5222D' : isBearing ? '#165DFF' : ann.type === 'gear' ? '#FAAD14' : '#999',
+          color: isDetected ? COLORS.danger : isBearing ? COLORS.primary : ann.type === 'gear' ? COLORS.warning : COLORS.info,
           width: isDetected ? 2 : 1,
         },
       })
@@ -495,7 +505,7 @@ export function useDataView() {
     series.markLine = {
       silent: true,
       symbol: 'none',
-      lineStyle: { type: 'dashed', color: '#999' },
+      lineStyle: { type: 'dashed', color: COLORS.info },
       data: [...existingMarkLine, ...markLineData],
       label: { formatter: '{b}', position: 'insideEndTop', fontSize: 10 },
     }
@@ -593,17 +603,18 @@ export function useDataView() {
       const timeX = timeData.map((_, i) => (i / sr).toFixed(4))
 
       timeOption.value = {
-        tooltip: { trigger: 'axis', triggerOn: 'click' },
+        ...baseCartesianOption(),
+        tooltip: { ...TOOLTIP_STYLE, trigger: 'axis', triggerOn: 'click' },
         grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-        xAxis: { type: 'category', data: timeX, name: '时间 (s)', nameGap: 25 },
-        yAxis: { type: 'value', name: '幅值' },
+        xAxis: { type: 'category', data: timeX, name: '时间 (s)', nameGap: 25, ...AXIS_STYLE },
+        yAxis: { type: 'value', name: '幅值', ...AXIS_STYLE },
         dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 0 }],
         series: [{
           type: 'line',
           data: timeData,
           showSymbol: false,
           sampling: 'lttb',
-          lineStyle: { width: 1, color: '#165DFF' }
+          lineStyle: { width: 1, color: COLORS.primary }
         }]
       }
     } catch (e) {
@@ -628,18 +639,19 @@ export function useDataView() {
 
       computedFFT.value = true
       fftOption.value = {
-        tooltip: { trigger: 'axis', triggerOn: 'click' },
+        ...baseCartesianOption(),
+        tooltip: { ...TOOLTIP_STYLE, trigger: 'axis', triggerOn: 'click' },
         grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-        xAxis: { type: 'category', data: d.fft_freq, name: '频率 (Hz)', nameGap: 25 },
-        yAxis: { type: 'value', name: '幅值' },
+        xAxis: { type: 'category', data: d.fft_freq, name: '频率 (Hz)', nameGap: 25, ...AXIS_STYLE },
+        yAxis: { type: 'value', name: '幅值', ...AXIS_STYLE },
         dataZoom: [{ type: 'inside' }],
         series: [{
           type: 'line',
           data: d.fft_amp,
           showSymbol: false,
           sampling: 'lttb',
-          areaStyle: { color: 'rgba(22, 93, 255, 0.2)' },
-          lineStyle: { width: 1.5, color: '#165DFF' }
+          areaStyle: { color: withAlpha(COLORS.primary, 0.12) },
+          lineStyle: { width: 1.5, color: COLORS.primary }
         }]
       }
       // 叠加特征频率标注
@@ -678,11 +690,14 @@ export function useDataView() {
       computedSTFT.value = true
       const minVal = Math.min(...d.magnitude.flat())
       const maxVal = Math.max(...d.magnitude.flat())
+      // 热力图配色取自品牌靛蓝阶梯令牌（variables.css）
+      const stftHeatColors = [cssVar('--bg-subtle'), cssVar('--brand-200'), cssVar('--brand-500'), cssVar('--brand-800')]
       stftOption.value = {
-        tooltip: { position: 'top', triggerOn: 'click' },
+        ...baseCartesianOption(),
+        tooltip: { ...TOOLTIP_STYLE, position: 'top', triggerOn: 'click' },
         grid: { left: '10%', right: '12%', bottom: '18%', top: '10%' },
-        xAxis: { type: 'category', data: d.time, name: '时间 (s)' },
-        yAxis: { type: 'category', data: d.freq, name: '频率 (Hz)' },
+        xAxis: { type: 'category', data: d.time, name: '时间 (s)', ...AXIS_STYLE },
+        yAxis: { type: 'category', data: d.freq, name: '频率 (Hz)', ...AXIS_STYLE },
         dataZoom: [
           // 鼠标滚轮/拖拽缩放
           { type: 'inside', xAxisIndex: 0, filterMode: 'empty' },
@@ -692,29 +707,30 @@ export function useDataView() {
             type: 'slider', xAxisIndex: 0, filterMode: 'empty',
             height: 18, bottom: 38,
             handleSize: '80%', showDetail: false,
-            borderColor: 'transparent', backgroundColor: '#f5f5f5',
-            fillerColor: 'rgba(22, 93, 255, 0.15)',
-            handleStyle: { color: '#165DFF' }
+            borderColor: 'transparent', backgroundColor: cssVar('--el-fill-color'),
+            fillerColor: withAlpha(COLORS.primary, 0.15),
+            handleStyle: { color: COLORS.primary }
           },
           // Y轴（频率）右侧滑动条
           {
             type: 'slider', yAxisIndex: 0, filterMode: 'empty',
             width: 18, right: 10,
             handleSize: '80%', showDetail: false,
-            borderColor: 'transparent', backgroundColor: '#f5f5f5',
-            fillerColor: 'rgba(22, 93, 255, 0.15)',
-            handleStyle: { color: '#165DFF' }
+            borderColor: 'transparent', backgroundColor: cssVar('--el-fill-color'),
+            fillerColor: withAlpha(COLORS.primary, 0.15),
+            handleStyle: { color: COLORS.primary }
           }
         ],
         visualMap: {
           min: minVal, max: maxVal, calculable: true,
           orient: 'horizontal', left: 'center', bottom: '0%',
-          inRange: { color: ['#0d0887', '#46039f', '#7201a8', '#9c179e', '#bd3786', '#d8576b', '#ed7953', '#fdb42f', '#f0f921'] }
+          textStyle: { color: cssVar('--text-secondary') },
+          inRange: { color: stftHeatColors }
         },
         series: [{
           type: 'heatmap',
           data: d.magnitude.flatMap((row, y) => row.map((val, x) => [x, y, val])),
-          emphasis: { itemStyle: { borderColor: '#333', borderWidth: 1 } }
+          emphasis: { itemStyle: { borderColor: cssVar('--text-primary'), borderWidth: 1 } }
         }]
       }
     } catch (e) {
@@ -753,21 +769,25 @@ export function useDataView() {
 
       const spectrum = d.spectrum
       if (spectrum?.frequency_hz?.length && spectrum?.amplitude?.length) {
+        // 包络主线用色板第二色（天蓝），与 FFT 主色区分
+        const envelopeColor = CHART_PALETTE[1]
         envelopeOption.value = {
-          tooltip: { trigger: 'axis', triggerOn: 'click' },
+          ...baseCartesianOption(),
+          tooltip: { ...TOOLTIP_STYLE, trigger: 'axis', triggerOn: 'click' },
           grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-          xAxis: { type: 'category', data: spectrum.frequency_hz, name: '频率 (Hz)', nameGap: 25 },
+          xAxis: { type: 'category', data: spectrum.frequency_hz, name: '频率 (Hz)', nameGap: 25, ...AXIS_STYLE },
           yAxis: {
             type: 'value',
             name: `包络幅值 (${spectrum.amplitude_unit || 'input_signal'}；${spectrum.scaling || 'unnormalized'})`,
+            ...AXIS_STYLE,
           },
           dataZoom: [{ type: 'inside' }],
           series: [{
             type: 'line',
             data: spectrum.amplitude,
             showSymbol: false,
-            areaStyle: { color: 'rgba(250, 173, 20, 0.2)' },
-            lineStyle: { width: 1.5, color: '#FAAD14' }
+            areaStyle: { color: withAlpha(envelopeColor, 0.15) },
+            lineStyle: { width: 1.5, color: envelopeColor }
           }]
         }
         // 叠加特征频率标注（包络谱是轴承诊断核心视图，标注尤为重要）
@@ -836,24 +856,25 @@ export function useDataView() {
       const idx2x = Math.min(Math.round(2 / orderStep), d.orders.length - 1)
       const idx3x = Math.min(Math.round(3 / orderStep), d.orders.length - 1)
       orderOption.value = {
-        tooltip: { trigger: 'axis', triggerOn: 'click', formatter: (params) => {
+        ...baseCartesianOption(),
+        tooltip: { ...TOOLTIP_STYLE, trigger: 'axis', triggerOn: 'click', formatter: (params) => {
           const p = params[0]
           return `阶次: ${p.name}<br/>幅值: ${p.value}`
         }},
         grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-        xAxis: { type: 'category', data: d.orders, name: '阶次', nameGap: 25 },
-        yAxis: { type: 'value', name: '幅值' },
+        xAxis: { type: 'category', data: d.orders, name: '阶次', nameGap: 25, ...AXIS_STYLE },
+        yAxis: { type: 'value', name: '幅值', ...AXIS_STYLE },
         dataZoom: [{ type: 'inside' }],
         series: [{
           type: 'line',
           data: d.spectrum,
           showSymbol: false,
-          areaStyle: { color: 'rgba(82, 196, 26, 0.2)' },
-          lineStyle: { width: 1.5, color: '#52C41A' },
+          areaStyle: { color: withAlpha(COLORS.primary, 0.12) },
+          lineStyle: { width: 1.5, color: COLORS.primary },
           markLine: {
             silent: true,
             symbol: 'none',
-            lineStyle: { type: 'dashed', color: '#999' },
+            lineStyle: { type: 'dashed', color: COLORS.danger },
             data: [
               { xAxis: idx1x, name: '1×转频' },
               { xAxis: idx2x, name: '2×转频' },
@@ -902,24 +923,25 @@ export function useDataView() {
         name: `${p.freq_hz}Hz`
       }))
       cepstrumOption.value = {
-        tooltip: { trigger: 'axis', triggerOn: 'click', formatter: (params) => {
+        ...baseCartesianOption(),
+        tooltip: { ...TOOLTIP_STYLE, trigger: 'axis', triggerOn: 'click', formatter: (params) => {
           const p = params[0]
           return `倒频率: ${p.value[0]} ms<br/>幅值: ${p.value[1]}`
         }},
         grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-        xAxis: { type: 'value', name: '倒频率 (ms)', nameGap: 25, min: 0 },
-        yAxis: { type: 'value', name: '倒谱幅值' },
+        xAxis: { type: 'value', name: '倒频率 (ms)', nameGap: 25, min: 0, ...AXIS_STYLE },
+        yAxis: { type: 'value', name: '倒谱幅值', ...AXIS_STYLE },
         dataZoom: [{ type: 'inside' }],
         series: [{
           type: 'line',
           data: xyData,
           showSymbol: false,
-          lineStyle: { width: 1.5, color: '#722ED1' },
-          areaStyle: { color: 'rgba(114, 46, 209, 0.15)' },
+          lineStyle: { width: 1.5, color: COLORS.primary },
+          areaStyle: { color: withAlpha(COLORS.primary, 0.12) },
           markLine: markLines.length > 0 ? {
             silent: true,
             symbol: 'none',
-            lineStyle: { type: 'dashed', color: '#FAAD14' },
+            lineStyle: { type: 'dashed', color: COLORS.danger },
             data: markLines,
             label: { formatter: '{b}', position: 'insideEndTop', fontSize: 10 }
           } : undefined
@@ -1101,61 +1123,63 @@ export function useDataView() {
     if (!ws || !ws.time || ws.time.length === 0) return
 
     windowedOption.value = {
-      tooltip: { trigger: 'axis', triggerOn: 'click' },
+      ...baseCartesianOption(),
+      tooltip: { ...TOOLTIP_STYLE, trigger: 'axis', triggerOn: 'click' },
       legend: {
         data: ['峭度', '偏度', 'RMS', '峰值', '裕度', '峰值因子', '波形因子', '脉冲因子'],
         type: 'scroll',
         bottom: 0
       },
       grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
-      xAxis: { type: 'category', data: ws.time, name: '时间 (s)', nameGap: 25 },
+      xAxis: { type: 'category', data: ws.time, name: '时间 (s)', nameGap: 25, ...AXIS_STYLE },
       yAxis: [
-        { type: 'value', name: '无量纲指标', position: 'left' },
-        { type: 'value', name: '幅值', position: 'right' }
+        { type: 'value', name: '无量纲指标', position: 'left', ...AXIS_STYLE },
+        { type: 'value', name: '幅值', position: 'right', ...AXIS_STYLE }
       ],
       dataZoom: [{ type: 'inside' }],
+      // 系列颜色按顺序取自 CHART_PALETTE（baseCartesianOption 的 color）
       series: [
         {
           name: '峭度',
           type: 'line',
           data: ws.kurtosis,
           showSymbol: false,
-          lineStyle: { width: 1.5, color: '#F5222D' }
+          lineStyle: { width: 1.5 }
         },
         {
           name: '偏度',
           type: 'line',
           data: ws.skewness,
           showSymbol: false,
-          lineStyle: { width: 1.5, color: '#EB2F96' }
+          lineStyle: { width: 1.5 }
         },
         {
           name: '裕度',
           type: 'line',
           data: ws.margin,
           showSymbol: false,
-          lineStyle: { width: 1.5, color: '#722ED1' }
+          lineStyle: { width: 1.5 }
         },
         {
           name: '峰值因子',
           type: 'line',
           data: ws.crest_factor,
           showSymbol: false,
-          lineStyle: { width: 1.5, color: '#13C2C2' }
+          lineStyle: { width: 1.5 }
         },
         {
           name: '波形因子',
           type: 'line',
           data: ws.shape_factor,
           showSymbol: false,
-          lineStyle: { width: 1.5, color: '#52C41A' }
+          lineStyle: { width: 1.5 }
         },
         {
           name: '脉冲因子',
           type: 'line',
           data: ws.impulse_factor,
           showSymbol: false,
-          lineStyle: { width: 1.5, color: '#FA8C16' }
+          lineStyle: { width: 1.5 }
         },
         {
           name: 'RMS',
@@ -1163,7 +1187,7 @@ export function useDataView() {
           yAxisIndex: 1,
           data: ws.rms,
           showSymbol: false,
-          lineStyle: { width: 1.5, color: '#165DFF' }
+          lineStyle: { width: 1.5 }
         },
         {
           name: '峰值',
@@ -1171,7 +1195,7 @@ export function useDataView() {
           yAxisIndex: 1,
           data: ws.peak,
           showSymbol: false,
-          lineStyle: { width: 1.5, color: '#FAAD14' }
+          lineStyle: { width: 1.5 }
         }
       ]
     }

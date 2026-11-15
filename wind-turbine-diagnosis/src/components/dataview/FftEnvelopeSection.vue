@@ -136,7 +136,7 @@ defineEmits(['compute-fft', 'clear-fft', 'compute-envelope', 'clear-envelope'])
 .chart-title {
   font-weight: 600;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .section-header {
@@ -151,16 +151,16 @@ defineEmits(['compute-fft', 'clear-fft', 'compute-envelope', 'clear-envelope'])
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  border-radius: 8px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
 }
 
 .envelope-info {
   margin-bottom: 8px;
   padding: 8px 12px;
-  background: #fffbe6;
-  border: 1px solid #ffe58f;
-  border-radius: 6px;
+  background: var(--color-warning-soft);
+  border: 1px solid var(--el-color-warning-light-7);
+  border-radius: var(--radius-sm);
   display: flex;
   flex-wrap: wrap;
   align-items: center;

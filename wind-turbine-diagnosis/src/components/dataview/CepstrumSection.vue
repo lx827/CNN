@@ -77,7 +77,7 @@ defineEmits(['compute', 'clear'])
 .chart-title {
   font-weight: 600;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .section-header {
@@ -92,16 +92,16 @@ defineEmits(['compute', 'clear'])
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  border-radius: 8px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
 }
 
 .cepstrum-info {
   margin-bottom: 8px;
   padding: 8px 12px;
-  background: #f9f0ff;
-  border: 1px solid #d3adf7;
-  border-radius: 6px;
+  background: var(--color-primary-soft);
+  border: 1px solid var(--el-color-primary-light-7);
+  border-radius: var(--radius-sm);
   display: flex;
   flex-wrap: wrap;
   align-items: center;

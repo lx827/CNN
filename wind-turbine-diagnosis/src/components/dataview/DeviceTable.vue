@@ -58,7 +58,7 @@
     <el-dialog v-model="dialogVisible" title="批量删除批次" width="400px">
       <div v-if="deleteTarget">
         <p style="margin-bottom: 12px;">设备：<b>{{ deleteTarget.device_name }}</b></p>
-        <p style="margin-bottom: 12px; color: #666; font-size: 13px;">请选择要删除的普通数据批次：</p>
+        <p style="margin-bottom: 12px; color: var(--text-regular); font-size: 13px;">请选择要删除的普通数据批次：</p>
         <el-checkbox-group v-model="deleteSelected">
           <el-checkbox
             v-for="batch in deleteTarget.batches.filter(b => !b.is_special)"
@@ -68,7 +68,7 @@
             批次 #{{ batch.batch_index }} {{ formatTime(batch.created_at) }}
           </el-checkbox>
         </el-checkbox-group>
-        <p v-if="deleteTarget.batches.filter(b => !b.is_special).length === 0" style="color: #999;">该设备没有普通数据批次</p>
+        <p v-if="deleteTarget.batches.filter(b => !b.is_special).length === 0" style="color: var(--text-secondary);">该设备没有普通数据批次</p>
       </div>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -181,7 +181,7 @@ const onDeleteDeviceSpecial = async (deviceId) => {
 
 .batch-tag {
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-fast);
 }
 
 .batch-tag:hover {
@@ -189,7 +189,7 @@ const onDeleteDeviceSpecial = async (deviceId) => {
 }
 
 .batch-tag.active {
-  box-shadow: 0 0 0 2px #165DFF;
+  box-shadow: 0 0 0 2px var(--color-primary);
 }
 
 .special-icon {
