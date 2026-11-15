@@ -38,9 +38,9 @@ CNN/
 ├── edge/                      # Rust 边端（开发中，目标树莓派，cargo 管理）
 ├── dc24/                      # DC24 共用采集宿主（dc24 依赖组，测试在 dc24/tests/）
 ├── drivers/                   # 公共 DC24 接口及 Python TCP / 原厂 DLL 独立驱动包
-├── lib/                       # 纯 C++：core 公共数值模块、emd 算法模块
-├── bind/                      # pybind11 导出、NumPy 互操作与类型声明生成
-├── cnn_compute/               # 独立 Python 计算包
+├── compute/lib/               # 纯 C++：core 公共数值模块、emd 算法模块
+├── compute/bind/              # pybind11 导出、NumPy 互操作与类型声明生成
+├── compute/cnn_compute/       # 独立 Python 计算包
 ├── deploy/                    # 部署资产：cloud/CNN.service 模板、edge/ 交叉编译构建
 ├── scripts/                   # 运维调试脚本（dc24_start、export_openapi 等）
 ├── data/                      # 数据集（不提交 Git）

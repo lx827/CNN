@@ -2,7 +2,7 @@
 
 > 状态：当前契约（#76 / PR #81 已合并）。函数签名以源码 docstring 为准，HTTP 字段以 [后端 API](../../api/backend_api.md) 为准。
 >
-> 实现导航：`lib/numeric/`、`lib/filtering/`、`lib/fourier/` 提供独立数值能力；`cnn_compute.numeric`、`filtering`、`fourier` 是 Python 绑定；cloud 的 `transforms/`、`statistics/`、`cepstrum/` 保留单位、数据类与业务适配。
+> 实现导航：`compute/lib/numeric/`、`compute/lib/filtering/`、`compute/lib/fourier/` 提供独立数值能力；`cnn_compute.numeric`、`filtering`、`fourier` 是 Python 绑定；cloud 的 `transforms/`、`statistics/`、`cepstrum/` 保留单位、数据类与业务适配。
 
 ## 数学目的
 
@@ -83,7 +83,7 @@ FFT/STFT/倒谱主要为 $O(N\log N)$；STFT 额外存储随频率 bin 与帧数
 
 已合并的验证资产为 `cloud/tests/test_numeric_algorithms.py` 与 `cloud/tests/test_numeric_routes.py`。登记的向量主题包括整数周期正弦、DC、Nyquist、非整数周期、STFT 轴和形状、倒谱单位、统计零分母、分段末段、极值抽点、全长数组独立性，以及 DataView/Monitor 路由归一化与兼容字段。
 
-原生公共边界验证入口为 `tests/test_native_numeric.py`，以 NumPy/SciPy 对照奇偶 FFT、半谱、任意复谱逆变换、STFT 补零/刻度、统计、SOS/S-G、倒谱与自相关，并检查只读/非连续输入和最终结果生命周期。C++ `numeric_contract` 另验证 Plan 的实部逆变换与 Hermitian 逆变换契约。验证平台和最近执行结果见 [构建说明](../../native_compute.md)；运行方式和数据依赖见 [测试索引](../../tests/INDEX.md)。
+原生公共边界验证入口为 `compute/tests/test_native_numeric.py`，以 NumPy/SciPy 对照奇偶 FFT、半谱、任意复谱逆变换、STFT 补零/刻度、统计、SOS/S-G、倒谱与自相关，并检查只读/非连续输入和最终结果生命周期。C++ `numeric_contract` 另验证 Plan 的实部逆变换与 Hermitian 逆变换契约。验证平台和最近执行结果见 [构建说明](../../native_compute.md)；运行方式和数据依赖见 [测试索引](../../tests/INDEX.md)。
 
 2026-11-13 在 Windows x64、MSVC 19.50、`/O2 /fp:strict`、Eigen 3.4 baseline SSE2 构建通过：原生 Python 7 项、C++ numeric 契约、cloud 数值 7 项、标准包络 11 项、CPW/TEO 8 项、S-G 5 项及 signal_utils 45 项。numeric 对象反汇编观察到 `mulpd` 批量乘法；不据此宣称所有归约或所有算法均 SIMD。
 

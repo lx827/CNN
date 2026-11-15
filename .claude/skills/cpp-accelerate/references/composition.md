@@ -5,14 +5,14 @@
 ## 模块归属
 
 ```text
-lib/
+compute/lib/
 ├─ core/                 # 通用数组、view、基础结构
 ├─ interpolation/        # PCHIP、cubic
 ├─ solvers/              # 带状求解等独立数值能力
 ├─ transforms/           # FFT、希尔伯特变换、解析信号
 ├─ envelope/             # 极值插值包络、Hilbert 包络
 └─ emd/                  # 筛分、停止、模态与集成编排
-bind/                    # Python 类型、布局、GIL、owner 转换
+compute/bind/            # Python 类型、布局、GIL、owner 转换
 ```
 
 小模块不必立刻拥有独立目录或 CMake target。基础结构按广泛共享性归 core；`InterpolationWorkspace`、包络参数等归所属算法模块。依赖方向示例：EMD → 极值插值包络 → 插值 → 求解器；Hilbert 包络 → 解析信号 → FFT。所有模块可使用 core，core 不依赖算法。

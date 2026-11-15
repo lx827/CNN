@@ -3,9 +3,9 @@
 # cnn_compute C++ 计算库 + edge-diag Rust CLI 的 aarch64 交叉构建容器
 #
 # 用途:在 x64 开发机的 WSL Docker 内,分两个 stage 交叉构建:
-#   1) builder:Debian 交叉工具链按 cmake/toolchains/linux-aarch64.cmake
+#   1) builder:Debian 交叉工具链按 compute/cmake/toolchains/linux-aarch64.cmake
 #      构建 libcnn_compute.so,并用 aarch64 gcc 冒烟编译/链接
-#      capi/tests/consumer.c(x64 容器内不能运行 aarch64 二进制,
+#      compute/capi/tests/consumer.c(x64 容器内不能运行 aarch64 二进制,
 #      编译+链接成功即通过,运行验证在树莓派上做)。
 #      构建命令与 docs/native_compute_distribution.md ARM64 节一致。
 #   2) rust-builder:官方 rust 镜像(同为 Debian bookworm/glibc 2.36,与
@@ -23,7 +23,7 @@
 #     --progress=plain <仓库根目录>
 #
 # 构建上下文白名单见 edge-diag/build/Dockerfile.dockerignore
-# (lib/ capi/ cmake/ CMakeLists.txt 归 builder,edge-diag/ 归 rust-builder)。
+# (compute/{lib,capi,cmake,CMakeLists.txt} 归 builder,edge-diag/ 归 rust-builder)。
 # Eigen 为 FetchContent 固定来源与 SHA256,configure 阶段需联网;
 # rust-builder 需联网拉取 crates.io 依赖(按已提交 Cargo.lock --locked 构建)。
 #
@@ -58,8 +58,8 @@ COPY . .
 
 # 交叉构建 + 安装(Ninja 并行度固定 1,遵守仓库约定)
 RUN set -eux; \
-    cmake -S /src -B /tmp/build-aarch64 -G Ninja \
-        -DCMAKE_TOOLCHAIN_FILE=/src/cmake/toolchains/linux-aarch64.cmake \
+    cmake -S /src/compute -B /tmp/build-aarch64 -G Ninja \
+        -DCMAKE_TOOLCHAIN_FILE=/src/compute/cmake/toolchains/linux-aarch64.cmake \
         -DCMAKE_BUILD_TYPE=Release \
         -DCNN_COMPUTE_BUILD_PYTHON=OFF \
         -DCMAKE_INSTALL_PREFIX=/opt/cnn-compute-aarch64 \
@@ -67,10 +67,10 @@ RUN set -eux; \
     cmake --build /tmp/build-aarch64 --parallel 1; \
     cmake --install /tmp/build-aarch64
 
-# 冒烟验证 + 产物汇总:用 aarch64 交叉 gcc 编译 capi/tests/consumer.c 并链接
+# 冒烟验证 + 产物汇总:用 aarch64 交叉 gcc 编译 compute/capi/tests/consumer.c 并链接
 # 安装树中的产物 .so。rpath=$ORIGIN 让导出的 consumer 与 .so 同目录即可直接运行。
 RUN set -eux; \
-    aarch64-linux-gnu-gcc -std=c11 /src/capi/tests/consumer.c \
+    aarch64-linux-gnu-gcc -std=c11 /src/compute/capi/tests/consumer.c \
         -I/opt/cnn-compute-aarch64/include \
         -L/opt/cnn-compute-aarch64/lib -lcnn_compute -lm \
         '-Wl,-rpath,$ORIGIN' \

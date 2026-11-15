@@ -4,7 +4,7 @@ node_modules/
 # ========== Build output ==========
 dist/
 *.pyd
-/cnn_compute/_native/
+/compute/cnn_compute/_native/
 *.dll
 *.lib
 *.obj
@@ -66,7 +66,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-# 根 lib/ 保存 C++ 源码，不按 Python 历史产物目录忽略。
+# compute/lib/ 保存 C++ 源码，不按 Python 历史产物目录忽略。
 lib64/
 parts/
 sdist/

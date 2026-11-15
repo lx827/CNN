@@ -8,7 +8,7 @@
 
 ## 适用场景与必要前提
 
-用于非平稳信号探索、敏感 IMF 与去噪；模态混叠和端点效应仍存在，不以分解成功代替物理故障依据。输入有限、至少八点、采样率为正；算法参数前提由公开 C++ 入口建立，内部热路径沿用。参数及真实函数签名以 [包 docstring](../../../cnn_compute/emd_family.py) 和 [C++ 头](../../../lib/emd/family.hpp) 为准。
+用于非平稳信号探索、敏感 IMF 与去噪；模态混叠和端点效应仍存在，不以分解成功代替物理故障依据。输入有限、至少八点、采样率为正；算法参数前提由公开 C++ 入口建立，内部热路径沿用。参数及真实函数签名以 [包 docstring](../../../compute/cnn_compute/emd_family.py) 和 [C++ 头](../../../compute/lib/emd/family.hpp) 为准。
 
 ## 公式与随机性
 
@@ -24,7 +24,7 @@
 ```text
 cloud NativeEMDImplementation（Hz/结果适配）
   → cnn_compute.emd_family（配置/一次布局转换）
-    → bind/emd_business.cpp（GIL/capsule）
+    → compute/bind/emd_business.cpp（GIL/capsule）
       → emd::family::decompose（公开前提/拥有型结果）
         → family::execution::decompose（完整流程/逐成员聚合）
           → emd::execution::sift（当前/更新/包络工作区复用）
@@ -53,7 +53,7 @@ EEMD 结果累加池为 O(NK)，不再保留 O(NKM) 的成员结果。CEEMDAN �
 
 - [原生差分](../../../cloud/tests/diagnosis/algorithms/test_native_emd.py)：确定性 EMD 四种筛分组合对显式 Python 参考，保留既定数组预算；随机集成检查四种配置复现、完整性和质量元数据。需要数据根的旧五向量仅作确定性/零噪声对照。
 - [完整业务入口](../../../cloud/tests/diagnosis/algorithms/test_native_emd_family.py)：禁止调用 Python 数值实现/NumPy RNG、非连续输入保留、owner 生命周期、超长种子、零噪声、数值失败、尺度与未收敛状态。
-- [纯 C++ 契约](../../../tests/native/emd_business_contract.cpp)：用相同原生白噪声和独立基础 EMD 调用组成 EEMD/Torres CEEMDAN 公式参照；检查公开/内部入口、跨规模工作区、失败后复用、并发隔离和重构。
+- [纯 C++ 契约](../../../compute/tests/native/emd_business_contract.cpp)：用相同原生白噪声和独立基础 EMD 调用组成 EEMD/Torres CEEMDAN 公式参照；检查公开/内部入口、跨规模工作区、失败后复用、并发隔离和重构。
 - [测量脚本](../../../scripts/benchmark_emd_family.py)：每算法/后端独立进程，端到端计时计入参数/布局/所有权，OS 峰值包含导入、预热与真实输出生命周期。随机源不同，不将混合/原生的耗时差全部归因于接口开销。
 
 2026-11-14 Windows MSVC 19.50 baseline SSE2 首轮测量，4096 点、最多四 IMF、八成员、50 次筛分上限，各后端预热后测三次：

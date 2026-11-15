@@ -16,7 +16,7 @@ EMD 默认 `NativeEMDImplementation` 已将归一化、多 IMF、原生随机数
 
 ## 小波数学与结果成本
 
-复用官方 PyWavelets v1.8.0 的独立 C 滤波器、卷积、DWT/IDWT 源码，支持其全部内置离散小波族和九种延拓模式；运行时没有 Python/Cython 调用。MIT 源码归属见 [模块说明](../../../lib/wavelet/NOTICE.md)。PyWavelets 当前参考包为 1.8.0，导入模块为 `pywt`，实际计算来自其 `_extensions._dwt` 扩展。
+复用官方 PyWavelets v1.8.0 的独立 C 滤波器、卷积、DWT/IDWT 源码，支持其全部内置离散小波族和九种延拓模式；运行时没有 Python/Cython 调用。MIT 源码归属见 [模块说明](../../../compute/lib/wavelet/NOTICE.md)。PyWavelets 当前参考包为 1.8.0，导入模块为 `pywt`，实际计算来自其 `_extensions._dwt` 扩展。
 
 C++ 执行多层 DWT、完全 WP、原时间轴分量重构，以及 MAD 通用阈值的 soft/hard/improved 细节收缩。近似带不收缩；归一化保证阈值不依赖幅值单位，MAD 没有绝对幅值下限。奇数长度只裁去延拓产生的尾点，不补零、不丢原记录尾点。`dmey` 是 FIR 近似，保留其固有重构误差。
 
@@ -36,13 +36,13 @@ N 为有效窗口，M=N+2·floor(N/2)，P=ceil(M/2)。两轮模态频谱为 `2·
 
 ## 所有权与执行接口
 
-`lib/wavelet/api.hpp` 与 `lib/vmd/api.hpp` 是公开和内部执行契约的唯一签名来源。公开入口检查前提、准备独立拥有型输出和 Workspace，内部执行入口复用同一实现。调用同步借用连续输入；必要的归一化、镜像和系数存储是算法工作副本。工作区每个活跃调用独占，不创建线程池。
+`compute/lib/wavelet/api.hpp` 与 `compute/lib/vmd/api.hpp` 是公开和内部执行契约的唯一签名来源。公开入口检查前提、准备独立拥有型输出和 Workspace，内部执行入口复用同一实现。调用同步借用连续输入；必要的归一化、镜像和系数存储是算法工作副本。工作区每个活跃调用独占，不创建线程池。
 
 NumPy 连续 float64 输入借用，其他 dtype/布局只在 Python 边界集中适配。C++ 结果通过 capsule 转交 Eigen owner，重排形状使用 NumPy view；VMD 历史 view 只显示有效轮数，底层仍保留预分配容量。轻量小波系数 view 为只读且持有原生系数对象；对象销毁或下一次独立计算不会破坏已有 view。
 
 ## 定向证据
 
-`tests/test_native_wavelet_vmd.py` 的五组检查覆盖七个离散族、九种边界、奇偶长度、WP 自然路径/频率映射、轻量选重构、三种阈值及幅值尺度、VMD 的 DC/tau/窗口、收敛状态、输入保留和输出生命周期。C++ `tests/native/wavelet_vmd_contract.cpp` 检查内部执行与公开入口一致、重复执行的缓冲指针、失败输出和跨规模准备。
+`compute/tests/test_native_wavelet_vmd.py` 的五组检查覆盖七个离散族、九种边界、奇偶长度、WP 自然路径/频率映射、轻量选重构、三种阈值及幅值尺度、VMD 的 DC/tau/窗口、收敛状态、输入保留和输出生命周期。C++ `compute/tests/native/wavelet_vmd_contract.cpp` 检查内部执行与公开入口一致、重复执行的缓冲指针、失败输出和跨规模准备。
 
 官方 vmdpy 0.2 的 1024 点双频参考与原生结果：模态归一化 L2 差 8.26×10⁻⁸，中心最大差 2.69×10⁻⁷ Hz。不要求官方每步求和、迭代末位或 RNG 序列相同。
 

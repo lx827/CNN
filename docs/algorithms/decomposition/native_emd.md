@@ -56,11 +56,11 @@ mask 复用同一个成员筛分工作区；独立任务各自准备工作区。
 
 ## 验证边界
 
-维护测试 [test_compute_emd.py](../../../tests/test_compute_emd.py) 对照所选 `emd 0.8.1`，覆盖默认及可选停止/插值/延拓、输入保留、输出所有权、并发隔离与失败。纯 C++ [接口测试](../../../tests/native/emd_contract.cpp) 检查公开/执行一致、大小规模复用及失败后复用。
+维护测试 [test_compute_emd.py](../../../compute/tests/test_compute_emd.py) 对照所选 `emd 0.8.1`，覆盖默认及可选停止/插值/延拓、输入保留、输出所有权、并发隔离与失败。纯 C++ [接口测试](../../../compute/tests/native/emd_contract.cpp) 检查公开/执行一致、大小规模复用及失败后复用。
 
-[mask 差分测试](../../../tests/test_compute_emd_mask.py) 覆盖默认/显式/IF mask、幅值模式、奇偶长度 Hilbert/NHT、迭代收敛平均和上限退出、局部随机状态、二层成功域及输出所有权和并发隔离；[原生工作区测试](../../../tests/native/emd_mask_contract.cpp) 检查跨尺寸 prepare 后复用、公开/内部一致与并发任务隔离。具体通过状态与性能证据随 PR 验收记录，不以接口存在代替测试。
+[mask 差分测试](../../../compute/tests/test_compute_emd_mask.py) 覆盖默认/显式/IF mask、幅值模式、奇偶长度 Hilbert/NHT、迭代收敛平均和上限退出、局部随机状态、二层成功域及输出所有权和并发隔离；[原生工作区测试](../../../compute/tests/native/emd_mask_contract.cpp) 检查跨尺寸 prepare 后复用、公开/内部一致与并发任务隔离。具体通过状态与性能证据随 PR 验收记录，不以接口存在代替测试。
 
-集成维护测试 [test_compute_emd_ensemble.py](../../../tests/test_compute_emd_ensemble.py) 对照 single/flip、两种插值、complete 的真实 IMF 上限，并检查固定种子重复、全局 RNG 不变、独立输出所有权、并发及失败传播。[集成 C++ 接口测试](../../../tests/native/emd_ensemble_contract.cpp) 直接复用同一工作区跨不同输入长度执行，检查输出活过工作区销毁、失败后恢复与并发隔离。
+集成维护测试 [test_compute_emd_ensemble.py](../../../compute/tests/test_compute_emd_ensemble.py) 对照 single/flip、两种插值、complete 的真实 IMF 上限，并检查固定种子重复、全局 RNG 不变、独立输出所有权、并发及失败传播。[集成 C++ 接口测试](../../../compute/tests/native/emd_ensemble_contract.cpp) 直接复用同一工作区跨不同输入长度执行，检查输出活过工作区销毁、失败后恢复与并发隔离。
 
 [测量工具](../../../scripts/benchmark_emd.py) 在独立进程中交错三块执行参考与原生入口，包含 RNG/输入准备/输出布局成本，记录原始耗时、中位数/P95、OS 高水位和构建信息。输出保存在新建忽略目录或库外；这是本地受控比较，不复用旧同公式候选的生产采用门槛，也不替代真实数据效果和目标 ECS 2C2G 验收。
 
