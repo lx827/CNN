@@ -6,17 +6,20 @@
 
 | 模块 | 目录 | 说明 |
 |------|------|------|
-| 云端后端 | `server/` | FastAPI 服务，负责数据接入、信号分析、诊断、告警与 WebSocket 推送 |
+| 分析后端 | `server/` | FastAPI 服务，负责数据接入、信号分析、诊断、告警与 WebSocket 推送；云端与本地工作站同一套代码（ADR 0011） |
 | 前端 | `web/` | Vue 3 + Vite + Element Plus + ECharts 可视化界面 |
-| 边端 | `edge/acquire/` | Rust 边端（开发中）：设备通信、保存与上传，目标部署树莓派 |
-| 现场采集工具 | `collector/` | Windows 现场电脑驱动 DC24 采集卡的 Python 工具链（实机验收现役链路） |
+| 采集宿主 | `collector/` | 直连 DC24 采集卡的机器上运行；驱动四包在 `collector/drivers/`（Python TCP / Rust FFI / 原厂 DLL 三选一） |
+| 边端 | `edge/` | 树莓派：`acquire/` Rust 采集传输核心（主路线），`diag/` 诊断 POC |
+| 计算库 | `compute/` | 独立 C++ 数值计算库（pybind11 进 Python、C ABI 供边端），含自身 tests 与消费示例 |
 | 文档 | `docs/` | 架构、算法、接口、部署、运维与现场资料 |
+
+**三种部署形态，各有唯一入口：** 云端 = 服务器上 `bash /opt/CNN/deploy.sh`；本地工作站 = 双击根目录 `start.bat`；树莓派边端 = `deploy/edge/build.sh` 交叉编译 + `edge/acquire/deploy/pi/deploy_pi.sh` 安装。
 
 **诊断能力：** 轴承（包络分析、快速谱峭度图、CPW、MED、MCKD、循环平稳等）、齿轮（FM0/FM4/CAR/SER、行星齿轮箱解调等）、阶次跟踪、去噪与多方法集成投票，输出健康度、故障概率与维护建议。
 
 ## 快速开始
 
-**DC24 现场实时采集**：双击仓库根目录的 `start.bat`（或 `start_dc24.bat`）一次启动本机前后端和真实采集链路，自动打开“真实采集”。支持原厂12档采样率、四通道实时示波、可选频谱/RMS/均值/包络谱、自填时长或手动停止，以及选择现场保存目录。操作见 [DC24采集说明](docs/DC24_ACQUISITION.md)，原理见[从传感器到CSV](docs/DC24_SIGNAL_TO_CSV.md)。旧数据集回放链已于 2026-11 布局重构退役。
+**DC24 现场实时采集**：双击仓库根目录的 `start.bat` 一次启动本机前后端和真实采集链路，自动打开“真实采集”。支持原厂12档采样率、四通道实时示波、可选频谱/RMS/均值/包络谱、自填时长或手动停止，以及选择现场保存目录。操作见 [DC24采集说明](docs/DC24_ACQUISITION.md)，原理见[从传感器到CSV](docs/DC24_SIGNAL_TO_CSV.md)。旧数据集回放链已于 2026-11 布局重构退役。
 
 ## 开发与部署
 
@@ -46,7 +49,7 @@ CNN/
 ├── data/                      # 数据集（不提交 Git）
 ├── docs/                      # 项目文档
 ├── pyproject.toml / uv.lock / .python-version   # 根项目配置、锁文件与 Python 3.13
-├── start_dc24.bat             # DC24 一键启动（start.bat 为其转发壳）
+├── start.bat                  # 本地工作站一键启动(DC24 实机链路)
 └── deploy.sh                  # 服务器一键部署（支持 --dry-run / -s）
 ```
 

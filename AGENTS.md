@@ -48,7 +48,7 @@ cd server && uv sync && uv run python -m app.main
 cd web && npm install && npm run dev   # build 产出 dist/
 
 # DC24 现场采集(Windows,实机链路)
-start_dc24.bat                 # 一键入口(等价:uv run python scripts/dc24_start.py)
+start.bat                     # 本地工作站一键入口(等价:uv run python scripts/dc24_start.py)
 ```
 
 ## 4. 测试
