@@ -1,6 +1,6 @@
 # C ABI 与独立 CMake 分发
 
-独立分发把现有 C++ 数学入口提供给 C 或未来的边端宿主。算法不依赖 Python；Python 扩展和 C ABI 共用同一批静态计算模块。架构决定见 [ADR 0009](adr/0009-c-abi-native-distribution.md)，算法、单位和可信状态仍以 [算法族契约](algorithms/INDEX.md) 为准，真实函数签名以 [C 头](../capi/include/cnn_compute.h) 和 `lib/` 各公开头为准。
+独立分发把现有 C++ 数学入口提供给 C 或未来的边端宿主。算法不依赖 Python；Python 扩展和 C ABI 共用同一批静态计算模块。架构决定见 [ADR 0009](adr/0009-c-abi-native-distribution.md)，算法、单位和可信状态仍以 [算法族契约](algorithms/INDEX.md) 为准，真实函数签名以 [C 头](../compute/capi/include/cnn_compute.h) 和 `compute/lib/` 各公开头为准。
 
 ## 构建与安装
 
@@ -9,10 +9,10 @@
 Windows MSVC，在已有开发环境的 PowerShell 中执行：
 
 ```powershell
-cmake -S . -B build/native-msvc -GNinja -DCMAKE_BUILD_TYPE=Release -DCNN_COMPUTE_BUILD_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=C:/cnn-compute
+cmake -S compute -B build/native-msvc -GNinja -DCMAKE_BUILD_TYPE=Release -DCNN_COMPUTE_BUILD_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=C:/cnn-compute
 cmake --build build/native-msvc --parallel 1
 cmake --install build/native-msvc
-cmake -S examples/native-consumer -B build/consume-msvc -GNinja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:/cnn-compute
+cmake -S compute/examples/native-consumer -B build/consume-msvc -GNinja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:/cnn-compute
 cmake --build build/consume-msvc --parallel 1
 $env:PATH='C:/cnn-compute/bin;'+$env:PATH
 ctest --test-dir build/consume-msvc --output-on-failure
@@ -23,10 +23,10 @@ Windows 根工程默认选择 `cl`。外部工程需显式选择同一工具链�
 Linux 原生构建：
 
 ```bash
-cmake -S . -B build/native-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DCNN_COMPUTE_BUILD_PYTHON=OFF -DCMAKE_INSTALL_PREFIX="$PWD/build/install-linux"
+cmake -S compute -B build/native-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DCNN_COMPUTE_BUILD_PYTHON=OFF -DCMAKE_INSTALL_PREFIX="$PWD/build/install-linux"
 cmake --build build/native-linux --parallel 1
 cmake --install build/native-linux
-cmake -S examples/native-consumer -B build/consume-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PWD/build/install-linux"
+cmake -S compute/examples/native-consumer -B build/consume-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PWD/build/install-linux"
 cmake --build build/consume-linux --parallel 1
 ctest --test-dir build/consume-linux --output-on-failure
 ```
@@ -69,10 +69,10 @@ ctest --test-dir build/consume-linux --output-on-failure
 
 ## ARM64 交叉构建
 
-Linux 主机安装目标 GNU 工具链后，使用 [aarch64 toolchain](../cmake/toolchains/linux-aarch64.cmake)：
+Linux 主机安装目标 GNU 工具链后，使用 [aarch64 toolchain](../compute/cmake/toolchains/linux-aarch64.cmake)：
 
 ```bash
-cmake -S . -B build/native-aarch64 -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/linux-aarch64.cmake -DCMAKE_BUILD_TYPE=Release -DCNN_COMPUTE_BUILD_PYTHON=OFF -DCMAKE_INSTALL_PREFIX="$PWD/build/install-aarch64"
+cmake -S compute -B build/native-aarch64 -G Ninja -DCMAKE_TOOLCHAIN_FILE=compute/cmake/toolchains/linux-aarch64.cmake -DCMAKE_BUILD_TYPE=Release -DCNN_COMPUTE_BUILD_PYTHON=OFF -DCMAKE_INSTALL_PREFIX="$PWD/build/install-aarch64"
 cmake --build build/native-aarch64 --parallel 1
 cmake --install build/native-aarch64
 ```

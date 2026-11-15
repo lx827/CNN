@@ -7,7 +7,7 @@
 ## 模块与导出
 
 ```text
-lib/
+compute/lib/
 ├── core/          # 数组类型、旧兼容头、构建信息
 ├── solvers/       # 三对角求解、直接写入的内部执行接口
 ├── interpolation/ # splrep/PCHIP/cubic、旧数值兼容实现
@@ -20,15 +20,15 @@ lib/
 ├── wavelet/ vmd/  # 内置离散小波与 ADMM 分解
 ├── deconvolution/ ica/ adaptive/ # MED/MCKD、FastICA、LMS 族
 └── diagnostic/ rotation/ sequence/ # 高阶谱、相位阶次/TSA、趋势与序列
-bind/              # 独立 pybind11 绑定与 NumPy 所有权转换
-capi/              # 公开 C 头、动态库适配与 C 生命周期消费
-cmake/             # 独立安装 package、MSVC 前缀探针、ARM64 toolchain
-cnn_compute/       # Python 入口、core 公共接口及内联类型注解
+compute/bind/      # 独立 pybind11 绑定与 NumPy 所有权转换
+compute/capi/      # 公开 C 头、动态库适配与 C 生命周期消费
+compute/cmake/     # 独立安装 package、MSVC 前缀探针、ARM64 toolchain
+compute/cnn_compute/  # Python 入口、core 公共接口及内联类型注解
 ```
 
 依赖方向为 `CNN::emd → CNN::envelope → CNN::interpolation → CNN::solvers`，各数值模块使用 core/Eigen，纯 C++ target 不依赖 Python。公开入口准备拥有型结果与工作区，内部执行接口用于直接写输出和跨算法组合。绑定单独链接这些 target，处理 Python 布局、GIL 释放和输出 capsule；根目录不设置 `src/`。
 
-Python 独立模块包括 `cnn_compute.fourier`、`filtering`、`numeric`、`wavelet`、`vmd`、`diagnostic`、`rotation`、`sequence`、业务 `emd_family` 及独立参照 `emd`、`envelope`、`interpolation`、`transforms`。MED/MCKD、ICA 与自适应滤波的 Python 数值函数聚合于 `diagnostic`，对应 C++ 目录和 targets 仍按数学族独立。既有 `core` 数值入口和下划线差分别名保留兼容。`CNN::emd` 的 mask 路径使用 `CNN::transforms`，NHT 再组合包络与插值，依赖无环。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../cnn_compute/__init__.py)。
+Python 独立模块包括 `cnn_compute.fourier`、`filtering`、`numeric`、`wavelet`、`vmd`、`diagnostic`、`rotation`、`sequence`、业务 `emd_family` 及独立参照 `emd`、`envelope`、`interpolation`、`transforms`。MED/MCKD、ICA 与自适应滤波的 Python 数值函数聚合于 `diagnostic`，对应 C++ 目录和 targets 仍按数学族独立。既有 `core` 数值入口和下划线差分别名保留兼容。`CNN::emd` 的 mask 路径使用 `CNN::transforms`，NHT 再组合包络与插值，依赖无环。输入、输出及失败契约以各 Python 源码 docstring 与 C++ 头文件为准，旧筛分入口见 [包源码](../compute/cnn_compute/__init__.py)。
 
 ### mask 分支本地受控结果（2026-11-12）
 
@@ -90,13 +90,13 @@ wheel 仅包含 `cnn_compute`、其原生扩展、生成存根、类型标记及
 
 PCHIP 适配保留 SciPy 的端点规则、非等距节点、小节点退化、外推与常数项到三次项的累加次序；使用 MSVC `/fp:strict` 或 GCC/Clang `-ffp-contract=off` 抑制乘加收缩，实际规则也写入构建信息。此约定保留 SIMD，避免极平残差因改写求值次序而改变后续极值拓扑；跨后端仍按冻结误差预算验收，不承诺跨平台逐位相同。
 
-候选筛选曾比较 Boost.Math 1.89 的 PCHIP：端点需覆写、原始求值不支持外推、内点加权调和均值的舍入次序也不同。受控对照显示，普通 Horner 以及该斜率次序的末位差异可放大到固定双频反例的后续模态；分别恢复 SciPy 求值及斜率次序后恢复预算内对照。需要覆写全部相关行为时，该库没有实际复用价值，因此最终以 Eigen 为计算基座，PCHIP 仅保留必要的语义适配。[SciPy BSD 归属](../lib/LICENSE.scipy) 随源码与 wheel 许可证目录分发，没有额外链接无用依赖。
+候选筛选曾比较 Boost.Math 1.89 的 PCHIP：端点需覆写、原始求值不支持外推、内点加权调和均值的舍入次序也不同。受控对照显示，普通 Horner 以及该斜率次序的末位差异可放大到固定双频反例的后续模态；分别恢复 SciPy 求值及斜率次序后恢复预算内对照。需要覆写全部相关行为时，该库没有实际复用价值，因此最终以 Eigen 为计算基座，PCHIP 仅保留必要的语义适配。[SciPy BSD 归属](../compute/lib/LICENSE.scipy) 随源码与 wheel 许可证目录分发，没有额外链接无用依赖。
 
 cubic 使用 not-a-knot 一阶导数三对角系统；两个节点为线性，三个节点使用固定 3×3 抛物线系统，其余节点使用带相邻部分主元的单右端项消元。两种插值共用 SciPy 兼容的分段系数与向量化求值，并允许首尾多项式外推。Rilling 的包络对称比使用 Eigen 数组计算；零幅值/零均值比值为 0，零幅值但非零均值为无穷，阈值与超标比例保留当前比较规则。
 
 初始 cubic 候选使用 Eigen 自然排序稀疏 LU。它通过局部、合成及多数固定向量检查，但 HUSTbear 的 cubic/Rilling CEEMDAN 在第 4 模态出现 10 个点超过已冻结预算，迭代数相同。仅将大节点系统改为 Reference-LAPACK 3.12.1 DGTSV 的单右端项消元次序后，同一反馈四个模态差异归零；预算、右端项、插值与 Rilling 不变。该窄适配避免稀疏 LU 的倒数乘法及分离三角解所引入的不同舍入次序，并非要求全部浮点运算逐位相同。
 
-带状适配持有下对角、主对角、上对角和右端项共 `4N-2` 个 double，下对角缓冲区复用为换行后产生的第二上对角，不进行通用稀疏填充或构造 N×N 稠密矩阵；相关节点和系数数组同样线性增长。递推求解保持标量依赖链，数组构造和多项式求值继续使用 Eigen SIMD。CMake 将适配源码链接进既有计算核心，没有新增 Fortran/BLAS 运行时；[LAPACK 归属](../lib/LICENSE.lapack) 随源码和 wheel 分发。
+带状适配持有下对角、主对角、上对角和右端项共 `4N-2` 个 double，下对角缓冲区复用为换行后产生的第二上对角，不进行通用稀疏填充或构造 N×N 稠密矩阵；相关节点和系数数组同样线性增长。递推求解保持标量依赖链，数组构造和多项式求值继续使用 Eigen SIMD。CMake 将适配源码链接进既有计算核心，没有新增 Fortran/BLAS 运行时；[LAPACK 归属](../compute/lib/LICENSE.lapack) 随源码和 wheel 分发。
 
 ## 指令集与缓存
 
@@ -117,13 +117,13 @@ uv 缓存键覆盖根配置、CMake 文件、原生源码、Python 源文件及�
 
 更换编译器或工具链版本时，CMake 已缓存的编译器不会仅靠修改环境变量替换。使用新的忽略构建目录并强制重装计算包，例如 `uv sync --reinstall-package cnn-compute --config-setting build-dir=build/new-toolchain`；Windows 仍经 `vsdev`。新目录名应标识实际工具链，确认 `build_info()` 后再采用产物。
 
-MSVC 的 `/showIncludes` 探测由 `cmake/msvc_include_probe.ps1` 使用系统 PowerShell 按实际控制台输出代码页解码，无控制台时使用 ANSI，再以 UTF-8 交给 CMake；Ninja 生成器负责按控制台代码页写出规则。独立构建和安装后的 CMake package 都不依赖 Python 或英文资源包。GBK 原始字节直接进入 CMake 字符串会使 `rules.ninja` 漏生成，而把 UTF-8 控制台输出误按系统 ANSI 解码会丢失间接头依赖。构建同时支持中文 GBK 与 UTF-8 控制台，修改头文件应由依赖图触发相关对象重编。
+MSVC 的 `/showIncludes` 探测由 `compute/cmake/msvc_include_probe.ps1` 使用系统 PowerShell 按实际控制台输出代码页解码，无控制台时使用 ANSI，再以 UTF-8 交给 CMake；Ninja 生成器负责按控制台代码页写出规则。独立构建和安装后的 CMake package 都不依赖 Python 或英文资源包。GBK 原始字节直接进入 CMake 字符串会使 `rules.ninja` 漏生成，而把 UTF-8 控制台输出误按系统 ANSI 解码会丢失间接头依赖。构建同时支持中文 GBK 与 UTF-8 控制台，修改头文件应由依赖图触发相关对象重编。
 
-Windows 的构建回归在根目录执行 `uv run --with cmake==4.4.4 --with ninja==1.13.2 --no-sync python tests/test_msvc_ninja_build.py -v`：使用根配置的工具链部分和真实 MSVC/Ninja，分别在代码页 936、65001 下验证全新生成、编译及间接头文件修改后的重编。此测试只构建最小库；计算包完整安装另以普通 `uv sync` 验证。
+Windows 的构建回归在根目录执行 `uv run --with cmake==4.4.4 --with ninja==1.13.2 --no-sync python compute/tests/test_msvc_ninja_build.py -v`：使用根配置的工具链部分和真实 MSVC/Ninja，分别在代码页 936、65001 下验证全新生成、编译及间接头文件修改后的重编。此测试只构建最小库；计算包完整安装另以普通 `uv sync` 验证。
 
 ## 进程级有界预计算缓存
 
-跨调用复用的 FFT 计划和周期 Hann 表由 [lib/core/cache.hpp](../lib/core/cache.hpp) 的小型 LRU 持有。每类最多四项，同时限制表的总长度：real/complex FFT 计划各不超过 `2^20` 点，Hann 表不超过 `2^19` 个 double（表数据 4 MiB）。超过预算的单表仍可执行，但只由当前调用持有，不驻留缓存。FFT 后端表的每点字节数因分解方案不同，不把点数预算写成精确字节数；活跃调用持有的已逐出表、执行临时和输出另计。
+跨调用复用的 FFT 计划和周期 Hann 表由 [compute/lib/core/cache.hpp](../compute/lib/core/cache.hpp) 的小型 LRU 持有。每类最多四项，同时限制表的总长度：real/complex FFT 计划各不超过 `2^20` 点，Hann 表不超过 `2^19` 个 double（表数据 4 MiB）。超过预算的单表仍可执行，但只由当前调用持有，不驻留缓存。FFT 后端表的每点字节数因分解方案不同，不把点数预算写成精确字节数；活跃调用持有的已逐出表、执行临时和输出另计。
 
 四项覆盖转速组合调用的原长、Welch 段长、补零自相关长度，并留一个常用尺寸位置。原单槽在一次 `spectrum_speed` 内就会被这三种长度轮流逐出，同规模下次调用仍须重建，因此改为固定容量的小缓存；不使用按任意长度无限增长的 map。Hann 全长表与 Welch 段窗也可同时保留。
 
@@ -137,10 +137,10 @@ real/complex 计划及可写缓冲仍按首次使用方向准备；仅使用实�
 
 Eigen 3.4.0 对混合标量表达式（`complex*double`、`complex/double`）把 `PacketAccess` 置 false，整棵赋值表达式树退化为标量循环；double 的超越函数包也只覆盖部分运算。以下路径已改走 `Eigen::internal` packet 中间层，重写时均以位级 golden 验证逐元素运算次序不变；这是已实现状态记录，不表示全库 packet 化，未列出的路径仍走表达式层或专用标量流程：
 
-- 小波多相内核：DWT/IDWT 中心卷积按奇偶相位拆分滤波器与输入，tap-major 累加让逐包累加器驻留寄存器，tap 序与 vendor 标量链一致（`lib/wavelet`）。
-- VMD SoA 分量：ADMM 频域状态拆成实/虚实平面，主更新与对偶更新是纯实数组表达式，`operator/(complex,T)` 即分量除法，实/实商走 packet 除法（`lib/vmd`）。
-- 插值求值内核：求值循环按 lane 并行推进，B 样条基的节点与值包驻留寄存器；查询点严格单增时推进指针摊还区间查找，splrep 基函数同样 packet 化（`lib/interpolation`）。
-- EMD 停止与归约：pairwise 八路累加器按 packet 宽度分组进包（SSE2 四包、AVX2 两包），最终树归约保持标量；rilling_stop 的对称比逐元素比较走 packet（`lib/emd/decomposition.cpp`）。
+- 小波多相内核：DWT/IDWT 中心卷积按奇偶相位拆分滤波器与输入，tap-major 累加让逐包累加器驻留寄存器，tap 序与 vendor 标量链一致（`compute/lib/wavelet`）。
+- VMD SoA 分量：ADMM 频域状态拆成实/虚实平面，主更新与对偶更新是纯实数组表达式，`operator/(complex,T)` 即分量除法，实/实商走 packet 除法（`compute/lib/vmd`）。
+- 插值求值内核：求值循环按 lane 并行推进，B 样条基的节点与值包驻留寄存器；查询点严格单增时推进指针摊还区间查找，splrep 基函数同样 packet 化（`compute/lib/interpolation`）。
+- EMD 停止与归约：pairwise 八路累加器按 packet 宽度分组进包（SSE2 四包、AVX2 两包），最终树归约保持标量；rilling_stop 的对称比逐元素比较走 packet（`compute/lib/emd/decomposition.cpp`）。
 
 SLEEF 引入、FastICA tanh 自写 SIMD 等仍为缓议项，不在已采用列表。
 
@@ -161,12 +161,12 @@ uv run python scripts/format_cpp.py          # 格式化
 uv run python scripts/format_cpp.py --check  # 只检查，发现差异时非零退出
 ```
 
-命令只处理 Git 跟踪的 `lib/`、`bind/`、`capi/` 与 `tests/native/` 手写 C/C++ 文件；第三方 `vendor` / `third_party` 等目录不参与。根 `.clang-format-ignore` 同时排除第三方、构建、依赖下载和环境目录，供直接调用 clang-format 或编辑器使用。格式化不替代算法正确性与性能验证。
+命令只处理 Git 跟踪的 `compute/lib/`、`compute/bind/`、`compute/capi/` 与 `compute/tests/native/` 手写 C/C++ 文件；第三方 `vendor` / `third_party` 等目录不参与。根 `.clang-format-ignore` 同时排除第三方、构建、依赖下载和环境目录，供直接调用 clang-format 或编辑器使用。格式化不替代算法正确性与性能验证。
 
 ## 验证
 
 ```bash
-uv run --no-sync python tests/test_compute_package.py -v
+uv run --no-sync python compute/tests/test_compute_package.py -v
 ```
 
 验证安装后的真实构建信息和独立库依赖边界。发布前另检查清洁环境同步、源码及头文件变更重建、构建目标切换、wheel 内容、后端导入及采集启动检查。WSL 的 Ubuntu 结果仅证明 Linux 构建链可用，不等同于目标 ECS 的 2C2G 整机资源验收；后者由性能与资源工单独立执行。

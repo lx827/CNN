@@ -5,14 +5,14 @@
 ## 模块与数据流
 
 ```text
-lib/deconvolution  MED / MCKD → 固定设计矩阵 QR → 小 R 的 SVD → 迭代更新
-lib/ica            SVD 白化 → logcosh symmetric FastICA → 观测单位逆映射
-lib/adaptive       延迟参考 LMS / NLMS / VSS-LMS
-lib/diagnostic     TEO / CPW / SC / SCoh / 四阶 MSB / 实际滤波器组谱峭度
-                         ↓
-                   公共 Fourier 与 filtering
+compute/lib/deconvolution  MED / MCKD → 固定设计矩阵 QR → 小 R 的 SVD → 迭代更新
+compute/lib/ica            SVD 白化 → logcosh symmetric FastICA → 观测单位逆映射
+compute/lib/adaptive       延迟参考 LMS / NLMS / VSS-LMS
+compute/lib/diagnostic     TEO / CPW / SC / SCoh / 四阶 MSB / 实际滤波器组谱峭度
+                                 ↓
+                           公共 Fourier 与 filtering
 
-以上公共 C++ 入口 → bind/diagnostic.cpp → cnn_compute.diagnostic → cloud 薄适配
+以上公共 C++ 入口 → compute/bind/diagnostic.cpp → cnn_compute.diagnostic → cloud 薄适配
 ```
 
 公开 C++ 入口与内部执行路径共用计算实现，Python 不保留另一套迭代公式。输入在同步调用期间只读借用，布局转换集中在 Python 边界。独立拥有的结果缓冲通过 capsule 交给 NumPy，旧结果不随下一次调用或工作区复用而变化；原生执行释放 GIL，不建立内部线程池。

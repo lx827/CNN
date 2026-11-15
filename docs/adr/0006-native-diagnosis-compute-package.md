@@ -23,7 +23,7 @@
 
 本决策延续 [ADR 0005](0005-diagnosis-native-benchmark-gate.md) 的固定向量、正确性、状态、所有权和目标资源准入要求。采用源码构建后，目标环境的编译工具链、构建峰值内存及并发限制也需要验证；现有生产分析线程与内存上限继续有效。
 
-当前 Python 实现的 cubic 使用 SciPy 默认 not-a-knot 边界，PCHIP 与 cubic 均允许外推。候选覆盖非等距精化节点、端点、小节点数退化和平台极值规则；不能仅凭插值方法同名宣称兼容。数学行为以 [Python adapter](../../cloud/app/algorithms/decomposition/emd/python_adapter.py) 为对照，原生函数签名由 [包源码 docstring](../../cnn_compute/__init__.py) 维护。
+当前 Python 实现的 cubic 使用 SciPy 默认 not-a-knot 边界，PCHIP 与 cubic 均允许外推。候选覆盖非等距精化节点、端点、小节点数退化和平台极值规则；不能仅凭插值方法同名宣称兼容。数学行为以 [Python adapter](../../cloud/app/algorithms/decomposition/emd/python_adapter.py) 为对照，原生函数签名由 [包源码 docstring](../../compute/cnn_compute/__init__.py) 维护。
 
 ## 向量化与数值一致性
 
