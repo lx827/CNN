@@ -85,6 +85,11 @@ class SensorData(Base):
     channel = Column(Integer, comment="通道号 1/2/3/...")
     data = Column(JSON, comment="振动信号数组，或带时间区段的原始文件来源描述")
     sample_rate = Column(Integer, default=25600, comment="采样率 Hz")
+    diagnosis_sample_rate_override = Column(
+        Integer,
+        nullable=True,
+        comment="仅旧 NULL 记录迁移的诊断采样率覆盖；0 表示不可诊断，新记录为 NULL",
+    )
     is_analyzed = Column(Integer, default=0, comment="是否已检测 0/1")
     is_special = Column(Integer, default=0, comment="是否特殊采集 0=普通 1=特殊")
     analyzed_at = Column(DateTime, nullable=True, comment="检测完成时间")
