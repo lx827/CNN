@@ -1,24 +1,30 @@
 <template>
   <div class="login-container">
-    <el-card class="login-card" shadow="always">
+    <!-- 背景装饰 -->
+    <div class="bg-decor bg-decor-1"></div>
+    <div class="bg-decor bg-decor-2"></div>
+
+    <el-card class="login-card">
       <div class="login-header">
-        <el-icon :size="40" color="#165DFF"><Setting /></el-icon>
+        <div class="logo-mark">
+          <el-icon :size="26" color="#fff"><Setting /></el-icon>
+        </div>
         <h2>风机齿轮箱智能故障诊断系统</h2>
-        <p>请输入访问密码</p>
+        <p>Wind Turbine Gearbox Intelligent Diagnosis</p>
       </div>
 
       <el-form
         ref="formRef"
         :model="form"
         :rules="rules"
+        size="large"
         @submit.prevent="handleLogin"
       >
         <el-form-item prop="password">
           <el-input
             v-model="form.password"
             type="password"
-            placeholder="访问密码"
-            size="large"
+            placeholder="请输入访问密码"
             show-password
             prefix-icon="Lock"
             @keyup.enter="handleLogin"
@@ -28,9 +34,8 @@
         <el-form-item>
           <el-button
             type="primary"
-            size="large"
             :loading="loading"
-            style="width: 100%"
+            class="login-btn"
             @click="handleLogin"
           >
             进入系统
@@ -39,7 +44,7 @@
       </el-form>
 
       <div class="login-tip">
-        <el-tag type="info" size="small">默认密码：admin123</el-tag>
+        <el-tag type="info" size="small" effect="plain">默认密码：admin123</el-tag>
       </div>
     </el-card>
   </div>
@@ -91,17 +96,48 @@ const handleLogin = async () => {
 
 <style scoped>
 .login-container {
+  position: relative;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f0f2f5 0%, #e4e7ed 100%);
+  background: var(--bg-page);
+  overflow: hidden;
+}
+
+/* 柔和的品牌色光斑背景 */
+.bg-decor {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+}
+
+.bg-decor-1 {
+  width: 480px;
+  height: 480px;
+  top: -160px;
+  right: -120px;
+  background: rgba(99, 102, 241, 0.16);
+}
+
+.bg-decor-2 {
+  width: 420px;
+  height: 420px;
+  bottom: -140px;
+  left: -100px;
+  background: rgba(14, 165, 233, 0.12);
 }
 
 .login-card {
-  width: 420px;
-  padding: 20px;
-  border-radius: 12px;
+  position: relative;
+  width: 400px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+}
+
+.login-card :deep(.el-card__body) {
+  padding: 40px 36px 28px;
 }
 
 .login-header {
@@ -109,20 +145,40 @@ const handleLogin = async () => {
   margin-bottom: 32px;
 }
 
+.logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--brand-500), var(--brand-700));
+  box-shadow: var(--shadow-brand);
+}
+
 .login-header h2 {
-  margin: 16px 0 8px;
-  font-size: 22px;
-  color: #1d2129;
-  font-weight: 600;
+  margin: 18px 0 6px;
+  font-size: 20px;
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .login-header p {
-  color: #86909c;
-  font-size: 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.login-btn {
+  width: 100%;
+  height: 44px;
+  font-size: 15px;
+  letter-spacing: 0.1em;
 }
 
 .login-tip {
   text-align: center;
-  margin-top: 16px;
+  margin-top: 8px;
 }
 </style>
