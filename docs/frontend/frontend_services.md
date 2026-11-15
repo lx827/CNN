@@ -85,8 +85,8 @@ const deviceStore = useDeviceStore();
 | 配置/拦截器 | 说明 |
 |-------------|------|
 | `baseURL` | 动态获取当前 host（开发环境通过 Vite 代理） |
-| 请求拦截器 | 从 `localStorage` 读取 `token`，注入 `Authorization: Bearer {token}` |
-| 响应拦截器 | `code !== 200` 抛错；`401` 清除 Token 并跳转登录页 |
+| 请求拦截器 | 云端从 `localStorage` 读取 `token` 并注入 Bearer；本地部署不携带 Token |
+| 响应拦截器 | `code !== 200` 抛错；云端 `401` 清除 Token 并跳转登录页，本地部署不跳转 |
 
 ```javascript
 // 使用方式
@@ -100,7 +100,7 @@ request.post('/api/auth/login', { password: 'xxx' }).then(res => { ... });
 
 **文件路径**：`src/utils/websocket.js`
 
-带断线自动重连(指数退避,最大 30s,最多 20 次)与 30s 心跳(ping/pong)的 WebSocket 客户端。
+带断线自动重连(指数退避,最大 30s,最多 20 次)与 30s 心跳(ping/pong)的 WebSocket 客户端。云端连接从 `localStorage` 读取 Token 查询参数；本地部署忽略旧 Token，使用后端允许空令牌的本机 WS 入口。
 
 | 导出 | 类型 | 说明 |
 |------|------|------|
@@ -132,7 +132,8 @@ view.connect();
 | `getBaseUrl` | `getBaseUrl() -> string` | 获取后端基础 URL |
 | `buildUrl` | `buildUrl(path: string, params?: object) -> string` | 构建完整 URL（带查询参数） |
 | `getApiBaseURL` | `getApiBaseURL() -> string` | 获取 API 基础 URL（优先使用配置/存储的值，其次自动判断同源，最后回退到默认地址） |
-| `getWebSocketURL` | `getWebSocketURL(path?: string) -> string` | 获取 WebSocket 完整 URL（自动拼接 `ws://`/`wss://` 协议和 Token 查询参数） |
+| `getWebSocketURL` | `getWebSocketURL(path?: string) -> string` | 获取 WebSocket 完整 URL（自动拼接 `ws://`/`wss://` 协议） |
+| `isLocalDeployment` | `isLocalDeployment() -> boolean` | 仅当后端向页面注入 `window.__DEPLOYMENT_MODE__ === 'local'` 时为真；未注入按云端处理 |
 
 ### 2.4 常量定义 (`constants.js`)
 
@@ -365,7 +366,7 @@ Research 的单方法/all/ensemble 结果直接读顶层完整 Domain；局部�
 
 | 守卫 | 说明 |
 |------|------|
-| `beforeEach` | 检查 Token，未登录跳转 `/login` |
+| `beforeEach` | 云端检查 Token，未登录跳转 `/login`；本地部署直接放行 |
 
 ---
 

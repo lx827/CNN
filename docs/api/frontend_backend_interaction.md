@@ -32,6 +32,8 @@
 | `request.js` → 请求拦截器 | — | 自动注入 `Authorization: Bearer <token>` | — | 所有 HTTP 请求自动携带 Token |
 | `request.js` → 响应拦截器 | — | 处理 `401 Unauthorized` | — | ⚠️ 影响前端：Token 过期或无效时自动跳转登录页 |
 
+本地工作站仍使用同一份前端源码与构建产物。后端通过 `/dc24/` 注入 `window.__DEPLOYMENT_MODE__='local'`：路由守卫不要求 Token，请求与 WebSocket 不携带旧 Token，本地响应中的 401 不触发登录跳转。云端静态托管没有该注入，或注入值为 `cloud` 时，上表认证流程保持不变。
+
 ---
 
 ## 2. Dashboard

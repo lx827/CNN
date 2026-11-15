@@ -115,6 +115,7 @@ def main():
         "USE_SQLITE": "true",
         "DATABASE_URL": "sqlite:///" + str(ROOT / "cloud/turbine.db"),
         "EDGE_API_KEY": key,
+        "DEPLOYMENT_MODE": "local",
         "PYTHONUTF8": "1",
         "PYTHONIOENCODING": "utf-8",
         "VIRTUAL_ENV": str(ROOT / ".venv"),
@@ -217,7 +218,7 @@ def main():
         url = BASE + "/dc24/#/acquisition"
         print(f"已就绪，用时 {time.monotonic() - started:.1f} 秒：{url}", flush=True)
         print(
-            "首次打开沿用系统登录。请选择示波或采集；此入口只连接真实DC24。Ctrl+C停止本次启动的服务。",
+            "本机页面无需登录。请选择示波或采集；此入口只连接真实DC24。Ctrl+C停止本次启动的服务。",
             flush=True,
         )
         if not args.no_browser:

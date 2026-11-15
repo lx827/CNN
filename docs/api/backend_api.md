@@ -74,6 +74,8 @@
 | 边端采集 | API Key | `X-Edge-Key: <EDGE_API_KEY>` |
 | 部分公共接口 | 可选认证 | `optional_auth` 依赖，兼容以上两种 |
 
+部署模式默认为 `cloud`，上述认证行为不变。`DEPLOYMENT_MODE=local` 时，应用配置和本地启动器均强制使用 `127.0.0.1`；`optional_auth` 允许无凭据的本机 HTTP 请求，两个 WebSocket 入口允许空 `token`，边端专用接口仍按 `edge_only` 校验边端身份。`/dc24/` 返回同一前端 `dist/index.html` 时注入 `window.__BACKEND_BASE_URL__` 和 `window.__DEPLOYMENT_MODE__`，供页面、请求及 WS 工具识别部署状态；没有新增认证或部署状态 REST 端点。
+
 ### OpenAPI 契约（唯一事实源）
 
 机器可读契约入库于 [`docs/api/openapi.json`](./openapi.json)，由 FastAPI 自动生成。**修改任何后端路由后**，在仓库根执行以下命令刷新并随代码提交：

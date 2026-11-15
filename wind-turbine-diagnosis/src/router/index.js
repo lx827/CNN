@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Layout from '../components/Layout.vue'
+import { isLocalDeployment } from '../utils/backend'
 
 const routes = [
   {
@@ -70,10 +71,10 @@ const router = createRouter({
   routes
 })
 
-// 全局路由守卫：未登录跳转到登录页
+// 全局路由守卫：本地回环部署免登录，云端未登录跳转到登录页
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('access_token')
-  if (!to.meta?.public && !token) {
+  if (!isLocalDeployment() && !to.meta?.public && !token) {
     next({ path: '/login', query: { redirect: to.fullPath } })
   } else {
     next()

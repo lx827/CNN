@@ -9,7 +9,7 @@ const source = fs.readFileSync(path.resolve(__dirname, '../src/utils/websocket.j
   .replace('export const getWebSocketClient', 'globalThis.getWebSocketClient')
   .replace('export const createWebSocketClient', 'globalThis.createWebSocketClient')
 
-function harness() {
+function harness(local = false, token = null) {
   const sockets = [], timeouts = new Map(), intervals = new Map()
   let id = 0
   class Socket {
@@ -22,7 +22,8 @@ function harness() {
   }
   const context = {
     WebSocket: Socket, URL, getWebSocketURL: (p = '/ws/monitor') => `ws://localhost${p}`,
-    localStorage: { getItem: () => null }, window: { location: { href: 'http://localhost' } },
+    isLocalDeployment: () => local,
+    localStorage: { getItem: () => token }, window: { location: { href: 'http://localhost' } },
     console: { log() {}, warn() {}, error() {} },
     setTimeout: cb => { timeouts.set(++id, cb); return id }, clearTimeout: key => timeouts.delete(key),
     setInterval: cb => { intervals.set(++id, cb); return id }, clearInterval: key => intervals.delete(key)
@@ -30,6 +31,15 @@ function harness() {
   vm.runInNewContext(source, context)
   return { client: context.getWebSocketClient(), factory: context.createWebSocketClient, sockets, timeouts, intervals }
 }
+
+test('本地部署忽略旧 token，WS 握手不携带认证参数', () => {
+  const local = harness(true, 'stale-token')
+  local.client.connect()
+  assert.equal(local.sockets[0].url, 'ws://localhost/ws/monitor')
+  const cloud = harness(false, 'cloud-token')
+  cloud.client.connect()
+  assert.equal(cloud.sockets[0].url, 'ws://localhost/ws/monitor?token=cloud-token')
+})
 
 test('握手期间重复 connect 不创建多条连接', () => {
   const h = harness()

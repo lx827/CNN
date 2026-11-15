@@ -8,7 +8,11 @@ from datetime import datetime, timezone
 
 from app.database import init_db, SessionLocal
 from app.models import Device
-from app.core.config import SENSOR_SAMPLE_RATE, SENSOR_WINDOW_SECONDS
+from app.core.config import (
+    SENSOR_SAMPLE_RATE,
+    SENSOR_WINDOW_SECONDS,
+    IS_LOCAL_DEPLOYMENT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +61,10 @@ def create_initial_devices():
     避免用户误以为已配置真实机械参数。
     当设备未配置机械参数时，诊断系统只使用统计指标判断是否异常，
     不再注入默认轴承型号或默认齿轮齿数。
+    本地工作站的真实采集对象由采集流程创建，这里不生成演示设备。
     """
+    if IS_LOCAL_DEPLOYMENT:
+        return
     db = SessionLocal()
     try:
         # 10 台设备：3 台 CW 轴承（仅轴承参数）+ 5 台 WTgearbox 齿轮（仅齿轮参数）+ 1 台混合 + 1 台离线

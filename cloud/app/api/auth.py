@@ -8,7 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 
-from app.core.config import SECRET_KEY, ADMIN_PASSWORD, EDGE_API_KEY
+from app.core.config import (
+    SECRET_KEY,
+    ADMIN_PASSWORD,
+    EDGE_API_KEY,
+    IS_LOCAL_DEPLOYMENT,
+)
 from app.schemas import LoginRequest, TokenResponse
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
@@ -33,7 +38,9 @@ def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
 
 
 def verify_token_string(token: str) -> str:
-    """验证 JWT 字符串，返回用户名。"""
+    """验证 JWT 字符串，返回用户名；本地回环部署不要求令牌。"""
+    if IS_LOCAL_DEPLOYMENT:
+        return "local"
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
@@ -52,9 +59,11 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> str:
     """
-    FastAPI 依赖：验证 Bearer Token。
+    FastAPI 依赖：云端验证 Bearer Token，本地回环部署直接放行。
     在需要保护的接口上使用：Depends(get_current_user)
     """
+    if IS_LOCAL_DEPLOYMENT:
+        return "local"
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -69,7 +78,7 @@ async def optional_auth(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> str:
     """
-    兼容认证：优先检查边端 API Key，没有则检查 JWT Token。
+    云端优先检查边端 API Key，没有则检查 JWT Token；本地回环部署免登录。
     用于需要同时被前端（登录用户）和边端（设备）访问的接口。
     """
     edge_key = request.headers.get("X-Edge-Key")
