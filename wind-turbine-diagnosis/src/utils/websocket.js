@@ -3,10 +3,10 @@
  * 使用指数退避策略，最大重试间隔 30 秒
  */
 
-import { getWebSocketURL } from './backend'
+import { getWebSocketURL, isLocalDeployment } from './backend'
 
 const buildWebSocketURL = (path = '/ws/monitor') => {
-  const token = localStorage.getItem('access_token')
+  const token = isLocalDeployment() ? null : localStorage.getItem('access_token')
   const url = new URL(getWebSocketURL(path), window.location.href)
   if (token) url.searchParams.set('token', token)
   return url.toString()

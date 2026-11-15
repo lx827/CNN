@@ -30,7 +30,12 @@ else:
     DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 
 # ========== 服务配置 ==========
-API_HOST = os.getenv("API_HOST", "0.0.0.0")
+# cloud 保持云端认证与演示设备初始化；local 仅由本机回环启动器使用
+DEPLOYMENT_MODE = os.getenv("DEPLOYMENT_MODE", "cloud")
+IS_LOCAL_DEPLOYMENT = DEPLOYMENT_MODE == "local"
+API_HOST = (
+    "127.0.0.1" if IS_LOCAL_DEPLOYMENT else os.getenv("API_HOST", "0.0.0.0")
+)
 API_PORT = int(os.getenv("API_PORT", 8000))
 CORS_ORIGINS = [
     item.strip()
