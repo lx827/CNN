@@ -4,7 +4,7 @@ from sqlalchemy import func, desc
 from app.database import get_db
 from app.services.diagnosis_store import summary_state
 from app.models import SensorData, Device, Diagnosis
-from . import router, _get_channel_name, prepare_signal
+from . import router, _get_channel_name, prepare_signal, _load_channel_waveform
 from app.services.diagnosis.signal_utils import denoise_signal, DenoisingError
 from .errors import denoising_http_error
 from app.services.diagnosis_queries import latest_diagnosis_summaries
@@ -12,6 +12,10 @@ from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _channel_numbers(value):
+    return sorted(int(channel) for channel in value.split(",")) if value else []
 
 
 @router.get("/devices")
@@ -38,7 +42,9 @@ def get_all_device_data(db: Session = Depends(get_db)):
             func.max(SensorData.created_at).label("created_at"),
             func.max(SensorData.is_special).label("is_special"),
             func.count(SensorData.channel).label("channel_count"),
+            func.group_concat(SensorData.channel).label("channels"),
             func.max(SensorData.sample_rate).label("sample_rate"),
+            func.max(SensorData.data["kind"].as_string()).label("source_kind"),
         )
         .filter(SensorData.device_id.in_(device_ids))
         .group_by(SensorData.device_id, SensorData.batch_index)
@@ -68,7 +74,9 @@ def get_all_device_data(db: Session = Depends(get_db)):
                     "created_at": r.created_at.isoformat() if r.created_at else None,
                     "is_special": bool(r.is_special),
                     "channel_count": r.channel_count,
-                    "sample_rate": r.sample_rate or 25600,
+                    "channels": _channel_numbers(r.channels),
+                    "sample_rate": r.sample_rate,
+                    "source_kind": r.source_kind,
                     **summary_state(diag),
                     "analyzed_at": diag.analyzed_at.isoformat()
                     if diag and diag.analyzed_at
@@ -105,7 +113,9 @@ def get_device_batches(
             func.max(SensorData.created_at).label("created_at"),
             func.max(SensorData.is_special).label("is_special"),
             func.count(SensorData.channel).label("channel_count"),
+            func.group_concat(SensorData.channel).label("channels"),
             func.max(SensorData.sample_rate).label("sample_rate"),
+            func.max(SensorData.data["kind"].as_string()).label("source_kind"),
         )
         .filter(SensorData.device_id == device_id)
         .group_by(SensorData.batch_index)
@@ -122,7 +132,7 @@ def get_device_batches(
     diag_map = {d.batch_index: d for d in diag_records}
 
     batches = []
-    for batch_index, created_at, is_special, ch_count, sr in batch_records:
+    for batch_index, created_at, is_special, ch_count, channels, sr, source_kind in batch_records:
         diag = diag_map.get(batch_index)
         batches.append(
             {
@@ -130,7 +140,9 @@ def get_device_batches(
                 "created_at": created_at.isoformat() if created_at else None,
                 "is_special": bool(is_special),
                 "channel_count": ch_count,
-                "sample_rate": sr or 25600,
+                "channels": _channel_numbers(channels),
+                "sample_rate": sr,
+                "source_kind": source_kind,
                 **summary_state(diag),
                 "analyzed_at": diag.analyzed_at.isoformat()
                 if diag and diag.analyzed_at
@@ -156,24 +168,14 @@ def get_channel_data(
     """
     查询某批次某通道的原始时域数据
     """
-    record = (
-        db.query(SensorData)
-        .filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index,
-            SensorData.channel == channel,
-        )
-        .first()
-    )
-
-    if not record:
-        raise HTTPException(status_code=404, detail="数据不存在")
+    waveform = _load_channel_waveform(db, device_id, batch_index, channel)
+    record = waveform.records[0]
 
     # 获取通道名称
     device = db.query(Device).filter(Device.device_id == device_id).first()
 
     # 时域波形返回去均值后的数据，便于观察
-    dc_removed = prepare_signal(record.data, detrend=detrend)
+    dc_removed = prepare_signal(waveform.signals[f"ch{channel}"], detrend=detrend)
     try:
         dc_removed = denoise_signal(dc_removed, denoise).tolist()
     except DenoisingError as e:
@@ -186,7 +188,7 @@ def get_channel_data(
             "batch_index": record.batch_index,
             "channel": record.channel,
             "channel_name": _get_channel_name(device, record.channel),
-            "sample_rate": record.sample_rate,
+            "sample_rate": waveform.sample_rate,
             "data": dc_removed,
             "is_analyzed": record.is_analyzed,
             "is_special": bool(record.is_special),

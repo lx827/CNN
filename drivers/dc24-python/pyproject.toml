@@ -1,0 +1,10 @@
+[build-system]
+requires = ["uv_build==0.12.8"]
+build-backend = "uv_build"
+
+[project]
+name = "dc24-driver-python"
+version = "0.1.0"
+description = "DC24 纯 Python TCP 驱动"
+requires-python = ">=3.13"
+dependencies = ["dc24-driver==0.1.0"]

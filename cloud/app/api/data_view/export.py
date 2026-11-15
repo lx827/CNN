@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import SensorData, Device
-from . import router, prepare_signal
+from app.models import Device
+from . import router, prepare_signal, _load_channel_waveform
 from app.services.diagnosis.signal_utils import denoise_signal, DenoisingError
 from .errors import denoising_http_error
 from datetime import datetime
@@ -29,25 +29,15 @@ def export_channel_csv(
     导出某批次某通道的时域数据为 CSV
     格式：时间(s), 振幅
     """
-    record = (
-        db.query(SensorData)
-        .filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index,
-            SensorData.channel == channel,
-        )
-        .first()
-    )
+    waveform = _load_channel_waveform(db, device_id, batch_index, channel)
+    record = waveform.records[0]
 
-    if not record:
-        raise HTTPException(status_code=404, detail="数据不存在")
-
-    signal = prepare_signal(record.data, detrend=detrend) if record.data else []
+    signal = prepare_signal(waveform.signals[f"ch{channel}"], detrend=detrend)
     try:
         signal = denoise_signal(signal, denoise).tolist()
     except DenoisingError as e:
         raise denoising_http_error(e) from e
-    sample_rate = record.sample_rate or 25600
+    sample_rate = waveform.sample_rate
 
     # 生成 CSV
     output = io.StringIO()

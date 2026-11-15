@@ -2,7 +2,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import SensorData, Device
+from app.models import Device
 from app.schemas import DiagnosisResponse
 from app.services.diagnosis.signal_utils import (
     estimate_rot_freq_spectrum as _estimate_rot_freq_spectrum,
@@ -18,6 +18,7 @@ from . import (
     _get_channel_name,
     _extract_device_param,
     _sanitize_for_json,
+    _load_channel_waveform,
 )
 from datetime import datetime
 from .bearing_options import get_bearing_options
@@ -54,22 +55,14 @@ async def get_channel_envelope(
     支持标准包络、滤波器组复谱峭度、CPW、MED 等显式方法。
     请求时计算，不预存。
     """
-    record = (
-        db.query(SensorData)
-        .filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index,
-            SensorData.channel == channel,
-        )
-        .first()
-    )
-
-    if not record or not record.data:
-        raise HTTPException(status_code=404, detail="数据不存在")
+    waveform = _load_channel_waveform(db, device_id, batch_index, channel)
+    record = waveform.records[0]
 
     try:
-        sample_rate = record.sample_rate or 25600
-        signal = prepare_signal(record.data[: int(sample_rate * 5)], detrend=detrend)
+        sample_rate = waveform.sample_rate
+        signal = prepare_signal(
+            waveform.signals[f"ch{channel}"][: int(sample_rate * 5)], detrend=detrend
+        )
 
         if len(signal) < 64:
             raise HTTPException(

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from app.core.websocket import manager
 from app.core.json_utils import sanitize_for_json
-from app.models import SensorData
+from app.services import waveform as waveform_service
 from app.services.analyzer import analyze_device
 from app.services.alarms import generate_alarms
 from app.services.diagnosis_store import save_batch, cache_query
@@ -24,20 +24,10 @@ async def process_batch(
         semaphore = ANALYSIS_SEM
     async with semaphore:
         try:
-            records = (
-                db.query(SensorData)
-                .filter(
-                    SensorData.device_id == device.device_id,
-                    SensorData.batch_index == batch_index,
-                )
-                .order_by(SensorData.channel.asc())
-                .all()
+            waveform = waveform_service.load_waveform(
+                db, device.device_id, batch_index
             )
-            if not records:
-                raise ValueError("batch_data_not_found")
-            rates = {record.sample_rate or device.sample_rate for record in records}
-            if len(rates) != 1 or not next(iter(rates)):
-                raise ValueError("batch_channel_sample_rates_must_match")
+            records = waveform.records
             if rot_freq is None:
                 previous = cache_query(
                     db, DiagnosisKey(device.device_id, batch_index, 0, "none")
@@ -45,8 +35,8 @@ async def process_batch(
                 rot_freq = previous.rot_freq if previous else None
             result = await asyncio.to_thread(
                 analyze_device,
-                {f"ch{record.channel}": record.data for record in records},
-                next(iter(rates)),
+                waveform.signals,
+                waveform_service.get_diagnosis_sample_rate(waveform),
                 device,
                 rot_freq,
                 denoise,

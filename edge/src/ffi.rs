@@ -44,6 +44,8 @@ struct Queued {
     sequence: u16,
     start: u64,
     bytes: Vec<u8>,
+    /// 样本消息对应的完整设备 80 帧；其他消息为 None。
+    frame: Option<Vec<u8>>,
 }
 
 #[derive(Default)]
@@ -54,14 +56,15 @@ struct Queue {
 impl Queue {
     /// 链路状态消息不受预算限制：会话失败时队列可能已满，终态必须可送达。
     fn push(&mut self, item: Queued) -> Result<()> {
+        let size = item.bytes.len() + item.frame.as_ref().map_or(0, Vec::len);
         if item.tag != MSG_STATE {
             ensure!(
-                self.bytes + item.bytes.len() <= QUEUE_BUDGET_BYTES,
+                self.bytes + size <= QUEUE_BUDGET_BYTES,
                 "接收队列超过 {} MiB：宿主消费过慢或链路异常，停止会话",
                 QUEUE_BUDGET_BYTES / (1024 * 1024)
             );
         }
-        self.bytes += item.bytes.len();
+        self.bytes += size;
         self.items.push_back(item);
         Ok(())
     }
@@ -83,6 +86,7 @@ fn state_message(state: &str, detail: impl std::fmt::Display) -> Queued {
         bytes: json!({"state": state, "detail": detail.to_string()})
             .to_string()
             .into_bytes(),
+        frame: None,
     }
 }
 
@@ -117,6 +121,7 @@ impl Sink {
             sequence,
             start,
             bytes,
+            frame: Some(frame.to_vec()),
         })?;
         // 事件缓冲是容量 100 的环形队列；发现被裁剪就全量重发，避免漏记关键命令。
         if events.len() < self.events_seen {
@@ -128,6 +133,7 @@ impl Sink {
                 sequence,
                 start,
                 bytes: (event.to_string() + "\n").into_bytes(),
+                frame: None,
             })?;
         }
         self.events_seen = events.len();
@@ -357,10 +363,9 @@ pub unsafe extern "C" fn dc24_edge_poll(
     loop {
         let popped = {
             let mut queue = lock(&edge.queue);
-            queue
-                .items
-                .pop_front()
-                .inspect(|item| queue.bytes -= item.bytes.len())
+            queue.items.pop_front().inspect(|item| {
+                queue.bytes -= item.bytes.len() + item.frame.as_ref().map_or(0, Vec::len)
+            })
         };
         if let Some(item) = popped {
             let message = Message {
@@ -380,6 +385,35 @@ pub unsafe extern "C" fn dc24_edge_poll(
         }
         thread::sleep(Duration::from_millis(5));
     }
+}
+
+/// 读取最近一次 poll 交付的样本消息所对应的完整设备 80 帧。
+/// 返回 1=取得借用指针，0=最近消息不是样本块，-1=句柄或出参无效。
+/// 指针与 Message.data 一样，在下一次 poll / start / close 前有效。
+#[no_mangle]
+pub unsafe extern "C" fn dc24_edge_sample_frame(
+    edge: *const Edge,
+    data: *mut *const u8,
+    len: *mut usize,
+) -> i32 {
+    let Some(edge) = edge.as_ref() else {
+        return -1;
+    };
+    if data.is_null() || len.is_null() {
+        return -1;
+    }
+    *data = std::ptr::null();
+    *len = 0;
+    let Some(frame) = edge
+        .borrowed
+        .as_ref()
+        .and_then(|item| item.frame.as_deref())
+    else {
+        return 0;
+    };
+    *data = frame.as_ptr();
+    *len = frame.len();
+    1
 }
 
 /// 会话线程是否仍在运行（0=否，1=是，-1=句柄无效）。
@@ -426,7 +460,7 @@ fn info() -> &'static CString {
             "channel_count": 4,
             "input_configuration": protocol::input_configuration(),
             "transport": "rust_tcp",
-            "implementation": "dc24-edge-rust-ffi-0.1.0",
+            "implementation": "dc24-edge-rust-ffi-0.2.0",
             "b2_payload_hex": protocol::hex(&protocol::B2),
             "b5_payload_hex_by_rate": profiles,
             "sample_layout": "每采样时刻16字节：四路小端有符号int32，数值为有符号24位ADC计数",

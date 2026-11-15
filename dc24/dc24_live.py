@@ -1,12 +1,9 @@
 """真正的连续示波：预览只驻留内存，开始保存后从下一完整帧记录。"""
 
 from collections import deque
-from contextlib import closing, contextmanager
 import csv
-import io
 import json
 from pathlib import Path
-import socket
 import threading
 import time
 import numpy as np
@@ -17,20 +14,9 @@ from dc24_capture import (
     B5_PROFILES,
     CONFIG_B2,
     INPUT_CONFIGURATION,
-    Link,
+    create_driver,
 )
-from dc24_vendor import VendorConnection
-
-
-def decode(frame):
-    if frame[3] != 0x80 or len(frame) < 23 or (len(frame) - 7) % 16:
-        raise ValueError("四通道数据帧尺寸无效")
-    words = np.frombuffer(
-        frame, dtype="<i4", offset=6, count=(len(frame) - 7) // 4
-    ).reshape(-1, 4)
-    if not np.all((words & 255) == np.arange(4)):
-        raise ValueError("设备通道排列与四通道配置不符")
-    return int.from_bytes(frame[4:6], "little"), (words >> 8).astype("<i4")
+from dc24_driver import decode as decode
 
 
 class EventBuffer:
@@ -143,9 +129,10 @@ class Recording:
 
 
 class SessionRunner:
-    def __init__(self, agent, session, vendor_root=None):
+    def __init__(self, agent, session, vendor_root=None, driver=None):
         self.agent, self.session = agent, session
         self.vendor_root = vendor_root
+        self.driver = driver
         self.lock = threading.RLock()
         self.stop = threading.Event()
         self.finished = threading.Event()
@@ -187,33 +174,40 @@ class SessionRunner:
                 params={"agent_id": self.agent.agent_id},
                 json={"stage": "uploading", "samples_per_channel": recording.count},
             )
-            for name in (
-                "samples.csv",
-                "metadata.json",
-                "rx_stream.bin",
-                "commands.jsonl",
-                "counts.i32",
-            ):
-                for attempt in range(3):
-                    try:
-                        with (recording.path / name).open("rb") as f:
-                            self.agent.call(
-                                "PUT",
-                                f"/jobs/{recording.job_id}/stream-files/{name}",
-                                params={"agent_id": self.agent.agent_id},
-                                data=f,
-                                timeout=(5, 180),
-                            )
-                        break
-                    except Exception:
-                        if attempt == 2:
-                            raise
-                        time.sleep(1)
+            if not self.agent.local_originals:
+                for name in (
+                    "samples.csv",
+                    "metadata.json",
+                    "rx_stream.bin",
+                    "commands.jsonl",
+                    "counts.i32",
+                ):
+                    for attempt in range(3):
+                        try:
+                            with (recording.path / name).open("rb") as f:
+                                self.agent.call(
+                                    "PUT",
+                                    f"/jobs/{recording.job_id}/stream-files/{name}",
+                                    params={"agent_id": self.agent.agent_id},
+                                    data=f,
+                                    timeout=(5, 180),
+                                )
+                            break
+                        except Exception:
+                            if attempt == 2:
+                                raise
+                            time.sleep(1)
+            completion = (
+                {"json": {"local_directory": str(recording.path)}}
+                if self.agent.local_originals
+                else {}
+            )
             result = self.agent.call(
                 "POST",
                 f"/jobs/{recording.job_id}/finish-stream",
                 params={"agent_id": self.agent.agent_id},
                 timeout=(5, 180),
+                **completion,
             )
             state["status"] = result["status"]
         except Exception as exc:
@@ -226,7 +220,11 @@ class SessionRunner:
                     json={
                         "stage": "failed",
                         "samples_per_channel": recording.count,
-                        "message": "上传失败，本地文件保留：" + str(recording.path),
+                        "message": (
+                            "登记失败" if self.agent.local_originals else "上传失败"
+                        )
+                        + "，本地文件保留："
+                        + str(recording.path),
                     },
                 )
             except Exception:
@@ -244,8 +242,8 @@ class SessionRunner:
         self.upload_threads.append(t)
         t.start()
 
-    def consume(self, frame):
-        sequence, values = decode(frame)
+    def consume(self, block):
+        frame, sequence, values = block.frame, block.sequence, block.values
         if (
             self.previous_sequence is not None
             and (sequence - self.previous_sequence) & 65535 != 1
@@ -271,9 +269,7 @@ class SessionRunner:
                     self.recording.meta["session_sample_start"] = self.count - len(
                         values
                     )
-                    self.recording.meta["transport"] = (
-                        "jmserver" if self.vendor_root else "python_tcp"
-                    )
+                    self.recording.meta["transport"] = self.driver.transport
                 except Exception as exc:
                     self.record_state = dict(
                         id=command["id"], status="failed", error=str(exc)
@@ -356,76 +352,32 @@ class SessionRunner:
                 pass  # 网络暂时断开不影响正在进行的本地完整保存。
             self.finished.wait(0.25)
 
-    @contextmanager
-    def _connection(self):
-        if self.vendor_root:
-            with closing(
-                VendorConnection(self.vendor_root, HOST, PORT, PEER)
-            ) as connection:
-                yield connection if connection.wait_for_device(self.stop, 45) else None
-            return
-        with socket.socket() as server:
-            if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
-                server.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-            server.bind((HOST, PORT))
-            server.listen(1)
-            server.settimeout(0.25)
-            deadline = time.monotonic() + 45
-            while not self.stop.is_set() and time.monotonic() < deadline:
-                try:
-                    candidate, address = server.accept()
-                except socket.timeout:
-                    continue
-                with candidate:
-                    if address[0] == PEER:
-                        yield candidate
-                        return
-            if not self.stop.is_set():
-                raise TimeoutError(
-                    "45秒内未收到采集器连接，请检查网线、IP和原厂软件是否脱机"
-                )
-            yield None
-
     def run(self):
         monitor = threading.Thread(target=self.monitor, daemon=True)
         monitor.start()
+        driver = self.driver
         try:
+            if driver is None:
+                driver = create_driver(self.vendor_root)
+                self.driver = driver
             self.update("waiting_device")
-            with self._connection() as connection:
-                if connection is None:
-                    return
-                started = False
-                link = Link(connection, Discard(), self.events)
-                try:
-                    self.update("configuring")
-                    link.exchange(0xBA, status=False)
-                    link.exchange(0xB8)
-                    link.exchange(0xB2, CONFIG_B2)
-                    link.exchange(0xB5, B5_PROFILES[self.session["sample_rate"]])
-                    if self.stop.is_set():
-                        return
-                    link.on_data = self.consume
-                    started = True
-                    link.exchange(0xB7, b"\x00")
-                    self.update("streaming")
-                    while not self.stop.is_set():
-                        if any(frame[3] == 0xB8 for frame in link.pump()):
-                            raise RuntimeError("设备在示波期间应答了未请求的停止命令")
-                        with self.lock:
-                            if self.recording and self.control.get("recording", {}).get(
-                                "stop_requested"
-                            ):
-                                self.end_record()
-                    with self.lock:
+            if not driver.connect(self.stop.is_set, 45):
+                return
+            self.update("configuring")
+            driver.start(
+                self.session["sample_rate"], self.consume, Discard(), self.events
+            )
+            self.update("streaming")
+            while not self.stop.is_set():
+                driver.poll()
+                with self.lock:
+                    if self.recording and self.control.get("recording", {}).get(
+                        "stop_requested"
+                    ):
                         self.end_record()
-                    link.exchange(0xB8)
-                    started = False
-                finally:
-                    if started:
-                        try:
-                            link.send(0xB8)
-                        except OSError:
-                            pass
+            with self.lock:
+                self.end_record()
+            driver.stop()
         except BaseException as exc:
             self.error = f"{type(exc).__name__}: {exc}"
             if isinstance(exc, OSError) and getattr(exc, "winerror", None) in (
@@ -436,8 +388,10 @@ class SessionRunner:
             with self.lock:
                 self.end_record(self.error)
         finally:
+            if driver is not None:
+                driver.close()
             self.update("stopping")
-            # 停止期间继续报告上传状态；副本完成后才发布终态，避免启动器过早结束边端。
+            # 停止期间继续报告上传/登记状态；完成后才发布终态，避免启动器过早结束边端。
             for t in self.upload_threads:
                 t.join()
             self.update("failed" if self.error else "stopped")

@@ -13,7 +13,7 @@
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-from app.core.config import DATABASE_URL, USE_SQLITE
+from app.core.config import DATABASE_URL, SENSOR_SAMPLE_RATE, USE_SQLITE
 
 # 创建数据库引擎
 if USE_SQLITE:
@@ -151,6 +151,54 @@ def init_db():
                             )
                         )
                     conn.execute(text(f"UPDATE {table} SET health_score=NULL"))
+
+    # AcquisitionJob 表新增诊断通道选择；旧任务保持四通道语义。
+    if "acquisition_jobs" in inspector.get_table_names():
+        job_cols = {c["name"] for c in inspector.get_columns("acquisition_jobs")}
+        if "enabled_channels" not in job_cols:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE acquisition_jobs ADD COLUMN enabled_channels JSON")
+                )
+
+    # origin/main 的 DataView/Monitor 对 NULL 使用全局采样率，diagnosis_workflow
+    # 则使用设备采样率。仅迁移旧 NULL：分别物化两种历史语义，不在读取期兜底。
+    if "sensor_data" in inspector.get_table_names():
+        sensor_cols = {c["name"] for c in inspect(engine).get_columns("sensor_data")}
+        device_cols = {c["name"] for c in inspect(engine).get_columns("devices")}
+        with engine.begin() as conn:
+            if "sample_rate" not in sensor_cols:
+                conn.execute(text("ALTER TABLE sensor_data ADD COLUMN sample_rate INTEGER"))
+            if "diagnosis_sample_rate_override" not in sensor_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE sensor_data "
+                        "ADD COLUMN diagnosis_sample_rate_override INTEGER"
+                    )
+                )
+            if "sample_rate" in device_cols:
+                override_update = text(
+                    "UPDATE sensor_data SET diagnosis_sample_rate_override = "
+                    "COALESCE((SELECT devices.sample_rate FROM devices "
+                    "WHERE devices.device_id = sensor_data.device_id), :unavailable) "
+                    "WHERE sensor_data.sample_rate IS NULL "
+                    "AND diagnosis_sample_rate_override IS NULL"
+                )
+            else:
+                override_update = text(
+                    "UPDATE sensor_data SET diagnosis_sample_rate_override = :unavailable "
+                    "WHERE sensor_data.sample_rate IS NULL "
+                    "AND diagnosis_sample_rate_override IS NULL"
+                )
+            conn.execute(override_update, {"unavailable": 0})
+            conn.execute(
+                text(
+                    "UPDATE sensor_data SET sample_rate = :legacy_display_rate "
+                    "WHERE sample_rate IS NULL "
+                    "AND diagnosis_sample_rate_override IS NOT NULL"
+                ),
+                {"legacy_display_rate": SENSOR_SAMPLE_RATE},
+            )
 
     from app.models import Diagnosis
 

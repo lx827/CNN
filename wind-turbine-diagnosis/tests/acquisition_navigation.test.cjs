@@ -12,7 +12,8 @@ test('一键入口首次登录后返回采集页，正常登录仍返回总览',
   const routerSource = readFileSync(path.resolve(__dirname, '../src/router/index.js'), 'utf8')
     .replace(/^import .*\r?\n/gm, '').replace('export default router', '')
   vm.runInNewContext(routerSource, { Layout: {}, createWebHashHistory: () => ({}),
-    createRouter: () => ({ beforeEach: fn => { guard = fn } }), localStorage: { getItem: () => null } })
+    createRouter: () => ({ beforeEach: fn => { guard = fn } }), isLocalDeployment: () => false,
+    localStorage: { getItem: () => null } })
   let next
   guard({ meta: {}, fullPath: '/acquisition' }, {}, value => { next = value })
   assert.equal(next.path, '/login'); assert.equal(next.query.redirect, '/acquisition')

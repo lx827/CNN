@@ -74,8 +74,11 @@ export const updateBatchDiagnosis = async (deviceId, batchIndex, data) => {
   return res
 }
 
-export const reanalyzeBatch = async (deviceId, batchIndex) => {
-  const res = await request.post(`/api/data/${deviceId}/${batchIndex}/reanalyze`)
+export const reanalyzeBatch = async (deviceId, batchIndex, selection) => {
+  const url = `/api/data/${deviceId}/${batchIndex}/reanalyze`
+  const res = selection === undefined
+    ? await request.post(url)
+    : await request.post(url, selection)
   return res
 }
 

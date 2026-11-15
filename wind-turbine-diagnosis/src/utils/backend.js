@@ -18,6 +18,8 @@ const shouldUseSameOrigin = () => {
   return true
 }
 
+export const isLocalDeployment = () => window.__DEPLOYMENT_MODE__ === 'local'
+
 export const getApiBaseURL = () => {
   const configured = getConfiguredBackend()
   if (configured) return `${stripTrailingSlash(configured)}/`

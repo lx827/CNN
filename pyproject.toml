@@ -32,8 +32,20 @@ cloud = [
     "python-dotenv==1.0.1",
     "msgpack>=1.0.8",
     "python-jose[cryptography]>=3.3.0",
+    "dc24-driver==0.1.0",
 ]
-dc24 = ["requests==2.32.3", "python-dotenv==1.0.1"]
+dc24 = [
+    "requests==2.32.3",
+    "python-dotenv==1.0.1",
+    "dc24-driver==0.1.0",
+]
+local = [
+    { include-group = "cloud" },
+    { include-group = "dc24" },
+]
+dc24-python = ["dc24-driver-python==0.1.0"]
+dc24-rust = ["dc24-driver-rust==0.1.0"]
+dc24-vendor = ["dc24-driver-vendor==0.1.0"]
 dev = [
     "clang-format==23.1.5",
     "httpx>=0.27",
@@ -46,7 +58,7 @@ emd-reference = [
 ]
 
 [tool.uv]
-default-groups = ["cloud", "dc24", "dev"]
+default-groups = ["cloud", "dc24", "dc24-python", "dev"]
 cache-keys = [
     { file = "pyproject.toml" },
     { file = "CMakeLists.txt" },
@@ -64,6 +76,12 @@ cache-keys = [
     { env = "CXXFLAGS" },
     { env = "LDFLAGS" },
 ]
+
+[tool.uv.sources]
+dc24-driver = { path = "drivers/dc24", editable = true }
+dc24-driver-python = { path = "drivers/dc24-python", editable = true }
+dc24-driver-rust = { path = "drivers/dc24-rust" }
+dc24-driver-vendor = { path = "drivers/dc24-vendor", editable = true }
 
 [tool.scikit-build]
 minimum-version = "1.1"

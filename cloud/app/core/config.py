@@ -30,7 +30,12 @@ else:
     DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 
 # ========== 服务配置 ==========
-API_HOST = os.getenv("API_HOST", "0.0.0.0")
+# cloud 保持云端认证与演示设备初始化；local 仅由本机回环启动器使用
+DEPLOYMENT_MODE = os.getenv("DEPLOYMENT_MODE", "cloud")
+IS_LOCAL_DEPLOYMENT = DEPLOYMENT_MODE == "local"
+API_HOST = (
+    "127.0.0.1" if IS_LOCAL_DEPLOYMENT else os.getenv("API_HOST", "0.0.0.0")
+)
 API_PORT = int(os.getenv("API_PORT", 8000))
 CORS_ORIGINS = [
     item.strip()
@@ -51,6 +56,12 @@ SENSOR_WINDOW_SECONDS = int(
 )  # 每次上传时长（秒）
 # 后台自动诊断默认去噪方法：wavelet(推荐) / none / vmd
 ANALYZE_DENOISE_METHOD = os.getenv("ANALYZE_DENOISE_METHOD", "wavelet")
+DC24_DIAGNOSIS_WINDOW_SECONDS = float(
+    os.getenv("DC24_DIAGNOSIS_WINDOW_SECONDS", "5")
+)  # DC24 采集完成后自动诊断的窗口秒数
+DC24_CHANNELS = tuple(
+    int(item.strip()) for item in os.getenv("DC24_CHANNELS", "1,2,3,4").split(",")
+)  # 可供采集任务启用的真实通道号；硬件帧仍固定保存四路
 
 # ========== 设备配置 ==========
 DEVICE_ID = "WTG-001"

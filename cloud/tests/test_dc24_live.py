@@ -16,6 +16,7 @@ from app.services.acquisition_live import live
 from dc24_live import Recording, EventBuffer, decode
 from dc24_live import SessionRunner
 from dc24_capture import command, samples
+from app.models import SensorData
 
 
 def frame(sequence=0, rows=254):
@@ -194,6 +195,18 @@ class LiveTests(unittest.TestCase):
             headers=self.edge,
         )
         self.assertEqual(result.json()["data"]["status"], "completed")
+        self.assertEqual(result.json()["data"]["metadata"]["diagnosis_batches"], [101])
+        # 流式完成通知与 ZIP 完成入口共用同一幂等登记语义。
+        duplicate = self.client.post(
+            f"/api/acquisition/jobs/{request['id']}/finish-stream?agent_id=test",
+            headers=self.edge,
+        )
+        self.assertEqual(duplicate.status_code, 200)
+        with self.fixture.sessions() as db:
+            records = db.query(SensorData).all()
+            self.assertEqual(len(records), 4)
+            self.assertEqual({r.batch_index for r in records}, {101})
+            self.assertTrue(all(r.data["kind"] == "dc24_counts" for r in records))
         self.assertEqual(
             self.client.get(
                 f"/api/acquisition/jobs/{request['id']}/files/samples.csv",
@@ -206,6 +219,89 @@ class LiveTests(unittest.TestCase):
             headers=self.user,
         ).json()["data"]
         self.assertEqual(wave[0][1], -8388608)
+
+    def test_local_finish_registers_originals_without_backend_copy(self):
+        from app.services.waveform import load_waveform
+
+        sid = self.session(20000)
+        request = self.client.post(
+            f"/api/acquisition/sessions/{sid}/record",
+            headers=self.user,
+            json={
+                "duration": 0,
+                "save_directory": str(Path(self.fixture.temp.name) / "chosen"),
+            },
+        ).json()["data"]
+        recording = Recording(
+            {
+                "id": request["id"],
+                "duration": 0,
+                "save_directory": str(Path(self.fixture.temp.name) / "chosen"),
+            },
+            {"id": sid, "sample_rate": 20000},
+            EventBuffer(),
+        )
+        original = frame(sequence=99, rows=508)
+        sequence, values = decode(original)
+        recording.append(original, sequence, values)
+        recording.close()
+
+        with patch.object(api.config, "IS_LOCAL_DEPLOYMENT", True):
+            result = self.client.post(
+                f"/api/acquisition/jobs/{request['id']}/finish-stream?agent_id=test",
+                headers=self.edge,
+                json={"local_directory": str(recording.path)},
+            )
+            self.assertEqual(result.status_code, 200, result.text)
+            duplicate = self.client.post(
+                f"/api/acquisition/jobs/{request['id']}/finish-stream?agent_id=test",
+                headers=self.edge,
+                json={"local_directory": str(recording.path)},
+            )
+            self.assertEqual(duplicate.status_code, 200, duplicate.text)
+
+        backend_copy = Path(self.fixture.temp.name) / request["id"]
+        self.assertFalse(backend_copy.exists())
+        self.assertEqual(
+            self.client.get(
+                f"/api/acquisition/jobs/{request['id']}/files/samples.csv",
+                headers=self.user,
+            ).content,
+            (recording.path / "samples.csv").read_bytes(),
+        )
+        wave = self.client.get(
+            f"/api/acquisition/jobs/{request['id']}/waveform?channel=0&seconds=.01",
+            headers=self.user,
+        ).json()["data"]
+        self.assertEqual(wave[0][1], -8388608)
+        with self.fixture.sessions() as db:
+            records = db.query(SensorData).all()
+            self.assertEqual(len(records), 4)
+            self.assertTrue(
+                all(
+                    r.data["path"] == str((recording.path / "counts.i32").resolve())
+                    for r in records
+                )
+            )
+            batch = load_waveform(db, "test", 101)
+        np.testing.assert_array_equal(batch.signals["ch1"], values[:, 0])
+        self.assertEqual(batch.signals["ch1"].dtype, np.float64)
+
+    def test_cloud_rejects_local_original_registration(self):
+        sid = self.session(20000)
+        request = self.client.post(
+            f"/api/acquisition/sessions/{sid}/record",
+            headers=self.user,
+            json={"duration": 0, "save_directory": self.fixture.temp.name},
+        ).json()["data"]
+        with patch.object(api.config, "IS_LOCAL_DEPLOYMENT", False):
+            result = self.client.post(
+                f"/api/acquisition/jobs/{request['id']}/finish-stream?agent_id=test",
+                headers=self.edge,
+                json={"local_directory": self.fixture.temp.name},
+            )
+        self.assertEqual(result.status_code, 422)
+        self.assertIn("仅本地工作站", result.json()["detail"])
 
     def test_ws_view_rejects_bad_token_and_unknown_session(self):
         from starlette.testclient import WebSocketDisconnect
@@ -334,8 +430,8 @@ class LiveTests(unittest.TestCase):
             original_update(status)
 
         runner.update = update
-        # 仅模拟未连接就停止的socket外壳；真实执行runner的最终清理与上传等待。
-        with patch("dc24_live.socket.socket"):
+        # 仅模拟未连接就停止的驱动外壳；真实执行runner的最终清理与上传等待。
+        with patch("dc24_driver_python.driver.socket.socket"):
             run = threading.Thread(target=runner.run)
             run.start()
             for _ in range(100):

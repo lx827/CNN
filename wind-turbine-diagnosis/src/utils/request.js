@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { getApiBaseURL } from './backend'
+import { getApiBaseURL, isLocalDeployment } from './backend'
 import { formatErrorMessage } from './errorMessage'
 
 const request = axios.create({
@@ -11,7 +11,7 @@ const request = axios.create({
 // 请求拦截器：自动携带 Token
 request.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('access_token')
+    const token = isLocalDeployment() ? null : localStorage.getItem('access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -38,7 +38,7 @@ request.interceptors.response.use(
     if (error.config?.silentError && error.response?.status !== 401) {
       return Promise.reject(error)
     }
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !isLocalDeployment()) {
       ElMessage.error('登录已过期，请重新登录')
       localStorage.removeItem('access_token')
       window.location.hash = '#/login'

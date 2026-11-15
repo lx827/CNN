@@ -320,6 +320,7 @@ benchmark = [
 cloud = [
     { name = "apscheduler" },
     { name = "cryptography" },
+    { name = "dc24-driver" },
     { name = "fastapi" },
     { name = "msgpack" },
     { name = "pymysql" },
@@ -332,8 +333,18 @@ cloud = [
     { name = "uvicorn", extra = ["standard"] },
 ]
 dc24 = [
+    { name = "dc24-driver" },
     { name = "python-dotenv" },
     { name = "requests" },
+]
+dc24-python = [
+    { name = "dc24-driver-python" },
+]
+dc24-rust = [
+    { name = "dc24-driver-rust" },
+]
+dc24-vendor = [
+    { name = "dc24-driver-vendor" },
 ]
 dev = [
     { name = "clang-format" },
@@ -343,6 +354,21 @@ dev = [
 ]
 emd-reference = [
     { name = "emd" },
+]
+local = [
+    { name = "apscheduler" },
+    { name = "cryptography" },
+    { name = "dc24-driver" },
+    { name = "fastapi" },
+    { name = "msgpack" },
+    { name = "pymysql" },
+    { name = "python-dotenv" },
+    { name = "python-jose", extra = ["cryptography"] },
+    { name = "pywavelets" },
+    { name = "requests" },
+    { name = "scipy" },
+    { name = "sqlalchemy" },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
@@ -356,6 +382,7 @@ benchmark = [
 cloud = [
     { name = "apscheduler", specifier = "==3.10.4" },
     { name = "cryptography", specifier = "==42.0.7" },
+    { name = "dc24-driver", editable = "drivers/dc24" },
     { name = "fastapi", specifier = "==0.111.0" },
     { name = "msgpack", specifier = ">=1.0.8" },
     { name = "pymysql", specifier = "==1.1.1" },
@@ -368,9 +395,13 @@ cloud = [
     { name = "uvicorn", extras = ["standard"], specifier = "==0.30.0" },
 ]
 dc24 = [
+    { name = "dc24-driver", editable = "drivers/dc24" },
     { name = "python-dotenv", specifier = "==1.0.1" },
     { name = "requests", specifier = "==2.32.3" },
 ]
+dc24-python = [{ name = "dc24-driver-python", editable = "drivers/dc24-python" }]
+dc24-rust = [{ name = "dc24-driver-rust", directory = "drivers/dc24-rust" }]
+dc24-vendor = [{ name = "dc24-driver-vendor", editable = "drivers/dc24-vendor" }]
 dev = [
     { name = "clang-format", specifier = "==23.1.5" },
     { name = "httpx", specifier = ">=0.27" },
@@ -378,6 +409,21 @@ dev = [
     { name = "ruff", specifier = ">=0.17.4" },
 ]
 emd-reference = [{ name = "emd", specifier = "==0.8.1" }]
+local = [
+    { name = "apscheduler", specifier = "==3.10.4" },
+    { name = "cryptography", specifier = "==42.0.7" },
+    { name = "dc24-driver", editable = "drivers/dc24" },
+    { name = "fastapi", specifier = "==0.111.0" },
+    { name = "msgpack", specifier = ">=1.0.8" },
+    { name = "pymysql", specifier = "==1.1.1" },
+    { name = "python-dotenv", specifier = "==1.0.1" },
+    { name = "python-jose", extras = ["cryptography"], specifier = ">=3.3.0" },
+    { name = "pywavelets", specifier = ">=1.6.0" },
+    { name = "requests", specifier = "==2.32.3" },
+    { name = "scipy", specifier = ">=1.13.1" },
+    { name = "sqlalchemy", specifier = "==2.0.36" },
+    { name = "uvicorn", extras = ["standard"], specifier = "==0.30.0" },
+]
 
 [[package]]
 name = "colorama"
@@ -499,6 +545,50 @@ sdist = { url = "https://files.pythonhosted.org/packages/a9/95/a3dbbb5028f35eafb
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl", hash = "sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30", size = 8321, upload-time = "2023-10-07T05:32:16.783Z" },
 ]
+
+[[package]]
+name = "dc24-driver"
+version = "0.1.0"
+source = { editable = "drivers/dc24" }
+dependencies = [
+    { name = "numpy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "numpy", specifier = ">=1.26.4" }]
+
+[[package]]
+name = "dc24-driver-python"
+version = "0.1.0"
+source = { editable = "drivers/dc24-python" }
+dependencies = [
+    { name = "dc24-driver" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "dc24-driver", specifier = "==0.1.0" }]
+
+[[package]]
+name = "dc24-driver-rust"
+version = "0.1.0"
+source = { directory = "drivers/dc24-rust" }
+dependencies = [
+    { name = "dc24-driver" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "dc24-driver", specifier = "==0.1.0" }]
+
+[[package]]
+name = "dc24-driver-vendor"
+version = "0.1.0"
+source = { editable = "drivers/dc24-vendor" }
+dependencies = [
+    { name = "dc24-driver" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "dc24-driver", specifier = "==0.1.0" }]
 
 [[package]]
 name = "dcor"

@@ -83,8 +83,13 @@ class SensorData(Base):
     device_id = Column(String(50), index=True, comment="设备编号")
     batch_index = Column(Integer, default=1, comment="批次序号")
     channel = Column(Integer, comment="通道号 1/2/3/...")
-    data = Column(JSON, comment="振动信号数组")
+    data = Column(JSON, comment="振动信号数组，或带时间区段的原始文件来源描述")
     sample_rate = Column(Integer, default=25600, comment="采样率 Hz")
+    diagnosis_sample_rate_override = Column(
+        Integer,
+        nullable=True,
+        comment="仅旧 NULL 记录迁移的诊断采样率覆盖；0 表示不可诊断，新记录为 NULL",
+    )
     is_analyzed = Column(Integer, default=0, comment="是否已检测 0/1")
     is_special = Column(Integer, default=0, comment="是否特殊采集 0=普通 1=特殊")
     analyzed_at = Column(DateTime, nullable=True, comment="检测完成时间")
@@ -214,7 +219,7 @@ class AcquisitionAgent(Base):
 
 
 class AcquisitionJob(Base):
-    """原始计数采集任务；不进入物理量诊断和告警流水线。"""
+    """原始计数采集任务；完成后按启用通道登记统一机械诊断批次。"""
 
     __tablename__ = "acquisition_jobs"
     id = Column(String(32), primary_key=True)
@@ -224,6 +229,7 @@ class AcquisitionJob(Base):
     sample_rate = Column(Integer, nullable=False)
     duration = Column(Integer, nullable=False)
     analysis_options = Column(JSON, nullable=False)
+    enabled_channels = Column(JSON, nullable=True, comment="启用诊断的真实通道号 1~4")
     progress = Column(JSON, nullable=False)
     result_metadata = Column(JSON, nullable=True)
     cancel_requested = Column(Integer, default=0, nullable=False)

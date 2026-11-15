@@ -20,7 +20,7 @@ import zipfile
 from dotenv import load_dotenv
 import requests
 
-from dc24_capture import record, B5_PROFILES, INPUT_CONFIGURATION
+from dc24_capture import create_driver, record, B5_PROFILES, INPUT_CONFIGURATION
 
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(Path(__file__).with_name(".env"))
@@ -97,6 +97,7 @@ class Agent:
         self.cloud = cloud.rstrip("/") + "/api/acquisition"
         self.agent_id, self.output, self.replay_dir = agent_id, Path(output), replay_dir
         self.source = "recording_replay" if replay_dir else "dc24_tcp"
+        self.local_originals = os.getenv("DEPLOYMENT_MODE") == "local"
         self.vendor_root = None if replay_dir else os.getenv("DC24_VENDOR_ROOT") or None
         # 与既有上云边端/cloud 保持同一认证配置约定。
         self.headers = {"X-Edge-Key": os.getenv("EDGE_API_KEY", "turbine-edge-secret")}
@@ -112,7 +113,7 @@ class Agent:
             "input_configuration": dict(INPUT_CONFIGURATION),
         }
         if not replay_dir:
-            self.state["transport"] = "jmserver" if self.vendor_root else "python_tcp"
+            self.state["transport"] = create_driver(self.vendor_root).transport
         self.picker = None
         self.picker_id = None
         if replay_dir:
@@ -229,6 +230,7 @@ class Agent:
                     sample_rate=job["sample_rate"],
                     on_progress=self.progress,
                     should_stop=stop.is_set,
+                    driver=create_driver(self.vendor_root),
                 )
             if meta.get("samples_per_channel", 0) == 0 and meta.get("cancelled"):
                 self.report(job["id"], "cancelled")
@@ -238,20 +240,31 @@ class Agent:
                 json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
             )
             self.progress({"stage": "uploading", "hardware_connected": False})
-            payload = io.BytesIO()
-            with zipfile.ZipFile(payload, "w", zipfile.ZIP_DEFLATED) as archive:
-                for name in FILES:
-                    if (output / name).is_file():
-                        archive.write(output / name, name)
-            # 网络重试只重传同一份已保存数据，不重新采集。
+            if self.local_originals:
+                completion = {
+                    "params": {
+                        "agent_id": self.agent_id,
+                        "local_directory": str(output),
+                    }
+                }
+            else:
+                payload = io.BytesIO()
+                with zipfile.ZipFile(payload, "w", zipfile.ZIP_DEFLATED) as archive:
+                    for name in FILES:
+                        if (output / name).is_file():
+                            archive.write(output / name, name)
+                completion = {
+                    "params": {"agent_id": self.agent_id},
+                    "data": payload.getvalue(),
+                }
+            # 网络重试只登记/重传同一份已保存数据，不重新采集。
             for attempt in range(3):
                 try:
                     self.call(
                         "POST",
                         f"/jobs/{job['id']}/upload",
-                        params={"agent_id": self.agent_id},
-                        data=payload.getvalue(),
                         timeout=(5, 180),
+                        **completion,
                     )
                     break
                 except requests.RequestException:

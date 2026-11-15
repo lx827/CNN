@@ -74,6 +74,8 @@
 | 边端采集 | API Key | `X-Edge-Key: <EDGE_API_KEY>` |
 | 部分公共接口 | 可选认证 | `optional_auth` 依赖，兼容以上两种 |
 
+部署模式默认为 `cloud`，上述认证行为不变。`DEPLOYMENT_MODE=local` 时，应用配置和本地启动器均强制使用 `127.0.0.1`；`optional_auth` 允许无凭据的本机 HTTP 请求，两个 WebSocket 入口允许空 `token`，边端专用接口仍按 `edge_only` 校验边端身份。`/dc24/` 返回同一前端 `dist/index.html` 时注入 `window.__BACKEND_BASE_URL__` 和 `window.__DEPLOYMENT_MODE__`，供页面、请求及 WS 工具识别部署状态；没有新增认证或部署状态 REST 端点。
+
 ### OpenAPI 契约（唯一事实源）
 
 机器可读契约入库于 [`docs/api/openapi.json`](./openapi.json)，由 FastAPI 自动生成。**修改任何后端路由后**，在仓库根执行以下命令刷新并随代码提交：
@@ -396,7 +398,13 @@ GET /api/collect/history?device_id={device_id}&limit={limit}
 
 ### 5.6 DC24 实时采集边端
 
-`POST /api/acquisition/agents/heartbeat` 的 `state.transport` 可选，真实边端上报 `jmserver` 或 `python_tcp`。`GET /api/acquisition/agents` 返回该字段供本机启动器识别连接方式。没有该字段的旧真实边端按 `python_tcp` 处理。两种方式的采集来源均为 `dc24_tcp`，已保存记录在 `metadata.transport` 中标记本次连接方式。操作见 [DC24 现场采集](../DC24_ACQUISITION.md)。
+`POST /api/acquisition/agents/heartbeat` 的 `state.transport` 可选，真实边端上报 `jmserver`、`python_tcp` 或 `rust_tcp`。`GET /api/acquisition/agents` 返回该字段供本机启动器识别连接方式。没有该字段的旧真实边端按 `python_tcp` 处理。三种方式的采集来源均为 `dc24_tcp`，已保存记录在 `metadata.transport` 中标记本次连接方式。
+
+`POST /api/acquisition/jobs` 与 `POST /api/acquisition/sessions/{session_id}/record` 均接受 `enabled_channels`：非空、无重复的真实通道号数组，默认取 `GET /api/acquisition/capabilities` 返回的 `data.channels`。有效集合由后端统一配置 `DC24_CHANNELS` 决定；硬件原始文件始终保存四路，只有启用通道显示并生成诊断数据。任务快照返回实际 `enabled_channels`。
+
+完整任务经 `POST /api/acquisition/jobs/{job_id}/upload` 或 `POST /api/acquisition/jobs/{job_id}/finish-stream` 完成后，按 `DC24_DIAGNOSIS_WINDOW_SECONDS`（默认 5 秒）自动登记特殊诊断批次并交给现有 worker。远程单次任务仍向 `/upload?agent_id=...` 发送 ZIP 请求体；本地单次任务不打包，也不上传副本，改为 `/upload?agent_id=...&local_directory=现场任务目录绝对路径`。两种 `/upload` 输入共用元数据、CSV、显示分析和诊断登记校验；单次 record 尚未生成 `counts.i32` 时，后端在现场原目录由已校验 CSV 生成该统一读取文件，不伪造计数。
+
+远程流式边端先 PUT 五个原始文件，再以无请求体的 `finish-stream` 完成；本地流式边端不 PUT 文件，发送 `{ "local_directory": "现场任务目录绝对路径" }`。本地目录输入仅由 `DEPLOYMENT_MODE=local` 接受，后端校验五件套、元数据和 counts 长度，并在 `data.metadata.local_directory` 返回实际登记目录。任务文件下载、任务波形与诊断均直接读取此目录；远程任务仍读取后端上传目录。响应 `data.metadata.diagnosis_device_id` 为真实 agent 对应的 Device，`data.metadata.diagnosis_batches` 为窗口批次号列表；重复完成通知保持幂等，不重复创建批次。结果显示继续使用既有 DataView、Diagnosis、Alarm 与 Monitor API，不增加本地专用结果端点。操作见 [DC24 现场采集](../DC24_ACQUISITION.md)。
 
 ## 6. 数据查看与诊断 (data_view)
 
@@ -420,6 +428,8 @@ GET /api/data/{device_id}/batches?include_special={include_special}
 ```
 
 **参数**：`include_special: bool = True`
+
+两个批次列表的每项均保留旧 `channel_count`，并返回实际 `channels` 升序数组与 `source_kind`（DC24 文件批次为 `dc24_counts`，数据库数组为 `null`）。例如仅存 CH4 时返回 `channels: [4]`、`channel_count: 1`；前端按该数组选择和请求通道，不从数量推测连续编号。批次摘要 `sample_rate` 是显示采样率。旧 NULL 记录在启动迁移中物化为统一配置采样率以保持旧显示语义，设备采样率另存诊断覆盖；普通新记录没有覆盖，显示与诊断采样率相同。
 
 #### 6.1.3 获取某通道原始时域数据
 
@@ -726,7 +736,17 @@ PUT /api/data/{device_id}/{batch_index}/diagnosis
 POST /api/data/{device_id}/{batch_index}/reanalyze
 ```
 
-**说明**：与后台 worker 复用 process_batch，在线程池/单批信号量内重新计算，追加所有通道与 channel=0 摘要、标记原始数据、生成规范告警并一次 commit。设备不存在 404，业务输入不合法 422；不以在线状态作为计算前提。响应是完整批次 Domain，含 channels；失败 rollback，成功 commit 后才推 WS。
+**说明**：与后台 worker 复用 process_batch，在线程池/单批信号量内重新计算，追加所有通道与 channel=0 摘要、标记原始数据、生成规范告警并一次 commit。设备不存在 404，业务输入不合法 422；不以在线状态作为计算前提。响应是完整批次 Domain，含 channels 与实际 `batch_index`；失败 rollback，成功 commit 后才推 WS。
+
+无请求体或空对象保持原批次、原时间范围和原通道的旧重新诊断行为。仅 `source_kind=dc24_counts` 的文件批次接受以下可选选择对象；提供任一范围或通道字段即创建新的 `is_special=1` 批次，再进入同一 `process_batch`，原批次和原始文件不变：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `start_sample` / `end_sample` | `int` | 可选的半开样本区间，须同时提供且 start < end |
+| `start_time` / `end_time` | `float` | 可选的半开秒区间，须同时提供；与样本区间互斥，按原批次采样率换算 |
+| `channels` | `int[]` | 可选的非空、无重复真实通道集合，可包含原任务未启用通道；缺省沿用原批次实际通道 |
+
+新区间必须位于原始文件全长内，而非仅限当前窗口。响应 `batch_index` 是新特殊批次身份，DataView 据此切换到新结果。非文件批次携带这些额外字段返回 422。
 
 #### 6.6.4 全部批次重新诊断
 
@@ -1015,7 +1035,7 @@ WS /ws/acquisition/sessions/{session_id}/view?token={token}
 | `POST` | `/api/acquisition/jobs/{job_id}/progress` | DC24 边端任务进度上报 |
 | `POST` | `/api/acquisition/jobs/{job_id}/upload` | DC24 边端整包上传 |
 | `PUT` | `/api/acquisition/jobs/{job_id}/stream-files/{name}` | DC24 边端流式上传（`edge_only`） |
-| `POST` | `/api/acquisition/jobs/{job_id}/finish-stream` | DC24 边端完成流式上传（`edge_only`） |
+| `POST` | `/api/acquisition/jobs/{job_id}/finish-stream` | DC24 边端完成远程流式上传，或本地登记原件目录（`edge_only`） |
 | `POST` | `/api/acquisition/sessions/{session_id}/frames` | DC24 边端示波帧上报（`edge_only`，HTTP 保持不变） |
 | `POST` | `/api/acquisition/sessions/{session_id}/state` | DC24 边端会话状态上报（`edge_only`） |
 

@@ -1,5 +1,6 @@
 """DC24 任务、完整文件传输、可选分析与边界；仅使用隔离SQLite和临时目录。"""
 
+import asyncio
 import io
 import json
 import os
@@ -8,6 +9,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from unittest.mock import AsyncMock, patch
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request
@@ -21,7 +23,8 @@ sys.path.insert(0, str(ROOT / "cloud"))
 from app.api import acquisition as api
 from app.api.auth import optional_auth
 from app.database import Base, get_db
-from app.models import Alarm, Diagnosis
+from app.models import AcquisitionJob, Alarm, Device, Diagnosis, SensorData
+from app.services.waveform import load_waveform
 
 
 def auth_override(request: Request):
@@ -129,6 +132,8 @@ class AcquisitionTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/acquisition/agents").status_code, 401)
         self.assertEqual(self.create(sample_rate=6000).status_code, 422)
         self.assertEqual(self.create(duration=0).status_code, 422)
+        self.assertEqual(self.create(enabled_channels=[]).status_code, 422)
+        self.assertEqual(self.create(enabled_channels=[1, 5]).status_code, 422)
         self.assertEqual(
             self.create(
                 analysis={"envelope": True, "band_low": 200, "band_high": 1000}
@@ -163,13 +168,14 @@ class AcquisitionTests(unittest.TestCase):
             403,
         )
 
-    def test_full_transfer_no_optional_analysis_and_no_diagnosis(self):
+    def test_full_transfer_registers_one_pending_diagnosis_window(self):
         job = self.create().json()["data"]["id"]
         blob, values, csv_text = archive()
         response = self.upload(job, blob)
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["data"]["status"], "completed")
-        self.assertTrue(np.array_equal(api.load_values(job), values))
+        with self.sessions() as db:
+            self.assertTrue(np.array_equal(api.load_values(db.get(AcquisitionJob, job)), values))
         output = self.client.get(
             f"/api/acquisition/jobs/{job}/files/samples.csv", headers=self.user
         )
@@ -195,8 +201,163 @@ class AcquisitionTests(unittest.TestCase):
         )
         self.assertEqual(self.upload(job, blob).status_code, 200)
         with self.sessions() as db:
+            records = db.query(SensorData).order_by(SensorData.channel).all()
+            self.assertEqual([record.channel for record in records], [1, 2, 3, 4])
+            self.assertEqual({record.batch_index for record in records}, {101})
+            self.assertTrue(all(record.is_special == 1 for record in records))
+            self.assertTrue(all(record.is_analyzed == 0 for record in records))
+            self.assertEqual(db.query(Device).one().device_id, "test")
             self.assertEqual(db.query(Alarm).count(), 0)
             self.assertEqual(db.query(Diagnosis).count(), 0)
+
+    def test_registered_batch_runs_worker_and_existing_result_pages(self):
+        from app import lifespan as worker
+        from app.services import diagnosis_workflow as workflow
+        from tests.diagnosis_fixtures import batch_snapshot
+
+        job = self.create().json()["data"]["id"]
+        blob, values, _ = archive()
+        self.assertEqual(self.upload(job, blob).status_code, 200)
+        result = batch_snapshot("test", 101)
+        with (
+            patch.object(worker, "SessionLocal", self.sessions),
+            patch.object(workflow, "analyze_device", return_value=result) as analyze,
+            patch.object(workflow.manager, "broadcast", new=AsyncMock()),
+            patch.object(
+                worker.asyncio,
+                "sleep",
+                AsyncMock(side_effect=[None, asyncio.CancelledError]),
+            ),
+        ):
+            asyncio.run(worker.analysis_worker())
+
+        signals = analyze.call_args.args[0]
+        self.assertEqual(set(signals), {"ch1", "ch2", "ch3", "ch4"})
+        for channel, signal in signals.items():
+            np.testing.assert_array_equal(signal, values[:, int(channel[2:]) - 1])
+            self.assertEqual(signal.dtype, np.float64)
+        with self.sessions() as db:
+            self.assertTrue(
+                all(record.is_analyzed == 1 for record in db.query(SensorData))
+            )
+            self.assertGreater(db.query(Alarm).count(), 0)
+            self.assertGreater(db.query(Diagnosis).count(), 0)
+
+        from app.api.data_view import router as data_router
+
+        self.client.app.include_router(data_router)
+        batches = self.client.get("/api/data/devices", headers=self.user)
+        self.assertEqual(batches.status_code, 200, batches.text)
+        device = next(row for row in batches.json()["data"] if row["device_id"] == "test")
+        self.assertEqual(device["batches"][0]["batch_index"], 101)
+        self.assertEqual(device["batches"][0]["analyzed_at"] is not None, True)
+        diagnosis = self.client.get(
+            "/api/data/test/101/1/diagnosis", headers=self.user
+        )
+        self.assertEqual(diagnosis.status_code, 200, diagnosis.text)
+        self.assertEqual(diagnosis.json()["data"]["diagnosis_conclusion"], "warning")
+
+    def test_next_job_reuses_the_same_agent_device(self):
+        first = self.create().json()["data"]["id"]
+        self.assertEqual(self.upload(first, archive()[0]).status_code, 200)
+        second = self.create().json()["data"]["id"]
+        response = self.upload(second, archive()[0])
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["data"]["metadata"]["diagnosis_device_id"], "test")
+        self.assertEqual(response.json()["data"]["metadata"]["diagnosis_batches"], [102])
+        with self.sessions() as db:
+            self.assertEqual(db.query(Device).count(), 1)
+            self.assertEqual(db.query(SensorData).count(), 8)
+
+    def test_upload_registers_multiple_windows_tail_and_selected_channels_once(self):
+        self.client.post(
+            "/api/acquisition/agents/heartbeat",
+            headers=self.edge,
+            json={
+                "agent_id": "test",
+                "source": "recording_replay",
+                "state": {"sample_rate": 50},
+            },
+        ).raise_for_status()
+        job = self.create(
+            sample_rate=50, duration=6, enabled_channels=[4, 2]
+        ).json()["data"]["id"]
+        blob, values, _ = archive(samples=300, rate=50)
+        response = self.upload(job, blob)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["data"]["enabled_channels"], [2, 4])
+        self.assertEqual(response.json()["data"]["metadata"]["diagnosis_batches"], [101, 102])
+        # 完成通知网络重试不得再次登记批次。
+        self.assertEqual(self.upload(job, blob).status_code, 200)
+
+        with self.sessions() as db:
+            records = (
+                db.query(SensorData)
+                .order_by(SensorData.batch_index, SensorData.channel)
+                .all()
+            )
+            self.assertEqual(len(records), 4)
+            self.assertEqual(
+                [(r.batch_index, r.channel) for r in records],
+                [(101, 2), (101, 4), (102, 2), (102, 4)],
+            )
+            self.assertEqual(
+                [(r.data["start_sample"], r.data["end_sample"]) for r in records],
+                [(0, 250), (0, 250), (250, 300), (250, 300)],
+            )
+            self.assertTrue(all(r.data["kind"] == "dc24_counts" for r in records))
+            self.assertTrue(all(r.data["job_id"] == job for r in records))
+            first = load_waveform(db, "test", 101)
+            last = load_waveform(db, "test", 102)
+        np.testing.assert_array_equal(first.signals["ch2"], values[:250, 1])
+        np.testing.assert_array_equal(first.signals["ch4"], values[:250, 3])
+        np.testing.assert_array_equal(last.signals["ch2"], values[250:, 1])
+        np.testing.assert_array_equal(last.signals["ch4"], values[250:, 3])
+
+    def test_local_single_upload_uses_originals_without_backend_copy(self):
+        self.client.post(
+            "/api/acquisition/agents/heartbeat",
+            headers=self.edge,
+            json={"agent_id": "test", "source": "dc24_tcp", "state": {}},
+        ).raise_for_status()
+        job = self.create().json()["data"]["id"]
+        blob, values, csv_text = archive()
+        with zipfile.ZipFile(io.BytesIO(blob)) as zipped:
+            metadata = zipped.read("metadata.json")
+        original = Path(self.temp.name) / "field-original"
+        original.mkdir()
+        (original / "samples.csv").write_text(csv_text, encoding="utf-8")
+        (original / "metadata.json").write_bytes(metadata)
+        (original / "rx_stream.bin").write_bytes(b"original-frames")
+        (original / "commands.jsonl").write_text("{}\n", encoding="utf-8")
+
+        with patch.object(api.config, "IS_LOCAL_DEPLOYMENT", True):
+            response = self.client.post(
+                f"/api/acquisition/jobs/{job}/upload",
+                params={"agent_id": "test", "local_directory": str(original)},
+                headers=self.edge,
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["data"]["status"], "completed")
+        self.assertEqual(
+            response.json()["data"]["metadata"]["local_directory"], str(original)
+        )
+        self.assertTrue((original / "counts.i32").is_file())
+        self.assertTrue((original / "analysis.json").is_file())
+        self.assertFalse(api.directory(job).exists())
+        with self.sessions() as db:
+            orm_job = db.get(AcquisitionJob, job)
+            np.testing.assert_array_equal(api.load_values(orm_job), values)
+            records = db.query(SensorData).all()
+            self.assertEqual(len(records), 4)
+            self.assertEqual(
+                {record.data["path"] for record in records},
+                {str((original / "counts.i32").resolve())},
+            )
+        analysis = self.client.get(
+            f"/api/acquisition/jobs/{job}/analysis", headers=self.user
+        )
+        self.assertEqual(analysis.status_code, 200, analysis.text)
 
     def test_selected_fft_rms_and_envelope_band(self):
         job = self.create(

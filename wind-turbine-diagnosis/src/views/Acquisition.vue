@@ -14,10 +14,11 @@
           <el-form-item label="波形时间窗（秒）"><el-input-number v-model="form.wave_seconds" :min=".01" :max="2" :step=".05" :precision="2" controls-position="right" aria-label="波形时间窗" /></el-form-item>
           <div v-if="show.envelope" class="band-fields"><el-form-item label="包络带通下限（Hz）"><el-input-number v-model="form.band_low" :controls="false" aria-label="包络带通下限" /></el-form-item><el-form-item label="包络带通上限（Hz）"><el-input-number v-model="form.band_high" :controls="false" aria-label="包络带通上限" /></el-form-item><p v-if="bandError" class="error-text" role="alert">{{ bandError }}</p></div>
           <el-divider /><strong>保存原始数据</strong><br><el-checkbox v-model="form.manual" :disabled="recordBusy">手动结束采集</el-checkbox>
+          <el-form-item label="显示与诊断通道（至少一路）"><el-checkbox-group v-model="form.enabled_channels" :disabled="recordBusy" aria-label="显示与诊断通道"><el-checkbox v-for="channel in channels" :key="channel" :value="channel">CH{{ channel }}</el-checkbox></el-checkbox-group><p class="help">只显示并诊断启用的通道；原始帧和原始文件仍完整保存四路。</p></el-form-item>
           <el-form-item v-if="!form.manual" label="采集时长（秒）"><el-input-number v-model="form.duration" :min="1" :precision="0" :disabled="recordBusy" controls-position="right" aria-label="采集时长" /><p class="help">可自行填写，按完整数据帧收尾。</p></el-form-item>
           <el-form-item label="现场电脑保存目录"><el-input v-model="form.save_directory" :disabled="recordBusy" placeholder="例如 D:\采集数据" aria-label="保存目录" @input="directoryEdited = true" /><el-button class="directory-button" :disabled="!selectedAgent?.online || recordBusy" :loading="selectingDirectory" @click="chooseDirectory">选择目录…</el-button></el-form-item>
           <div class="actions"><el-button type="success" :disabled="recordBusy || !selectedAgent?.online || !!bandError" :loading="saving" @click="startRecording">开始采集</el-button><el-button type="danger" plain :disabled="!recordBusy || recording?.stop_requested" @click="stopRecording">停止保存</el-button></div>
-          <p class="help">开始后从下一完整帧保存四路原件，示波继续。后端另存完整副本。</p>
+          <p class="help">开始后从下一完整帧保存四路原件，示波继续。远程任务上传云端副本；本地工作站只登记现场原件。</p>
         </el-form>
       </aside>
       <main class="scope-panel" aria-live="polite">
@@ -27,10 +28,10 @@
         <el-alert v-if="!realAgents.some(a => a.online)" type="info" :closable="false" title="等待现场边端：请运行 start_dc24.bat 一键启动" show-icon />
         <div v-if="recording" class="record-strip"><strong>{{ recordLabel }}</strong><span>每通道 {{ (recording.samples_per_channel || 0).toLocaleString() }} 点</span><span>{{ ((recording.samples_per_channel || 0) / (session?.sample_rate || form.sample_rate)).toFixed(3) }} 秒</span><p v-if="recording.saved_directory">现场原件：{{ recording.saved_directory }}</p><p v-if="recording.error" class="error-text">{{ recording.error }}</p><el-button v-if="recording.status === 'completed'" size="small" @click="download(recording.id, 'samples.csv')">下载完整 CSV</el-button></div>
         <div class="source-line"><span>来源：DC24 192.168.2.101 → TCP 192.168.2.100:6800</span><span v-if="session?.received_at">最后收到：{{ new Date(session.received_at).toLocaleTimeString() }}</span></div>
-        <template v-if="view?.channels?.length">
+        <template v-if="visibleChannels.length">
           <p class="help">实时分析窗口：{{ view.window_start.toFixed(3) }}～{{ view.window_end.toFixed(3) }} 秒。波形仅展开最近 {{ form.wave_seconds }} 秒，频谱使用上述连续窗口；长图保留极值显示，保存文件不抽点。</p>
-          <el-table v-if="show.rms" :data="view.channels" size="small"><el-table-column prop="label" label="通道" min-width="150" /><el-table-column label="均值（counts）"><template #default="{row}">{{ row.mean.toFixed(5) }}</template></el-table-column><el-table-column label="去均值 RMS（counts）"><template #default="{row}">{{ row.rms?.toFixed(5) }}</template></el-table-column></el-table>
-          <section v-for="kind in visibleKinds" :key="kind.key"><h2>{{ kind.label }}</h2><div class="channel-grid"><div v-for="channel in view.channels" :key="channel.channel" class="channel-scope"><div :ref="el => bindChart(kind.key, channel.channel, el)" class="chart" :aria-label="`${channel.label}${kind.label}`" /></div></div></section>
+          <el-table v-if="show.rms" :data="visibleChannels" size="small"><el-table-column prop="label" label="通道" min-width="150" /><el-table-column label="均值（counts）"><template #default="{row}">{{ row.mean.toFixed(5) }}</template></el-table-column><el-table-column label="去均值 RMS（counts）"><template #default="{row}">{{ row.rms?.toFixed(5) }}</template></el-table-column></el-table>
+          <section v-for="kind in visibleKinds" :key="kind.key"><h2>{{ kind.label }}</h2><div class="channel-grid"><div v-for="channel in visibleChannels" :key="channel.channel" class="channel-scope"><div :ref="el => bindChart(kind.key, channel.channel, el)" class="chart" :aria-label="`${channel.label}${kind.label}`" /></div></div></section>
           <el-empty v-if="!visibleKinds.length" description="显示项已全部关闭，采样和原始保存仍照常进行" :image-size="65" />
         </template>
         <el-empty v-else :description="sessionActive ? '等待设备连接和首个完整采样帧' : '点击示波查看现场四通道，或直接开始采集'" :image-size="110" />
@@ -47,10 +48,10 @@ import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import { getAcquisitionAgents, getAcquisitionJobs, downloadAcquisitionFile, getAcquisitionCapabilities, startLiveSession, getLiveSession, getCurrentLiveSession, stopLiveSession, getLiveView, startLiveRecording, stopLiveRecording, selectAcquisitionDirectory, getAcquisitionDirectory } from '../api/acquisition'
 import { createWebSocketClient } from '../utils/websocket'
-const agents = ref([]), jobs = ref([]), session = ref(null), view = ref(null), nativeRates = ref([])
+const agents = ref([]), jobs = ref([]), session = ref(null), view = ref(null), nativeRates = ref([]), channels = ref([])
 const connectionError = ref('')
 const starting = ref(false), stopping = ref(false), saving = ref(false), selectingDirectory = ref(false), directoryEdited = ref(false)
-const form = reactive({ agent_id: '', sample_rate: 10000, duration: 60, manual: false, save_directory: '', wave_seconds: .2, band_low: undefined, band_high: undefined })
+const form = reactive({ agent_id: '', sample_rate: 10000, duration: 60, manual: false, save_directory: '', enabled_channels: [], wave_seconds: .2, band_low: undefined, band_high: undefined })
 const show = reactive({ waveform: true, fft: true, rms: false, envelope: false })
 const realAgents = computed(() => agents.value.filter(a => a.source === 'dc24_tcp' && a.state?.version >= 3))
 const selectedAgent = computed(() => realAgents.value.find(a => a.id === form.agent_id))
@@ -59,7 +60,8 @@ const sessionActive = computed(() => session.value && !['stopped', 'failed'].inc
 const recording = computed(() => session.value?.recording)
 const recordBusy = computed(() => recording.value && ['pending', 'waiting_device', 'capturing', 'uploading', 'analyzing'].includes(recording.value.status))
 const stateLabel = computed(() => session.value?.stop_requested && sessionActive.value ? '正在停止与保存' : ({ waiting_device: '等待采集器', configuring: '配置设备', streaming: '实时示波中', stopping: '正在停止与保存', stopped: '示波已停止', failed: '连接失败' }[session.value?.status] || '未连接'))
-const recordLabel = computed(() => ({ waiting_device: '等待开始保存', capturing: '正在保存', uploading: '原件已保存，正在传后端副本', completed: '采集已保存，示波可继续', failed: '保存失败' }[recording.value?.status] || recording.value?.status))
+const visibleChannels = computed(() => (view.value?.channels || []).filter(channel => form.enabled_channels.includes(channel.channel + 1)))
+const recordLabel = computed(() => ({ waiting_device: '等待开始保存', capturing: '正在保存', uploading: '原件已保存，正在登记或上传', completed: '采集已保存，示波可继续', failed: '保存失败' }[recording.value?.status] || recording.value?.status))
 const bandError = computed(() => show.envelope && !(Number.isFinite(form.band_low) && Number.isFinite(form.band_high) && 0 < form.band_low && form.band_low < form.band_high && form.band_high < form.sample_rate/2) ? `请填写 0 < 下限 < 上限 < ${form.sample_rate/2} Hz 的包络频带` : '')
 const kinds = [{ key: 'waveform', label: '原始信号', axis: 's' }, { key: 'fft', label: '原始信号频谱', axis: 'Hz' }, { key: 'rms', label: '去均值 RMS', axis: 's' }, { key: 'envelope', label: '包络谱', axis: 'Hz' }]
 const visibleKinds = computed(() => kinds.filter(k => show[k.key]))
@@ -110,6 +112,7 @@ function openViewSocket(id) {
 watch(() => session.value && !['stopped', 'failed'].includes(session.value.status) ? session.value.id : null,
   id => { if (id) openViewSocket(id); else closeViewSocket() })
 watch([show, () => form.wave_seconds, () => form.band_low, () => form.band_high], sendViewOptions, { deep: true })
+watch(() => form.enabled_channels, draw, { deep: true })
 async function refreshAgents() {
   const [a, j] = await Promise.all([getAcquisitionAgents(), getAcquisitionJobs()])
   if (disposed) return
@@ -131,11 +134,12 @@ async function stopPreview() { if (!session.value || stopping.value) return; sto
 async function startRecording() {
   if (saving.value || recordBusy.value) return
   if (!form.save_directory.trim()) { ElMessage.warning('请先选择或填写现场电脑保存目录'); return }
+  if (!form.enabled_channels.length) { ElMessage.warning('请至少启用一路诊断通道'); return }
   if (bandError.value) { ElMessage.warning(bandError.value); return }
   saving.value = true
   try {
     const current = await ensureSession(); if (!current || disposed) return
-    await startLiveRecording(current.id, { duration: form.manual ? 0 : form.duration, save_directory: form.save_directory, analysis: analysisOptions() })
+    await startLiveRecording(current.id, { duration: form.manual ? 0 : form.duration, save_directory: form.save_directory, enabled_channels: form.enabled_channels, analysis: analysisOptions() })
     const status = await getLiveSession(current.id)
     if (!disposed && session.value?.id === current.id) session.value = status.data
     ElMessage.success('开始保存真实四通道，示波继续')
@@ -147,8 +151,8 @@ async function download(id, name) { try { await downloadAcquisitionFile(id, name
 function bindChart(kind, channel, element) { const key = `${kind}-${channel}`; if (!element) { charts.get(key)?.dispose(); charts.delete(key); containers.delete(key) } else containers.set(key, element) }
 function disposeCharts() { charts.forEach(c => c.dispose()); charts.clear(); containers.clear() }
 async function draw() {
-  await nextTick(); if (disposed || !view.value?.channels?.length) return
-  for (const kind of visibleKinds.value) for (const c of view.value.channels) {
+  await nextTick(); if (disposed || !visibleChannels.value.length) return
+  for (const kind of visibleKinds.value) for (const c of visibleChannels.value) {
     const key = `${kind.key}-${c.channel}`, element = containers.get(key); if (!element) continue
     let chart = charts.get(key); if (!chart) { chart = echarts.init(element); charts.set(key, chart) }
     const data = kind.key === 'rms' ? c.rms_curve : c[kind.key]
@@ -198,7 +202,7 @@ watch(() => form.agent_id, async id => {
   directoryEdited.value = false; form.save_directory = selectedAgent.value?.state?.save_directory || ''
   try { const r = await getCurrentLiveSession(id); if (disposed || version !== turn) return; session.value = r.data; view.value = null; lastRevision = -1; disposeCharts(); if (r.data) form.sample_rate = r.data.sample_rate } catch {}
 })
-onMounted(async () => { window.addEventListener('resize', resize); try { const c = await getAcquisitionCapabilities(); if (!disposed) nativeRates.value = c.data.sample_rates; await refreshAgents() } finally { if (!disposed) poll() } })
+onMounted(async () => { window.addEventListener('resize', resize); try { const c = await getAcquisitionCapabilities(); if (!disposed) { nativeRates.value = c.data.sample_rates; channels.value = c.data.channels; form.enabled_channels = [...c.data.channels] }; await refreshAgents() } finally { if (!disposed) poll() } })
 onBeforeUnmount(() => { disposed = true; turn++; clearTimeout(timer); closeViewSocket(); window.removeEventListener('resize', resize); disposeCharts() })
 </script>
 

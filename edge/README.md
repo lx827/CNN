@@ -13,6 +13,7 @@
 | 形态 | 组成 | 状态 |
 |---|---|---|
 | **核心动态库**（树莓派主路线） | 本 crate 的 cdylib `dc24_edge_core`（Linux 产物 `libdc24_edge_core.so`）+ Python 驱动（`dc24/dc24_edge_pi.py`，负责云端会话/落盘/上传） | FFI 契约见 [FFI.md](FFI.md) |
+| **本地工作站可选驱动** | `drivers/dc24-rust` 将同一 cdylib 打入 `dc24-driver-rust` wheel，薄 adapter 实现公共 `Dc24Driver`；`dc24_agent.py` / `dc24_live.py` 仍是唯一采集、保存和上传宿主 | Python 公共接口回环已通过；Windows DC24 实机尚未验收 |
 | **全 Rust 单体** | `main.rs` + `runtime.rs` 二进制，链同一核心（rlib） | 端到端回环测试通过 |
 
 网络核心修复（相对 2026-11-07 版）：监听改为**进程内常驻绑定**（Unix 设 SO_REUSEADDR，避开 TIME_WAIT 占用；accept 后 BA 探活丢弃陈旧 backlog 连接）；**首帧序号必须为 0**（与 Python 基线一致）。
@@ -21,7 +22,7 @@
 |---|---|
 | `src/protocol.rs` | 控制报文、TCP 拆帧、四路有符号24位计数、首帧0+序号连续性检查 |
 | `src/device.rs` | 常驻监听绑定、设备连接与 BA 探活、心跳、开始/停止控制 |
-| `src/ffi.rs` | C ABI 导出：open/start/poll/stop/close/info，有界消息队列 |
+| `src/ffi.rs` | C ABI 导出：open/start/poll/原始样本帧/stop/close/info，有界消息队列 |
 | `src/recording.rs` | CSV、原始采样帧、int32 计数及元数据保存，磁盘空间保护 |
 | `src/cloud.rs` | 现有 `/api/acquisition` HTTP 接口及流式文件上传 |
 | `src/runtime.rs` | 云端控制、有限实时窗口、调度、持久化补传清单 |
@@ -66,6 +67,9 @@ cargo test --locked
 
 # 生成本机平台的优化构建；不会自动生成树莓派 ARM64 程序，也不会部署。
 cargo build --release --locked
+
+# 同一 crate 也可由可选驱动包的构建后端调用 cargo 并打入 wheel。
+uv build --wheel ../drivers/dc24-rust
 ```
 
 运行程序前要替换配置样例的云端占位地址，并设置认证环境变量。即使构建成功，也先使用检查模式，不连接采集器或上传数据：
@@ -79,4 +83,4 @@ cargo build --release --locked
 
 ## 下一步
 
-Python 驱动与 FFI 核心的实机联调（先 Windows 开发机 + 模拟设备，再树莓派 ARM64 + 真实 DC24）、真机资源占用与停止行为核验。全 Rust 单体路径已于 2026-11-11 实机部署验证(见上);FFI/Python 驱动路径仍待联调。
+Windows 本地工作站的 Rust adapter 已通过模拟设备公共接口回环，仍需真实 DC24 的采集、停止、保存和诊断验收；树莓派 FFI/Python 驱动路径仍待实机联调。全 Rust 单体路径已于 2026-11-11 实机部署验证(见上)。

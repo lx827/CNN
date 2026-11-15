@@ -1,6 +1,6 @@
-# DC24 云端服务契约
+# DC24 采集服务契约
 
-任务、上传、示波和 WebSocket 的外部字段见 [后端 API](../api/backend_api.md)；采集协议和文件格式见 [DC24 采集说明](../DC24_ACQUISITION.md)。本页只记录云端服务的稳定业务语义。
+任务、上传、示波和 WebSocket 的外部字段见 [后端 API](../api/backend_api.md)；采集协议和文件格式见 [DC24 采集说明](../DC24_ACQUISITION.md)。本页只记录云端与本地工作站共用的应用服务语义。
 
 ## 原始 counts 显示分析
 
@@ -29,4 +29,10 @@
 
 ## 持久化边界
 
-整包原始文件、可选分析摘要和完整数组属于采集任务产物，不等同于 `sensor_data` 业务批次。原始文件落盘根目录由 `ACQUISITION_DATA_DIR` 配置；数据库任务状态与文件系统产物需要按任务生命周期保持一致。
+整包原始文件、可选分析摘要和完整数组属于采集任务产物。远程任务的原始文件落盘根目录由 `ACQUISITION_DATA_DIR` 配置；本地单次任务通过 `/upload?local_directory=...`、流式任务通过 `finish-stream` 登记用户目录中的同一套原件，均不创建后端副本。单次 record 未生成 `counts.i32` 时，后端从已校验 CSV 在现场原目录补齐统一读取文件。数据库任务状态与文件系统产物需要按任务生命周期保持一致。
+
+采集任务保存 `enabled_channels`，有效通道集合由统一配置 `DC24_CHANNELS` 提供，至少选择一路；原始四路文件不随选择改变。完整采集结束后，`services/acquisition_diagnosis.py` 按 `DC24_DIAGNOSIS_WINDOW_SECONDS`（默认 5 秒）划分半开样本区段，末段按实际长度保留，并只为启用通道登记 `sensor_data` 永久特殊批次。`sensor_data.data` 保存文件来源与时间区段，不保存浮点波形，读取契约见 [持久化](persistence.md)。
+
+远程 ZIP、本地单次原件与流式完成入口调用同一个登记函数；本地和远程 `/upload` 还共用 `validate_record` 与 `analyze_counts`，不形成两套校验或显示分析。批次、来源元数据和任务终态在同一事务提交，完成通知重试与并发完成共用现有分析锁，不重复登记。远程流式完成读取后端上传目录；仅 `DEPLOYMENT_MODE=local` 接受 `local_directory`，校验同一套文件和元数据后直接登记现场 `counts.i32`。任务下载、任务波形与诊断读取都使用该实际目录，不复制或回退到云端副本。设备身份使用真实 `agent_id`，名称取 agent 状态或该身份，agent 心跳同步设备在线时间。登记后的未分析批次由现有 worker 逐批串行进入 `process_batch`，结果继续由 DataView、Diagnosis、Alarm、Monitor 和设备参数页消费。`analyze_counts` 的显示摘要仍保留，但不代替该机械诊断链路。
+
+DataView 选段重诊复用本模块的特殊批次分配与 counts 窗口登记函数，不复制注册逻辑；只新增来源区段和通道记录，原始四路文件不变。采集页的 `enabled_channels` 同时约束实时显示和机械诊断，但不裁剪原始帧。

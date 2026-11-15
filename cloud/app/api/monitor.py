@@ -20,6 +20,7 @@ from app.models import SensorData, Device, Diagnosis
 from app.algorithms.transforms import compute_spectrum
 from app.api.data_view import _get_channel_name
 from app.services.diagnosis_store import summary_state
+from app.services.waveform import load_waveform, waveform_from_records
 
 router = APIRouter(prefix="/api/monitor", tags=["实时监测"])
 
@@ -102,24 +103,17 @@ def get_latest_monitor(
         cached.setdefault(row.channel, row)
     results = []
     if latest_batch:
-        records = (
-            db.query(SensorData)
-            .filter(
-                SensorData.device_id == device_id,
-                SensorData.batch_index == latest_batch,
-            )
-            .order_by(SensorData.channel.asc())
-            .all()
-        )
+        waveform = load_waveform(db, device_id, latest_batch)
+        records = waveform.records
 
         for record in records:
-            sample_rate = record.sample_rate or 25600
+            sample_rate = waveform.sample_rate
             channel_num = record.channel
+            signal = waveform.signals[f"ch{channel_num}"]
 
             # 全长分析先于显示截断：最多取 1 秒，统一 Hann 单边峰值幅值。
             try:
-                signal_fft = record.data[:FFT_POINTS]
-                spectrum = compute_spectrum(signal_fft, sample_rate)
+                spectrum = compute_spectrum(signal[:FFT_POINTS], sample_rate)
                 spectrum = spectrum.truncated(FFT_MAX_FREQ)
                 fft_freq = [round(float(value), 2) for value in spectrum.frequency_hz]
                 fft_amp = [round(float(value), 4) for value in spectrum.amplitude]
@@ -133,7 +127,7 @@ def get_latest_monitor(
                     "channel": channel_num,
                     "channel_name": _get_channel_name(device, channel_num),
                     "batch_index": record.batch_index,
-                    "data": record.data[:TIME_DOMAIN_POINTS],
+                    "data": signal[:TIME_DOMAIN_POINTS].tolist(),
                     "sample_rate": sample_rate,
                     "is_analyzed": record.is_analyzed,
                     "is_special": bool(record.is_special),
@@ -202,13 +196,14 @@ def get_monitor_history(
     for bi in batch_indices:
         record = record_map.get(bi)
         if record:
+            signal = waveform_from_records([record]).signals[f"ch{channel}"]
             items.append(
                 {
                     "batch_index": record.batch_index,
                     "sample_rate": record.sample_rate,
                     "is_analyzed": record.is_analyzed,
                     "is_special": bool(record.is_special),
-                    "data": record.data[:TIME_DOMAIN_POINTS],
+                    "data": signal[:TIME_DOMAIN_POINTS].tolist(),
                     "created_at": record.created_at.isoformat()
                     if record.created_at
                     else None,

@@ -1,0 +1,10 @@
+[build-system]
+requires = ["uv_build==0.12.8"]
+build-backend = "uv_build"
+
+[project]
+name = "dc24-driver"
+version = "0.1.0"
+description = "DC24 采集宿主的公共驱动接口与设备协议"
+requires-python = ">=3.13"
+dependencies = ["numpy>=1.26.4"]
