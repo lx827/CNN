@@ -2,7 +2,7 @@
 
 > 状态：#75 核心、专用研究 HTTP/前端与 #77/#84 顶层 Domain 已集成开发分支/PR #90；13 个核心向量与定向真实 HTTP/前端有验证。本文不声明生产融合、告警或真实数据诊断效果。
 >
-> 实现导航：`cloud/app/algorithms/composite/`、`cloud/app/algorithms/pipelines/composite.py` 与研究服务边界。基础算法在普通模块复用，研究限定属于具体组合策略，不建立实验算法目录或集中注册表。
+> 实现导航：`server/app/algorithms/composite/`、`server/app/algorithms/pipelines/composite.py` 与研究服务边界。基础算法在普通模块复用，研究限定属于具体组合策略，不建立实验算法目录或集中注册表。
 
 ## 数学目的
 
@@ -100,7 +100,7 @@ VMD、ICA、MED 各有模态、迭代、矩阵倍率；MSB 按请求网格而非
 
 ## 验证向量与验证状态
 
-`cloud/tests/diagnosis/algorithms/test_composite_pipelines.py` 的 13 个独立向量已由实现方验证；文档轮次不重复运行。覆盖 AM 真值 0.4、FM 调制幅 5 Hz、四阶 MSB 已知耦合值 1/16、交替非耦合相位复均值抵消小于 1e−12、ICA 已知源相关大于 0.99/逆映射单位、Haar 能量分布 `(0.2,0.8)` 手算熵、CVS 空相位/覆盖不足与实际串联。
+`server/tests/diagnosis/algorithms/test_composite_pipelines.py` 的 13 个独立向量已由实现方验证；文档轮次不重复运行。覆盖 AM 真值 0.4、FM 调制幅 5 Hz、四阶 MSB 已知耦合值 1/16、交替非耦合相位复均值抵消小于 1e−12、ICA 已知源相关大于 0.99/逆映射单位、Haar 能量分布 `(0.2,0.8)` 手算熵、CVS 空相位/覆盖不足与实际串联。
 
 已记录的消融：真实 VMD 后 AM 幅值 0.387672558，去掉 VMD 直接解调为 0.395397808，真值 0.4；这不证明 VMD 更优。CVS 产生 7 个独立重组圈，去掉 MED 后 MSB 幅值向量 L2 差约 0.0150640224；原链 MED 未收敛，只能标 approximate。去掉 CVS 所需相位后不可判定，不能以原信号替代并计算同名结果。
 

@@ -13,7 +13,7 @@
 
 当前独立程序采用2026-11-06用户确认有效的四路 **IEPE / AC0.2Hz / PASS** 输入配置，页面默认 **10000Hz**。原厂软件与独立程序各自下发配置；只在原厂里修改选项，不会自动更新独立程序。每次连接时独立程序会发送自己的配置，页面显示当前模板，记录中保存实际B2/B5负载。旧输入模板的边端会被拒绝开始新版示波，应重启新版边端。
 
-Windows 边端在环境变量或本机 `dc24/.env` 中用 `DC24_DRIVER=python`、`rust` 或 `vendor` 显式选择驱动，环境变量优先。`vendor` 还需将 `DC24_VENDOR_ROOT` 设为包含 `dll/JMServer.dll` 的原厂软件安装目录绝对路径，例如 `D:/VALENIAN动态采集分析软件`。只有点击示波时，DLL 驱动才启动一个 32 位子进程加载已验证版本。设备配置、开始停止、保存和页面操作始终由 CNN 共用宿主控制；指定 DLL 与已验证版本不符时会明确报错。未设置 `DC24_DRIVER` 时仅保留旧默认规则：有原厂目录则使用 DLL，否则使用 Python TCP。
+Windows 边端在环境变量或本机 `collector/.env` 中用 `DC24_DRIVER=python`、`rust` 或 `vendor` 显式选择驱动，环境变量优先。`vendor` 还需将 `DC24_VENDOR_ROOT` 设为包含 `dll/JMServer.dll` 的原厂软件安装目录绝对路径，例如 `D:/VALENIAN动态采集分析软件`。只有点击示波时，DLL 驱动才启动一个 32 位子进程加载已验证版本。设备配置、开始停止、保存和页面操作始终由 CNN 共用宿主控制；指定 DLL 与已验证版本不符时会明确报错。未设置 `DC24_DRIVER` 时仅保留旧默认规则：有原厂目录则使用 DLL，否则使用 Python TCP。
 
 切换采集模块后应退出旧启动窗口，再双击一键启动。启动器检查边端上报的模块，避免把已运行的另一种连接方式当成新配置继续使用，也不会在缺包时静默换成其他驱动。该设置只影响真实采集页的示波和保存。最小安装按选择执行 `uv sync --no-default-groups --group local --group dc24-python`、`... --group dc24-rust` 或 `... --group dc24-vendor`；DLL 适配包不会安装原厂软件。`start_dc24.bat` 使用 `uv run --no-sync`，保留已选环境；缺少所选包时会给出对应的完整安装命令。
 
@@ -48,8 +48,8 @@ Windows 边端在环境变量或本机 `dc24/.env` 中用 `DC24_DRIVER=python`�
 | 输入配置 | 固定四路IEPE、AC0.2Hz、PASS；按用户确认有效的原厂新配置同步，当前页面不提供切回电压模式 |
 | 时长 | 自填正整数秒，没有上一版60秒上限；或勾选手动结束，后台用0表示手动模式 |
 | 通道 | 原始帧固定四路，CH1～CH4对应原厂软件6-1～6-4；每次采集可启用其中至少一路进入诊断，有效集合由后端 capabilities 提供；BNC物理测点对应仍需逐路响应确认 |
-| 自动诊断窗口 | `cloud/.env` 的 `DC24_DIAGNOSIS_WINDOW_SECONDS`，默认 5 秒；末段按实际样本长度分析 |
-| 有效通道集合 | `cloud/.env` 的 `DC24_CHANNELS`，默认 `1,2,3,4`；页面不自行写死 |
+| 自动诊断窗口 | `server/.env` 的 `DC24_DIAGNOSIS_WINDOW_SECONDS`，默认 5 秒；末段按实际样本长度分析 |
+| 有效通道集合 | `server/.env` 的 `DC24_CHANNELS`，默认 `1,2,3,4`；页面不自行写死 |
 | 原始波形 | 四路并排显示；时间窗可选0.01～2秒，保持真实样本时间与数值，不使用平滑曲线拟合 |
 | 原始频谱 | 可选；对最近连续窗口去均值、加Hann窗、计算单边幅值谱 |
 | RMS/均值 | 可选；显示窗口算术均值、去均值RMS及最近统计趋势，表格保留5位小数；原始计数仍为整数 |
@@ -96,18 +96,17 @@ Windows 边端在环境变量或本机 `dc24/.env` 中用 `DC24_DRIVER=python`�
 | 文件 | 职责 |
 |---|---|
 | `start_dc24.bat`、`scripts/dc24_start.py` | 检查本机环境、必要时构建前端、启动/复用后端和边端、打开页面及清理自有进程 |
-| `drivers/dc24/src/dc24_driver/dc24_profiles.json` | 原厂12档完整B5命令负载，云端与现场工具共用 |
-| `drivers/dc24/src/dc24_driver/` | 公共窄驱动接口、四路 int32 样本块、帧序号、事件、链路状态与协议实现 |
-| `drivers/dc24-python/` | 默认纯 Python TCP 连接适配器 |
-| `drivers/dc24-rust/` | 复用 `dc24_edge_core` 的 Rust FFI 薄适配器，携带原生库 |
-| `drivers/dc24-vendor/` | 验证本机 DLL、管理 32 位连接进程并交付完整设备帧；不捆绑原厂软件 |
-| `dc24/dc24_capture.py` | 单次采集宿主；按所选驱动编排配置、进度、停止与原始文件 |
-| `dc24/dc24_vendor.py` | 旧模块名兼容入口；实际实现位于 `drivers/dc24-vendor/` |
-| `dc24/dc24_live.py` | 连续示波、有界窗口、从点击时刻保存、远程异步传输或本地原件登记 |
-| `dc24/dc24_agent.py` | 心跳、会话/任务控制、现场目录选择与认证；继承显式驱动和本地部署配置 |
-| `cloud/app/api/acquisition_live.py` | 实时会话、内存窗口、远程逐文件上传与本地/远程保存完成接口 |
-| `cloud/app/services/acquisition_live.py` | 有界缓存、连续片段和统计趋势 |
-| `wind-turbine-diagnosis/src/views/Acquisition.vue` | 四通道实时示波、显示开关、时长/频带/目录和保存状态 |
+| `collector/drivers/dc24/src/dc24_driver/dc24_profiles.json` | 原厂12档完整B5命令负载，云端与现场工具共用 |
+| `collector/drivers/dc24/src/dc24_driver/` | 公共窄驱动接口、四路 int32 样本块、帧序号、事件、链路状态与协议实现 |
+| `collector/drivers/dc24-python/` | 默认纯 Python TCP 连接适配器 |
+| `collector/drivers/dc24-rust/` | 复用 `dc24_edge_core` 的 Rust FFI 薄适配器，携带原生库 |
+| `collector/drivers/dc24-vendor/` | 验证本机 DLL、管理 32 位连接进程并交付完整设备帧；不捆绑原厂软件 |
+| `collector/dc24_capture.py` | 单次采集宿主；按所选驱动编排配置、进度、停止与原始文件 |
+| `collector/dc24_live.py` | 连续示波、有界窗口、从点击时刻保存、远程异步传输或本地原件登记 |
+| `collector/dc24_agent.py` | 心跳、会话/任务控制、现场目录选择与认证；继承显式驱动和本地部署配置 |
+| `server/app/api/acquisition_live.py` | 实时会话、内存窗口、远程逐文件上传与本地/远程保存完成接口 |
+| `server/app/services/acquisition_live.py` | 有界缓存、连续片段和统计趋势 |
+| `web/src/views/Acquisition.vue` | 四通道实时示波、显示开关、时长/频带/目录和保存状态 |
 
 ## 验证和仍需现场确认的部分
 

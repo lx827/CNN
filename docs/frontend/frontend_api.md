@@ -1,6 +1,6 @@
 # 前端接口文档
 
-> **文档用途**：汇总 `wind-turbine-diagnosis` 前端项目中的所有 API 封装、Vue 页面组件及通用组件的接口定义，便于前后端联调与后续维护。  
+> **文档用途**：汇总 `web` 前端项目中的所有 API 封装、Vue 页面组件及通用组件的接口定义，便于前后端联调与后续维护。  
 > **维护提醒**：每当新增/修改 API 或组件 Props/Emits 时，请同步更新本文档。文档应与代码保持一致，避免口头约定。
 
 ---
@@ -264,7 +264,7 @@ const status = await getTaskStatus(task.task_id);
 
 **文件路径**：`src/api/ingest.js`
 
-`/api/ingest/` 由边端客户端（Rust `edge/`）调用，前端暂不直接调用；模块保留为占位说明，无导出函数。
+`/api/ingest/` 由边端客户端（Rust `edge/acquire/`）调用，前端暂不直接调用；模块保留为占位说明，无导出函数。
 
 ---
 

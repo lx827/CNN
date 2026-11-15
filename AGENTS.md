@@ -35,17 +35,17 @@ uv sync --no-default-groups --group local --group dc24-vendor   # 本地工作�
 - `local` 汇集应用后端与采集宿主依赖；`dc24-python` / `dc24-rust` / `dc24-vendor` 分别选择独立驱动发行包，三者都依赖公共 `dc24-driver`。Rust 包携带 `dc24_edge_core`，wheel 构建由后端调用 cargo 完成
 - Windows 首次构建和源码变更后的重建使用 Git Bash 的 `vsdev uv sync`；本机默认 `bash` 是 WSL，显式选择 Git Bash。原生构建、目标 ISA 与缓存规则见 [计算库构建说明](docs/native_compute.md)
 - 原生构建依赖在根配置固定版本，Eigen 在 CMake 固定来源和 SHA256，通过 target 链接；编译并行度固定为 1
-- Rust 边端 `edge/` 由 cargo 管理；`drivers/dc24-rust` 的 Python 构建后端只调用其 cargo 构建并打包，不复制 Rust 核心
+- Rust 边端 `edge/acquire/` 由 cargo 管理；`collector/drivers/dc24-rust` 的 Python 构建后端只调用其 cargo 构建并打包，不复制 Rust 核心
 - Python 版本锁定 `.python-version`(3.13),由 uv 自动下载托管,不依赖系统 Python
 
 ## 3. 开发命令
 
 ```bash
 # 后端(http://localhost:8000,API 文档 /docs)
-cd cloud && uv sync && uv run python -m app.main
+cd server && uv sync && uv run python -m app.main
 
 # 前端(http://localhost:3000)
-cd wind-turbine-diagnosis && npm install && npm run dev   # build 产出 dist/
+cd web && npm install && npm run dev   # build 产出 dist/
 
 # DC24 现场采集(Windows,实机链路)
 start_dc24.bat                 # 一键入口(等价:uv run python scripts/dc24_start.py)
@@ -53,16 +53,16 @@ start_dc24.bat                 # 一键入口(等价:uv run python scripts/dc24_
 
 ## 4. 测试
 
-**P0 回归(合成信号,无需数据集)— 修改 `cloud/app/services/diagnosis/` 或 `cloud/app/algorithms/` 下任何文件后,三件全绿才算完成:**
+**P0 回归(合成信号,无需数据集)— 修改 `server/app/services/diagnosis/` 或 `server/app/algorithms/` 下任何文件后,三件全绿才算完成:**
 
 ```bash
-cd cloud
+cd server
 uv run python tests/diagnosis/regression/test_none_params.py
 uv run python tests/diagnosis/regression/test_cpw_robustness.py
 uv run python tests/diagnosis/regression/test_varying_speed_order.py
 ```
 
-扩展测试按目录选:正确性验证 `cloud/tests/diagnosis/foundation/layer1/`、`layer2/`（如 `layer2/test_order_tracking_correctness.py`）、合成调度 `foundation/layer4/`、行星箱端到端 `planetary/`、引擎与业务回归 `algorithms/`、原始数据与效果 `real_data/`;改 API 路由另加手动调用验证。cloud/dc24/前端测试套件及运行方式见 `docs/tests/INDEX.md`。
+扩展测试按目录选:正确性验证 `server/tests/diagnosis/foundation/layer1/`、`layer2/`（如 `layer2/test_order_tracking_correctness.py`）、合成调度 `foundation/layer4/`、行星箱端到端 `planetary/`、引擎与业务回归 `algorithms/`、原始数据与效果 `real_data/`;改 API 路由另加手动调用验证。server/collector/前端测试套件及运行方式见 `docs/tests/INDEX.md`。
 
 ## 5. 2G 红线(违反即生产 OOM)
 
@@ -72,15 +72,15 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 
 ## 6. 配置
 
-- `cloud/.env`(不入库):云端配置,键定义以 `cloud/app/core/config.py` 为准;生产必改 `ADMIN_PASSWORD`、`SECRET_KEY`、`EDGE_API_KEY`。`DEPLOYMENT_MODE` 默认 `cloud`;本地工作站由 `scripts/dc24_start.py` 强制设为 `local` 并仅监听 `127.0.0.1`,网页及 HTTP/WS 免登录且不创建演示设备,不要在云端改为 `local`。DC24 自动诊断窗口 `DC24_DIAGNOSIS_WINDOW_SECONDS`(默认5秒)与有效通道 `DC24_CHANNELS`(默认`1,2,3,4`)也在此处统一配置。可选键 `CORS_ORIGINS`(逗号分隔跨域白名单,默认含 localhost:3000/4173 与生产 IP)
-- `dc24/.env`(不入库):DC24 边端本机配置,由 `dc24/dc24_agent.py` 读取——`DC24_DRIVER`(`python`/`rust`/`vendor`,未设置时保持原厂目录优先、否则 Python)、`DC24_VENDOR_ROOT`(原厂软件目录,DLL 驱动必填)、`CLOUD_BASE_URL`、`EDGE_API_KEY`,详见 `dc24/README.md`
-- `ACQUISITION_DATA_DIR`:可选环境变量,远程上传与旧 ZIP 采集任务落盘根目录(默认 `<仓库根>/data/acquisitions`),读取处 `cloud/app/api/acquisition.py`;本地流式采集只使用页面选择的现场原件目录
+- `server/.env`(不入库):云端配置,键定义以 `server/app/core/config.py` 为准;生产必改 `ADMIN_PASSWORD`、`SECRET_KEY`、`EDGE_API_KEY`。`DEPLOYMENT_MODE` 默认 `cloud`;本地工作站由 `scripts/dc24_start.py` 强制设为 `local` 并仅监听 `127.0.0.1`,网页及 HTTP/WS 免登录且不创建演示设备,不要在云端改为 `local`。DC24 自动诊断窗口 `DC24_DIAGNOSIS_WINDOW_SECONDS`(默认5秒)与有效通道 `DC24_CHANNELS`(默认`1,2,3,4`)也在此处统一配置。可选键 `CORS_ORIGINS`(逗号分隔跨域白名单,默认含 localhost:3000/4173 与生产 IP)
+- `collector/.env`(不入库):DC24 边端本机配置,由 `collector/dc24_agent.py` 读取——`DC24_DRIVER`(`python`/`rust`/`vendor`,未设置时保持原厂目录优先、否则 Python)、`DC24_VENDOR_ROOT`(原厂软件目录,DLL 驱动必填)、`CLOUD_BASE_URL`、`EDGE_API_KEY`,详见 `collector/README.md`
+- `ACQUISITION_DATA_DIR`:可选环境变量,远程上传与旧 ZIP 采集任务落盘根目录(默认 `<仓库根>/data/acquisitions`),读取处 `server/app/api/acquisition.py`;本地流式采集只使用页面选择的现场原件目录
 - 生产部署(`CNN.service`、Nginx、dry-run 演练)见 `docs/部署指南.md`
 
 ## 7. 代码导航
 
 ```
-cloud/                      # 云端后端(根项目 cloud 依赖组)
+server/                     # 云端后端(根项目 cloud 依赖组)
 ├── app/
 │   ├── api/                # 路由:data_view/(频谱+诊断+重新诊断)、devices/、
 │   │                       # acquisition(DC24 任务/上传)+ acquisition_live(实时示波+WS)、
@@ -110,30 +110,33 @@ cloud/                      # 云端后端(根项目 cloud 依赖组)
 │   └── lifespan.py         # 线程池 + 后台分析 worker
 └── tests/                  # 后端测试 + 诊断测试套件(含 P0 回归)
 
-dc24/                       # DC24 共用采集宿主(根项目 dc24 依赖组,Windows)
+collector/                  # DC24 共用采集宿主(根项目 dc24 依赖组,Windows)
 ├── dc24_capture.py         # 单次采集编排(兼作旧协议名 re-export)
-├── dc24_agent.py           # 心跳、控制轮询与采集入口(读 dc24/.env)
+├── dc24_agent.py           # 心跳、控制轮询与采集入口(读 collector/.env)
 ├── dc24_live.py            # 连续示波、保存与上传
+├── drivers/                # 独立 DC24 驱动发行包(根 uv sources 集中管理)
+│   ├── dc24/               # dc24-driver:窄接口、样本块、链路状态、协议与12档配置
+│   ├── dc24-python/        # dc24-driver-python:默认纯 Python TCP 适配器
+│   ├── dc24-rust/          # dc24-driver-rust:打包 edge/acquire cdylib 的薄适配器
+│   └── dc24-vendor/        # dc24-driver-vendor:原厂 DLL 与32位桥接,不捆绑原厂软件
 └── tests/                  # 驱动接口、启动、DLL 与树莓派回归
 
-drivers/                    # 独立 DC24 驱动发行包(根 uv sources 集中管理)
-├── dc24/                   # dc24-driver:窄接口、样本块、链路状态、协议与12档配置
-├── dc24-python/            # dc24-driver-python:默认纯 Python TCP 适配器
-├── dc24-rust/              # dc24-driver-rust:打包 edge cdylib 的薄适配器
-└── dc24-vendor/            # dc24-driver-vendor:原厂 DLL 与32位桥接,不捆绑原厂软件
+edge/                       # Rust 边端(cargo 管理,不经 uv)
+├── acquire/                # 采集边端(开发稿,目标树莓派)
+│   ├── src/ tests/ Cargo.toml / Cargo.lock
+│   │   └── ffi.rs          # C ABI 网络接收核心(cdylib dc24_edge_core,树莓派主路线)
+│   ├── deploy/             # dc24-edge.service 模板 + pi/ 实机部署文件(deploy_pi.sh、配置模板)
+│   ├── FFI.md              # FFI 契约(Python 驱动接入文档)
+│   └── README.md           # 开发稿说明(可调配置、验证状态、部署限制)
+└── diag/                   # edge-diag 诊断 CLI(POC 算法宿主,动态链接 libcnn_compute.so)
 
-edge/                       # Rust 边端(开发稿,目标树莓派;cargo 管理,不经 uv)
-├── src/ tests/ Cargo.toml / Cargo.lock
-│   └── ffi.rs              # C ABI 网络接收核心(cdylib dc24_edge_core,树莓派主路线)
-├── deploy/                 # dc24-edge.service 模板 + pi/ 实机部署文件(deploy_pi.sh、配置模板)
-├── FFI.md                  # FFI 契约(Python 驱动接入文档)
-└── README.md               # 开发稿说明(可调配置、验证状态、部署限制)
-
-deploy/                     # 部署资产:cloud/CNN.service(systemd 模板)、
+compute/                    # 独立计算库:lib/ C++ 核心、bind/ pybind11 绑定、
+│                           # capi/ C ABI、cnn_compute/ Python 包、cmake/ 与 tests/
+deploy/                     # 部署资产:server/CNN.service(systemd 模板)、
 │                           # edge/(交叉编译 Dockerfile + build 脚本;out/ 产物不入库)
 scripts/                    # dc24_start.py(一键入口)、dc24_select_directory.py、
 │                           # register_hustbear_devices.py、export_openapi.py
-wind-turbine-diagnosis/     # Vue3 前端
+web/                        # Vue3 前端
 ├── src/api/                # 按域模块(acquisition/monitor/dashboard/data/diagnosis/alarms/devices/…)
 ├── src/composables/        # useMonitor / useDashboard / useDataView / useSettings 等页面逻辑
 ├── src/components/<view>/  # 按页面分组(dashboard/monitor/dataview/research/settings/charts)
@@ -145,7 +148,7 @@ wind-turbine-diagnosis/     # Vue3 前端
 
 ## 8. 数据与数据库
 
-- 原始离线测试数据:Ottawa轴承(历史名称CW,200kHz MAT)、华中HUSTbear(25.6kHz文本)、HUSTgearbox(25.6kHz文本)、WT行星箱(48kHz MAT)。提交选样清单与独立入口在 `cloud/tests/diagnosis/real_data/`;真实采样率、分组、几何/测速前提见 **`docs/datasets.md`**,不得用其他来源参数代填
+- 原始离线测试数据:Ottawa轴承(历史名称CW,200kHz MAT)、华中HUSTbear(25.6kHz文本)、HUSTgearbox(25.6kHz文本)、WT行星箱(48kHz MAT)。提交选样清单与独立入口在 `server/tests/diagnosis/real_data/`;真实采样率、分组、几何/测速前提见 **`docs/datasets.md`**,不得用其他来源参数代填
 - 表:`devices`、`sensor_data`(batch 1~16 循环覆盖,≥101 永久保留)、`diagnosis`、`alarms`、`collection_tasks`
 - 诊断缓存键 `(device, batch, channel, denoise_method)`;重新诊断 `POST /api/data/{device_id}/{batch_index}/reanalyze`、`POST /api/data/{device_id}/reanalyze-all`(逐批串行防 OOM)。持久化语义:`docs/backend/persistence.md`
 

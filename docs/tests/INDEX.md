@@ -1,6 +1,6 @@
 # 测试与验收入口
 
-Python 环境由根目录单项目统一管理。仓库根目录先执行 `uv sync`（Windows 构建用 Git Bash 的 `vsdev uv sync`），以下 Python 命令在 `cloud/` 执行；前端命令在 `wind-turbine-diagnosis/` 执行。按模块或单文件选择测试，脚本式测试可能在导入时计算，不对 `cloud/tests/` 整体 discover。
+Python 环境由根目录单项目统一管理。仓库根目录先执行 `uv sync`（Windows 构建用 Git Bash 的 `vsdev uv sync`），以下 Python 命令在 `server/` 执行；前端命令在 `web/` 执行。按模块或单文件选择测试，脚本式测试可能在导入时计算，不对 `server/tests/` 整体 discover。
 
 计算包安装后的行为在根目录运行 `uv run --no-sync python -m unittest discover -s compute/tests -p 'test_compute*.py' -v`，检查真实编译器/目标/SIMD 信息、独立分发依赖、公共插值/三对角求解、输出所有权，以及生成类型存根和 `py.typed` 的安装。源码变更重建、ISA 缓存和双平台说明见 [计算库构建说明](../native_compute.md)。
 
@@ -18,14 +18,14 @@ mask/NHT/二层组合的独立差分入口为 `compute/tests/test_compute_emd_ma
 
 算法正确性以公式、单位、物理前提、已知解、独立参考和负对照为依据。业务测试验证状态与副作用；真实数据输出与性能分别核对。文档链接检查不能替代正确性验证。
 
-公共数值绑定在根目录执行 `uv run --no-sync python compute/tests/test_native_numeric.py -v`，覆盖 NumPy/SciPy 参考的 Fourier/STFT、SOS/S-G、统计与结果 owner。C++ `numeric_contract` 专门核对任意复谱实部逆变换与 Hermitian 半谱逆变换。cloud 原有 `test_numeric_algorithms.py` 保留幅值/单位和数据类契约，三项 P0 由最终整合统一执行。
+公共数值绑定在根目录执行 `uv run --no-sync python compute/tests/test_native_numeric.py -v`，覆盖 NumPy/SciPy 参考的 Fourier/STFT、SOS/S-G、统计与结果 owner。C++ `numeric_contract` 专门核对任意复谱实部逆变换与 Hermitian 半谱逆变换。server 原有 `test_numeric_algorithms.py` 保留幅值/单位和数据类契约，三项 P0 由最终整合统一执行。
 
 ## P0 回归
 
-修改 `cloud/app/services/diagnosis/` 或 `cloud/app/algorithms/` 下任何文件后，以下三件必须全部通过，均使用合成信号：
+修改 `server/app/services/diagnosis/` 或 `server/app/algorithms/` 下任何文件后，以下三件必须全部通过，均使用合成信号：
 
 ```bash
-cd cloud
+cd server
 uv run python tests/diagnosis/regression/test_none_params.py
 uv run python tests/diagnosis/regression/test_cpw_robustness.py
 uv run python tests/diagnosis/regression/test_varying_speed_order.py
@@ -37,10 +37,10 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 
 | 边界 | 当前入口 | 证据 |
 |------|----------|------|
-| 信号基元与特征 | `cloud/tests/diagnosis/foundation/layer1/`、`layer2/` | 合成信号、手算统计、滤波、阶次与预处理 |
+| 信号基元与特征 | `server/tests/diagnosis/foundation/layer1/`、`layer2/` | 合成信号、手算统计、滤波、阶次与预处理 |
 | 去噪调度 | `foundation/layer4/test_engine_deep.py`（同诊断目录） | 合成信号与转频不可判定 |
 | 证据与状态 | `algorithms/test_diagnosis_domain.py` | 依赖去重、冲突、对象 coverage、状态与单次权重 |
-| 唯一生产流程 | `cloud/tests/test_diagnosis_workflow.py` | SQLite 状态及旧 NULL 显示/诊断采样率迁移、HTTP、缓存、重评、worker、事务回滚、告警与转频隔离 |
+| 唯一生产流程 | `server/tests/test_diagnosis_workflow.py` | SQLite 状态及旧 NULL 显示/诊断采样率迁移、HTTP、缓存、重评、worker、事务回滚、告警与转频隔离 |
 | 标准包络 | `algorithms/test_bearing_envelope_analysis.py`、`test_bearing_envelope_pipeline.py`、`test_bearing_envelope_api.py` | 谱峰唯一归属、幅值、边带、前提门控、Engine 与 HTTP |
 | 高级轴承 | `algorithms/test_bearing_*_advanced.py`、`test_bearing_advanced_business.py`、`test_bearing_advanced_api.py` | 谱峭度、反卷积、CPW/TEO、循环平稳已知解、负对照与专属评估 |
 | 定轴齿轮 | `algorithms/test_fixed_axis_gear.py`、`test_fixed_axis_gear_api.py` | TSA 恒等式、矩与边带手算、健康参考、重评与 HTTP |
@@ -52,8 +52,8 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 | EMD 性能准入规则 | `benchmarks/test_native_performance.py` | 冻结时间边界、零容差峰值、MAD/块间噪声、漏块与重复块；不执行性能测量 |
 | 复合研究 | `algorithms/test_composite_pipelines.py`、`test_composite_research_api.py` | 已知解、阶段串联、消融、五组合 HTTP 与生产隔离 |
 | 引擎回归 | `algorithms/test_engine_regressions.py` | 无参数、TSA、噪声转频和零信号不可判定，全部合成信号 |
-| 公共数值 | `cloud/tests/test_numeric_algorithms.py`、`test_numeric_routes.py` | FFT/STFT/倒谱、统计、通用包络、显示抽点与响应契约 |
-| 去噪失败 | `cloud/tests/test_preprocessing_failures.py` | 真实 HTTP/worker、失败状态、无告警与 422 schema |
+| 公共数值 | `server/tests/test_numeric_algorithms.py`、`test_numeric_routes.py` | FFT/STFT/倒谱、统计、通用包络、显示抽点与响应契约 |
+| 去噪失败 | `server/tests/test_preprocessing_failures.py` | 真实 HTTP/worker、失败状态、无告警与 422 schema |
 
 诊断目录单文件示例：
 
@@ -63,7 +63,7 @@ uv run python tests/diagnosis/planetary/test_planetary_pipeline.py
 uv run python -m unittest tests.test_diagnosis_workflow tests.test_preprocessing_failures -v
 ```
 
-完整测试职责见 [诊断测试架构](../../cloud/tests/diagnosis/TEST_ARCHITECTURE.md)。算法族前提见 [算法索引](../algorithms/INDEX.md)。
+完整测试职责见 [诊断测试架构](../../server/tests/diagnosis/TEST_ARCHITECTURE.md)。算法族前提见 [算法索引](../algorithms/INDEX.md)。
 
 EMD 筛分替换与事前冻结的数值对照可独立运行：
 
@@ -71,11 +71,11 @@ EMD 筛分替换与事前冻结的数值对照可独立运行：
 uv run python -m unittest tests.diagnosis.algorithms.test_emd_sift_contract -v
 ```
 
-[冻结契约](../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json) 与 [手写对照资产](../../cloud/tests/diagnosis/algorithms/emd_reference_contract.py) 供后续 Python/原生差分复用；测试本身不生成需要提交的波形或 golden 数组，不表示已有原生性能结论。
+[冻结契约](../../server/tests/diagnosis/benchmarks/native_emd_contract.json) 与 [手写对照资产](../../server/tests/diagnosis/algorithms/emd_reference_contract.py) 供后续 Python/原生差分复用；测试本身不生成需要提交的波形或 golden 数组，不表示已有原生性能结论。
 
-完整原生业务族可在 `cloud/` 运行 `uv run --no-sync python -m unittest tests.diagnosis.algorithms.test_native_emd_family`，纯 C++ 对应 `emd_business_contract` CTest。该契约用相同原生白噪声独立组合基础 EMD 调用验证 EEMD/Torres CEEMDAN；不要求不同随机源的 IMF 逐点一致。公式、所有权与验证边界见 [完整原生业务 EMD](../algorithms/decomposition/native_business_emd.md)。
+完整原生业务族可在 `server/` 运行 `uv run --no-sync python -m unittest tests.diagnosis.algorithms.test_native_emd_family`，纯 C++ 对应 `emd_business_contract` CTest。该契约用相同原生白噪声独立组合基础 EMD 调用验证 EEMD/Torres CEEMDAN；不要求不同随机源的 IMF 逐点一致。公式、所有权与验证边界见 [完整原生业务 EMD](../algorithms/decomposition/native_business_emd.md)。
 
-已安装计算扩展后，四种插值/停止组合的 EMD 族原生候选在 `cloud/` 执行：
+已安装计算扩展后，四种插值/停止组合的 EMD 族原生候选在 `server/` 执行：
 
 ```powershell
 $env:CNN_DATA_ROOT='D:/code/CNN/data'
@@ -86,7 +86,7 @@ uv run --no-sync python -m unittest tests.diagnosis.algorithms.test_native_emd -
 
 ## 本地真实数据测试
 
-`cloud/tests/diagnosis/real_data/` 使用提交清单和 `DATA_ROOT/raw_sources/`。来源、采样率、分组、机械参数和测速前提见 [数据集契约](../datasets.md)。独立 worktree 可设置 `CNN_DATA_ROOT` 共享数据根。
+`server/tests/diagnosis/real_data/` 使用提交清单和 `DATA_ROOT/raw_sources/`。来源、采样率、分组、机械参数和测速前提见 [数据集契约](../datasets.md)。独立 worktree 可设置 `CNN_DATA_ROOT` 共享数据根。
 
 `common.LoadedRecord` 统一表示采集窗口；`bearing.py`、`gear.py` 读取原始格式，`effectiveness.load_record` 按数据身份分派。固定选样、SHA256、标签、分组和条件假设保存在 `real_data/manifests/effectiveness.json`。这些是本地测试代码，不提供 HTTP 接口或数据库接入。
 
@@ -109,17 +109,17 @@ uv run python -m tests.diagnosis.real_data.effectiveness --data-root $env:CNN_DA
 
 ## 本地性能基准
 
-#106 的同公式 Python/原生 EMD 族入口为 `cloud/tests/diagnosis/benchmarks/native_performance.py`，冻结配置为同目录 `native_performance_config.json`。五条原 SHA256 短向量 × 两档参数 × 三个算法族共 30 项，固定 PCHIP/SD；先 `prepare`、`check`，再 `measure`、`profile`、`report`。三块顺序为 AB/BA/AB，各后端每块五次计时，独立正确性/质量与 profile worker 不混入计时或 OS 峰值门槛。Windows/WSL 全矩阵、Linux 源码构建与 ECS 资源子集的命令及采用边界见 [性能基准说明](../benchmarks/diagnosis_performance.md)。
+#106 的同公式 Python/原生 EMD 族入口为 `server/tests/diagnosis/benchmarks/native_performance.py`，冻结配置为同目录 `native_performance_config.json`。五条原 SHA256 短向量 × 两档参数 × 三个算法族共 30 项，固定 PCHIP/SD；先 `prepare`、`check`，再 `measure`、`profile`、`report`。三块顺序为 AB/BA/AB，各后端每块五次计时，独立正确性/质量与 profile worker 不混入计时或 OS 峰值门槛。Windows/WSL 全矩阵、Linux 源码构建与 ECS 资源子集的命令及采用边界见 [性能基准说明](../benchmarks/diagnosis_performance.md)。
 
 #106 显式固定在旧 Python 外层/NumPy 噪声加 C++ 单 IMF 筛分，业务默认切换不改变该历史测量。完整业务族在根目录运行 `uv run --no-sync python scripts/benchmark_emd_family.py`，每算法/后端独立进程报告端到端耗时和 OS 高水位；原生 RNG 与旧 NumPy 不同，结果不冒充 #106 的同噪声冻结准入。生成报告保存在忽略目录或库外。
 
-冻结准入计算可在 `cloud/` 独立验证，不运行基准：
+冻结准入计算可在 `server/` 独立验证，不运行基准：
 
 ```bash
 uv run --no-sync python -m unittest tests.diagnosis.benchmarks.test_native_performance -v
 ```
 
-旧 #79 `run.py` 仍是 Windows-only 的广义诊断基准，独立配置 `config.json`，其 worker 全生命周期峰值包含额外 profile；不能与 #106 在末次计时后、汇总前读取且排除独立 profile/quality 的峰口径混比。旧入口在 `cloud/` 安装可选 benchmark 依赖组并执行：
+旧 #79 `run.py` 仍是 Windows-only 的广义诊断基准，独立配置 `config.json`，其 worker 全生命周期峰值包含额外 profile；不能与 #106 在末次计时后、汇总前读取且排除独立 profile/quality 的峰口径混比。旧入口在 `server/` 安装可选 benchmark 依赖组并执行：
 
 ```powershell
 uv sync --group benchmark
@@ -133,7 +133,7 @@ uv run --group benchmark python -m tests.diagnosis.benchmarks.export --input D:/
 
 ## 后端读写与采集
 
-| 入口（`cloud/tests/`） | 覆盖 |
+| 入口（`server/tests/`） | 覆盖 |
 |-----------------------|------|
 | `test_read_paths.py` | 摘要查询、真实稀疏 channels、排序、JSON、缓存、索引迁移与 HTTP |
 | `test_waveform_source.py` | 普通记录显示/诊断采样率一致、48000 历史覆盖、override=0 时 DataView/Monitor 按 25600 显示而诊断函数/reanalyze 拒绝、DC24 文件区段与选段新批次 |
@@ -150,7 +150,7 @@ uv run python -m unittest tests.test_waveform_source tests.test_analysis_worker_
 uv run python -m unittest tests.test_dc24_acquisition tests.test_dc24_driver tests.test_dc24_live -v
 ```
 
-DC24 工具链在 `dc24/` 直跑：
+DC24 工具链在 `collector/` 直跑：
 
 ```bash
 uv run python tests/test_dc24_driver_interface.py -v
@@ -160,11 +160,11 @@ uv run python tests/test_dc24_vendor.py -v
 uv run python tests/test_dc24_edge_pi.py -v
 ```
 
-`test_dc24_driver_interface.py` 用公共接口假驱动穿过单次采集与连续示波宿主，核对最小接口无帧协议/恒零统计要求、四路 int32 样本、帧序号、停止、远程逐文件上传、本地单次不创建 ZIP，以及流式仅登记原件目录，不测试驱动内部函数。`test_dc24_start.py` 覆盖环境/`dc24/.env` 的 python/rust/vendor 显式选择、缺包安装命令、本地配置继承和真实 Windows 批处理 `--check`。`test_dc24_driver_rust.py` 在安装 `dc24-rust` 组后检查 Rust 直接实现最小接口、close 错误传播与资源释放，并加载 wheel 内真实 cdylib，以回环模拟设备穿过同一单次采集宿主，逐字节核对原始 `80` 帧、四路计数与事件；它不是实机验收。vendor 需要配置原厂 DLL，使用回环模拟器，未配置时跳过。edge_pi 的纯逻辑测试验证窗口、缺口与重试；集成测试加载真实 cdylib，使用假设备和假云端核对完整收件，无 Rust 工具链时可跳过。MSVC 编译遵守根 AGENTS 的 `vsdev` 约定。
+`test_dc24_driver_interface.py` 用公共接口假驱动穿过单次采集与连续示波宿主，核对最小接口无帧协议/恒零统计要求、四路 int32 样本、帧序号、停止、远程逐文件上传、本地单次不创建 ZIP，以及流式仅登记原件目录，不测试驱动内部函数。`test_dc24_start.py` 覆盖环境/`collector/.env` 的 python/rust/vendor 显式选择、缺包安装命令、本地配置继承和真实 Windows 批处理 `--check`。`test_dc24_driver_rust.py` 在安装 `dc24-rust` 组后检查 Rust 直接实现最小接口、close 错误传播与资源释放，并加载 wheel 内真实 cdylib，以回环模拟设备穿过同一单次采集宿主，逐字节核对原始 `80` 帧、四路计数与事件；它不是实机验收。vendor 需要配置原厂 DLL，使用回环模拟器，未配置时跳过。edge_pi 的纯逻辑测试验证窗口、缺口与重试；集成测试加载真实 cdylib，使用假设备和假云端核对完整收件，无 Rust 工具链时可跳过。MSVC 编译遵守根 AGENTS 的 `vsdev` 约定。
 
 ## 前端
 
-在 `wind-turbine-diagnosis/` 执行全部 Node 测试和构建：
+在 `web/` 执行全部 Node 测试和构建：
 
 ```bash
 node --test tests/*.test.cjs

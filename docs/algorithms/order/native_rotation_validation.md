@@ -6,7 +6,7 @@
 
 通过既有公开 cloud 调用执行原生 4 项独立向量、阶次 17 项、定轴齿轮 13 项、行星 19 项及 AM/FM/CVS 7 项，共 60 项。定轴“已有分析重评不重做 FFT”的测试原先拦截已移除的 SciPy 导入名，现拦截真实原生幅值入口；修正后单独复查通过，未放宽原有数值预算。
 
-另通过 7 个公开数值边界操作及现有趋势 6 个向量，覆盖 NaN 不得变成零 CUSUM/空谱峰、退化/稳定预测、单点/空序列和 Kalman 平滑。测试入口为 `cloud/tests/diagnosis/algorithms/test_native_rotation.py`、`test_order_pipeline.py`、`test_fixed_axis_gear.py`、`cloud/tests/diagnosis/planetary/test_planetary_pipeline.py`、`cloud/tests/diagnosis/algorithms/test_composite_pipelines.py` 的 AMFM/CVS 类及 `foundation/layer1/test_trend_prediction_correctness.py`。
+另通过 7 个公开数值边界操作及现有趋势 6 个向量，覆盖 NaN 不得变成零 CUSUM/空谱峰、退化/稳定预测、单点/空序列和 Kalman 平滑。测试入口为 `server/tests/diagnosis/algorithms/test_native_rotation.py`、`test_order_pipeline.py`、`test_fixed_axis_gear.py`、`server/tests/diagnosis/planetary/test_planetary_pipeline.py`、`server/tests/diagnosis/algorithms/test_composite_pipelines.py` 的 AMFM/CVS 类及 `foundation/layer1/test_trend_prediction_correctness.py`。
 
 绑定仅检查维度、布局和最小长度，数值前提由公开 C++ 入口统一建立。候选组合复用已验证且中心化的输入，窗口矩组合不重复执行全数组检查；滤波/Hilbert 组合调用内部执行接口。输入同步只读借用，独立输出 capsule 在最后一个 NumPy 数组或 view 释放时销毁；没有全局可写工作区或新增线程。
 

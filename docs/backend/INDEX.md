@@ -1,6 +1,6 @@
 # 后端文档索引
 
-后端文档按稳定业务边界组织，不镜像 `cloud/app/` 文件树。函数签名以源码 docstring 为准，外部 HTTP/WebSocket 字段以 [API 文档](../api/backend_api.md) 为准。
+后端文档按稳定业务边界组织，不镜像 `server/app/` 文件树。函数签名以源码 docstring 为准，外部 HTTP/WebSocket 字段以 [API 文档](../api/backend_api.md) 为准。
 
 | 文档 | 责任 |
 |------|------|

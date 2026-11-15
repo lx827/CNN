@@ -4,7 +4,7 @@
 
 云端默认 `NativeEMDImplementation` 经 `cnn_compute.emd_family` 一次调用完成 EMD、EEMD 或 Torres 2011 CEEMDAN。归一化、完整 IMF 筛分、多模态残差更新、随机噪声、逐模态集成及质量信息均在 C++；Python 负责配置、布局转换、Hz/有效区间和领域结果适配。后续敏感分量选择、阈值及诊断继续属于各自 Pipeline。
 
-数学参照是仓库内 [Python 实现](../../../cloud/app/algorithms/decomposition/emd/python_adapter.py)，支持 PCHIP/cubic 与 SD/Rilling。该族不混用 [emd.sift 0.8.1 原生候选](native_emd.md) 的极值、延拓与局部均值公式。原参考可显式注入，默认执行不回退 Python。
+数学参照是仓库内 [Python 实现](../../../server/app/algorithms/decomposition/emd/python_adapter.py)，支持 PCHIP/cubic 与 SD/Rilling。该族不混用 [emd.sift 0.8.1 原生候选](native_emd.md) 的极值、延拓与局部均值公式。原参考可显式注入，默认执行不回退 Python。
 
 ## 适用场景与必要前提
 
@@ -51,8 +51,8 @@ EEMD 结果累加池为 O(NK)，不再保留 O(NKM) 的成员结果。CEEMDAN �
 
 ## 验证向量与验证状态
 
-- [原生差分](../../../cloud/tests/diagnosis/algorithms/test_native_emd.py)：确定性 EMD 四种筛分组合对显式 Python 参考，保留既定数组预算；随机集成检查四种配置复现、完整性和质量元数据。需要数据根的旧五向量仅作确定性/零噪声对照。
-- [完整业务入口](../../../cloud/tests/diagnosis/algorithms/test_native_emd_family.py)：禁止调用 Python 数值实现/NumPy RNG、非连续输入保留、owner 生命周期、超长种子、零噪声、数值失败、尺度与未收敛状态。
+- [原生差分](../../../server/tests/diagnosis/algorithms/test_native_emd.py)：确定性 EMD 四种筛分组合对显式 Python 参考，保留既定数组预算；随机集成检查四种配置复现、完整性和质量元数据。需要数据根的旧五向量仅作确定性/零噪声对照。
+- [完整业务入口](../../../server/tests/diagnosis/algorithms/test_native_emd_family.py)：禁止调用 Python 数值实现/NumPy RNG、非连续输入保留、owner 生命周期、超长种子、零噪声、数值失败、尺度与未收敛状态。
 - [纯 C++ 契约](../../../compute/tests/native/emd_business_contract.cpp)：用相同原生白噪声和独立基础 EMD 调用组成 EEMD/Torres CEEMDAN 公式参照；检查公开/内部入口、跨规模工作区、失败后复用、并发隔离和重构。
 - [测量脚本](../../../scripts/benchmark_emd_family.py)：每算法/后端独立进程，端到端计时计入参数/布局/所有权，OS 峰值包含导入、预热与真实输出生命周期。随机源不同，不将混合/原生的耗时差全部归因于接口开销。
 

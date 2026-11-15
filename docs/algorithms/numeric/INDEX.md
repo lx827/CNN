@@ -81,10 +81,10 @@ FFT/STFT/倒谱主要为 $O(N\log N)$；STFT 额外存储随频率 bin 与帧数
 
 ## 验证向量与验证状态
 
-已合并的验证资产为 `cloud/tests/test_numeric_algorithms.py` 与 `cloud/tests/test_numeric_routes.py`。登记的向量主题包括整数周期正弦、DC、Nyquist、非整数周期、STFT 轴和形状、倒谱单位、统计零分母、分段末段、极值抽点、全长数组独立性，以及 DataView/Monitor 路由归一化与兼容字段。
+已合并的验证资产为 `server/tests/test_numeric_algorithms.py` 与 `server/tests/test_numeric_routes.py`。登记的向量主题包括整数周期正弦、DC、Nyquist、非整数周期、STFT 轴和形状、倒谱单位、统计零分母、分段末段、极值抽点、全长数组独立性，以及 DataView/Monitor 路由归一化与兼容字段。
 
 原生公共边界验证入口为 `compute/tests/test_native_numeric.py`，以 NumPy/SciPy 对照奇偶 FFT、半谱、任意复谱逆变换、STFT 补零/刻度、统计、SOS/S-G、倒谱与自相关，并检查只读/非连续输入和最终结果生命周期。C++ `numeric_contract` 另验证 Plan 的实部逆变换与 Hermitian 逆变换契约。验证平台和最近执行结果见 [构建说明](../../native_compute.md)；运行方式和数据依赖见 [测试索引](../../tests/INDEX.md)。
 
-2026-11-13 在 Windows x64、MSVC 19.50、`/O2 /fp:strict`、Eigen 3.4 baseline SSE2 构建通过：原生 Python 7 项、C++ numeric 契约、cloud 数值 7 项、标准包络 11 项、CPW/TEO 8 项、S-G 5 项及 signal_utils 45 项。numeric 对象反汇编观察到 `mulpd` 批量乘法；不据此宣称所有归约或所有算法均 SIMD。
+2026-11-13 在 Windows x64、MSVC 19.50、`/O2 /fp:strict`、Eigen 3.4 baseline SSE2 构建通过：原生 Python 7 项、C++ numeric 契约、server 数值 7 项、标准包络 11 项、CPW/TEO 8 项、S-G 5 项及 signal_utils 45 项。numeric 对象反汇编观察到 `mulpd` 批量乘法；不据此宣称所有归约或所有算法均 SIMD。
 
 同机 51200 点固定向量、1024 点周期 Hann、512 点步长的时域统计，三块交错、每块每后端 5 次：原生公开调用中位 0.408 ms，同公式 Python/SciPy 参考 45.073 ms（110.6 倍）；参考预先准备窗，原生调用包含窗、结果与工作区准备。该对照测量统计内核及其窗口/结果构造，不包含导入、JSON、数据库或诊断评分。另以已准备 Plan 对同一实序列做完整输出 FFT，每块 100 次、交错三块，real plan 三块均值为 213.9/213.8/215.7 µs，原 complex 路径为 631.7/633.3/634.9 µs，约 2.96 倍。原始测量脚本和产物保留忽略的 `build/`，不将此本机结果当作 Linux、ARM64 或生产整机验收。

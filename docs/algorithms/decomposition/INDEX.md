@@ -2,7 +2,7 @@
 
 > 状态：纯计算、分量选择、质量门控与业务错误边界已分离；默认 [完整原生业务 EMD](native_business_emd.md) 与 [原生小波/VMD](native_wavelet_vmd.md) 已接入。真实数据诊断效果与目标资源仍需分别验收。
 >
-> 实现导航：`cloud/app/algorithms/decomposition/`、`cloud/app/algorithms/pipelines/decomposition.py`。各算法族保留专属 adapter，不设统一 `BaseAlgorithm`。
+> 实现导航：`server/app/algorithms/decomposition/`、`server/app/algorithms/pipelines/decomposition.py`。各算法族保留专属 adapter，不设统一 `BaseAlgorithm`。
 
 ## 数学目的
 
@@ -80,7 +80,7 @@ DWT 约 O(N)，WP 随层数保留更多节点；完整全长 WP 分量的结果�
 
 ## 验证向量与验证状态
 
-独立数学审查与定向返修覆盖频率序、时间轴、熵和质量门控；文档轮次不重复算法测试。以下位于 `cloud/tests/diagnosis/algorithms/`：
+独立数学审查与定向返修覆盖频率序、时间轴、熵和质量门控；文档轮次不重复算法测试。以下位于 `server/tests/diagnosis/algorithms/`：
 
 | 资产 | 向量与反例 |
 |------|------------|
@@ -96,4 +96,4 @@ DWT 约 O(N)，WP 随层数保留更多节点；完整全长 WP 分量的结果�
 
 真实数据效果需按 [数据集说明](../../datasets.md) 分别建立；测试通过不替代物理有效性和设备校准。
 
-确定性 EMD 与局部筛分比较继续使用 [冻结误差契约](../../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json) 和可重建手写信号，检查逐点误差与混合 L2 界，不放宽近零残差预算。原生随机集成按独立同噪声公式、复现和质量状态验证，不要求匹配旧 NumPy 噪声数组。正确性不代表目标 ECS 资源验收；所有权、工作区与实测边界见 [完整原生业务 EMD](native_business_emd.md)。
+确定性 EMD 与局部筛分比较继续使用 [冻结误差契约](../../../server/tests/diagnosis/benchmarks/native_emd_contract.json) 和可重建手写信号，检查逐点误差与混合 L2 界，不放宽近零残差预算。原生随机集成按独立同噪声公式、复现和质量状态验证，不要求匹配旧 NumPy 噪声数组。正确性不代表目标 ECS 资源验收；所有权、工作区与实测边界见 [完整原生业务 EMD](native_business_emd.md)。

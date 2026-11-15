@@ -4,7 +4,7 @@
 
 ## #106 原生 EMD 双平台验收
 
-入口为 [native_performance.py](../../cloud/tests/diagnosis/benchmarks/native_performance.py)，事前冻结参数与准入规则为 [native_performance_config.json](../../cloud/tests/diagnosis/benchmarks/native_performance_config.json)（冻结提交 `a26fdf3`）。这里只比较项目同公式 Python 与显式原生候选，不引入 PyEMD 参照，不修改生产默认后端。
+入口为 [native_performance.py](../../server/tests/diagnosis/benchmarks/native_performance.py)，事前冻结参数与准入规则为 [native_performance_config.json](../../server/tests/diagnosis/benchmarks/native_performance_config.json)（冻结提交 `a26fdf3`）。这里只比较项目同公式 Python 与显式原生候选，不引入 PyEMD 参照，不修改生产默认后端。
 
 固定矩阵为五条既有 4096 点向量 × `controlled`/`production` 两档 × EMD/EEMD/CEEMDAN，共 30 项。向量 SHA256、原采样率与旧 campaign 相同；两档分别采用 4/8 个 IMF、50/100 次筛分上限、8/50 次 ensemble，种子为 `20261112`。性能矩阵固定 PCHIP/SD、镜像数 3、SD 阈值 0.2 和噪声尺度 0.2。cubic/Rilling 已由原生候选支持，但其四配置正确性由 `test_native_emd.py` 单独覆盖，不把这 30 项称为四配置性能矩阵。
 
@@ -22,7 +22,7 @@
 
 ### Windows 运行
 
-先在仓库根通过显式 Git Bash 的 `vsdev uv sync --frozen --group benchmark` 完成源码构建；构建与测量分开。以下 PowerShell 在 `cloud/` 执行，输出目录每个平台、ISA 和 campaign 独立，使用已安装扩展，避免测量期间同步重建：
+先在仓库根通过显式 Git Bash 的 `vsdev uv sync --frozen --group benchmark` 完成源码构建；构建与测量分开。以下 PowerShell 在 `server/` 执行，输出目录每个平台、ISA 和 campaign 独立，使用已安装扩展，避免测量期间同步重建：
 
 ```powershell
 $sourceCache='D:/code/CNN/data/real_diagnosis/performance/20261112'
@@ -47,7 +47,7 @@ campaign=/root/cnn106/data/native-performance-wsl
 source_cache=/root/cnn106/data/real_diagnosis/performance/20261112
 bash "$source_root/scripts/native_benchmark_build.sh" "$source_root" "$artifact_root" wsl
 export UV_PROJECT_ENVIRONMENT="$artifact_root/env"
-cd "$source_root/cloud"
+cd "$source_root/server"
 uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance prepare --mode wsl --source-cache "$source_cache" --output "$campaign"
 uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance check --output "$campaign"
 uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance measure --output "$campaign"
@@ -83,7 +83,7 @@ uv run --no-sync python -m tests.diagnosis.benchmarks.native_performance report 
 
 旧 `run.py` 是独立离线入口，不访问数据库，不修改生产实现，仍只支持 Windows。它保留 #79 的广义算法比较，与 #106 `native_performance.py` 分开运行和导出。Python 依赖仅由 uv 管理；EMD-signal 与 psutil 位于可选 `benchmark` group，不是生产默认依赖。
 
-在 `cloud/` 中运行，将示例替换为主仓或其他共享原始数据根：
+在 `server/` 中运行，将示例替换为主仓或其他共享原始数据根：
 
 ```bash
 uv sync --group benchmark
@@ -91,7 +91,7 @@ uv run --group benchmark python -m tests.diagnosis.benchmarks.run --data-root /p
 uv run --group benchmark python -m tests.diagnosis.benchmarks.export --input /path/to/data/real_diagnosis/performance/20261112
 ```
 
-精确参数来自 [config.json](../../cloud/tests/diagnosis/benchmarks/config.json)，入口为 [run.py](../../cloud/tests/diagnosis/benchmarks/run.py)，可选参照为 [pyemd_adapter.py](../../cloud/tests/diagnosis/benchmarks/pyemd_adapter.py)，结果导出为 [export.py](../../cloud/tests/diagnosis/benchmarks/export.py)。修改 frozen config 后必须使用独立 `--output` 保存新 campaign，不能混入旧向量/结果。
+精确参数来自 [config.json](../../server/tests/diagnosis/benchmarks/config.json)，入口为 [run.py](../../server/tests/diagnosis/benchmarks/run.py)，可选参照为 [pyemd_adapter.py](../../server/tests/diagnosis/benchmarks/pyemd_adapter.py)，结果导出为 [export.py](../../server/tests/diagnosis/benchmarks/export.py)。修改 frozen config 后必须使用独立 `--output` 保存新 campaign，不能混入旧向量/结果。
 
 数据根按显式 `--data-root`、`CNN_DATA_ROOT`、当前 checkout 的 `data/` 解析。默认 campaign 输出在 `DATA_ROOT/real_diagnosis/performance/20261112/`，可用 `--output` 覆盖；导出默认在该 campaign 的 `export/` 下。始终把输出指向仓库外数据目录，不提交生成结果。失败时用 `--resume --case <case-id>` 只继续目标 case，复用已缓存向量与参数，不重复已完成项。
 
@@ -141,7 +141,7 @@ PCHIP、镜像数量、IMF/筛分上限可对齐，但 PyEMD 多停止测试不�
 
 本节保留 #79/#106 的历史接口草案，下表名称不代表现行 ABI。EMD 首批按 [ADR 0006](../adr/0006-native-diagnosis-compute-package.md) 实现 C++ 单 IMF 筛分；#106 仍显式选用 Python 外层、NumPy 噪声与原生筛分，不随业务默认改变。
 
-2026-11-14 云端默认已迁移到 [完整原生业务 EMD](../algorithms/decomposition/native_business_emd.md)，支持 PCHIP/cubic × SD/Rilling 的完整 EMD/EEMD/Torres CEEMDAN。随机生成也在 C++，同种子不保证旧 NumPy 数组相同，因此独立测量脚本为 `scripts/benchmark_emd_family.py`，不能套用 #106 的同噪声逐数组门槛。原生数学公式使用独立同噪声组合核验，确定性 EMD 和局部筛分继续保持原 [冻结预算](../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json)。构建验证、本地成本与生产 ECS 资源验收分别记录；既有固定输入清单保留，不提交生成数组或数值报告。
+2026-11-14 云端默认已迁移到 [完整原生业务 EMD](../algorithms/decomposition/native_business_emd.md)，支持 PCHIP/cubic × SD/Rilling 的完整 EMD/EEMD/Torres CEEMDAN。随机生成也在 C++，同种子不保证旧 NumPy 数组相同，因此独立测量脚本为 `scripts/benchmark_emd_family.py`，不能套用 #106 的同噪声逐数组门槛。原生数学公式使用独立同噪声组合核验，确定性 EMD 和局部筛分继续保持原 [冻结预算](../../server/tests/diagnosis/benchmarks/native_emd_contract.json)。构建验证、本地成本与生产 ECS 资源验收分别记录；既有固定输入清单保留，不提交生成数组或数值报告。
 
 | 候选粒度 | 输入与单位 | 输出与工作区 |
 |---|---|---|

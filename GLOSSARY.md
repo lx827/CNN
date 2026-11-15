@@ -15,25 +15,25 @@ _Avoid_: 边端、本地边端、下位机
 _Avoid_: 云端算法、本地算法、云端后端与本地后端两套实现
 
 **边端(Edge)**:
-部署在树莓派上、只负责设备通信/保存/上传的 Rust 服务,代码在 `edge/`。异常判断在云端,边端不做诊断。
-_Avoid_: 采集端、下位机、客户端、edge-rust(旧目录名,已并入 edge/)
+部署在树莓派上、只负责设备通信/保存/上传的 Rust 服务,代码在 `edge/acquire/`。异常判断在云端,边端不做诊断。
+_Avoid_: 采集端、下位机、客户端、edge-rust(旧目录名,已并入 edge/acquire/)
 
 **现场采集工具(DC24 工具链)**:
-在 Windows 现场电脑上驱动 DC24 采集卡的 Python 链路,共用宿主在 `dc24/`(dc24_capture / dc24_agent / dc24_live),可选驱动发行包在 `drivers/`。是实机验证的现役链路,不是部署物;按"别人的采集器"命名,与树莓派边端区分。
+在 Windows 现场电脑上驱动 DC24 采集卡的 Python 链路,共用宿主在 `collector/`(dc24_capture / dc24_agent / dc24_live),可选驱动发行包在 `collector/drivers/`。是实机验证的现役链路,不是部署物;按"别人的采集器"命名,与树莓派边端区分。
 _Avoid_: 边端(与树莓派上的 Rust 边端混淆)、上云脚本、edge(旧目录名,已让位给 Rust 边端)
 
 **云端(Cloud)**:
-阿里云 ECS 上运行的服务整体:FastAPI 后端(`cloud/`)+ 前端静态托管。接收边端数据、执行诊断、面向用户网站。
+阿里云 ECS 上运行的服务整体:FastAPI 后端(`server/`)+ 前端静态托管。接收边端数据、执行诊断、面向用户网站。
 _Avoid_: 服务器端(与现场电脑混淆)、后端(后端只是云端的一部分)
 
 **前端(Frontend)**:
-Vue3 单页应用(`wind-turbine-diagnosis/`),同一份代码与构建产物由云端或本地工作站托管。
+Vue3 单页应用(`web/`),同一份代码与构建产物由云端或本地工作站托管。
 _Avoid_: 网页端(口语可用,文档用"前端")
 
 ### 数据与设备域
 
 **DC24**:
-瓦伦尼安 4 通道振动采集卡硬件,以太网 TCP 输出数字帧(ADC counts)。采样率配置表在 `drivers/dc24/src/dc24_driver/dc24_profiles.json`(云端与现场工具共用)。
+瓦伦尼安 4 通道振动采集卡硬件,以太网 TCP 输出数字帧(ADC counts)。采样率配置表在 `collector/drivers/dc24/src/dc24_driver/dc24_profiles.json`(云端与现场工具共用)。
 
 **采集通道(acquisition channel)**:
 DC24 的一路物理输入。硬件帧始终携带四路原始计数,每路可以独立启用或停用显示与诊断;一路输入异常不应阻止其他有效通道分析。
