@@ -30,13 +30,10 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# Rust 源码目录:当前为 edge-rust/,平移工单合入后为 edge/。自动探测。
-SRC_DIR=""
-for cand in "$ROOT_DIR/edge-rust" "$ROOT_DIR/edge"; do
-    [ -f "$cand/Cargo.toml" ] && SRC_DIR="$cand" && break
-done
-if [ -z "$SRC_DIR" ]; then
-    echo "错误:未找到 Rust 边端源码目录(需含 Cargo.toml,尝试 edge-rust/ 与 edge/)" >&2
+# Rust 边端采集源码目录(edge/acquire)
+SRC_DIR="$ROOT_DIR/edge/acquire"
+if [ ! -f "$SRC_DIR/Cargo.toml" ]; then
+    echo "错误:未找到 Rust 边端源码目录 $SRC_DIR(需含 Cargo.toml)" >&2
     exit 1
 fi
 

@@ -12,10 +12,10 @@
 #     --target export \
 #     --build-arg TARGET_TRIPLE=aarch64-unknown-linux-gnu \
 #     --output type=local,dest=deploy/edge/out/aarch64-unknown-linux-gnu \
-#     <Rust 源码目录>          # 当前为 edge-rust/,平移工单合入后为 edge/
+#     <Rust 源码目录>          # edge/acquire/
 #
 # 说明:本 Dockerfile 不含任何源码目录名(源码通过构建上下文只读复制进来),
-#       目录平移(edge-rust/ -> edge/)后无需改动本文件。
+#       构建上下文即 edge/acquire/ 本身,目录平移无需改动本文件。
 # =============================================================================
 
 # 基础镜像:官方 rust(Debian bookworm,自带 x86_64 原生 gcc)。

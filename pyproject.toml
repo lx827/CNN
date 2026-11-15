@@ -78,10 +78,10 @@ cache-keys = [
 ]
 
 [tool.uv.sources]
-dc24-driver = { path = "drivers/dc24", editable = true }
-dc24-driver-python = { path = "drivers/dc24-python", editable = true }
-dc24-driver-rust = { path = "drivers/dc24-rust" }
-dc24-driver-vendor = { path = "drivers/dc24-vendor", editable = true }
+dc24-driver = { path = "collector/drivers/dc24", editable = true }
+dc24-driver-python = { path = "collector/drivers/dc24-python", editable = true }
+dc24-driver-rust = { path = "collector/drivers/dc24-rust" }
+dc24-driver-vendor = { path = "collector/drivers/dc24-vendor", editable = true }
 
 [tool.scikit-build]
 minimum-version = "1.1"

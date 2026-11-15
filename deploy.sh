@@ -87,6 +87,17 @@ fi
 run git switch main
 run git pull --ff-only
 
+# 3.5) 一次性目录迁移(2026-11 重组 cloud/→server/):生产状态文件跟随新目录名。
+#      .env 与 turbine.db 不入库,git pull 不会移动它们;只在目标不存在时迁移。
+if [ -d "$DEPLOY_ROOT/cloud" ]; then
+    if [ -f "$DEPLOY_ROOT/cloud/.env" ] && [ ! -f "$DEPLOY_ROOT/server/.env" ]; then
+        run mv "$DEPLOY_ROOT/cloud/.env" "$DEPLOY_ROOT/server/.env"
+    fi
+    if [ -f "$DEPLOY_ROOT/cloud/turbine.db" ] && [ ! -f "$DEPLOY_ROOT/server/turbine.db" ]; then
+        run mv "$DEPLOY_ROOT/cloud/turbine.db" "$DEPLOY_ROOT/server/turbine.db"
+    fi
+fi
+
 # 4) 根项目按锁文件同步运行依赖并从源码构建计算扩展；目标需 C++20 工具链。
 #    构建后端版本在根配置固定，CMake 管理原生依赖，编译并行度为 1。
 run uv sync --frozen
@@ -103,8 +114,8 @@ else
 fi
 
 # 5) systemd 服务:首次安装 / 与模板不一致时备份更新 CNN.service
-#    (ExecStart 直指 .venv 解释器,模板见 deploy/cloud/CNN.service)
-SERVICE_SRC="$DEPLOY_ROOT/deploy/cloud/CNN.service"
+#    (ExecStart 直指 .venv 解释器,模板见 deploy/server/CNN.service)
+SERVICE_SRC="$DEPLOY_ROOT/deploy/server/CNN.service"
 SERVICE_DST="/etc/systemd/system/${SERVICE}.service"
 install_service() {
     run sudo cp "$SERVICE_SRC" "$SERVICE_DST"
@@ -139,7 +150,7 @@ fi
 #    Node/Vite 构建同为内存大户,失败时 EXIT trap 恢复后端(此时依赖已就绪)
 if [ "$SKIP_FRONTEND" = false ]; then
     echo "==> 构建前端"
-    run npm --prefix "$DEPLOY_ROOT/wind-turbine-diagnosis" run build
+    run npm --prefix "$DEPLOY_ROOT/web" run build
 else
     echo "==> 跳过前端构建"
 fi

@@ -16,7 +16,7 @@ import webbrowser
 from dotenv import dotenv_values
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "dc24"))
+sys.path.insert(0, str(ROOT / "collector"))
 from dc24_capture import create_driver
 
 BASE = "http://127.0.0.1:8000"
@@ -34,7 +34,7 @@ def call(path, key, method="GET"):
 
 
 def bundle_stale():
-    front = ROOT / "wind-turbine-diagnosis"
+    front = ROOT / "web"
     index = front / "dist/index.html"
     if not index.exists():
         return True
@@ -71,10 +71,10 @@ def main():
         raise RuntimeError(
             "缺少 uv workspace 环境："
             + str(fallback)
-            + "；请先按 dc24/README.md 选择驱动并运行对应的 "
+            + "；请先按 collector/README.md 选择驱动并运行对应的 "
             "uv sync --no-default-groups --group local --group dc24-<choice>"
         )
-    dc24_config = dotenv_values(ROOT / "dc24/.env")
+    dc24_config = dotenv_values(ROOT / "collector/.env")
     vendor_root = (
         os.environ.get("DC24_VENDOR_ROOT", dc24_config.get("DC24_VENDOR_ROOT")) or ""
     )
@@ -109,20 +109,20 @@ def main():
         return
     if bundle_stale():
         node = shutil.which("node")
-        vite = ROOT / "wind-turbine-diagnosis/node_modules/vite/bin/vite.js"
+        vite = ROOT / "web/node_modules/vite/bin/vite.js"
         if not node or not vite.exists():
             raise RuntimeError("前端需要构建，但未找到Node.js或已有Vite依赖")
         print("正在构建更新后的页面；后续启动将直接复用，不会每次重建。", flush=True)
         subprocess.run(
-            [node, str(vite), "build"], cwd=ROOT / "wind-turbine-diagnosis", check=True
+            [node, str(vite), "build"], cwd=ROOT / "web", check=True
         )
-    config = {**dotenv_values(ROOT / "cloud/.env"), **os.environ}
+    config = {**dotenv_values(ROOT / "server/.env"), **os.environ}
     key = config.get("EDGE_API_KEY") or "turbine-edge-secret"
     env = {
         **os.environ,
         **{k: str(v) for k, v in config.items() if v is not None},
         "USE_SQLITE": "true",
-        "DATABASE_URL": "sqlite:///" + str(ROOT / "cloud/turbine.db"),
+        "DATABASE_URL": "sqlite:///" + str(ROOT / "server/turbine.db"),
         "EDGE_API_KEY": key,
         "DEPLOYMENT_MODE": "local",
         "PYTHONUTF8": "1",
@@ -158,7 +158,7 @@ def main():
                     "--port",
                     "8000",
                 ],
-                cwd=ROOT / "cloud",
+                cwd=ROOT / "server",
                 env=env,
                 stdout=log,
                 stderr=subprocess.STDOUT,
@@ -203,7 +203,7 @@ def main():
             p = subprocess.Popen(
                 [
                     str(workspace_python),
-                    str(ROOT / "dc24/dc24_agent.py"),
+                    str(ROOT / "collector/dc24_agent.py"),
                     "--cloud",
                     BASE,
                     "--agent-id",
