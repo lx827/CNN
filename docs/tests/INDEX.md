@@ -151,12 +151,13 @@ uv run python -m unittest tests.test_dc24_acquisition tests.test_dc24_driver tes
 DC24 工具链在 `dc24/` 直跑：
 
 ```bash
+uv run python tests/test_dc24_driver_interface.py -v
 uv run python tests/test_dc24_start.py -v
 uv run python tests/test_dc24_vendor.py -v
 uv run python tests/test_dc24_edge_pi.py -v
 ```
 
-start 实际调用 Windows 批处理的 `--check`。vendor 需要配置原厂 DLL，使用回环模拟器，未配置时跳过。edge_pi 的纯逻辑测试验证窗口、缺口与重试；集成测试加载真实 cdylib，使用假设备和假云端核对完整收件，无 Rust 工具链时可跳过。MSVC 编译遵守根 AGENTS 的 `vsdev` 约定。
+`test_dc24_driver_interface.py` 用公共接口假驱动穿过单次采集与连续示波宿主，核对四路 int32 样本、帧序号、停止和既有保存/上传结果，不测试驱动内部函数。start 实际调用 Windows 批处理的 `--check`。vendor 需要配置原厂 DLL，使用回环模拟器，未配置时跳过。edge_pi 的纯逻辑测试验证窗口、缺口与重试；集成测试加载真实 cdylib，使用假设备和假云端核对完整收件，无 Rust 工具链时可跳过。MSVC 编译遵守根 AGENTS 的 `vsdev` 约定。
 
 ## 前端
 

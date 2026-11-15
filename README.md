@@ -36,7 +36,8 @@ CNN/
 ├── cloud/                     # 云端 FastAPI 后端（cloud 依赖组，测试在 cloud/tests/）
 ├── wind-turbine-diagnosis/    # Vue 3 前端（测试在 wind-turbine-diagnosis/tests/）
 ├── edge/                      # Rust 边端（开发中，目标树莓派，cargo 管理）
-├── dc24/                      # DC24 现场采集工具链（dc24 依赖组，测试在 dc24/tests/）
+├── dc24/                      # DC24 共用采集宿主（dc24 依赖组，测试在 dc24/tests/）
+├── drivers/                   # 公共 DC24 接口及 Python TCP / 原厂 DLL 独立驱动包
 ├── lib/                       # 纯 C++：core 公共数值模块、emd 算法模块
 ├── bind/                      # pybind11 导出、NumPy 互操作与类型声明生成
 ├── cnn_compute/               # 独立 Python 计算包

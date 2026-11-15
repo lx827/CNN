@@ -15,7 +15,7 @@
 
 Windows 边端可在本机 `dc24/.env` 中将 `DC24_VENDOR_ROOT` 设为原厂软件安装目录的绝对路径，例如 `D:/VALENIAN动态采集分析软件`。一键启动会显示使用 `原厂 JMServer.dll`。点击示波时，边端才启动一个 32 位子进程调用已验证的 `dll/JMServer.dll` 监听、接收和分帧。设备配置、开始停止、保存和页面操作由 CNN 控制。安装目录没有配置时，边端使用原有 Python TCP 连接。指定的 DLL 与已验证版本不符时，示波会报告错误，需要检查安装版本。
 
-切换采集模块后应退出旧启动窗口，再双击一键启动。启动器检查边端上报的模块，避免把已运行的另一种连接方式当成新配置继续使用。该设置只影响真实采集页的示波和保存。
+切换采集模块后应退出旧启动窗口，再双击一键启动。启动器检查边端上报的模块，避免把已运行的另一种连接方式当成新配置继续使用。该设置只影响真实采集页的示波和保存。最小安装分别使用 `uv sync --no-default-groups --group local --group dc24-python` 或 `uv sync --no-default-groups --group local --group dc24-vendor`；后一条只安装 DLL 适配包，不会安装原厂软件。使用这类最小环境时以 `uv run --no-sync python scripts/dc24_start.py` 启动，避免自动同步恢复默认驱动组；一键批处理对已选环境的显式驱动入口由后续启动任务收口。
 
 也可只用一行。在**本机Windows PowerShell，任意工作目录**执行，无需管理员权限；已有依赖就绪时不访问互联网、不安装软件：
 
@@ -94,9 +94,12 @@ Windows 边端可在本机 `dc24/.env` 中将 `DC24_VENDOR_ROOT` 设为原厂软
 | 文件 | 职责 |
 |---|---|
 | `start_dc24.bat`、`scripts/dc24_start.py` | 检查本机环境、必要时构建前端、启动/复用后端和边端、打开页面及清理自有进程 |
-| `dc24/dc24_profiles.json` | 原厂12档完整B5命令负载，云端与边端共用 |
-| `dc24/dc24_capture.py` | 协议重组、控制命令、标准库单次采集；支持按真实帧长度拆四通道 |
-| `dc24/dc24_vendor.py`、`dc24/dc24_vendor_bridge.ps1` | 验证本机 DLL、管理 32 位连接进程、从回调接收设备帧并复用现有控制报文 |
+| `drivers/dc24/src/dc24_driver/dc24_profiles.json` | 原厂12档完整B5命令负载，云端与现场工具共用 |
+| `drivers/dc24/src/dc24_driver/` | 公共窄驱动接口、四路 int32 样本块、帧序号、事件、链路状态与协议实现 |
+| `drivers/dc24-python/` | 默认纯 Python TCP 连接适配器 |
+| `drivers/dc24-vendor/` | 验证本机 DLL、管理 32 位连接进程并交付完整设备帧；不捆绑原厂软件 |
+| `dc24/dc24_capture.py` | 单次采集宿主；按所选驱动编排配置、进度、停止与原始文件 |
+| `dc24/dc24_vendor.py` | 旧模块名兼容入口；实际实现位于 `drivers/dc24-vendor/` |
 | `dc24/dc24_live.py` | 连续示波、有界窗口、从点击时刻保存、异步传输已关闭文件 |
 | `dc24/dc24_agent.py` | 心跳、会话/任务控制、现场目录选择与认证 |
 | `cloud/app/api/acquisition_live.py` | 实时会话、内存窗口、逐文件上传与保存完成接口 |

@@ -76,7 +76,7 @@ Python 由 uv 托管，构建后端、pybind11、CMake 与 Ninja 的版本在根
 
 ## 依赖与分发边界
 
-根项目运行依赖仅包含计算库所需的 NumPy。cloud、dc24、dev 是日常默认依赖组；benchmark 通过 `uv sync --group benchmark` 显式安装。只需库运行环境时使用 `uv sync --no-default-groups`。
+根项目运行依赖仅包含计算库所需的 NumPy。cloud、dc24、dc24-python、dev 是日常默认依赖组；本地工作站可用 `local` 搭配 `dc24-python` 或 `dc24-vendor` 选择采集驱动；benchmark 通过 `uv sync --group benchmark` 显式安装。只需库运行环境时使用 `uv sync --no-default-groups`。
 
 cloud 与现场采集源码不因打包迁移：后端继续以 cloud 为工作目录启动，采集继续按原脚本入口运行。各目录的 uv 命令向上发现同一个根项目和 `.venv`。应用依赖使用 `uv add --group cloud` 等命令添加；计算库本身的运行依赖才使用无分组的 `uv add`。
 
