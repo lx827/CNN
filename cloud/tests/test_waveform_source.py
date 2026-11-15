@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 
 from app.database import Base, get_db
 from app.models import Device, SensorData
-from app.services.waveform import load_waveform
+from app.services.waveform import get_diagnosis_sample_rate, load_waveform
 
 
 class WaveformSourceTests(unittest.TestCase):
@@ -52,7 +52,7 @@ class WaveformSourceTests(unittest.TestCase):
         waveform = load_waveform(self.db, "DB", 7)
 
         self.assertEqual(waveform.sample_rate, 8192)
-        self.assertEqual(waveform.diagnosis_sample_rate, 8192)
+        self.assertEqual(get_diagnosis_sample_rate(waveform), 8192)
         self.assertIsNone(record.diagnosis_sample_rate_override)
         self.assertEqual(waveform.records, [record])
         self.assertEqual(set(waveform.signals), {"ch3"})
@@ -93,9 +93,12 @@ class WaveformSourceTests(unittest.TestCase):
         self.db.commit()
         waveform = load_waveform(self.db, "LEGACY", 2)
         self.assertEqual(waveform.sample_rate, 25600)
-        self.assertEqual(waveform.diagnosis_sample_rate, 48000)
+        self.assertEqual(get_diagnosis_sample_rate(waveform), 48000)
 
-    def test_zero_override_keeps_legacy_display_but_fails_diagnosis_read(self):
+    def test_zero_override_displays_but_diagnosis_entry_rejects(self):
+        from app.services import diagnosis_workflow as workflow
+
+        self.db.add(Device(device_id="LEGACY", sample_rate=48000, is_online=1))
         self.db.add(
             SensorData(
                 device_id="LEGACY",
@@ -107,8 +110,34 @@ class WaveformSourceTests(unittest.TestCase):
             )
         )
         self.db.commit()
+        waveform = load_waveform(self.db, "LEGACY", 3)
+        self.assertEqual(waveform.sample_rate, 25600)
+        np.testing.assert_array_equal(waveform.signals["ch1"], [0.0, 1.0])
         with self.assertRaisesRegex(ValueError, "batch_sample_rate_missing"):
-            load_waveform(self.db, "LEGACY", 3)
+            get_diagnosis_sample_rate(waveform)
+
+        application = FastAPI()
+        from app.api.data_view import router
+        from app.api.monitor import router as monitor_router
+
+        application.include_router(router)
+        application.include_router(monitor_router)
+        application.dependency_overrides[get_db] = lambda: self.db
+        with (
+            patch.object(workflow, "analyze_device") as analyze,
+            TestClient(application) as client,
+        ):
+            dataview = client.get("/api/data/LEGACY/3/1")
+            monitor = client.get("/api/monitor/latest?device_id=LEGACY")
+            reanalyze = client.post("/api/data/LEGACY/3/reanalyze")
+
+        self.assertEqual(dataview.status_code, 200, dataview.text)
+        self.assertEqual(dataview.json()["data"]["sample_rate"], 25600)
+        self.assertEqual(monitor.status_code, 200, monitor.text)
+        self.assertEqual(monitor.json()["data"][0]["sample_rate"], 25600)
+        self.assertEqual(reanalyze.status_code, 422, reanalyze.text)
+        self.assertIn("batch_sample_rate_missing", reanalyze.text)
+        analyze.assert_not_called()
 
     def test_dc24_file_reads_sample_window_and_real_channels(self):
         counts = np.array(

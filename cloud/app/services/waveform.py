@@ -1,4 +1,4 @@
-"""统一波形读取：分别提供显示采样率、诊断采样率和原始 records。"""
+"""统一波形显示读取，以及仅诊断入口使用的采样率校验。"""
 
 from dataclasses import dataclass
 
@@ -13,11 +13,10 @@ class WaveformNotFoundError(ValueError):
 
 @dataclass
 class WaveformBatch:
-    """一个诊断批次的内存波形；records 保留持久化身份与分析标记。"""
+    """一个可显示批次的内存波形；records 保留持久化身份与分析标记。"""
 
     signals: dict[str, np.ndarray]
     sample_rate: int
-    diagnosis_sample_rate: int
     records: list[SensorData]
 
 
@@ -32,30 +31,36 @@ def _read_signal(record):
 
 
 def waveform_from_records(records):
-    """普通记录两种采样率相同；历史覆盖只恢复旧诊断语义。"""
+    """只校验显示采样率；诊断 override 不参与显示可用性判断。"""
     if not records:
         raise WaveformNotFoundError("batch_data_not_found")
     rates = {record.sample_rate for record in records}
-    diagnosis_rates = {
-        record.diagnosis_sample_rate_override
-        if record.diagnosis_sample_rate_override is not None
-        else record.sample_rate
-        for record in records
-    }
-    if not all(rates) or not all(diagnosis_rates):
+    if not all(rates):
         raise ValueError("batch_sample_rate_missing")
     if len(rates) != 1:
         raise ValueError("batch_channel_sample_rates_must_match")
-    if len(diagnosis_rates) != 1:
-        raise ValueError("batch_channel_diagnosis_sample_rates_must_match")
     return WaveformBatch(
         signals={
             f"ch{record.channel}": _read_signal(record) for record in records
         },
         sample_rate=next(iter(rates)),
-        diagnosis_sample_rate=next(iter(diagnosis_rates)),
         records=records,
     )
+
+
+def get_diagnosis_sample_rate(batch):
+    """仅在诊断入口解析历史覆盖；0/缺失和跨通道不一致明确拒绝。"""
+    rates = {
+        record.diagnosis_sample_rate_override
+        if record.diagnosis_sample_rate_override is not None
+        else record.sample_rate
+        for record in batch.records
+    }
+    if not all(rates):
+        raise ValueError("batch_sample_rate_missing")
+    if len(rates) != 1:
+        raise ValueError("batch_channel_diagnosis_sample_rates_must_match")
+    return next(iter(rates))
 
 
 def load_waveform(db, device_id, batch_index, channel=None):

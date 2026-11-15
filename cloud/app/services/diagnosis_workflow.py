@@ -36,7 +36,7 @@ async def process_batch(
             result = await asyncio.to_thread(
                 analyze_device,
                 waveform.signals,
-                waveform.diagnosis_sample_rate,
+                waveform_service.get_diagnosis_sample_rate(waveform),
                 device,
                 rot_freq,
                 denoise,
