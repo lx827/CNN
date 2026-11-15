@@ -102,20 +102,9 @@ const {
   margin-bottom: 20px;
 }
 
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
-  font-size: 16px;
-}
-
 .offline-health {
   font-size: 13px;
-  color: #909399;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  color: var(--color-info);
 }
 
 .chart {

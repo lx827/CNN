@@ -12,6 +12,14 @@ import { getDevices } from '../api/devices'
 import { getWebSocketClient } from '../utils/websocket'
 import { ElMessage } from 'element-plus'
 import { getDiagnosisView } from '../utils/diagnosisStatus'
+import { baseCartesianOption, AXIS_STYLE, emptyTitle } from '../utils/chartTheme'
+import { COLORS } from '../utils/constants'
+
+// 由语义色派生带透明度的 rgba，用于渐变面积填充，避免散落裸色值
+const withAlpha = (hex, alpha) => {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+}
 
 export function useMonitor() {
   const activeChannel = ref(0)
@@ -256,8 +264,8 @@ export function useMonitor() {
   // ============ 图表更新 ============
   const updateCharts = () => {
     if (!channels.value[activeChannel.value]) {
-      timeInstance?.setOption({ xAxis: { data: [] }, series: [{ data: [] }] })
-      freqInstance?.setOption({ xAxis: { data: [] }, series: [{ data: [] }] })
+      timeInstance?.setOption({ title: emptyTitle('暂无振动数据'), xAxis: { data: [] }, series: [{ data: [] }] })
+      freqInstance?.setOption({ title: emptyTitle('暂无频谱数据'), xAxis: { data: [] }, series: [{ data: [] }] })
       return
     }
 
@@ -270,6 +278,7 @@ export function useMonitor() {
     // 时域图：x 轴为时间（秒）
     const timeX = Array.from({ length: timeData.length }, (_, i) => (i / sampleRate).toFixed(4))
     timeInstance?.setOption({
+      title: { show: false },
       xAxis: { data: timeX },
       series: [{ data: timeData }]
     })
@@ -277,6 +286,7 @@ export function useMonitor() {
     // 频域图：x 轴为频率 (Hz)
     const freqX = fftFreq.length > 0 ? fftFreq : Array.from({ length: freqData.length }, (_, i) => i)
     freqInstance?.setOption({
+      title: { show: false },
       xAxis: { data: freqX },
       series: [{ data: freqData }]
     })
@@ -291,68 +301,67 @@ export function useMonitor() {
     timeInstance = echarts.init(timeDomainChart.value)
     freqInstance = echarts.init(frequencyChart.value)
 
+    // 坐标轴名称样式跟随主题坐标轴文字色
+    const axisNameStyle = { color: AXIS_STYLE.axisLabel.color, fontSize: 12 }
+    // 振动波形/频谱保持原始折线（不开 smooth），主色系列 + 轻量渐变面积
+    const lineSeries = {
+      type: 'line',
+      data: [],
+      smooth: false,
+      showSymbol: false,
+      lineStyle: { width: 1.5, color: COLORS.primary },
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: withAlpha(COLORS.primary, 0.16) },
+          { offset: 1, color: withAlpha(COLORS.primary, 0.02) }
+        ])
+      }
+    }
+
     const timeOption = {
-      tooltip: { trigger: 'axis' },
-      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      ...baseCartesianOption(),
+      grid: { left: '3%', right: '4%', bottom: '3%', top: 40, containLabel: true },
       xAxis: {
         type: 'category',
         data: [],
         boundaryGap: false,
         name: '时间 (s)',
         nameLocation: 'middle',
-        nameGap: 25
+        nameGap: 25,
+        nameTextStyle: axisNameStyle,
+        ...AXIS_STYLE,
+        splitLine: { show: false }
       },
       yAxis: {
         type: 'value',
-        name: '振幅 (mm/s)'
+        name: '振幅 (mm/s)',
+        nameTextStyle: axisNameStyle,
+        ...AXIS_STYLE
       },
-      series: [
-        {
-          type: 'line',
-          data: [],
-          smooth: true,
-          showSymbol: false,
-          lineStyle: { width: 1.5, color: '#165DFF' },
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(22, 93, 255, 0.3)' },
-              { offset: 1, color: 'rgba(22, 93, 255, 0.05)' }
-            ])
-          }
-        }
-      ]
+      series: [{ ...lineSeries }]
     }
 
     const freqOption = {
-      tooltip: { trigger: 'axis' },
-      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      ...baseCartesianOption(),
+      grid: { left: '3%', right: '4%', bottom: '3%', top: 40, containLabel: true },
       xAxis: {
         type: 'category',
         data: [],
         boundaryGap: false,
         name: '频率 (Hz)',
         nameLocation: 'middle',
-        nameGap: 25
+        nameGap: 25,
+        nameTextStyle: axisNameStyle,
+        ...AXIS_STYLE,
+        splitLine: { show: false }
       },
       yAxis: {
         type: 'value',
-        name: '幅值'
+        name: '幅值',
+        nameTextStyle: axisNameStyle,
+        ...AXIS_STYLE
       },
-      series: [
-        {
-          type: 'line',
-          data: [],
-          smooth: true,
-          showSymbol: false,
-          lineStyle: { width: 1.5, color: '#52C41A' },
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(82, 196, 26, 0.3)' },
-              { offset: 1, color: 'rgba(82, 196, 26, 0.05)' }
-            ])
-          }
-        }
-      ]
+      series: [{ ...lineSeries }]
     }
 
     timeInstance.setOption(timeOption)

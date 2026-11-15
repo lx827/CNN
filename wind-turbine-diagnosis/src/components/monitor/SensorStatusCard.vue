@@ -55,14 +55,7 @@ defineEmits(['update:selectedDevice', 'collect'])
 </script>
 
 <style scoped>
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
-  font-size: 16px;
-}
-
+/* .card-header 使用 global.css 全局工具类，此处不重复定义 */
 .header-actions {
   display: flex;
   align-items: center;
@@ -70,53 +63,62 @@ defineEmits(['update:selectedDevice', 'collect'])
 }
 
 .special-tag {
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .sensor-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
   margin-bottom: 12px;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.sensor-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
 }
 
 .indicator {
   width: 12px;
   height: 12px;
+  flex-shrink: 0;
   border-radius: 50%;
-  background: #909399;
+  background: var(--text-placeholder);
 }
 
 .indicator.success {
-  background: #52C41A;
+  background: var(--color-success);
 }
 
 .indicator.warning {
-  background: #FAAD14;
-  box-shadow: 0 0 8px rgba(250, 173, 14, 0.5);
+  background: var(--color-warning);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-warning) 50%, transparent);
 }
 
 .indicator.danger {
-  background: #F5222D;
-  box-shadow: 0 0 8px rgba(245, 34, 45, 0.5);
+  background: var(--color-danger);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-danger) 50%, transparent);
 }
 
 .sensor-info {
   flex: 1;
+  min-width: 0;
 }
 
 .sensor-name {
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
 .sensor-status {
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
   margin-top: 4px;
 }
 </style>

@@ -1,70 +1,25 @@
 <template>
   <el-row :gutter="16" class="summary-row">
-    <el-col :xs="12" :sm="8" :md="8" :lg="4">
-      <el-card class="summary-card">
+    <el-col v-for="card in cards" :key="card.label" :xs="12" :sm="8" :md="8" :lg="4">
+      <el-card class="summary-card" shadow="never">
         <div class="card-content">
-          <el-icon :size="32" color="#165DFF"><Cpu /></el-icon>
+          <div class="icon-wrap" :style="{ background: card.soft, color: card.color }">
+            <el-icon :size="22"><component :is="card.icon" /></el-icon>
+          </div>
           <div class="card-info">
-            <div class="label">设备总数</div>
-            <div class="value">{{ total }}</div>
+            <div class="label">{{ card.label }}</div>
+            <div class="value" :style="{ color: card.color }">{{ card.value }}</div>
           </div>
         </div>
       </el-card>
-    </el-col>
-    <el-col :xs="12" :sm="8" :md="8" :lg="5">
-      <el-card class="summary-card">
-        <div class="card-content">
-          <el-icon :size="32" color="#52C41A"><CircleCheck /></el-icon>
-          <div class="card-info">
-            <div class="label">诊断正常</div>
-            <div class="value" style="color: #52C41A">{{ normal }}</div>
-          </div>
-        </div>
-      </el-card>
-    </el-col>
-    <el-col :xs="12" :sm="8" :md="8" :lg="5">
-      <el-card class="summary-card">
-        <div class="card-content">
-          <el-icon :size="32" color="#FAAD14"><Warning /></el-icon>
-          <div class="card-info">
-            <div class="label">预警设备</div>
-            <div class="value" style="color: #FAAD14">{{ warning }}</div>
-          </div>
-        </div>
-      </el-card>
-    </el-col>
-    <el-col :xs="12" :sm="8" :md="8" :lg="5">
-      <el-card class="summary-card">
-        <div class="card-content">
-          <el-icon :size="32" color="#F5222D"><Delete /></el-icon>
-          <div class="card-info">
-            <div class="label">故障设备</div>
-            <div class="value" style="color: #F5222D">{{ fault }}</div>
-          </div>
-        </div>
-      </el-card>
-    </el-col>
-    <el-col :xs="12" :sm="8" :md="8" :lg="5">
-      <el-card class="summary-card">
-        <div class="card-content">
-          <el-icon :size="32" color="#909399"><Warning /></el-icon>
-          <div class="card-info">
-            <div class="label">离线设备</div>
-            <div class="value" style="color: #909399">{{ offline }}</div>
-          </div>
-        </div>
-      </el-card>
-    </el-col>
-    <el-col :xs="12" :sm="8" :md="8" :lg="4">
-      <el-card class="summary-card"><div class="card-info">
-        <div class="label">诊断未知 / 不可评估</div><div class="value">{{ unknown }}</div>
-      </div></el-card>
     </el-col>
   </el-row>
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   total: { type: Number, default: 0 },
   normal: { type: Number, default: 0 },
   warning: { type: Number, default: 0 },
@@ -72,6 +27,15 @@ defineProps({
   offline: { type: Number, default: 0 },
   unknown: { type: Number, default: 0 },
 })
+
+const cards = computed(() => [
+  { label: '设备总数', value: props.total, icon: 'Cpu', color: 'var(--color-primary)', soft: 'var(--color-primary-soft)' },
+  { label: '诊断正常', value: props.normal, icon: 'CircleCheck', color: 'var(--color-success)', soft: 'var(--color-success-soft)' },
+  { label: '预警设备', value: props.warning, icon: 'Warning', color: 'var(--color-warning)', soft: 'var(--color-warning-soft)' },
+  { label: '故障设备', value: props.fault, icon: 'CircleClose', color: 'var(--color-danger)', soft: 'var(--color-danger-soft)' },
+  { label: '离线设备', value: props.offline, icon: 'Connection', color: 'var(--color-info)', soft: 'var(--color-info-soft)' },
+  { label: '诊断未知', value: props.unknown, icon: 'QuestionFilled', color: 'var(--text-secondary)', soft: 'var(--bg-subtle)' },
+])
 </script>
 
 <style scoped>
@@ -80,34 +44,52 @@ defineProps({
 }
 
 .summary-card {
-  border-radius: 8px;
-  transition: all 0.3s;
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
 }
 
 .summary-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
+}
+
+.summary-card :deep(.el-card__body) {
+  padding: 18px 20px;
 }
 
 .card-content {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
+}
+
+.icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
 }
 
 .card-info {
   flex: 1;
+  min-width: 0;
 }
 
 .card-info .label {
   font-size: 13px;
-  color: #666;
-  margin-bottom: 6px;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card-info .value {
-  font-size: 28px;
-  font-weight: bold;
-  color: #333;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 </style>
