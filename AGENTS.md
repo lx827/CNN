@@ -111,10 +111,9 @@ cloud/                      # 云端后端(根项目 cloud 依赖组)
 └── tests/                  # 后端测试 + 诊断测试套件(含 P0 回归)
 
 dc24/                       # DC24 共用采集宿主(根项目 dc24 依赖组,Windows)
-├── dc24_capture.py         # 单次采集编排；旧协议导入名兼容入口
+├── dc24_capture.py         # 单次采集编排(兼作旧协议名 re-export)
 ├── dc24_agent.py           # 心跳、控制轮询与采集入口(读 dc24/.env)
 ├── dc24_live.py            # 连续示波、保存与上传
-├── dc24_vendor.py          # 旧原厂 DLL 模块名兼容入口
 └── tests/                  # 驱动接口、启动、DLL 与树莓派回归
 
 drivers/                    # 独立 DC24 驱动发行包(根 uv sources 集中管理)
@@ -126,7 +125,7 @@ drivers/                    # 独立 DC24 驱动发行包(根 uv sources 集中�
 edge/                       # Rust 边端(开发稿,目标树莓派;cargo 管理,不经 uv)
 ├── src/ tests/ Cargo.toml / Cargo.lock
 │   └── ffi.rs              # C ABI 网络接收核心(cdylib dc24_edge_core,树莓派主路线)
-├── deploy/dc24-edge.service    # 未安装的 systemd 模板
+├── deploy/                 # dc24-edge.service 模板 + pi/ 实机部署文件(deploy_pi.sh、配置模板)
 ├── FFI.md                  # FFI 契约(Python 驱动接入文档)
 └── README.md               # 开发稿说明(可调配置、验证状态、部署限制)
 
