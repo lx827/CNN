@@ -2,7 +2,8 @@
 //! 验证样本块布局、事件转发、终态交付、首帧门槛与队列超限保护。
 use dc24_edge_core::ffi::{
     dc24_edge_close, dc24_edge_info_json, dc24_edge_open, dc24_edge_poll, dc24_edge_running,
-    dc24_edge_start, dc24_edge_stop, Message, MSG_EVENT, MSG_SAMPLES, MSG_STATE,
+    dc24_edge_sample_frame, dc24_edge_start, dc24_edge_stop, Message, MSG_EVENT, MSG_SAMPLES,
+    MSG_STATE,
 };
 use dc24_edge_core::protocol::{self, Frames};
 use serde_json::{json, Value};
@@ -210,6 +211,18 @@ fn ffi_streams_samples_events_and_stops_cleanly() {
                 last_end = message.start_sample + message.len as u64 / 16;
                 let data = bytes(&message);
                 assert_eq!(data.len() % 16, 0);
+                let mut frame_ptr = std::ptr::null();
+                let mut frame_len = 0usize;
+                assert_eq!(
+                    unsafe { dc24_edge_sample_frame(handle, &mut frame_ptr, &mut frame_len) },
+                    1
+                );
+                let frame = unsafe { std::slice::from_raw_parts(frame_ptr, frame_len) };
+                assert_eq!(
+                    frame,
+                    data_frame(message.sequence),
+                    "必须交付设备原始 80 帧"
+                );
                 let mut first = [0i32; 4];
                 for (channel, word) in data.chunks_exact(4).take(4).enumerate() {
                     first[channel] = i32::from_le_bytes(word.try_into().unwrap());
