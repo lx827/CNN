@@ -3,8 +3,8 @@
 # cnn_compute + edge-diag aarch64 交叉构建一键入口 —— Windows Git Bash / PowerShell(wsl) / WSL 用
 #
 # 在 WSL Docker 容器内:
-#   1) 按 cmake/toolchains/linux-aarch64.cmake 交叉构建 libcnn_compute.so,
-#      并在容器内用 aarch64 gcc 冒烟编译/链接 capi/tests/consumer.c;
+#   1) 按 compute/cmake/toolchains/linux-aarch64.cmake 交叉构建 libcnn_compute.so,
+#      并在容器内用 aarch64 gcc 冒烟编译/链接 compute/capi/tests/consumer.c;
 #   2) 对 edge-diag/ crate 执行 cargo build --release --locked
 #      (rustup 目标 aarch64-unknown-linux-gnu),设 EDGE_DIAG_LIB 动态链接
 #      上一步产出的 libcnn_compute.so。

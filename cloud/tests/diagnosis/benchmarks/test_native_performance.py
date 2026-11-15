@@ -17,17 +17,17 @@ class PerformanceGateTests(unittest.TestCase):
     def test_source_identity_covers_shared_core_algorithms_and_bindings(self):
         hashes = source_identity()["sha256"]
         for path in (
-            "lib/interpolation/legacy.cpp",
-            "lib/interpolation/interpolation.cpp",
-            "lib/solvers/tridiagonal.cpp",
-            "lib/core/tridiagonal.hpp",
-            "lib/core/build_config.hpp.in",
-            "lib/emd/sift.cpp",
-            "lib/emd/CMakeLists.txt",
-            "bind/arrays.cpp",
-            "bind/module.cpp",
-            "bind/CMakeLists.txt",
-            "cnn_compute/core.py",
+            "compute/lib/interpolation/legacy.cpp",
+            "compute/lib/interpolation/interpolation.cpp",
+            "compute/lib/solvers/tridiagonal.cpp",
+            "compute/lib/core/tridiagonal.hpp",
+            "compute/lib/core/build_config.hpp.in",
+            "compute/lib/emd/sift.cpp",
+            "compute/lib/emd/CMakeLists.txt",
+            "compute/bind/arrays.cpp",
+            "compute/bind/module.cpp",
+            "compute/bind/CMakeLists.txt",
+            "compute/cnn_compute/core.py",
         ):
             self.assertIn(path, hashes)
         self.assertFalse(any(path.startswith("native/") for path in hashes))

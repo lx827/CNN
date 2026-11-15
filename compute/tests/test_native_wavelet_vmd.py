@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pywt
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "cloud"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "cloud"))
 
 from app.algorithms.decomposition.vmd import VMDParameters, decompose_vmd
 from app.algorithms.decomposition.vmd.python_adapter import PythonVMDImplementation
