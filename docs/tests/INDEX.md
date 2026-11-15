@@ -40,7 +40,7 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 | 信号基元与特征 | `cloud/tests/diagnosis/foundation/layer1/`、`layer2/` | 合成信号、手算统计、滤波、阶次与预处理 |
 | 去噪调度 | `foundation/layer4/test_engine_deep.py`（同诊断目录） | 合成信号与转频不可判定 |
 | 证据与状态 | `algorithms/test_diagnosis_domain.py` | 依赖去重、冲突、对象 coverage、状态与单次权重 |
-| 唯一生产流程 | `cloud/tests/test_diagnosis_workflow.py` | SQLite 迁移、HTTP、缓存、重评、worker、事务回滚、告警与转频隔离 |
+| 唯一生产流程 | `cloud/tests/test_diagnosis_workflow.py` | SQLite 状态及旧 NULL 显示/诊断采样率迁移、HTTP、缓存、重评、worker、事务回滚、告警与转频隔离 |
 | 标准包络 | `algorithms/test_bearing_envelope_analysis.py`、`test_bearing_envelope_pipeline.py`、`test_bearing_envelope_api.py` | 谱峰唯一归属、幅值、边带、前提门控、Engine 与 HTTP |
 | 高级轴承 | `algorithms/test_bearing_*_advanced.py`、`test_bearing_advanced_business.py`、`test_bearing_advanced_api.py` | 谱峭度、反卷积、CPW/TEO、循环平稳已知解、负对照与专属评估 |
 | 定轴齿轮 | `algorithms/test_fixed_axis_gear.py`、`test_fixed_axis_gear_api.py` | TSA 恒等式、矩与边带手算、健康参考、重评与 HTTP |
@@ -136,7 +136,7 @@ uv run --group benchmark python -m tests.diagnosis.benchmarks.export --input D:/
 | 入口（`cloud/tests/`） | 覆盖 |
 |-----------------------|------|
 | `test_read_paths.py` | 摘要查询、真实稀疏 channels、排序、JSON、缓存、索引迁移与 HTTP |
-| `test_waveform_source.py` | 缺失采样率读取错误、数据库数组不变、DC24 int32 文件区段与真实通道映射、DataView/Monitor/reanalyze 统一读取及选段新批次 |
+| `test_waveform_source.py` | 普通记录显示/诊断采样率一致、历史 override 双语义与 0 不可诊断、DC24 int32 文件区段与真实通道映射、DataView/Monitor/reanalyze 统一读取及选段新批次 |
 | `test_event_loop.py` | 慢去噪期间 STFT、倒谱、阶次端点的协程调度 |
 | `test_analysis_worker_json.py` | NumPy 入库、通道缓存、批次标记、告警输入与 JSON 推送 |
 | `test_hustbear_registration.py` | 内存 SQLite 注册、幂等和冲突整批回滚 |
