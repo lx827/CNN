@@ -42,6 +42,7 @@ from app.api.acquisition import (
     snapshot,
 )
 from app.database import get_db
+from app.core import config
 from app.core.config import DC24_CHANNELS
 from app.models import AcquisitionAgent, AcquisitionJob
 from app.services.acquisition_live import live
@@ -376,16 +377,37 @@ async def upload_file(
     return {"code": 200}
 
 
+class FinishStream(BaseModel):
+    local_directory: str | None = Field(default=None, min_length=1, max_length=1024)
+
+
 @router.post("/jobs/{job_id}/finish-stream", dependencies=[Depends(edge_only)])
-async def finish(job_id: str, agent_id: str, db: Session = Depends(get_db)):
+async def finish(
+    job_id: str,
+    agent_id: str,
+    body: FinishStream | None = None,
+    db: Session = Depends(get_db),
+):
+    local = body is not None and body.local_directory is not None
+    if local and not config.IS_LOCAL_DEPLOYMENT:
+        raise HTTPException(422, "本机原件登记仅本地工作站可用")
     async with ANALYSIS_LOCK:
         job = owned(db, job_id, agent_id)
         db.refresh(job)
         if job.status in ("completed", "failed"):
             return {"code": 200, "data": snapshot(job)}
-        p = directory(job_id)
+        if local:
+            p = Path(body.local_directory).expanduser()
+            if not p.is_absolute():
+                raise HTTPException(422, "本机原件目录必须是绝对路径")
+            p = p.resolve()
+        else:
+            p = directory(job_id)
         if not all((p / name).is_file() for name in STREAM_FILES):
-            raise HTTPException(422, "完整采集文件尚未上传")
+            raise HTTPException(
+                422,
+                "完整采集文件尚未上传" if not local else "本机原件目录缺少完整采集文件",
+            )
         meta = json.loads((p / "metadata.json").read_text(encoding="utf-8"))
         count = meta.get("samples_per_channel", 0)
         if (
@@ -394,8 +416,11 @@ async def finish(job_id: str, agent_id: str, db: Session = Depends(get_db)):
             or meta.get("value_unit") != "signed_24_bit_ADC_counts"
             or count <= 0
             or (p / "counts.i32").stat().st_size != count * 16
+            or (local and meta.get("saved_directory") != str(p))
         ):
             raise HTTPException(422, "实际数据、单位或采样率与任务不一致")
+        if local:
+            meta["local_directory"] = str(p)
         job.result_metadata, job.updated_at = meta, now()
         job.status = "completed" if meta.get("complete") else "failed"
         job.error_message = meta.get("error")

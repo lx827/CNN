@@ -174,33 +174,40 @@ class SessionRunner:
                 params={"agent_id": self.agent.agent_id},
                 json={"stage": "uploading", "samples_per_channel": recording.count},
             )
-            for name in (
-                "samples.csv",
-                "metadata.json",
-                "rx_stream.bin",
-                "commands.jsonl",
-                "counts.i32",
-            ):
-                for attempt in range(3):
-                    try:
-                        with (recording.path / name).open("rb") as f:
-                            self.agent.call(
-                                "PUT",
-                                f"/jobs/{recording.job_id}/stream-files/{name}",
-                                params={"agent_id": self.agent.agent_id},
-                                data=f,
-                                timeout=(5, 180),
-                            )
-                        break
-                    except Exception:
-                        if attempt == 2:
-                            raise
-                        time.sleep(1)
+            if not self.agent.local_originals:
+                for name in (
+                    "samples.csv",
+                    "metadata.json",
+                    "rx_stream.bin",
+                    "commands.jsonl",
+                    "counts.i32",
+                ):
+                    for attempt in range(3):
+                        try:
+                            with (recording.path / name).open("rb") as f:
+                                self.agent.call(
+                                    "PUT",
+                                    f"/jobs/{recording.job_id}/stream-files/{name}",
+                                    params={"agent_id": self.agent.agent_id},
+                                    data=f,
+                                    timeout=(5, 180),
+                                )
+                            break
+                        except Exception:
+                            if attempt == 2:
+                                raise
+                            time.sleep(1)
+            completion = (
+                {"json": {"local_directory": str(recording.path)}}
+                if self.agent.local_originals
+                else {}
+            )
             result = self.agent.call(
                 "POST",
                 f"/jobs/{recording.job_id}/finish-stream",
                 params={"agent_id": self.agent.agent_id},
                 timeout=(5, 180),
+                **completion,
             )
             state["status"] = result["status"]
         except Exception as exc:
@@ -213,7 +220,11 @@ class SessionRunner:
                     json={
                         "stage": "failed",
                         "samples_per_channel": recording.count,
-                        "message": "上传失败，本地文件保留：" + str(recording.path),
+                        "message": (
+                            "登记失败" if self.agent.local_originals else "上传失败"
+                        )
+                        + "，本地文件保留："
+                        + str(recording.path),
                     },
                 )
             except Exception:
@@ -380,7 +391,7 @@ class SessionRunner:
             if driver is not None:
                 driver.close()
             self.update("stopping")
-            # 停止期间继续报告上传状态；副本完成后才发布终态，避免启动器过早结束边端。
+            # 停止期间继续报告上传/登记状态；完成后才发布终态，避免启动器过早结束边端。
             for t in self.upload_threads:
                 t.join()
             self.update("failed" if self.error else "stopped")

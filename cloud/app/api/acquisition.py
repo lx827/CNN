@@ -62,6 +62,12 @@ def directory(job_id):
     return storage() / job_id
 
 
+def job_directory(job):
+    """本地任务只读登记的现场原件；远程任务读既有后端上传目录。"""
+    local_directory = (job.result_metadata or {}).get("local_directory")
+    return Path(local_directory) if local_directory else directory(job.id)
+
+
 def job_or_404(db, job_id):
     job = db.get(AcquisitionJob, job_id)
     if job is None:
@@ -286,8 +292,8 @@ def progress(job_id: str, body: Progress, agent_id: str, db: Session = Depends(g
     return {"code": 200, "data": {"cancel_requested": bool(job.cancel_requested)}}
 
 
-def load_values(job_id):
-    p = directory(job_id)
+def load_values(job):
+    p = directory(job) if isinstance(job, str) else job_directory(job)
     if (p / "counts.i32").is_file():
         return np.memmap(p / "counts.i32", dtype="<i4", mode="r").reshape(-1, 4)
     with np.load(p / "counts.npz", allow_pickle=False) as a:
@@ -412,8 +418,8 @@ async def upload(
 
 @router.get("/jobs/{job_id}/analysis")
 def analysis(job_id: str, db: Session = Depends(get_db)):
-    job_or_404(db, job_id)
-    path = directory(job_id) / "analysis.json"
+    job = job_or_404(db, job_id)
+    path = job_directory(job) / "analysis.json"
     if not path.exists():
         raise HTTPException(404, "分析尚未完成或本次任务已停止")
     return {"code": 200, "data": json.loads(path.read_text(encoding="utf-8"))}
@@ -430,7 +436,7 @@ def waveform(
     job = job_or_404(db, job_id)
     if job.result_metadata is None:
         raise HTTPException(404, "原始数据尚未保存")
-    values = load_values(job_id)
+    values = load_values(job)
     begin, end = (
         int(start * job.sample_rate),
         min(len(values), int((start + seconds) * job.sample_rate)),
@@ -447,10 +453,10 @@ def waveform(
 
 @router.get("/jobs/{job_id}/files/{name}")
 def download(job_id: str, name: str, db: Session = Depends(get_db)):
-    job_or_404(db, job_id)
+    job = job_or_404(db, job_id)
     if name not in DOWNLOAD_FILES:
         raise HTTPException(404, "文件不存在")
-    p = directory(job_id) / name
+    p = job_directory(job) / name
     if not p.is_file():
         raise HTTPException(404, "文件尚未生成")
     return FileResponse(p, filename=f"{job_id}_{name}")

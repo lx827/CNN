@@ -98,9 +98,11 @@ class DriverInterfaceTests(unittest.TestCase):
         class Agent:
             agent_id = "contract-agent"
 
-            def __init__(self, session):
+            def __init__(self, session, local_originals=False):
                 self.session = session
+                self.local_originals = local_originals
                 self.calls = []
+                self.requests = []
 
             def progress(self, state):
                 pass
@@ -113,39 +115,54 @@ class DriverInterfaceTests(unittest.TestCase):
 
             def call(self, method, path, **kwargs):
                 self.calls.append((method, path))
+                self.requests.append((method, path, kwargs))
                 return {"status": "completed"}
 
-        with tempfile.TemporaryDirectory() as directory:
-            command = {
-                "id": "job",
-                "duration": 0,
-                "save_directory": directory,
-                "stop_requested": False,
-            }
-            session = {
-                "id": "session",
-                "sample_rate": 20000,
-                "recording": command,
-                "stop_requested": False,
-            }
-            agent = Agent(session)
-            driver = ScriptedDriver()
-            runner = SessionRunner(agent, session, driver=driver)
-            driver.after_poll = runner.stop.set
-            runner.run()
-            output = Path(directory) / "job"
-            metadata = json.loads(
-                (output / "metadata.json").read_text(encoding="utf-8")
-            )
-            self.assertEqual(metadata["samples_per_channel"], 254)
-            self.assertEqual(metadata["transport"], "contract_fake")
-            self.assertTrue(metadata["complete"])
-            self.assertEqual((output / "counts.i32").stat().st_size, 254 * 16)
-            self.assertIn(
-                ("POST", "/jobs/job/finish-stream"),
-                [(method, path) for method, path in agent.calls],
-            )
-            self.assertEqual(driver.state, LinkState.STOPPED)
+        for local_originals in (False, True):
+            with (
+                self.subTest(local_originals=local_originals),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                command = {
+                    "id": "job",
+                    "duration": 0,
+                    "save_directory": directory,
+                    "stop_requested": False,
+                }
+                session = {
+                    "id": "session",
+                    "sample_rate": 20000,
+                    "recording": command,
+                    "stop_requested": False,
+                }
+                agent = Agent(session, local_originals=local_originals)
+                driver = ScriptedDriver()
+                runner = SessionRunner(agent, session, driver=driver)
+                driver.after_poll = runner.stop.set
+                runner.run()
+                output = Path(directory) / "job"
+                metadata = json.loads(
+                    (output / "metadata.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual(metadata["samples_per_channel"], 254)
+                self.assertEqual(metadata["transport"], "contract_fake")
+                self.assertTrue(metadata["complete"])
+                self.assertEqual((output / "counts.i32").stat().st_size, 254 * 16)
+                finish = next(
+                    request
+                    for request in agent.requests
+                    if request[:2] == ("POST", "/jobs/job/finish-stream")
+                )
+                uploads = [call for call in agent.calls if call[0] == "PUT"]
+                if local_originals:
+                    self.assertEqual(uploads, [])
+                    self.assertEqual(
+                        finish[2]["json"], {"local_directory": str(output)}
+                    )
+                else:
+                    self.assertEqual(len(uploads), 5)
+                    self.assertNotIn("json", finish[2])
+                self.assertEqual(driver.state, LinkState.STOPPED)
 
 
 if __name__ == "__main__":
