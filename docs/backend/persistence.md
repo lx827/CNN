@@ -11,6 +11,7 @@ ORM 类型以 `cloud/app/models.py` 为准；外部字段见 [API](../api/backen
 | diagnosis | 精确缓存身份、两维状态/nullable 分数/coverage、版本化 engine_result、转频与分析时间 |
 | alarms | 统一诊断产生的设备/通道预警或故障告警、去重/处理信息 |
 | collection_tasks | 采集任务生命周期，不与诊断状态混用 |
+| acquisition_jobs | DC24 采集生命周期、显示分析选项、启用通道、完成元数据与已登记诊断批次身份 |
 
 设备机械参数是配置，纯算法只接收已验证对象。原始波形不随重新诊断改写；历史 `order_analysis/full_analysis` 等物理列保留，不作为新诊断状态的兼容解释来源。
 
@@ -22,7 +23,13 @@ ORM 类型以 `cloud/app/models.py` 为准；外部字段见 [API](../api/backen
 - DC24 文件记录保存来源对象，包含 `kind=dc24_counts`、采集任务 `job_id`、原始 `counts.i32` 路径以及半开样本区段 `start_sample`/`end_sample`。文件是四路交错 little-endian int32；`SensorData.channel` 的 1~4 对应文件列 0~3。
 - 文件只按区段和真实通道读入内存并转为 float64，不保存浮点波形副本，不做统一归一化或工程单位转换。
 
-`services/waveform.py::load_waveform` 统一返回通道数组、采样率和 records。DataView 各数值/研究/导出接口与 `diagnosis_workflow.process_batch` 均经此入口读取；诊断缓存键和最新记录查询规则不变。
+`services/waveform.py::load_waveform` 统一返回通道数组、采样率和 records。DataView 各数值/研究/导出接口、Monitor 最新/历史接口与 `diagnosis_workflow.process_batch` 均经此模块读取；诊断缓存键和最新记录查询规则不变。Monitor 历史列表将已批量查询的 records 交给同一转换边界，保持常数 SQL 查询数。
+
+## DC24 完成登记事务
+
+完整采集的 `counts.i32` 是诊断文件源。完成时按统一配置窗口和任务 `enabled_channels` 创建 `is_special=1`、`batch_index>=101` 的记录；每个窗口只保存来源对象和实际起止样本，短记录形成一个窗口，末段不补齐。设备以真实 `agent_id` 自动取得或创建，无需用户绑定。
+
+`AcquisitionJob.result_metadata.diagnosis_device_id/diagnosis_batches` 是完成响应中的登记身份。ZIP 上传和流式 `finish-stream` 共用登记服务，在同一数据库事务中写入所有窗口、登记身份和任务终态；任一步失败不会留下“任务已完成但只登记部分窗口”的状态。终态重试直接返回原任务，两个完成入口由同一分析锁串行化，不能重复占用批次号。登记后每批 `is_analyzed=0`，由现有 worker 按统一批次事务逐批完成，已完成的窗口即可查询，不等待同一记录的其他窗口。
 
 ## 精确键、历史行与摘要
 
@@ -48,7 +55,7 @@ devices 与 diagnosis 新增 `evaluation_status`、`diagnosis_conclusion`、`cov
 
 当首次添加任一两维状态列时，该表旧 health_score 清空为 NULL，MySQL 同步将 health_score 改为 FLOAT NULL。状态列已存在的后续启动不再重复清空新分数；只缺 coverage 时补列不触发两维迁移的分数清空。SQLite 依动态类型保存 nullable 值，不为新模型类型机械重建旧表。
 
-其他缺失列和索引继续按现有增量建表/补列/checkfirst 规则处理。保留原采样、历史 JSON、旧状态列与记录，不为旧 NULL 通道或去噪列推造身份。迁移并不代表旧诊断已重新评估，首次部署后旧记录等待显式重新分析；真实生产数据库迁移未在文档轮次执行。
+其他缺失列和索引继续按现有增量建表/补列/checkfirst 规则处理。`acquisition_jobs.enabled_channels` 为新增 JSON 列；旧任务该列为 NULL，读取与完成登记沿用统一配置的全部有效通道，不改写历史任务。保留原采样、历史 JSON、旧状态列与记录，不为旧 NULL 通道或去噪列推造身份。迁移并不代表旧诊断已重新评估，首次部署后旧记录等待显式重新分析；真实生产数据库迁移未在文档轮次执行。
 
 ## 统一批次事务与通知
 
