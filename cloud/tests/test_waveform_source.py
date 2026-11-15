@@ -146,6 +146,50 @@ class WaveformSourceTests(unittest.TestCase):
         self.assertEqual(response.json()["data"]["sample_rate"], 1000)
         self.assertEqual(load.call_count, 1)
 
+    def test_monitor_http_uses_unified_file_source(self):
+        counts = np.arange(128 * 4, dtype="<i4").reshape(128, 4)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "counts.i32"
+            counts.tofile(path)
+            self.db.add(Device(device_id="LOCAL", sample_rate=1000, is_online=1))
+            self.db.add(
+                SensorData(
+                    device_id="LOCAL",
+                    batch_index=101,
+                    channel=2,
+                    data={
+                        "kind": "dc24_counts",
+                        "job_id": "acquisition-job",
+                        "path": str(path),
+                        "start_sample": 0,
+                        "end_sample": 128,
+                    },
+                    sample_rate=1000,
+                    is_special=1,
+                )
+            )
+            self.db.commit()
+            application = FastAPI()
+            from app.api.monitor import router
+
+            application.include_router(router)
+            application.dependency_overrides[get_db] = lambda: self.db
+            with TestClient(application) as client:
+                latest = client.get("/api/monitor/latest?device_id=LOCAL")
+                history = client.get(
+                    "/api/monitor/history?device_id=LOCAL&channel=2&batches=1"
+                )
+
+        self.assertEqual(latest.status_code, 200, latest.text)
+        item = latest.json()["data"][0]
+        self.assertEqual(item["channel"], 2)
+        self.assertEqual(item["data"], counts[:, 1].tolist())
+        self.assertTrue(item["fft_freq"])
+        self.assertEqual(history.status_code, 200, history.text)
+        self.assertEqual(
+            history.json()["data"]["items"][0]["data"], counts[:, 1].tolist()
+        )
+
     def test_reanalyze_http_uses_unified_file_source_and_marks_records(self):
         from app.services import diagnosis_workflow as workflow
 

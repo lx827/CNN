@@ -51,6 +51,12 @@ SENSOR_WINDOW_SECONDS = int(
 )  # 每次上传时长（秒）
 # 后台自动诊断默认去噪方法：wavelet(推荐) / none / vmd
 ANALYZE_DENOISE_METHOD = os.getenv("ANALYZE_DENOISE_METHOD", "wavelet")
+DC24_DIAGNOSIS_WINDOW_SECONDS = float(
+    os.getenv("DC24_DIAGNOSIS_WINDOW_SECONDS", "5")
+)  # DC24 采集完成后自动诊断的窗口秒数
+DC24_CHANNELS = tuple(
+    int(item.strip()) for item in os.getenv("DC24_CHANNELS", "1,2,3,4").split(",")
+)  # 可供采集任务启用的真实通道号；硬件帧仍固定保存四路
 
 # ========== 设备配置 ==========
 DEVICE_ID = "WTG-001"

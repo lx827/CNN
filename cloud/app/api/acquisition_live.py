@@ -31,7 +31,9 @@ from app.api.auth import optional_auth, verify_token_string
 from app.api.acquisition import (
     NATIVE_RATES,
     ACTIVE,
+    ANALYSIS_LOCK,
     AnalysisOptions,
+    ChannelSelection,
     directory,
     edge_only,
     job_or_404,
@@ -40,9 +42,11 @@ from app.api.acquisition import (
     snapshot,
 )
 from app.database import get_db
+from app.core.config import DC24_CHANNELS
 from app.models import AcquisitionAgent, AcquisitionJob
 from app.services.acquisition_live import live
 from app.services.acquisition_analysis import analyze_counts, display_points
+from app.services.acquisition_diagnosis import register_completed_acquisition
 
 router = APIRouter(
     prefix="/api/acquisition", tags=["实时示波"], dependencies=[Depends(optional_auth)]
@@ -78,6 +82,7 @@ def capabilities():
             "sample_rates": NATIVE_RATES,
             "hostname": socket.gethostname(),
             "channel_count": 4,
+            "channels": list(DC24_CHANNELS),
         },
     }
 
@@ -87,7 +92,7 @@ class StartSession(BaseModel):
     sample_rate: int
 
 
-class RecordRequest(BaseModel):
+class RecordRequest(ChannelSelection):
     duration: int = Field(default=60, ge=0)  # 0：手动结束；正数：按实际点数定时。
     save_directory: str = Field(min_length=1, max_length=1024)
     analysis: AnalysisOptions = Field(default_factory=AnalysisOptions)
@@ -152,6 +157,7 @@ def record(session_id: str, body: RecordRequest, db: Session = Depends(get_db)):
             sample_rate=s["sample_rate"],
             duration=body.duration,
             analysis_options=body.analysis.model_dump(),
+            enabled_channels=body.enabled_channels,
             progress={},
             created_at=now(),
             updated_at=now(),
@@ -371,25 +377,31 @@ async def upload_file(
 
 
 @router.post("/jobs/{job_id}/finish-stream", dependencies=[Depends(edge_only)])
-def finish(job_id: str, agent_id: str, db: Session = Depends(get_db)):
-    job = owned(db, job_id, agent_id)
-    p = directory(job_id)
-    if not all((p / name).is_file() for name in STREAM_FILES):
-        raise HTTPException(422, "完整采集文件尚未上传")
-    meta = json.loads((p / "metadata.json").read_text(encoding="utf-8"))
-    count = meta.get("samples_per_channel", 0)
-    if (
-        meta.get("source") != "dc24_tcp"
-        or meta.get("sample_rate_hz") != job.sample_rate
-        or meta.get("value_unit") != "signed_24_bit_ADC_counts"
-        or count <= 0
-        or (p / "counts.i32").stat().st_size != count * 16
-    ):
-        raise HTTPException(422, "实际数据、单位或采样率与任务不一致")
-    job.result_metadata, job.updated_at = meta, now()
-    job.status = "completed" if meta.get("complete") else "failed"
-    job.error_message = meta.get("error")
-    db.commit()
+async def finish(job_id: str, agent_id: str, db: Session = Depends(get_db)):
+    async with ANALYSIS_LOCK:
+        job = owned(db, job_id, agent_id)
+        db.refresh(job)
+        if job.status in ("completed", "failed"):
+            return {"code": 200, "data": snapshot(job)}
+        p = directory(job_id)
+        if not all((p / name).is_file() for name in STREAM_FILES):
+            raise HTTPException(422, "完整采集文件尚未上传")
+        meta = json.loads((p / "metadata.json").read_text(encoding="utf-8"))
+        count = meta.get("samples_per_channel", 0)
+        if (
+            meta.get("source") != "dc24_tcp"
+            or meta.get("sample_rate_hz") != job.sample_rate
+            or meta.get("value_unit") != "signed_24_bit_ADC_counts"
+            or count <= 0
+            or (p / "counts.i32").stat().st_size != count * 16
+        ):
+            raise HTTPException(422, "实际数据、单位或采样率与任务不一致")
+        job.result_metadata, job.updated_at = meta, now()
+        job.status = "completed" if meta.get("complete") else "failed"
+        job.error_message = meta.get("error")
+        if job.status == "completed":
+            register_completed_acquisition(db, job, p / "counts.i32")
+        db.commit()
     with live.lock:
         for s in live.sessions.values():
             if s.get("recording") and s["recording"]["id"] == job_id:

@@ -14,6 +14,7 @@
           <el-form-item label="波形时间窗（秒）"><el-input-number v-model="form.wave_seconds" :min=".01" :max="2" :step=".05" :precision="2" controls-position="right" aria-label="波形时间窗" /></el-form-item>
           <div v-if="show.envelope" class="band-fields"><el-form-item label="包络带通下限（Hz）"><el-input-number v-model="form.band_low" :controls="false" aria-label="包络带通下限" /></el-form-item><el-form-item label="包络带通上限（Hz）"><el-input-number v-model="form.band_high" :controls="false" aria-label="包络带通上限" /></el-form-item><p v-if="bandError" class="error-text" role="alert">{{ bandError }}</p></div>
           <el-divider /><strong>保存原始数据</strong><br><el-checkbox v-model="form.manual" :disabled="recordBusy">手动结束采集</el-checkbox>
+          <el-form-item label="诊断通道（至少一路）"><el-checkbox-group v-model="form.enabled_channels" :disabled="recordBusy" aria-label="诊断通道"><el-checkbox v-for="channel in channels" :key="channel" :value="channel">CH{{ channel }}</el-checkbox></el-checkbox-group><p class="help">只启用需要诊断的通道；原始文件仍完整保存四路。</p></el-form-item>
           <el-form-item v-if="!form.manual" label="采集时长（秒）"><el-input-number v-model="form.duration" :min="1" :precision="0" :disabled="recordBusy" controls-position="right" aria-label="采集时长" /><p class="help">可自行填写，按完整数据帧收尾。</p></el-form-item>
           <el-form-item label="现场电脑保存目录"><el-input v-model="form.save_directory" :disabled="recordBusy" placeholder="例如 D:\采集数据" aria-label="保存目录" @input="directoryEdited = true" /><el-button class="directory-button" :disabled="!selectedAgent?.online || recordBusy" :loading="selectingDirectory" @click="chooseDirectory">选择目录…</el-button></el-form-item>
           <div class="actions"><el-button type="success" :disabled="recordBusy || !selectedAgent?.online || !!bandError" :loading="saving" @click="startRecording">开始采集</el-button><el-button type="danger" plain :disabled="!recordBusy || recording?.stop_requested" @click="stopRecording">停止保存</el-button></div>
@@ -47,10 +48,10 @@ import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import { getAcquisitionAgents, getAcquisitionJobs, downloadAcquisitionFile, getAcquisitionCapabilities, startLiveSession, getLiveSession, getCurrentLiveSession, stopLiveSession, getLiveView, startLiveRecording, stopLiveRecording, selectAcquisitionDirectory, getAcquisitionDirectory } from '../api/acquisition'
 import { createWebSocketClient } from '../utils/websocket'
-const agents = ref([]), jobs = ref([]), session = ref(null), view = ref(null), nativeRates = ref([])
+const agents = ref([]), jobs = ref([]), session = ref(null), view = ref(null), nativeRates = ref([]), channels = ref([])
 const connectionError = ref('')
 const starting = ref(false), stopping = ref(false), saving = ref(false), selectingDirectory = ref(false), directoryEdited = ref(false)
-const form = reactive({ agent_id: '', sample_rate: 10000, duration: 60, manual: false, save_directory: '', wave_seconds: .2, band_low: undefined, band_high: undefined })
+const form = reactive({ agent_id: '', sample_rate: 10000, duration: 60, manual: false, save_directory: '', enabled_channels: [], wave_seconds: .2, band_low: undefined, band_high: undefined })
 const show = reactive({ waveform: true, fft: true, rms: false, envelope: false })
 const realAgents = computed(() => agents.value.filter(a => a.source === 'dc24_tcp' && a.state?.version >= 3))
 const selectedAgent = computed(() => realAgents.value.find(a => a.id === form.agent_id))
@@ -131,11 +132,12 @@ async function stopPreview() { if (!session.value || stopping.value) return; sto
 async function startRecording() {
   if (saving.value || recordBusy.value) return
   if (!form.save_directory.trim()) { ElMessage.warning('请先选择或填写现场电脑保存目录'); return }
+  if (!form.enabled_channels.length) { ElMessage.warning('请至少启用一路诊断通道'); return }
   if (bandError.value) { ElMessage.warning(bandError.value); return }
   saving.value = true
   try {
     const current = await ensureSession(); if (!current || disposed) return
-    await startLiveRecording(current.id, { duration: form.manual ? 0 : form.duration, save_directory: form.save_directory, analysis: analysisOptions() })
+    await startLiveRecording(current.id, { duration: form.manual ? 0 : form.duration, save_directory: form.save_directory, enabled_channels: form.enabled_channels, analysis: analysisOptions() })
     const status = await getLiveSession(current.id)
     if (!disposed && session.value?.id === current.id) session.value = status.data
     ElMessage.success('开始保存真实四通道，示波继续')
@@ -198,7 +200,7 @@ watch(() => form.agent_id, async id => {
   directoryEdited.value = false; form.save_directory = selectedAgent.value?.state?.save_directory || ''
   try { const r = await getCurrentLiveSession(id); if (disposed || version !== turn) return; session.value = r.data; view.value = null; lastRevision = -1; disposeCharts(); if (r.data) form.sample_rate = r.data.sample_rate } catch {}
 })
-onMounted(async () => { window.addEventListener('resize', resize); try { const c = await getAcquisitionCapabilities(); if (!disposed) nativeRates.value = c.data.sample_rates; await refreshAgents() } finally { if (!disposed) poll() } })
+onMounted(async () => { window.addEventListener('resize', resize); try { const c = await getAcquisitionCapabilities(); if (!disposed) { nativeRates.value = c.data.sample_rates; channels.value = c.data.channels; form.enabled_channels = [...c.data.channels] }; await refreshAgents() } finally { if (!disposed) poll() } })
 onBeforeUnmount(() => { disposed = true; turn++; clearTimeout(timer); closeViewSocket(); window.removeEventListener('resize', resize); disposeCharts() })
 </script>
 

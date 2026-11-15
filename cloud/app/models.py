@@ -214,7 +214,7 @@ class AcquisitionAgent(Base):
 
 
 class AcquisitionJob(Base):
-    """原始计数采集任务；不进入物理量诊断和告警流水线。"""
+    """原始计数采集任务；完成后按启用通道登记统一机械诊断批次。"""
 
     __tablename__ = "acquisition_jobs"
     id = Column(String(32), primary_key=True)
@@ -224,6 +224,7 @@ class AcquisitionJob(Base):
     sample_rate = Column(Integer, nullable=False)
     duration = Column(Integer, nullable=False)
     analysis_options = Column(JSON, nullable=False)
+    enabled_channels = Column(JSON, nullable=True, comment="启用诊断的真实通道号 1~4")
     progress = Column(JSON, nullable=False)
     result_metadata = Column(JSON, nullable=True)
     cancel_requested = Column(Integer, default=0, nullable=False)
