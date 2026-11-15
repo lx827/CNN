@@ -5084,6 +5084,7 @@
           },
           "sample_rate": {
             "type": "integer",
+            "exclusiveMinimum": 0.0,
             "title": "Sample Rate",
             "default": 5000
           },
@@ -5536,6 +5537,7 @@
           },
           "sample_rate": {
             "type": "integer",
+            "exclusiveMinimum": 0.0,
             "title": "Sample Rate"
           }
         },

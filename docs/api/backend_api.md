@@ -400,6 +400,8 @@ GET /api/collect/history?device_id={device_id}&limit={limit}
 
 `POST /api/acquisition/agents/heartbeat` 的 `state.transport` 可选，真实边端上报 `jmserver`、`python_tcp` 或 `rust_tcp`。`GET /api/acquisition/agents` 返回该字段供本机启动器识别连接方式。没有该字段的旧真实边端按 `python_tcp` 处理。三种方式的采集来源均为 `dc24_tcp`，已保存记录在 `metadata.transport` 中标记本次连接方式。
 
+采样率档位表是采集侧硬件知识，云端不持有：边端心跳在 `state.sample_rates` 上报支持档位，`GET /api/acquisition/capabilities` 只回答服务身份与通道配置（不返回 `sample_rates`）。实时示波 `POST /sessions` 按所选边端上报的档位当场校验（不在列 422）；保存任务创建时不预知档位，非法档位由采集端执行时拒绝并置任务 `failed`（`error_message` 携带原因），前端两者均可见。
+
 `POST /api/acquisition/jobs` 与 `POST /api/acquisition/sessions/{session_id}/record` 均接受 `enabled_channels`：非空、无重复的真实通道号数组，默认取 `GET /api/acquisition/capabilities` 返回的 `data.channels`。有效集合由后端统一配置 `DC24_CHANNELS` 决定；硬件原始文件始终保存四路，只有启用通道显示并生成诊断数据。任务快照返回实际 `enabled_channels`。
 
 完整任务经 `POST /api/acquisition/jobs/{job_id}/upload` 或 `POST /api/acquisition/jobs/{job_id}/finish-stream` 完成后，按 `DC24_DIAGNOSIS_WINDOW_SECONDS`（默认 5 秒）自动登记特殊诊断批次并交给现有 worker。远程单次任务仍向 `/upload?agent_id=...` 发送 ZIP 请求体；本地单次任务不打包，也不上传副本，改为 `/upload?agent_id=...&local_directory=现场任务目录绝对路径`。两种 `/upload` 输入共用元数据、CSV、显示分析和诊断登记校验；单次 record 尚未生成 `counts.i32` 时，后端在现场原目录由已校验 CSV 生成该统一读取文件，不伪造计数。
