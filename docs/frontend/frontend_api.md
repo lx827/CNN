@@ -47,8 +47,8 @@
 | 配置项 | 说明 |
 |--------|------|
 | `baseURL` | 动态获取当前 host（开发环境通过 Vite 代理转发到后端） |
-| 请求拦截器 | 从 `localStorage` 读取 `token`，自动注入 `Authorization: Bearer {token}` |
-| 响应拦截器 | 若响应体中 `code !== 200`，抛出错误提示；若返回 `401`，跳转登录页 |
+| 请求拦截器 | 云端从 `localStorage` 读取 `token` 并自动注入 Bearer；本地部署不携带 Token |
+| 响应拦截器 | 若响应体中 `code !== 200`，抛出错误提示；云端返回 `401` 时跳转登录页，本地部署不跳转 |
 
 ```javascript
 // 典型调用方式
@@ -56,6 +56,8 @@ import request from '@/utils/request';
 
 request.get('/api/dashboard/').then(res => { ... });
 ```
+
+部署状态由后端在 `/dc24/` 页面注入 `window.__DEPLOYMENT_MODE__`，`utils/backend.js::isLocalDeployment()` 是路由、HTTP 和 WebSocket 的统一判断入口。同一份 `dist` 在云端未注入时保持登录认证，不增加本地专用构建目标。
 
 ---
 

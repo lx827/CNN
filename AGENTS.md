@@ -68,7 +68,7 @@ uv run python tests/diagnosis/regression/test_varying_speed_order.py
 
 ## 6. 配置
 
-- `cloud/.env`(不入库):云端配置,键定义以 `cloud/app/core/config.py` 为准;生产必改 `ADMIN_PASSWORD`、`SECRET_KEY`、`EDGE_API_KEY`。可选键 `CORS_ORIGINS`(逗号分隔跨域白名单,默认含 localhost:3000/4173 与生产 IP)
+- `cloud/.env`(不入库):云端配置,键定义以 `cloud/app/core/config.py` 为准;生产必改 `ADMIN_PASSWORD`、`SECRET_KEY`、`EDGE_API_KEY`。`DEPLOYMENT_MODE` 默认 `cloud`;本地工作站由 `scripts/dc24_start.py` 强制设为 `local` 并仅监听 `127.0.0.1`,网页及 HTTP/WS 免登录且不创建演示设备,不要在云端改为 `local`。可选键 `CORS_ORIGINS`(逗号分隔跨域白名单,默认含 localhost:3000/4173 与生产 IP)
 - `dc24/.env`(不入库):DC24 边端本机配置,由 `dc24/dc24_agent.py` 读取——`DC24_VENDOR_ROOT`(原厂软件目录,配了走 DLL、留空走纯 Python TCP)、`CLOUD_BASE_URL`、`EDGE_API_KEY`,详见 `dc24/README.md`
 - `ACQUISITION_DATA_DIR`:可选环境变量,采集任务落盘根目录(默认 `<仓库根>/data/acquisitions`),读取处 `cloud/app/api/acquisition.py`
 - 生产部署(`CNN.service`、Nginx、dry-run 演练)见 `docs/部署指南.md`

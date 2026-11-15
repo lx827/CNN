@@ -139,6 +139,7 @@ uv run --group benchmark python -m tests.diagnosis.benchmarks.export --input D:/
 | `test_event_loop.py` | 慢去噪期间 STFT、倒谱、阶次端点的协程调度 |
 | `test_analysis_worker_json.py` | NumPy 入库、通道缓存、批次标记、告警输入与 JSON 推送 |
 | `test_hustbear_registration.py` | 内存 SQLite 注册、幂等和冲突整批回滚 |
+| `test_local_deployment.py` | 云端默认配置、本地回环监听、演示设备初始化、页面部署状态及 HTTP/WS 免认证 |
 | `test_dc24_acquisition.py` | 认证、任务、四通道 CSV、下载、FFT/RMS/包络与错误归档 |
 | `test_dc24_driver.py` | 回环 TCP、控制帧、分片、24 位计数、停止、取消和序号缺口 |
 | `test_dc24_live.py` | 原厂档位、示波窗口、保存、上传、缓存上限与 WS |
