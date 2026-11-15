@@ -14,7 +14,7 @@ from dotenv import dotenv_values
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "dc24"))
 from dc24_capture import B5_PROFILES, CONFIG_B2, Frames, Link, command, samples
-from dc24_vendor import VendorConnection
+from dc24_driver_vendor import VendorConnection
 
 
 class VendorConnectionTests(unittest.TestCase):
