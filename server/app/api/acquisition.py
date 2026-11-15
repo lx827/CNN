@@ -15,8 +15,6 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
-from dc24_driver import B5_PROFILES
-
 from app.api.auth import optional_auth
 from app.core import config
 from app.core.config import DC24_CHANNELS
@@ -42,7 +40,6 @@ ACTIVE = (
 INPUT_FILES = {"samples.csv", "metadata.json", "rx_stream.bin", "commands.jsonl"}
 DOWNLOAD_FILES = INPUT_FILES | {"analysis.json", "analysis_arrays.npz"}
 ANALYSIS_LOCK = asyncio.Semaphore(1)
-NATIVE_RATES = sorted(B5_PROFILES)
 
 
 def now():
@@ -129,14 +126,14 @@ class ChannelSelection(BaseModel):
 
 class CreateJob(ChannelSelection):
     agent_id: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,64}$")
-    sample_rate: int = 5000
+    # 采样率档位是否被硬件支持由采集端执行时判定(档位表属于采集侧),
+    # 非法档位的任务由采集端置 failed 并带原因,云端不预知卡片知识。
+    sample_rate: int = Field(default=5000, gt=0)
     duration: int = Field(default=60, ge=1)
     analysis: AnalysisOptions = Field(default_factory=AnalysisOptions)
 
     @model_validator(mode="after")
     def validate_profile(self):
-        if self.sample_rate not in NATIVE_RATES:
-            raise ValueError("采样率必须为原厂支持的档位")
         a = self.analysis
         if a.envelope and (
             a.band_low is None

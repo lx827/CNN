@@ -50,7 +50,7 @@ class LiveTests(unittest.TestCase):
         self.client.post(
             "/api/acquisition/agents/heartbeat",
             headers=self.edge,
-            json={"agent_id": "test", "source": "dc24_tcp", "state": {"version": 3}},
+            json={"agent_id": "test", "source": "dc24_tcp", "state": {"version": 3, "sample_rates": [50, 100, 200, 500, 1000, 2000, 4000, 5000, 10000, 20000, 50000, 100000]}},
         ).raise_for_status()
 
     def tearDown(self):
@@ -68,13 +68,12 @@ class LiveTests(unittest.TestCase):
         return r.json()["data"]["id"]
 
     def test_native_rates_duration_and_source_guard(self):
-        rates = self.client.get(
+        # 档位表是采集侧硬件知识,云端 capabilities 不再携带;非法档位
+        # 由云端按采集端心跳上报的 sample_rates 当场 422,不静默。
+        capabilities = self.client.get(
             "/api/acquisition/capabilities", headers=self.user
-        ).json()["data"]["sample_rates"]
-        self.assertEqual(
-            rates,
-            [50, 100, 200, 500, 1000, 2000, 4000, 5000, 10000, 20000, 50000, 100000],
-        )
+        ).json()["data"]
+        self.assertNotIn("sample_rates", capabilities)
         self.assertEqual(
             self.client.post(
                 "/api/acquisition/sessions",

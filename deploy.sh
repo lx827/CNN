@@ -105,7 +105,8 @@ fi
 
 # 4) 根项目按锁文件同步运行依赖并从源码构建计算扩展；目标需 C++20 工具链。
 #    构建后端版本在根配置固定，CMake 管理原生依赖，编译并行度为 1。
-run uv sync --frozen
+#    云端只装 cloud 组:采集宿主(dc24)、驱动适配器与开发工具不进生产。
+run uv sync --frozen --no-default-groups --group cloud
 
 # 4.1) 断言根项目解释器确实生成。2026-11-11 生产事故:uv sync 正常返回但
 #      /opt/CNN/.venv 未生成,服务被切到不存在的解释器上进入崩溃循环;此断言让

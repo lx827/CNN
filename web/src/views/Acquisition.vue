@@ -5,7 +5,7 @@
       <aside class="control-panel">
         <el-form label-position="top" @submit.prevent>
           <el-form-item label="现场边端"><el-select v-model="form.agent_id" :disabled="sessionActive || selectingDirectory" placeholder="等待现场边端上线" aria-label="现场边端"><el-option v-for="a in realAgents" :key="a.id" :value="a.id" :disabled="!a.online" :label="`${a.id}${a.online ? '' : '（离线）'}`" /></el-select></el-form-item>
-          <el-form-item label="采样率（每通道）"><el-select v-model="form.sample_rate" :disabled="sessionActive" filterable aria-label="采样率"><el-option v-for="rate in rates" :key="rate" :value="rate" :label="`${rate.toLocaleString()} Hz`" /></el-select><p class="help">原厂支持的全部档位。更改采样率前先停止示波。</p></el-form-item>
+          <el-form-item label="采样率（每通道）"><el-select v-model="form.sample_rate" :disabled="sessionActive" filterable aria-label="采样率"><el-option v-for="rate in rates" :key="rate" :value="rate" :label="`${rate.toLocaleString()} Hz`" /></el-select><p class="help">{{ rates.length ? '档位由采集端上报。更改采样率前先停止示波。' : '采集端未接入，启动采集端后才可选择档位。' }}</p></el-form-item>
           <div class="actions"><el-button type="primary" :disabled="sessionActive || !selectedAgent?.online" :loading="starting" @click="startPreview">示波</el-button><el-button :disabled="!sessionActive" :loading="stopping" @click="stopPreview">停止示波</el-button></div>
           <p class="help">示波只更新画面，不保存采样文件。</p>
           <p v-if="selectedAgent?.state?.input_configuration" class="help">输入：{{ selectedAgent.state.input_configuration.measurement }} · {{ selectedAgent.state.input_configuration.coupling }} · {{ selectedAgent.state.input_configuration.upper_frequency }}。频谱：汉宁窗。</p>
@@ -49,14 +49,14 @@ import * as echarts from 'echarts'
 import { getAcquisitionAgents, getAcquisitionJobs, downloadAcquisitionFile, getAcquisitionCapabilities, startLiveSession, getLiveSession, getCurrentLiveSession, stopLiveSession, getLiveView, startLiveRecording, stopLiveRecording, selectAcquisitionDirectory, getAcquisitionDirectory } from '../api/acquisition'
 import { createWebSocketClient } from '../utils/websocket'
 import { baseCartesianOption, AXIS_STYLE, CHART_PALETTE } from '../utils/chartTheme'
-const agents = ref([]), jobs = ref([]), session = ref(null), view = ref(null), nativeRates = ref([]), channels = ref([])
+const agents = ref([]), jobs = ref([]), session = ref(null), view = ref(null), channels = ref([])
 const connectionError = ref('')
 const starting = ref(false), stopping = ref(false), saving = ref(false), selectingDirectory = ref(false), directoryEdited = ref(false)
 const form = reactive({ agent_id: '', sample_rate: 10000, duration: 60, manual: false, save_directory: '', enabled_channels: [], wave_seconds: .2, band_low: undefined, band_high: undefined })
 const show = reactive({ waveform: true, fft: true, rms: false, envelope: false })
 const realAgents = computed(() => agents.value.filter(a => a.source === 'dc24_tcp' && a.state?.version >= 3))
 const selectedAgent = computed(() => realAgents.value.find(a => a.id === form.agent_id))
-const rates = computed(() => selectedAgent.value?.state?.sample_rates || nativeRates.value)
+const rates = computed(() => selectedAgent.value?.state?.sample_rates || [])
 const sessionActive = computed(() => session.value && !['stopped', 'failed'].includes(session.value.status))
 const recording = computed(() => session.value?.recording)
 const recordBusy = computed(() => recording.value && ['pending', 'waiting_device', 'capturing', 'uploading', 'analyzing'].includes(recording.value.status))
@@ -204,7 +204,7 @@ watch(() => form.agent_id, async id => {
   directoryEdited.value = false; form.save_directory = selectedAgent.value?.state?.save_directory || ''
   try { const r = await getCurrentLiveSession(id); if (disposed || version !== turn) return; session.value = r.data; view.value = null; lastRevision = -1; disposeCharts(); if (r.data) form.sample_rate = r.data.sample_rate } catch {}
 })
-onMounted(async () => { window.addEventListener('resize', resize); try { const c = await getAcquisitionCapabilities(); if (!disposed) { nativeRates.value = c.data.sample_rates; channels.value = c.data.channels; form.enabled_channels = [...c.data.channels] }; await refreshAgents() } finally { if (!disposed) poll() } })
+onMounted(async () => { window.addEventListener('resize', resize); try { const c = await getAcquisitionCapabilities(); if (!disposed) { channels.value = c.data.channels; form.enabled_channels = [...c.data.channels] }; await refreshAgents() } finally { if (!disposed) poll() } })
 onBeforeUnmount(() => { disposed = true; turn++; clearTimeout(timer); closeViewSocket(); window.removeEventListener('resize', resize); disposeCharts() })
 </script>
 
