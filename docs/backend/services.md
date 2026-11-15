@@ -4,7 +4,7 @@
 
 ## 统一波形读取
 
-`services/waveform.py` 是诊断 worker、DataView、Monitor 和重新分析读取波形的共同入口。调用方获得按 `chN` 标识的 float64 通道数组、显示采样率、诊断采样率和原始 records；DataView/Monitor/研究使用显示采样率，worker 使用诊断采样率并继续以 records 写入分析标记。普通记录两者相等，只有旧 NULL 迁移记录可带诊断覆盖。数据库数组与 DC24 文件区段的来源适配只在该模块内发生，HTTP 路由不判断文件格式。Monitor 历史列表复用已查询 records 的转换入口，不增加逐批 SQL；显示点数的截断发生在读取之后。持久化来源描述与数值转换契约见 [持久化](persistence.md)。
+`services/waveform.py` 是诊断 worker、DataView、Monitor 和重新分析读取波形的共同入口。`WaveformBatch` 只描述可显示波形，包含按 `chN` 标识的 float64 通道数组、显示采样率和原始 records；override=0 不阻断显示。只有 worker 调用 `get_diagnosis_sample_rate(batch)`，按历史 override 或 sample_rate 计算并校验诊断采样率，再以 records 写入分析标记。普通记录两种采样率相等，只有旧 NULL 迁移记录可带诊断覆盖。数据库数组与 DC24 文件区段的来源适配只在该模块内发生，HTTP 路由不判断文件格式。Monitor 历史列表复用已查询 records 的转换入口，不增加逐批 SQL；显示点数的截断发生在读取之后。持久化来源描述与数值转换契约见 [持久化](persistence.md)。
 
 ## 多通道后台分析
 

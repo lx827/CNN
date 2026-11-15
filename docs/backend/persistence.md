@@ -23,9 +23,9 @@ ORM 类型以 `cloud/app/models.py` 为准；外部字段见 [API](../api/backen
 - DC24 文件记录保存来源对象，包含 `kind=dc24_counts`、采集任务 `job_id`、原始 `counts.i32` 路径以及半开样本区段 `start_sample`/`end_sample`。文件是四路交错 little-endian int32；`SensorData.channel` 的 1~4 对应文件列 0~3。
 - 文件只按区段和真实通道读入内存并转为 float64，不保存浮点波形副本，不做统一归一化或工程单位转换。
 
-`services/waveform.py::load_waveform` 统一返回通道数组、显示采样率 `sample_rate`、诊断采样率 `diagnosis_sample_rate` 和 records。DataView 各数值/研究/导出接口与 Monitor 最新/历史接口使用 `sample_rate`；`diagnosis_workflow.process_batch` 使用 `diagnosis_sample_rate`。普通记录的 `diagnosis_sample_rate_override` 为 NULL，两者相等。仅旧 NULL 记录迁移后允许 override 非 NULL，此时诊断读取 override，显示读取仍用 sample_rate。诊断缓存键和最新记录查询规则不变，Monitor 历史列表继续复用已查询 records，保持常数 SQL 查询数。
+`services/waveform.py::load_waveform` 统一返回可显示通道数组、显示采样率 `sample_rate` 和 records。DataView 各数值/研究/导出接口与 Monitor 最新/历史接口只使用该显示结果，不解析诊断 override。`diagnosis_workflow.process_batch` 另外调用 `get_diagnosis_sample_rate(batch)`：普通记录的 override 为 NULL，返回 sample_rate；仅旧 NULL 记录迁移后允许 override 非 NULL，此时返回 override。诊断缓存键和最新记录查询规则不变，Monitor 历史列表继续复用已查询 records，保持常数 SQL 查询数。
 
-读取层不查询 Device，也不套用运行时 fallback。显示或诊断候选值为 0/NULL 时抛出 `batch_sample_rate_missing`；0 是迁移写入的“不可诊断”标记，不是真实采样率。显示采样率不一致抛出 `batch_channel_sample_rates_must_match`，诊断采样率不一致抛出 `batch_channel_diagnosis_sample_rates_must_match`。
+显示读取不查询 Device，也不套用运行时 fallback，只校验 sample_rate：0/NULL 抛出 `batch_sample_rate_missing`，跨通道不一致抛出 `batch_channel_sample_rates_must_match`。诊断采样率函数独立计算并校验：override/sample_rate 为 0/NULL 时抛出 `batch_sample_rate_missing`，跨通道不一致抛出 `batch_channel_diagnosis_sample_rates_must_match`。override=0 是迁移写入的“不可诊断”标记，不是真实采样率；它不妨碍 DataView/Monitor 按 25600 等已物化显示采样率展示，只有 reanalyze/worker 明确拒绝。
 
 ## DC24 完成登记事务
 
@@ -67,7 +67,7 @@ devices 与 diagnosis 新增 `evaluation_status`、`diagnosis_conclusion`、`cov
 
 ## 统一批次事务与通知
 
-HTTP 重新分析与后台 worker 共用 `services/diagnosis_workflow.py::process_batch`。在 `ANALYSIS_SEM=1` 内经统一波形读取入口按真实通道排序取得同批数据，分别检查显示与诊断采样率一致，并以 `diagnosis_sample_rate` 在线程池计算，保存各通道与 channel=0 摘要、更新原始数据已分析标记、生成规范告警，然后一次 commit。
+HTTP 重新分析与后台 worker 共用 `services/diagnosis_workflow.py::process_batch`。在 `ANALYSIS_SEM=1` 内经统一波形读取入口按真实通道排序取得可显示数据，再由 `get_diagnosis_sample_rate` 校验诊断采样率一致并在线程池计算，保存各通道与 channel=0 摘要、更新原始数据已分析标记、生成规范告警，然后一次 commit。
 
 计算、写缓存、标记或告警任一阶段失败都 rollback，整批事务不留半完成记录。单个通道在分析中合法形成未知结果仍可作为规范局部状态保存，不等于事务执行失败。commit 成功后才推送 diagnosis_update/new_alarm；浏览器推送失败只记日志，不撤销成功事务或触发重复计算。
 
