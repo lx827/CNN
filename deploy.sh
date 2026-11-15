@@ -1,5 +1,10 @@
 #!/bin/bash
-# 阿里云 ECS 一键部署(uv 链路,ADR-0001 / ADR-0002)
+# 云端形态一键部署:阿里云 ECS(uv 链路,ADR-0001 / ADR-0002)
+#
+# 本脚本只部署云端形态。三种部署形态各有唯一入口:
+#   云端       本脚本(服务器上执行)
+#   本地工作站  双击仓库根 start.bat(本机后端+前端+采集进程,免登录)
+#   树莓派边端  deploy/edge/build.sh 交叉编译 + edge/acquire/deploy/pi/deploy_pi.sh 安装
 #
 # 用法(服务器上执行):
 #   bash /opt/CNN/deploy.sh              完整部署(代码 + 依赖 + 后端重启 + 前端构建)
