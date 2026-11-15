@@ -14,7 +14,7 @@ class DC24StartTests(unittest.TestCase):
         if not (ROOT / ".venv/Scripts/python.exe").exists():
             self.skipTest("本机 uv workspace 环境不存在（先 uv sync）")
         result = subprocess.run(
-            ["cmd", "/d", "/c", "start_dc24.bat", "--check"],
+            ["cmd", "/d", "/c", str(ROOT / "start_dc24.bat"), "--check"],
             cwd=ROOT,
             capture_output=True,
             timeout=20,
