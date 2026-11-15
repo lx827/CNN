@@ -2,6 +2,10 @@
 
 本页记录跨请求稳定的服务职责和副作用，不复制函数签名。算法语义见 [算法模块索引](../algorithms/INDEX.md)，采集专用服务见 [DC24 云端服务](acquisition.md)。
 
+## 统一波形读取
+
+`services/waveform.py` 是诊断 worker、DataView 和重新分析读取波形的共同入口。调用方获得按 `chN` 标识的 float64 通道数组、统一采样率和原始 records；worker 继续使用这些 records 写入分析标记。数据库数组与 DC24 文件区段的来源适配只在该模块内发生，HTTP 路由不判断文件格式。持久化来源描述与数值转换契约见 [持久化](persistence.md)。
+
 ## 多通道后台分析
 
 `services/analyzer.py` 按真实通道排序，为每条记录建立 DiagnosisKey、选择本通道机械参数并运行 runtime 对象诊断；局部 Evidence 保留，批次按 `chN/object` 区分对象，再由 assessment 形成整体 Domain。没有旧通道共识或规则备用成功链。

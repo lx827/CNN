@@ -14,6 +14,16 @@ ORM 类型以 `cloud/app/models.py` 为准；外部字段见 [API](../api/backen
 
 设备机械参数是配置，纯算法只接收已验证对象。原始波形不随重新诊断改写；历史 `order_analysis/full_analysis` 等物理列保留，不作为新诊断状态的兼容解释来源。
 
+## 波形来源与统一读取
+
+`sensor_data.data` 沿用现有 JSON 列表达两类来源，旧库不需要新增列、迁移或改写数据：
+
+- 云端既有记录继续保存数值数组，读取时仅在内存转换为 float64，原 JSON 数值不变。
+- DC24 文件记录保存来源对象，包含 `kind=dc24_counts`、采集任务 `job_id`、原始 `counts.i32` 路径以及半开样本区段 `start_sample`/`end_sample`。文件是四路交错 little-endian int32；`SensorData.channel` 的 1~4 对应文件列 0~3。
+- 文件只按区段和真实通道读入内存并转为 float64，不保存浮点波形副本，不做统一归一化或工程单位转换。
+
+`services/waveform.py::load_waveform` 统一返回通道数组、采样率和 records。DataView 各数值/研究/导出接口与 `diagnosis_workflow.process_batch` 均经此入口读取；诊断缓存键和最新记录查询规则不变。
+
 ## 精确键、历史行与摘要
 
 新缓存身份为 `(device_id,batch_index,channel,denoise_method)`，方法证据使用真实通道号，channel=0 专用于批次摘要。保存追加历史行，不以查询后覆盖已有行的方式争抢同键；不新增唯一约束，不删除旧历史。
@@ -42,7 +52,7 @@ devices 与 diagnosis 新增 `evaluation_status`、`diagnosis_conclusion`、`cov
 
 ## 统一批次事务与通知
 
-HTTP 重新分析与后台 worker 共用 `services/diagnosis_workflow.py::process_batch`。在 `ANALYSIS_SEM=1` 内按真实通道排序读取同批数据，检查采样率一致，在线程池计算，保存各通道与 channel=0 摘要、更新原始数据已分析标记、生成规范告警，然后一次 commit。
+HTTP 重新分析与后台 worker 共用 `services/diagnosis_workflow.py::process_batch`。在 `ANALYSIS_SEM=1` 内经统一波形读取入口按真实通道排序取得同批数据，检查采样率一致，在线程池计算，保存各通道与 channel=0 摘要、更新原始数据已分析标记、生成规范告警，然后一次 commit。
 
 计算、写缓存、标记或告警任一阶段失败都 rollback，整批事务不留半完成记录。单个通道在分析中合法形成未知结果仍可作为规范局部状态保存，不等于事务执行失败。commit 成功后才推送 diagnosis_update/new_alarm；浏览器推送失败只记日志，不撤销成功事务或触发重复计算。
 
