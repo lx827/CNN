@@ -9,7 +9,7 @@
 所有频谱都是请求时实时计算，不预存。
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from app.models import Device
 from .errors import DataViewUnprocessableResponse
 
@@ -28,6 +28,16 @@ router = APIRouter(
 # prepare_signal 实际实现在 signal_utils.py，此处重导出以保持 data_view 子模块兼容
 from app.services.diagnosis.signal_utils import prepare_signal  # noqa: F401
 from app.core.json_utils import sanitize_for_json as _sanitize_for_json  # noqa: F401
+from app.services import waveform as waveform_service
+from app.services.waveform import WaveformNotFoundError
+
+
+def _load_channel_waveform(db, device_id, batch_index, channel, detail="数据不存在"):
+    """DataView 唯一通道读取入口；来源适配留在波形模块内。"""
+    try:
+        return waveform_service.load_waveform(db, device_id, batch_index, channel)
+    except WaveformNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=detail) from exc
 
 
 def _extract_device_param(params, device_keys):

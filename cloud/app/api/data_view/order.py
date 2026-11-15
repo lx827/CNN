@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 from app.database import get_db
-from app.models import SensorData, Device, Diagnosis
+from app.models import Device, Diagnosis
 from app.algorithms.order import (
     AutomaticOrderPipeline,
     ConstantSpeedOrderPipeline,
@@ -13,7 +13,7 @@ from app.algorithms.order import (
     SpeedSearchRange,
     SpeedTrajectory,
 )
-from . import router, prepare_signal, _get_channel_name
+from . import router, prepare_signal, _get_channel_name, _load_channel_waveform
 from app.services.diagnosis.signal_utils import denoise_signal, DenoisingError
 from .errors import denoising_http_error
 from datetime import datetime, timezone
@@ -58,24 +58,16 @@ async def get_channel_order(
     自动估计使用未去噪信号，显式 denoise 只影响重采样输入。快速变速无可靠
     脊线时返回 400，不回退固定转频或缓变正常谱。
     """
-    record = (
-        db.query(SensorData)
-        .filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index,
-            SensorData.channel == channel,
-        )
-        .first()
-    )
-
-    if not record or not record.data:
-        raise HTTPException(status_code=404, detail="数据不存在")
+    waveform = _load_channel_waveform(db, device_id, batch_index, channel)
+    record = waveform.records[0]
 
     try:
-        sample_rate = record.sample_rate or 25600
+        sample_rate = waveform.sample_rate
         # 五秒限制先于去趋势和慢去噪，自动估计与重采样使用同一个时间窗口。
         max_samples = int(sample_rate * 5)
-        raw_sig = prepare_signal(record.data[:max_samples], detrend=detrend)
+        raw_sig = prepare_signal(
+            waveform.signals[f"ch{channel}"][:max_samples], detrend=detrend
+        )
         # VMD 等去噪可能耗时较长，不能直接占用事件循环。
         sig = await asyncio.to_thread(denoise_signal, raw_sig, denoise)
         # 参数校验

@@ -136,6 +136,7 @@ uv run --group benchmark python -m tests.diagnosis.benchmarks.export --input D:/
 | 入口（`cloud/tests/`） | 覆盖 |
 |-----------------------|------|
 | `test_read_paths.py` | 摘要查询、排序、JSON、缓存、索引迁移与 HTTP |
+| `test_waveform_source.py` | 数据库数组不变、DC24 int32 文件区段与真实通道映射、DataView 和 reanalyze 统一读取 |
 | `test_event_loop.py` | 慢去噪期间 STFT、倒谱、阶次端点的协程调度 |
 | `test_analysis_worker_json.py` | NumPy 入库、通道缓存、批次标记、告警输入与 JSON 推送 |
 | `test_hustbear_registration.py` | 内存 SQLite 注册、幂等和冲突整批回滚 |
@@ -144,7 +145,7 @@ uv run --group benchmark python -m tests.diagnosis.benchmarks.export --input D:/
 | `test_dc24_live.py` | 原厂档位、示波窗口、保存、上传、缓存上限与 WS |
 
 ```bash
-uv run python -m unittest tests.test_analysis_worker_json tests.test_read_paths tests.test_event_loop tests.test_hustbear_registration -v
+uv run python -m unittest tests.test_waveform_source tests.test_analysis_worker_json tests.test_read_paths tests.test_event_loop tests.test_hustbear_registration -v
 uv run python -m unittest tests.test_dc24_acquisition tests.test_dc24_driver tests.test_dc24_live -v
 ```
 

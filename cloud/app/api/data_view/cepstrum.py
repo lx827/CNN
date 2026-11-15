@@ -3,10 +3,10 @@ from sqlalchemy.orm import Session
 
 from app.algorithms.cepstrum import analyze_cepstrum, compute_cepstrum
 from app.database import get_db
-from app.models import SensorData, Device
+from app.models import Device
 from app.services.diagnosis.signal_utils import denoise_signal, DenoisingError
 from .errors import denoising_http_error
-from . import router, prepare_signal, _get_channel_name
+from . import router, prepare_signal, _get_channel_name, _load_channel_waveform
 
 import asyncio
 import logging
@@ -30,24 +30,16 @@ async def get_channel_cepstrum(
     db: Session = Depends(get_db),
 ):
     """实时 log-amplitude 实倒谱及显示峰；不输出机械故障结论。"""
-    record = (
-        db.query(SensorData)
-        .filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index,
-            SensorData.channel == channel,
-        )
-        .first()
-    )
-
-    if not record or not record.data:
-        raise HTTPException(status_code=404, detail="数据不存在")
+    waveform = _load_channel_waveform(db, device_id, batch_index, channel)
+    record = waveform.records[0]
 
     try:
-        sample_rate = record.sample_rate or 25600
+        sample_rate = waveform.sample_rate
         # 5 秒业务限制先于去趋势和慢去噪，避免对完整长记录做无效计算。
         max_samples = int(sample_rate * 5)
-        signal = prepare_signal(record.data[:max_samples], detrend=detrend)
+        signal = prepare_signal(
+            waveform.signals[f"ch{channel}"][:max_samples], detrend=detrend
+        )
         signal = await asyncio.to_thread(denoise_signal, signal, denoise)
         representation = await asyncio.to_thread(compute_cepstrum, signal, sample_rate)
         analysis = await asyncio.to_thread(

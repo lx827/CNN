@@ -4,12 +4,12 @@ import asyncio
 from fastapi import Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Device, SensorData
+from app.models import Device
 from app.schemas import DiagnosisResponse
 from app.services.diagnosis import DiagnosisEngine, DiagnosisKey
 from app.services.diagnosis.gear.planetary import gear_config_for_channel
 from app.services.diagnosis_store import save_diagnosis
-from . import router, _sanitize_for_json
+from . import router, _sanitize_for_json, _load_channel_waveform
 from .errors import configured_denoise, denoising_http_error
 from app.services.diagnosis.signal_utils import DenoisingError
 
@@ -34,17 +34,10 @@ async def _run(
     method="standard",
     rot_freq_hz=None,
 ):
-    record = (
-        db.query(SensorData)
-        .filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index,
-            SensorData.channel == channel,
-        )
-        .first()
+    waveform = _load_channel_waveform(
+        db, device_id, batch_index, channel, detail="通道数据不存在"
     )
-    if record is None:
-        raise HTTPException(404, detail="通道数据不存在")
+    record = waveform.records[0]
     device = db.query(Device).filter(Device.device_id == device_id).first()
     try:
         key = DiagnosisKey(device_id, batch_index, channel, denoise)
@@ -59,10 +52,8 @@ async def _run(
             gear_method=method,
             diagnosis_key=key,
         )
-        rate = record.sample_rate or getattr(device, "sample_rate", None)
-        if not rate:
-            raise ValueError("missing_sample_rate")
-        signal = (record.data or [])[: int(rate * 5)]
+        rate = waveform.sample_rate
+        signal = waveform.signals[f"ch{channel}"][: int(rate * 5)]
         if mode == "gear":
             result = await asyncio.to_thread(
                 engine.analyze_gear, signal, rate, rot_freq_hz

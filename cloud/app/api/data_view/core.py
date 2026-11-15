@@ -4,7 +4,7 @@ from sqlalchemy import func, desc
 from app.database import get_db
 from app.services.diagnosis_store import summary_state
 from app.models import SensorData, Device, Diagnosis
-from . import router, _get_channel_name, prepare_signal
+from . import router, _get_channel_name, prepare_signal, _load_channel_waveform
 from app.services.diagnosis.signal_utils import denoise_signal, DenoisingError
 from .errors import denoising_http_error
 from app.services.diagnosis_queries import latest_diagnosis_summaries
@@ -156,24 +156,14 @@ def get_channel_data(
     """
     查询某批次某通道的原始时域数据
     """
-    record = (
-        db.query(SensorData)
-        .filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index,
-            SensorData.channel == channel,
-        )
-        .first()
-    )
-
-    if not record:
-        raise HTTPException(status_code=404, detail="数据不存在")
+    waveform = _load_channel_waveform(db, device_id, batch_index, channel)
+    record = waveform.records[0]
 
     # 获取通道名称
     device = db.query(Device).filter(Device.device_id == device_id).first()
 
     # 时域波形返回去均值后的数据，便于观察
-    dc_removed = prepare_signal(record.data, detrend=detrend)
+    dc_removed = prepare_signal(waveform.signals[f"ch{channel}"], detrend=detrend)
     try:
         dc_removed = denoise_signal(dc_removed, denoise).tolist()
     except DenoisingError as e:
@@ -186,7 +176,7 @@ def get_channel_data(
             "batch_index": record.batch_index,
             "channel": record.channel,
             "channel_name": _get_channel_name(device, record.channel),
-            "sample_rate": record.sample_rate,
+            "sample_rate": waveform.sample_rate,
             "data": dc_removed,
             "is_analyzed": record.is_analyzed,
             "is_special": bool(record.is_special),
