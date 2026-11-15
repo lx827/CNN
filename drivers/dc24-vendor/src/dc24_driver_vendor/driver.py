@@ -9,7 +9,7 @@ import threading
 import time
 from pathlib import Path
 
-from dc24_driver import Dc24Driver, LinkState
+from dc24_driver import FrameProtocolDriver, LinkState
 
 JM_SERVER_SHA256 = "15295ee583e94c3e9583c71e0de5cc433436ab027c7edd0d57506a43993251df"
 
@@ -147,7 +147,7 @@ class VendorConnection:
             self.process.stdout.close()
 
 
-class VendorDriver(Dc24Driver):
+class VendorDriver(FrameProtocolDriver):
     transport = "jmserver"
 
     class _Stop:

@@ -3,10 +3,10 @@
 import socket
 import time
 
-from dc24_driver import Dc24Driver, LinkState
+from dc24_driver import FrameProtocolDriver, LinkState
 
 
-class PythonTcpDriver(Dc24Driver):
+class PythonTcpDriver(FrameProtocolDriver):
     transport = "python_tcp"
 
     def __init__(self, *args, **kwargs):
@@ -42,7 +42,9 @@ class PythonTcpDriver(Dc24Driver):
         return False
 
     def close(self):
-        super().close()
-        if self.server is not None:
-            self.server.close()
-            self.server = None
+        try:
+            super().close()
+        finally:
+            if self.server is not None:
+                self.server.close()
+                self.server = None

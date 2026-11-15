@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "cloud"))
 from app.api import acquisition as api
 from app.api.auth import optional_auth
 from app.database import Base, get_db
-from app.models import Alarm, Device, Diagnosis, SensorData
+from app.models import AcquisitionJob, Alarm, Device, Diagnosis, SensorData
 from app.services.waveform import load_waveform
 
 
@@ -174,7 +174,8 @@ class AcquisitionTests(unittest.TestCase):
         response = self.upload(job, blob)
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["data"]["status"], "completed")
-        self.assertTrue(np.array_equal(api.load_values(job), values))
+        with self.sessions() as db:
+            self.assertTrue(np.array_equal(api.load_values(db.get(AcquisitionJob, job)), values))
         output = self.client.get(
             f"/api/acquisition/jobs/{job}/files/samples.csv", headers=self.user
         )
@@ -312,6 +313,51 @@ class AcquisitionTests(unittest.TestCase):
         np.testing.assert_array_equal(first.signals["ch4"], values[:250, 3])
         np.testing.assert_array_equal(last.signals["ch2"], values[250:, 1])
         np.testing.assert_array_equal(last.signals["ch4"], values[250:, 3])
+
+    def test_local_single_upload_uses_originals_without_backend_copy(self):
+        self.client.post(
+            "/api/acquisition/agents/heartbeat",
+            headers=self.edge,
+            json={"agent_id": "test", "source": "dc24_tcp", "state": {}},
+        ).raise_for_status()
+        job = self.create().json()["data"]["id"]
+        blob, values, csv_text = archive()
+        with zipfile.ZipFile(io.BytesIO(blob)) as zipped:
+            metadata = zipped.read("metadata.json")
+        original = Path(self.temp.name) / "field-original"
+        original.mkdir()
+        (original / "samples.csv").write_text(csv_text, encoding="utf-8")
+        (original / "metadata.json").write_bytes(metadata)
+        (original / "rx_stream.bin").write_bytes(b"original-frames")
+        (original / "commands.jsonl").write_text("{}\n", encoding="utf-8")
+
+        with patch.object(api.config, "IS_LOCAL_DEPLOYMENT", True):
+            response = self.client.post(
+                f"/api/acquisition/jobs/{job}/upload",
+                params={"agent_id": "test", "local_directory": str(original)},
+                headers=self.edge,
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["data"]["status"], "completed")
+        self.assertEqual(
+            response.json()["data"]["metadata"]["local_directory"], str(original)
+        )
+        self.assertTrue((original / "counts.i32").is_file())
+        self.assertTrue((original / "analysis.json").is_file())
+        self.assertFalse(api.directory(job).exists())
+        with self.sessions() as db:
+            orm_job = db.get(AcquisitionJob, job)
+            np.testing.assert_array_equal(api.load_values(orm_job), values)
+            records = db.query(SensorData).all()
+            self.assertEqual(len(records), 4)
+            self.assertEqual(
+                {record.data["path"] for record in records},
+                {str((original / "counts.i32").resolve())},
+            )
+        analysis = self.client.get(
+            f"/api/acquisition/jobs/{job}/analysis", headers=self.user
+        )
+        self.assertEqual(analysis.status_code, 200, analysis.text)
 
     def test_selected_fft_rms_and_envelope_band(self):
         job = self.create(

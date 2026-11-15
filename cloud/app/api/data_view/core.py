@@ -14,6 +14,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _channel_numbers(value):
+    return sorted(int(channel) for channel in value.split(",")) if value else []
+
+
 @router.get("/devices")
 def get_all_device_data(db: Session = Depends(get_db)):
     """
@@ -38,7 +42,9 @@ def get_all_device_data(db: Session = Depends(get_db)):
             func.max(SensorData.created_at).label("created_at"),
             func.max(SensorData.is_special).label("is_special"),
             func.count(SensorData.channel).label("channel_count"),
+            func.group_concat(SensorData.channel).label("channels"),
             func.max(SensorData.sample_rate).label("sample_rate"),
+            func.max(SensorData.data["kind"].as_string()).label("source_kind"),
         )
         .filter(SensorData.device_id.in_(device_ids))
         .group_by(SensorData.device_id, SensorData.batch_index)
@@ -68,7 +74,9 @@ def get_all_device_data(db: Session = Depends(get_db)):
                     "created_at": r.created_at.isoformat() if r.created_at else None,
                     "is_special": bool(r.is_special),
                     "channel_count": r.channel_count,
-                    "sample_rate": r.sample_rate or 25600,
+                    "channels": _channel_numbers(r.channels),
+                    "sample_rate": r.sample_rate,
+                    "source_kind": r.source_kind,
                     **summary_state(diag),
                     "analyzed_at": diag.analyzed_at.isoformat()
                     if diag and diag.analyzed_at
@@ -105,7 +113,9 @@ def get_device_batches(
             func.max(SensorData.created_at).label("created_at"),
             func.max(SensorData.is_special).label("is_special"),
             func.count(SensorData.channel).label("channel_count"),
+            func.group_concat(SensorData.channel).label("channels"),
             func.max(SensorData.sample_rate).label("sample_rate"),
+            func.max(SensorData.data["kind"].as_string()).label("source_kind"),
         )
         .filter(SensorData.device_id == device_id)
         .group_by(SensorData.batch_index)
@@ -122,7 +132,7 @@ def get_device_batches(
     diag_map = {d.batch_index: d for d in diag_records}
 
     batches = []
-    for batch_index, created_at, is_special, ch_count, sr in batch_records:
+    for batch_index, created_at, is_special, ch_count, channels, sr, source_kind in batch_records:
         diag = diag_map.get(batch_index)
         batches.append(
             {
@@ -130,7 +140,9 @@ def get_device_batches(
                 "created_at": created_at.isoformat() if created_at else None,
                 "is_special": bool(is_special),
                 "channel_count": ch_count,
-                "sample_rate": sr or 25600,
+                "channels": _channel_numbers(channels),
+                "sample_rate": sr,
+                "source_kind": source_kind,
                 **summary_state(diag),
                 "analyzed_at": diag.analyzed_at.isoformat()
                 if diag and diag.analyzed_at

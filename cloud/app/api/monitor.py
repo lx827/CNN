@@ -107,7 +107,7 @@ def get_latest_monitor(
         records = waveform.records
 
         for record in records:
-            sample_rate = record.sample_rate or 25600
+            sample_rate = waveform.sample_rate
             channel_num = record.channel
             signal = waveform.signals[f"ch{channel_num}"]
 

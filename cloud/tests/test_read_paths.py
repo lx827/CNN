@@ -128,6 +128,24 @@ class ReadPathTests(unittest.TestCase):
         self.assertEqual(one_device[0]["health_score"], all_batches[0]["health_score"])
         self.assertEqual(one_device[0]["health_score"], 40)
 
+    def test_batch_lists_expose_sparse_real_channel_numbers(self):
+        self.db.add(
+            SensorData(
+                device_id="TEST",
+                batch_index=4,
+                channel=4,
+                data=[0.0, 1.0],
+                sample_rate=8192,
+            )
+        )
+        self.db.commit()
+        all_batches = get_all_device_data(self.db)["data"][0]["batches"]
+        one_device = get_device_batches("TEST", True, self.db)["data"]
+        for batches in (all_batches, one_device):
+            batch = next(row for row in batches if row["batch_index"] == 4)
+            self.assertEqual(batch["channels"], [4])
+            self.assertEqual(batch["channel_count"], 1)
+
     def test_batch_lists_do_not_materialize_analysis_payloads(self):
         self.add_batches(1)
         self.db.add_all(

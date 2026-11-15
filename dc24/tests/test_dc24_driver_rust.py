@@ -19,6 +19,30 @@ from test_dc24_edge_pi import data_frame, free_port, run_fake_device
 
 
 class RustDriverInterfaceTests(unittest.TestCase):
+    def test_rust_driver_has_no_frame_protocol_state_and_close_propagates_errors(self):
+        from dc24_driver import FrameProtocolDriver
+        from dc24_driver_rust import RustDriver
+
+        class Core:
+            closed = False
+
+            def close(self):
+                self.closed = True
+
+        driver = RustDriver()
+        driver._core = core = Core()
+        driver.started = True
+        with (
+            patch.object(driver, "stop", side_effect=RuntimeError("stop failed")),
+            self.assertRaisesRegex(RuntimeError, "stop failed"),
+        ):
+            driver.close()
+        self.assertTrue(core.closed)
+        self.assertIsNone(driver._core)
+        self.assertNotIsInstance(driver, FrameProtocolDriver)
+        for name in ("connection", "link", "received_tcp_bytes", "unparsed_tail_bytes"):
+            self.assertFalse(hasattr(driver, name), name)
+
     def test_record_receives_original_frames_and_int32_samples(self):
         port = free_port()
         errors = []

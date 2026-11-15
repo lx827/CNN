@@ -1,4 +1,4 @@
-"""采集宿主使用的窄驱动接口及两种传输共用的控制时序。"""
+"""采集宿主的窄驱动接口，以及 Python/DLL 共用的帧协议生命周期。"""
 
 from __future__ import annotations
 
@@ -32,28 +32,51 @@ class SampleBlock:
 
 
 class Dc24Driver(ABC):
-    """DC24 可选驱动接口。
-
-    connect 等待匹配设备；start 完成 BA/B8/B2/B5/B7 时序并注册样本回调；
-    poll 驱动一次非阻塞接收；stop 以 B8 正常收尾；close 释放设备与监听资源。
-    事件以 JSON 行写入 events，原始接收字节写入 raw，文件所有权仍属宿主。
-    """
+    """宿主所需的最小驱动能力，不要求实现方使用 TCP 帧协议对象。"""
 
     transport: str
 
     def __init__(self, host=HOST, peer=PEER, port=PORT):
         self.host, self.peer, self.port = host, peer, port
         self.state = LinkState.WAITING_DEVICE
-        self.connection = None
-        self.link = None
         self.started = False
         self.identity_frame = None
-        self.device_source_port = None
-        self.emergency_stop_error = None
 
     @abstractmethod
     def connect(self, should_stop: Callable[[], bool], wait=45) -> bool:
         """等待目标设备；已连接返回 True，等待期间收到停止返回 False。"""
+
+    @abstractmethod
+    def start(
+        self,
+        sample_rate: int,
+        on_samples: Callable[[SampleBlock], None],
+        raw: IO[bytes],
+        events: IO[str],
+    ) -> None:
+        """启动采样并注册完整样本块、原始字节与事件输出。"""
+
+    @abstractmethod
+    def poll(self) -> None:
+        """驱动一次接收与消息分发。"""
+
+    @abstractmethod
+    def stop(self) -> None:
+        """正常停止采样。"""
+
+    @abstractmethod
+    def close(self) -> None:
+        """释放设备与监听资源；停止或释放错误必须向宿主传播。"""
+
+
+class FrameProtocolDriver(Dc24Driver):
+    """Python TCP 与原厂 DLL 共用的 BA/B8/B2/B5/B7 帧协议实现。"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.connection = None
+        self.link = None
+        self.device_source_port = None
 
     def start(
         self,
@@ -76,7 +99,7 @@ class Dc24Driver(ABC):
             on_samples(SampleBlock(sequence=sequence, frame=frame, values=values))
 
         self.link.on_data = consume
-        self.started = True  # 启动应答超时也必须由 close 尝试停止。
+        self.started = True
         self.link.exchange(0xB7, b"\x00")
         self.state = LinkState.STREAMING
 
@@ -94,17 +117,18 @@ class Dc24Driver(ABC):
         self.state = LinkState.STOPPED
 
     def close(self) -> None:
-        if self.started and self.link is not None:
-            try:
+        try:
+            if self.started and self.link is not None:
                 self.link.on_data = None
                 self.link.exchange(0xB8)
-            except (OSError, TimeoutError) as exc:
-                self.emergency_stop_error = str(exc)
+        finally:
             self.started = False
-        if self.connection is not None:
-            self.connection.close()
-            self.connection = None
-        self.state = LinkState.STOPPED
+            try:
+                if self.connection is not None:
+                    self.connection.close()
+            finally:
+                self.connection = None
+                self.state = LinkState.STOPPED
 
     @property
     def received_tcp_bytes(self):
