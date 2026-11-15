@@ -10,6 +10,7 @@ import argparse
 import csv
 import json
 import math
+import os
 from pathlib import Path
 import time
 
@@ -49,11 +50,23 @@ __all__ = [
 
 
 def create_driver(vendor_root=None, host=HOST, peer=PEER, port=PORT):
-    """按显式本机配置创建驱动；未配置原厂目录时保持 Python TCP 默认。"""
-    if vendor_root:
+    """按显式 DC24_DRIVER 创建驱动；未配置时保留原厂目录/Python TCP 旧行为。"""
+    selected = os.environ.get("DC24_DRIVER")
+    if selected is None:
+        selected = "vendor" if vendor_root else "python"
+    if selected == "vendor":
         from dc24_driver_vendor import VendorDriver
 
-        return VendorDriver(vendor_root, host=host, peer=peer, port=port)
+        root = vendor_root or os.environ.get("DC24_VENDOR_ROOT")
+        if not root:
+            raise ValueError("DC24_DRIVER=vendor 需要配置 DC24_VENDOR_ROOT")
+        return VendorDriver(root, host=host, peer=peer, port=port)
+    if selected == "rust":
+        from dc24_driver_rust import RustDriver
+
+        return RustDriver(host=host, peer=peer, port=port)
+    if selected != "python":
+        raise ValueError("DC24_DRIVER 必须是 python、rust 或 vendor")
     from dc24_driver_python import PythonTcpDriver
 
     return PythonTcpDriver(host=host, peer=peer, port=port)
