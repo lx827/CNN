@@ -119,6 +119,7 @@
 | `bearingDiagnosis.js` | `src/utils/bearingDiagnosis.js` | 轴承包络评估、SC/SCoh 指标与图表标注的只读适配 |
 | `math.js` | `src/utils/math.js` | 数学计算工具 |
 | `status.js` | `src/utils/status.js` | 状态处理工具（设备在线/离线状态判断） |
+| `chartTheme.js` | `src/utils/chartTheme.js` | ECharts 统一主题基底（色板、坐标轴/提示框样式、空数据占位），所有图表 option 以此为基底 |
 
 ---
 
@@ -126,7 +127,8 @@
 
 | 文件 | 路径 | 职责 |
 |------|------|------|
-| `variables.css` | `src/styles/variables.css` | CSS 变量定义（主题色、间距、字体等） |
+| `variables.css` | `src/styles/variables.css` | 设计令牌唯一来源（品牌色板、语义色、文本/背景/边框、圆角、阴影、动效、Element Plus 变量覆盖），组件样式一律引用 `var(--*)` |
+| `global.css` | `src/styles/global.css` | 全局元素样式（卡片/表格/按钮/滚动条、路由切换动效、`.card-header`/`.stat-value` 等工具类） |
 
 ---
 
@@ -135,9 +137,9 @@
 | 类别 | 数量 |
 |------|------|
 | Vue 组件 | 16 个 |
-| JavaScript 模块 | 19 个 |
-| CSS 样式 | 1 个 |
-| **总计** | **36 个文件** |
+| JavaScript 模块 | 20 个 |
+| CSS 样式 | 2 个 |
+| **总计** | **38 个文件** |
 
 ---
 
