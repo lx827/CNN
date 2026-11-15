@@ -6,7 +6,7 @@
 
 **现有传感器 → DC24 采集器 → 网线 → Windows 电脑 → CNN 后端 → 网页实时显示与完整数据保存。**
 
-不运行原厂主程序,由自己的程序控制硬件;既支持复用原厂接收 DLL(`JMServer.dll`),也保留不依赖 DLL 的纯 Python TCP 方式。支持原厂 50～100000Hz 全部 12 档、四通道、实时示波、示波中开始/停止保存、完整文件保存与上传。
+不运行原厂主程序,由自己的程序控制硬件;支持纯 Python TCP、复用 `dc24_edge_core` 的 Rust FFI，以及复用原厂接收 DLL(`JMServer.dll`)三种可选驱动。支持原厂 50～100000Hz 全部 12 档、四通道、实时示波、示波中开始/停止保存和完整文件保存。本地工作站在文件关闭后只登记现场原件目录，不逐文件上传；远程边端保持逐文件上传云端副本。
 
 一键入口:双击仓库根目录 `start_dc24.bat`(检查环境、启动/复用本机前后端与采集代理、打开"真实采集"页)。完整步骤见 [DC24 采集说明](../docs/DC24_ACQUISITION.md),协议细节见 [DC24 实测协议](../docs/DC24_PROTOCOL.md),交接全貌见 [DC24 工作交接说明](../docs/DC24_HANDOFF_20261107.md)。
 
@@ -47,13 +47,14 @@ uv sync --no-default-groups --group local --group dc24-vendor
 
 | 键 | 说明 |
 |----|------|
-| `DC24_DRIVER` | 显式选择 `python`、`rust` 或 `vendor`；未设置时保持旧行为：配置原厂目录走 DLL，否则走 Python TCP |
+| `DC24_DRIVER` | 显式选择 `python`、`rust` 或 `vendor`；环境变量优先于本文件，未设置时保持旧行为：配置原厂目录走 DLL，否则走 Python TCP。启动器通过公共 `create_driver` 校验对应包并复用其 transport，不会静默切换 |
 | `DC24_VENDOR_ROOT` | 原厂软件安装目录绝对路径(含 `dll/JMServer.dll`);选择 DLL 时必填 |
+| `DEPLOYMENT_MODE` | 由本机启动器向采集进程显式设为 `local`，使流式保存在关闭文件后仅登记原件目录；普通远程边端不要设置 |
 | `DC24_EDGE_LIB` | 可选的 Rust 原生库显式路径；默认加载 wheel 内携带的库，仅开发联调时覆盖 |
 | `CLOUD_BASE_URL` | 云端地址 fallback(默认 `http://127.0.0.1:8000`) |
 | `EDGE_API_KEY` | 边端密钥,须与云端 `cloud/.env` 的 `EDGE_API_KEY` 一致 |
 
-采样率、时长、频带等采集参数由"真实采集"页面下发,不在 `.env` 配置。
+采样率、时长、频带等采集参数由"真实采集"页面下发,不在 `.env` 配置。保存目录同样由页面选择；本地流式任务只在该目录下保留任务原件，任务下载、波形和自动诊断直接读取实际 `counts.i32`，不生成 `data/acquisitions` 或浮点波形副本。移动或删除原件后，既有任务与诊断批次将无法重新读取。ZIP 上传、独立 CLI 和树莓派边端不借用该本机登记路径。
 
 公共接口与现有宿主接缝回归：`uv run --no-sync python tests/test_dc24_driver_interface.py -v`；Rust adapter 的同一接缝及原始帧回归：`uv run --no-sync python tests/test_dc24_driver_rust.py -v`。现有 Python TCP 回环和示波保存测试仍在 `cloud/tests/test_dc24_driver.py`、`cloud/tests/test_dc24_live.py`。Rust Windows 实机采集、停止、保存与诊断尚未验收，回环模拟设备不能替代该项。
 

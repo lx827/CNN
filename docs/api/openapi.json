@@ -4866,6 +4866,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FinishStream"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5245,6 +5262,25 @@
           "not_evaluable"
         ],
         "title": "EvaluationStatus"
+      },
+      "FinishStream": {
+        "properties": {
+          "local_directory": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Directory"
+          }
+        },
+        "type": "object",
+        "title": "FinishStream"
       },
       "HTTPValidationError": {
         "properties": {

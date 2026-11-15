@@ -29,8 +29,8 @@
 
 ## 持久化边界
 
-整包原始文件、可选分析摘要和完整数组属于采集任务产物。原始文件落盘根目录由 `ACQUISITION_DATA_DIR` 配置；数据库任务状态与文件系统产物需要按任务生命周期保持一致。
+整包原始文件、可选分析摘要和完整数组属于采集任务产物。远程任务的原始文件落盘根目录由 `ACQUISITION_DATA_DIR` 配置；本地流式任务只在用户选择目录保存一套原件，`finish-stream` 登记其绝对路径，不创建后端副本。数据库任务状态与文件系统产物需要按任务生命周期保持一致。
 
 采集任务保存 `enabled_channels`，有效通道集合由统一配置 `DC24_CHANNELS` 提供，至少选择一路；原始四路文件不随选择改变。完整采集结束后，`services/acquisition_diagnosis.py` 按 `DC24_DIAGNOSIS_WINDOW_SECONDS`（默认 5 秒）划分半开样本区段，末段按实际长度保留，并只为启用通道登记 `sensor_data` 永久特殊批次。`sensor_data.data` 保存文件来源与时间区段，不保存浮点波形，读取契约见 [持久化](persistence.md)。
 
-ZIP 与流式完成入口调用同一个登记函数；批次、来源元数据和任务终态在同一事务提交，完成通知重试与并发完成共用现有分析锁，不重复登记。设备身份使用真实 `agent_id`，名称取 agent 状态或该身份，agent 心跳同步设备在线时间。登记后的未分析批次由现有 worker 逐批串行进入 `process_batch`，结果继续由 DataView、Diagnosis、Alarm、Monitor 和设备参数页消费。`analyze_counts` 的显示摘要仍保留，但不代替该机械诊断链路。
+ZIP 与流式完成入口调用同一个登记函数；批次、来源元数据和任务终态在同一事务提交，完成通知重试与并发完成共用现有分析锁，不重复登记。远程流式完成读取后端上传目录；仅 `DEPLOYMENT_MODE=local` 接受 `local_directory`，校验同一套文件、元数据和 counts 长度后直接登记现场 `counts.i32`。任务下载、任务波形与诊断读取都使用该实际目录，不复制或回退到云端副本。设备身份使用真实 `agent_id`，名称取 agent 状态或该身份，agent 心跳同步设备在线时间。登记后的未分析批次由现有 worker 逐批串行进入 `process_batch`，结果继续由 DataView、Diagnosis、Alarm、Monitor 和设备参数页消费。`analyze_counts` 的显示摘要仍保留，但不代替该机械诊断链路。

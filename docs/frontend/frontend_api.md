@@ -258,6 +258,8 @@ const status = await getTaskStatus(task.task_id);
 | `getAcquisitionWaveform(id, params)` | `id: string`<br>`params: object` | 波形数据 | `GET /api/acquisition/jobs/{id}/waveform` | 预留 |
 | `downloadAcquisitionFile(id, name)` | `id: string`<br>`name: string` | 无（Blob 触发下载） | `GET /api/acquisition/jobs/{id}/files/{name}` | `Acquisition.vue` |
 
+任务下载与波形封装在云端和本地共用同一 URL。本地后端直接读取采集进程登记的现场原件目录，不向前端暴露另一套存储接口；移动或删除原件会使既有任务下载、波形与诊断读取失败。
+
 ### 2.11 api/ingest.js — 边端数据接入（预留）
 
 **文件路径**：`src/api/ingest.js`
