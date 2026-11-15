@@ -145,7 +145,7 @@ DataView 计算、CSV 与研究分析去噪失败会得到 HTTP 422 `detail {sta
 
 **#77/#84 外部响应更新**：所有诊断消费完整 `contract_version=1` Domain：evaluation_status、diagnosis_conclusion、health_score、coverage、evaluations、deductions、fault_propositions、recommendation/reason。局部对象同样保留顶层 Domain；不再读取 status、fault_likelihood、votes/best 或旧概率。展示统一交 `getDiagnosisView`，partial 必须显示未覆盖对象，null 不能 Number() 变成 0。
 
-缓存 GET 严格传当前通道与 `{denoise_method}`，不存在精确键不借其他方法/批次。旧缓存返回 unknown/null 与需重新分析原因；直接重评 POST reevaluate 只消费已有规范 Evidence，旧载荷返回 409。手工 reanalyze 返回完整批次 Domain+channels，前端选择实际通道。PUT 批次 diagnosis 只发送 `{rot_freq}`，不发送 order_analysis。
+缓存 GET 严格传当前通道与 `{denoise_method}`，不存在精确键不借其他方法/批次。旧缓存返回 unknown/null 与需重新分析原因；直接重评 POST reevaluate 只消费已有规范 Evidence，旧载荷返回 409。手工 reanalyze 返回完整批次 Domain+channels+实际 batch_index，前端选择实际通道。无 selection 参数不发送请求体并保持原批复跑；DC24 文件批次可传样本/秒区间与 channels 创建新特殊批次。PUT 批次 diagnosis 只发送 `{rot_freq}`，不发送 order_analysis。
 
 生产 analyze/full-analysis 参数收敛为 denoise 与可选 rot_freq_hz，gear 另含 standard/advanced。旧策略/bearing_method/gear_method 不再作为该生产入口选择协议；研究方法选择仍在 method-analysis。`runCompositeResearch` 使用专用 POST body method/rot_freq_hz/options/alignment，研究运行不写生产缓存。
 
@@ -159,7 +159,7 @@ DataView 计算、CSV 与研究分析去噪失败会得到 HTTP 422 `detail {sta
 | `getChannelMethodAnalysis` | 记录身份、method 和 config | 单方法完整 Domain/原始表示 | `GET /api/data/{id}/{batch}/{ch}/method-analysis` | Research |
 | `runCompositeResearch` | 记录身份和 body | 研究限定 Domain 与阶段/原始指标 | `POST /api/data/{id}/{batch}/{ch}/composite-analysis` | Research |
 | `updateBatchDiagnosis` | 设备/批次与 `{rot_freq}` | 仅转频更新 | `PUT /api/data/{id}/{batch}/diagnosis` | DataView |
-| `reanalyzeBatch(deviceId, batchIndex)` | `deviceId: string`<br>`batchIndex: number` | 重新诊断结果 | `POST /api/data/{deviceId}/{batchIndex}/reanalyze` | `DataView.vue` |
+| `reanalyzeBatch(deviceId, batchIndex, selection?)` | `deviceId: string`<br>`batchIndex: number`<br>`selection?: {start_sample,end_sample,channels} 或 {start_time,end_time,channels}` | 原批或新特殊批次的重新诊断结果，含实际 batch_index | `POST /api/data/{deviceId}/{batchIndex}/reanalyze` | `DataView.vue` |
 | `reanalyzeAllDevice(deviceId)` | `deviceId: string` | 批量重新诊断汇总 | `POST /api/data/{deviceId}/reanalyze-all` | `DataView.vue` |
 
 ```javascript
@@ -390,7 +390,8 @@ import { getDeviceInfo } from '@/api';
 | `computeGear()` | 计算并展示齿轮诊断指标 |
 | `computeFullAnalysis()` | 执行全算法分析 |
 | `computeStats()` | 计算并展示统计指标 |
-| `onReanalyze()` | 对当前批次发起重新诊断 |
+| `onReanalyze()` | 无请求体，对当前批次发起原批重新诊断 |
+| `openReanalyzeDialog()` / `submitReanalyzeSelection()` | 在现有页面选择 DC24 原件时间/样本范围及通道，创建并切换到新特殊批次 |
 | `onReanalyzeAll()` | 对当前设备全部批次重新诊断 |
 | `onDeleteBatch()` | 删除当前批次 |
 | `gotoResearchDiagnosis()` | 跳转到研究级诊断页面 |
@@ -633,7 +634,7 @@ import {
 | 属性 | 说明 |
 |------|------|
 | **文件路径** | `src/views/Acquisition.vue` |
-| **用途** | DC24 实时示波与采集:选择现场边端与采样率开始示波,四通道波形/频谱/RMS/包络实时显示,随时开始/停止原始数据保存；从 capabilities 动态生成诊断通道启用控件，至少一路并随保存任务提交 |
+| **用途** | DC24 实时示波与采集:选择现场边端与采样率开始示波,按启用通道显示波形/频谱/RMS/包络,随时开始/停止原始数据保存；从 capabilities 动态生成显示与诊断通道控件，至少一路并随保存任务提交，原始帧仍保存四路 |
 
 **实时窗口数据流（2026-11-08,issue #51）**：会话激活时经 `utils/websocket.js::createWebSocketClient` 订阅 `WS /ws/acquisition/sessions/{id}/view`;连接建立即发送当前分析选项(显示开关/时间窗/包络带),`view` 推送驱动 ECharts 绘制,`session` 推送更新会话状态;WS 未连上时回退 `api/acquisition.js::getLiveView` REST 轮询,断线由客户端指数退避重连,会话停止/404 恢复/页面卸载时关闭订阅。
 
@@ -759,7 +760,8 @@ import {
 | `update:selectedDevice` | 设备切换 |
 | `update:selectedBatch` | 批次切换 |
 | `update:selectedChannel` | 通道切换 |
-| `reanalyze` | 点击重新诊断按钮 |
+| `reanalyze` | 点击原批重新诊断按钮 |
+| `reanalyze-selection` | 点击 DC24 文件批次的选段重诊按钮 |
 | `reanalyzeAll` | 点击全部重新诊断按钮 |
 | `deleteBatch` | 点击删除批次按钮 |
 | `exportCsv` | 点击导出 CSV 按钮 |
@@ -818,7 +820,7 @@ import {
 | `useMonitor.js` | `Monitor.vue` | `channels/params/sensors/collectDevices`、`requestCollect()`、`startPolling(taskId)`、`refreshLatestData()`(推送合并串行)、`onMonitorDeviceChange()`、图表 ref | — |
 | `useSettings.js` | `Settings.vue` | `form/channelNames/thresholds/thresholdEnabled`、三级加载、`onSaveEdgeConfig/onSaveMechanical/onSaveThresholds/onSyncMechanical`、`intervalValue/intervalUnit` 与 `computedSeconds` | `unitOptions`(采集间隔单位)、`thresholdItems`(阈值指标定义) |
 | `useResearchDiagnosis.js` | `ResearchDiagnosis.vue` | 三模式运行/组合 POST/顶层局部结果；规范 Evidence 汇总，研究不投票 | runModeOptions；原始格式在 researchDisplay，诊断统一 getDiagnosisView |
-| `useDataView.js` | `DataView.vue` | 设备批次表格数据与选择、时域自动加载、FFT/STFT/结构化包络谱/阶次/倒谱/统计/齿轮 `computeX/clearX`、轴承与齿轮特征频率标注、综合/策略诊断、删除/重新诊断/导出、路由联动 | `bearingMethodLabel`、`statsGroups`、`statsDisplay`(预留) |
+| `useDataView.js` | `DataView.vue` | 设备批次表格数据与实际 channels 选择、时域自动加载、FFT/STFT/结构化包络谱/阶次/倒谱/统计/齿轮 `computeX/clearX`、轴承与齿轮特征频率标注、综合/策略诊断、删除/原批复跑/文件选段重诊/导出、路由联动 | `dc24ChannelOptions`、`bearingMethodLabel`、`statsGroups`、`statsDisplay`(预留) |
 
 **配套子组件目录**：`src/components/dashboard/`(SummaryCards、DeviceCardList)、`src/components/monitor/`(SensorStatusCard、RunParamsCard、CollectionProgress)、`src/components/settings/`(EdgeConfigCard、MechanicalParamsCard、ThresholdsCard、ConfigNotesCard)、`src/components/research/`(ResearchToolbar、SingleResultPanels、EnsembleResultPanels)、`src/components/dataview/`(StatsSection、FftEnvelopeSection、GearSection、ComprehensiveSection、OrderSection、CepstrumSection、StftSection、DiagnosisDetailSection)。
 
