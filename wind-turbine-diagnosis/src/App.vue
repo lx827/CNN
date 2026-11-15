@@ -6,14 +6,5 @@
 </script>
 
 <style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
-  background-color: #f0f2f5;
-}
+/* 全局样式见 styles/global.css（令牌见 styles/variables.css） */
 </style>

@@ -1,7 +1,158 @@
+/**
+ * 设计令牌（Design Tokens）—— 全局唯一视觉来源
+ *
+ * 分层：
+ *   1. 品牌色板（靛蓝 Indigo 阶梯）
+ *   2. 语义色（状态/文本/背景/边框）
+ *   3. 圆角 / 阴影 / 间距 / 动效
+ *   4. Element Plus 变量覆盖（--el-*）
+ *
+ * 组件样式一律引用 var(--*)，禁止再写裸色值。
+ */
+
 :root {
-  --color-primary: #165DFF;
-  --color-success: #52C41A;
-  --color-warning: #FAAD14;
-  --color-danger: #F5222D;
-  --color-info: #909399;
+  /* ---------- 1. 品牌色板（Indigo） ---------- */
+  --brand-50: #eef2ff;
+  --brand-100: #e0e7ff;
+  --brand-200: #c7d2fe;
+  --brand-300: #a5b4fc;
+  --brand-400: #818cf8;
+  --brand-500: #6366f1;
+  --brand-600: #4f46e5;   /* 主色 */
+  --brand-700: #4338ca;
+  --brand-800: #3730a3;
+  --brand-900: #312e81;
+
+  /* ---------- 2. 语义色 ---------- */
+  --color-primary: var(--brand-600);
+  --color-primary-hover: var(--brand-500);
+  --color-primary-active: var(--brand-700);
+  --color-primary-soft: var(--brand-50);   /* 主色浅底（选中态/徽标底） */
+
+  --color-success: #10b981;
+  --color-success-soft: #ecfdf5;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #fffbeb;
+  --color-danger: #ef4444;
+  --color-danger-soft: #fef2f2;
+  --color-info: #64748b;
+  --color-info-soft: #f1f5f9;
+
+  /* 文本 */
+  --text-primary: #1e293b;    /* 标题/正文强调 */
+  --text-regular: #475569;    /* 正文 */
+  --text-secondary: #94a3b8;  /* 辅助说明 */
+  --text-placeholder: #cbd5e1;
+
+  /* 背景与边框 */
+  --bg-page: #f5f7fb;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f8fafc;       /* 卡片内嵌区域/表头 */
+  --border-color: #e2e8f0;
+  --border-light: #eef1f7;
+
+  /* ---------- 3. 圆角 / 阴影 / 动效 ---------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -2px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 12px 32px -8px rgba(15, 23, 42, 0.14), 0 4px 12px -4px rgba(15, 23, 42, 0.08);
+  --shadow-brand: 0 4px 14px -2px rgba(79, 70, 229, 0.35);
+
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 布局尺寸 */
+  --sidebar-width: 232px;
+  --sidebar-width-collapsed: 64px;
+  --topbar-height: 60px;
+  --content-max-width: 1600px;
+
+  /* 字体 */
+  --font-family: 'Inter', 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+  /* ---------- 4. Element Plus 变量覆盖 ---------- */
+  --el-color-primary: var(--brand-600);
+  --el-color-primary-light-3: var(--brand-300);
+  --el-color-primary-light-5: var(--brand-200);
+  --el-color-primary-light-7: var(--brand-100);
+  --el-color-primary-light-8: var(--brand-50);
+  --el-color-primary-light-9: #f5f7ff;
+  --el-color-primary-dark-2: var(--brand-700);
+
+  --el-color-success: var(--color-success);
+  --el-color-success-light-3: #6ee7b7;
+  --el-color-success-light-5: #a7f3d0;
+  --el-color-success-light-7: #d1fae5;
+  --el-color-success-light-8: #e3f9ef;
+  --el-color-success-light-9: var(--color-success-soft);
+  --el-color-success-dark-2: #059669;
+
+  --el-color-warning: var(--color-warning);
+  --el-color-warning-light-3: #fcd34d;
+  --el-color-warning-light-5: #fde68a;
+  --el-color-warning-light-7: #fef3c7;
+  --el-color-warning-light-8: #fdf3d8;
+  --el-color-warning-light-9: var(--color-warning-soft);
+  --el-color-warning-dark-2: #d97706;
+
+  --el-color-danger: var(--color-danger);
+  --el-color-error: var(--color-danger);
+  --el-color-danger-light-3: #fca5a5;
+  --el-color-danger-light-5: #fecaca;
+  --el-color-danger-light-7: #fee2e2;
+  --el-color-danger-light-8: #fbeaea;
+  --el-color-danger-light-9: var(--color-danger-soft);
+  --el-color-danger-dark-2: #dc2626;
+  --el-color-error-light-3: #fca5a5;
+  --el-color-error-light-5: #fecaca;
+  --el-color-error-light-7: #fee2e2;
+  --el-color-error-light-8: #fbeaea;
+  --el-color-error-light-9: var(--color-danger-soft);
+  --el-color-error-dark-2: #dc2626;
+
+  --el-color-info: var(--color-info);
+  --el-color-info-light-3: #a8b3c4;
+  --el-color-info-light-5: #c3ccd9;
+  --el-color-info-light-7: #dde3ec;
+  --el-color-info-light-8: #e8edf3;
+  --el-color-info-light-9: var(--color-info-soft);
+  --el-color-info-dark-2: #475569;
+
+  --el-text-color-primary: var(--text-primary);
+  --el-text-color-regular: var(--text-regular);
+  --el-text-color-secondary: var(--text-secondary);
+  --el-text-color-placeholder: var(--text-placeholder);
+
+  --el-bg-color: var(--bg-surface);
+  --el-bg-color-page: var(--bg-page);
+  --el-bg-color-overlay: var(--bg-surface);
+
+  --el-border-color: var(--border-color);
+  --el-border-color-light: var(--border-light);
+  --el-border-color-lighter: var(--border-light);
+  --el-border-color-extra-light: #f3f5fa;
+
+  --el-fill-color: #f1f5f9;
+  --el-fill-color-light: #f5f7fa;
+  --el-fill-color-lighter: #f8fafc;
+  --el-fill-color-blank: var(--bg-surface);
+
+  --el-border-radius-base: var(--radius-sm);
+  --el-border-radius-small: 4px;
+  --el-border-radius-round: 999px;
+
+  --el-font-family: var(--font-family);
+  --el-font-size-base: 14px;
+
+  --el-box-shadow: var(--shadow-md);
+  --el-box-shadow-light: var(--shadow-sm);
+  --el-box-shadow-lighter: var(--shadow-sm);
+  --el-box-shadow-dark: var(--shadow-lg);
+
+  --el-mask-color: rgba(15, 23, 42, 0.45);
 }
