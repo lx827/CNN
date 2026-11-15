@@ -429,7 +429,7 @@ GET /api/data/{device_id}/batches?include_special={include_special}
 
 **参数**：`include_special: bool = True`
 
-两个批次列表的每项均保留旧 `channel_count`，并返回实际 `channels` 升序数组与 `source_kind`（DC24 文件批次为 `dc24_counts`，数据库数组为 `null`）。例如仅存 CH4 时返回 `channels: [4]`、`channel_count: 1`；前端按该数组选择和请求通道，不从数量推测连续编号。批次摘要 `sample_rate` 不伪造默认值，旧库缺失值由启动迁移按设备采样率明确回填。
+两个批次列表的每项均保留旧 `channel_count`，并返回实际 `channels` 升序数组与 `source_kind`（DC24 文件批次为 `dc24_counts`，数据库数组为 `null`）。例如仅存 CH4 时返回 `channels: [4]`、`channel_count: 1`；前端按该数组选择和请求通道，不从数量推测连续编号。批次摘要 `sample_rate` 是显示采样率。旧 NULL 记录在启动迁移中物化为统一配置采样率以保持旧显示语义，设备采样率另存诊断覆盖；普通新记录没有覆盖，显示与诊断采样率相同。
 
 #### 6.1.3 获取某通道原始时域数据
 

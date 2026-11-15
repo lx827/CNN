@@ -1,4 +1,4 @@
-"""统一波形读取：调用方只消费通道数组、采样率和原始 records。"""
+"""统一波形读取：分别提供显示采样率、诊断采样率和原始 records。"""
 
 from dataclasses import dataclass
 
@@ -17,6 +17,7 @@ class WaveformBatch:
 
     signals: dict[str, np.ndarray]
     sample_rate: int
+    diagnosis_sample_rate: int
     records: list[SensorData]
 
 
@@ -31,19 +32,28 @@ def _read_signal(record):
 
 
 def waveform_from_records(records):
-    """从已加载 records 组成批次；缺失采样率必须已由启动迁移明确处理。"""
+    """普通记录两种采样率相同；历史覆盖只恢复旧诊断语义。"""
     if not records:
         raise WaveformNotFoundError("batch_data_not_found")
     rates = {record.sample_rate for record in records}
-    if not all(rates):
+    diagnosis_rates = {
+        record.diagnosis_sample_rate_override
+        if record.diagnosis_sample_rate_override is not None
+        else record.sample_rate
+        for record in records
+    }
+    if not all(rates) or not all(diagnosis_rates):
         raise ValueError("batch_sample_rate_missing")
     if len(rates) != 1:
         raise ValueError("batch_channel_sample_rates_must_match")
+    if len(diagnosis_rates) != 1:
+        raise ValueError("batch_channel_diagnosis_sample_rates_must_match")
     return WaveformBatch(
         signals={
             f"ch{record.channel}": _read_signal(record) for record in records
         },
         sample_rate=next(iter(rates)),
+        diagnosis_sample_rate=next(iter(diagnosis_rates)),
         records=records,
     )
 

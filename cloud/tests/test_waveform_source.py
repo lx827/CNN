@@ -52,6 +52,8 @@ class WaveformSourceTests(unittest.TestCase):
         waveform = load_waveform(self.db, "DB", 7)
 
         self.assertEqual(waveform.sample_rate, 8192)
+        self.assertEqual(waveform.diagnosis_sample_rate, 8192)
+        self.assertIsNone(record.diagnosis_sample_rate_override)
         self.assertEqual(waveform.records, [record])
         self.assertEqual(set(waveform.signals), {"ch3"})
         self.assertEqual(waveform.signals["ch3"].dtype, np.float64)
@@ -76,6 +78,37 @@ class WaveformSourceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "batch_sample_rate_missing"):
             load_waveform(self.db, "LEGACY", 1)
+
+    def test_migrated_override_separates_display_and_diagnosis_rates(self):
+        self.db.add(
+            SensorData(
+                device_id="LEGACY",
+                batch_index=2,
+                channel=1,
+                data=[0.0, 1.0],
+                sample_rate=25600,
+                diagnosis_sample_rate_override=48000,
+            )
+        )
+        self.db.commit()
+        waveform = load_waveform(self.db, "LEGACY", 2)
+        self.assertEqual(waveform.sample_rate, 25600)
+        self.assertEqual(waveform.diagnosis_sample_rate, 48000)
+
+    def test_zero_override_keeps_legacy_display_but_fails_diagnosis_read(self):
+        self.db.add(
+            SensorData(
+                device_id="LEGACY",
+                batch_index=3,
+                channel=1,
+                data=[0.0, 1.0],
+                sample_rate=25600,
+                diagnosis_sample_rate_override=0,
+            )
+        )
+        self.db.commit()
+        with self.assertRaisesRegex(ValueError, "batch_sample_rate_missing"):
+            load_waveform(self.db, "LEGACY", 3)
 
     def test_dc24_file_reads_sample_window_and_real_channels(self):
         counts = np.array(
@@ -142,6 +175,7 @@ class WaveformSourceTests(unittest.TestCase):
                         "end_sample": 128,
                     },
                     sample_rate=1000,
+                    diagnosis_sample_rate_override=48000,
                 )
             )
             self.db.commit()
@@ -229,6 +263,7 @@ class WaveformSourceTests(unittest.TestCase):
                     "end_sample": 128,
                 },
                 sample_rate=1000,
+                diagnosis_sample_rate_override=48000,
                 is_analyzed=0,
             )
             self.db.add(record)
@@ -260,7 +295,7 @@ class WaveformSourceTests(unittest.TestCase):
                 response = client.post("/api/data/LOCAL/101/reanalyze")
 
             self.assertEqual(response.status_code, 200, response.text)
-            self.assertEqual(observed["sample_rate"], 1000)
+            self.assertEqual(observed["sample_rate"], 48000)
             self.assertEqual(set(observed["signals"]), {"ch2"})
             np.testing.assert_array_equal(
                 observed["signals"]["ch2"], counts[:, 1].astype(np.float64)

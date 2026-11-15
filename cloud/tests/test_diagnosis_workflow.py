@@ -400,7 +400,7 @@ class MigrationTests(unittest.TestCase):
             )
         finally:
             engine.dispose()
-    def test_legacy_sensor_sample_rates_migrate_from_their_device_once(self):
+    def test_legacy_null_rates_keep_display_rate_and_record_diagnosis_override(self):
         engine = create_engine("sqlite://")
         try:
             with engine.begin() as conn:
@@ -414,7 +414,7 @@ class MigrationTests(unittest.TestCase):
                         "CREATE TABLE sensor_data (id INTEGER PRIMARY KEY, device_id VARCHAR(50), batch_index INTEGER, channel INTEGER, data JSON, sample_rate INTEGER)"
                     )
                 )
-                conn.execute(text("INSERT INTO devices VALUES (1,'OLD',4096,NULL)"))
+                conn.execute(text("INSERT INTO devices VALUES (1,'OLD',48000,NULL)"))
                 conn.execute(text("INSERT INTO devices VALUES (2,'UNKNOWN',NULL,NULL)"))
                 conn.execute(
                     text(
@@ -427,11 +427,17 @@ class MigrationTests(unittest.TestCase):
                 database.init_db()
             with engine.connect() as conn:
                 rows = conn.execute(
-                    text("SELECT id, sample_rate FROM sensor_data ORDER BY id")
+                    text(
+                        "SELECT id, sample_rate, diagnosis_sample_rate_override "
+                        "FROM sensor_data ORDER BY id"
+                    )
                 ).all()
             self.assertEqual(
-                [(row.id, row.sample_rate) for row in rows],
-                [(1, 4096), (2, 8192), (3, None)],
+                [
+                    (row.id, row.sample_rate, row.diagnosis_sample_rate_override)
+                    for row in rows
+                ],
+                [(1, 25600, 48000), (2, 8192, None), (3, 25600, 0)],
             )
         finally:
             engine.dispose()
