@@ -25,10 +25,11 @@ dc24/                              # 共用采集宿主
 drivers/
 ├── dc24/src/dc24_driver/          # 公共接口、SampleBlock、链路状态、协议与12档配置
 ├── dc24-python/                   # 独立 Python TCP 驱动发行包(默认)
+├── dc24-rust/                     # 独立 Rust FFI 驱动发行包(携带 dc24_edge_core)
 └── dc24-vendor/                   # 独立原厂 DLL 驱动发行包及32位桥接
 ```
 
-公共 `Dc24Driver` 接口只负责连接、开始、轮询、停止和关闭；样本块携带完整设备帧、帧序号及 `(N, 4)` int32 原始计数。事件与链路状态由驱动交付，任务控制、显示、保存和上传仍只有 `dc24_agent.py` / `dc24_live.py` 这一套宿主实现。驱动不执行诊断或工程单位转换。
+公共 `Dc24Driver` 接口只负责连接、开始、轮询、停止和关闭；样本块携带完整设备帧、帧序号及 `(N, 4)` int32 原始计数。Rust adapter 通过 FFI 新函数直接取得核心保存的设备原始 `80` 帧，不从解码样本重建。事件与链路状态由驱动交付，任务控制、显示、保存和上传仍只有 `dc24_agent.py` / `dc24_live.py` 这一套宿主实现。驱动不执行诊断或工程单位转换。
 
 ## 配置(`.env`)
 
@@ -36,22 +37,25 @@ Python 依赖由根 `pyproject.toml` 与 `uv.lock` 集中管理。日常 `uv syn
 
 ```bash
 uv sync --no-default-groups --group local --group dc24-python
+uv sync --no-default-groups --group local --group dc24-rust
 uv sync --no-default-groups --group local --group dc24-vendor
 ```
 
-`local` 包含应用后端、公共驱动接口和采集宿主依赖；`dc24-python` 与 `dc24-vendor` 只选择对应独立发行包。DLL 包不捆绑也不要求安装原厂软件，只有实际选择 DLL 并配置 `DC24_VENDOR_ROOT` 时才在运行时加载已验证版本。当前没有 `dc24-rust` 组，Rust 接入由后续任务完成。
+`local` 包含应用后端、公共驱动接口和采集宿主依赖；`dc24-python`、`dc24-rust` 与 `dc24-vendor` 只选择对应独立发行包。Rust 包的构建后端调用现有 `edge/` crate 的 `cargo build --release --locked`，wheel 携带原生库和公共接口薄 adapter，不包含另一套保存、上传或会话宿主。DLL 包不捆绑也不要求安装原厂软件，只有实际选择 DLL 并配置 `DC24_VENDOR_ROOT` 时才在运行时加载已验证版本。
 
 在已选择的最小环境中使用 `uv run --no-sync ...`，避免 `uv run` 自动恢复默认依赖组。Windows 首次构建计算包或修改原生源码后，在 Git Bash 执行 `vsdev uv sync`；现有采集入口及工作目录保持原样，见 [计算库构建说明](../docs/native_compute.md)。
 
 | 键 | 说明 |
 |----|------|
-| `DC24_VENDOR_ROOT` | 原厂软件安装目录绝对路径(含 `dll/JMServer.dll`);配置后实时采集走 DLL,留空走纯 Python TCP |
+| `DC24_DRIVER` | 显式选择 `python`、`rust` 或 `vendor`；未设置时保持旧行为：配置原厂目录走 DLL，否则走 Python TCP |
+| `DC24_VENDOR_ROOT` | 原厂软件安装目录绝对路径(含 `dll/JMServer.dll`);选择 DLL 时必填 |
+| `DC24_EDGE_LIB` | 可选的 Rust 原生库显式路径；默认加载 wheel 内携带的库，仅开发联调时覆盖 |
 | `CLOUD_BASE_URL` | 云端地址 fallback(默认 `http://127.0.0.1:8000`) |
 | `EDGE_API_KEY` | 边端密钥,须与云端 `cloud/.env` 的 `EDGE_API_KEY` 一致 |
 
 采样率、时长、频带等采集参数由"真实采集"页面下发,不在 `.env` 配置。
 
-公共接口与现有宿主接缝回归：`uv run --no-sync python tests/test_dc24_driver_interface.py -v`；现有 Python TCP 回环和示波保存测试仍在 `cloud/tests/test_dc24_driver.py`、`cloud/tests/test_dc24_live.py`。
+公共接口与现有宿主接缝回归：`uv run --no-sync python tests/test_dc24_driver_interface.py -v`；Rust adapter 的同一接缝及原始帧回归：`uv run --no-sync python tests/test_dc24_driver_rust.py -v`。现有 Python TCP 回环和示波保存测试仍在 `cloud/tests/test_dc24_driver.py`、`cloud/tests/test_dc24_live.py`。Rust Windows 实机采集、停止、保存与诊断尚未验收，回环模拟设备不能替代该项。
 
 ## 树莓派边端驱动(Rust 核心 + Python 驱动)
 
