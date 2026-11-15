@@ -14,7 +14,7 @@
         <span v-if="getDiagnosisView(batch).scoreText !== '-'">({{ getDiagnosisView(batch).scoreText }}分)</span>
       </el-tag>
       <el-tag v-if="batch?.coverage === 'partial'" type="info" size="small">部分覆盖</el-tag>
-      <el-tag type="info" size="small">采样率 {{ batch?.sample_rate || 25600 }} Hz</el-tag>
+      <el-tag type="info" size="small">采样率 {{ batch?.sample_rate ?? '缺失' }} Hz</el-tag>
     </span>
     <div class="detail-actions">
       <el-select
@@ -74,6 +74,9 @@
       <el-button type="warning" size="small" style="margin-left: 8px" :loading="reanalyzing" @click="$emit('reanalyze')">
         <el-icon><Refresh /></el-icon> 重新诊断
       </el-button>
+      <el-button v-if="batch?.source_kind === 'dc24_counts'" type="warning" plain size="small" style="margin-left: 8px" :loading="reanalyzing" @click="$emit('reanalyze-selection')">
+        <el-icon><Refresh /></el-icon> 选段重诊
+      </el-button>
       <el-button type="warning" size="small" style="margin-left: 8px" :loading="reanalyzingAll" @click="$emit('reanalyze-all')">
         <el-icon><Refresh /></el-icon> 全部重新诊断
       </el-button>
@@ -110,6 +113,7 @@ const emit = defineEmits([
   'update:enableDetrend',
   'export-csv',
   'reanalyze',
+  'reanalyze-selection',
   'reanalyze-all',
   'delete-batch',
   'goto-research',

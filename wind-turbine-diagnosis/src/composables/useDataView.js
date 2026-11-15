@@ -39,6 +39,8 @@ import {
 } from '../utils/bearingDiagnosis'
 
 
+export const dc24ChannelOptions = Object.freeze([1, 2, 3, 4])
+
 export const statsDisplay = [
   { key: 'peak', label: '峰值', precision: 4, normal: '—' },
   { key: 'rms', label: '均方根', precision: 4, normal: '—' },
@@ -77,6 +79,8 @@ export function useDataView() {
   const deleteLoading = ref(false)
   const reanalyzing = ref(false)
   const reanalyzingAll = ref(false)
+  const showReanalyzeDialog = ref(false)
+  const reanalyzeForm = ref({ mode: 'time', start: 0, end: null, channels: [] })
   const deviceTableData = ref([])
 
   // 批量删除事件处理（由 DeviceTable 子组件触发）
@@ -343,9 +347,10 @@ export function useDataView() {
     selectedDevice.value = device
     selectedBatch.value = batch
     // 通道选项按该批次实际存储的通道数决定（旧批次可能是3通道，新批次可能是2通道）
-    const actualChannels = batch.channel_count || device.channel_count || 3
-    channelOptions.value = Array.from({ length: actualChannels }, (_, i) => i + 1)
-    selectedChannel.value = 1
+    channelOptions.value = batch.channels?.length
+      ? [...batch.channels]
+      : Array.from({ length: batch.channel_count || device.channel_count || 3 }, (_, i) => i + 1)
+    selectedChannel.value = channelOptions.value[0]
 
     nextTick(() => {
       loadTimeDomain()
@@ -583,7 +588,7 @@ export function useDataView() {
       const d = res.data
       if (!d) return
 
-      const sr = d.sample_rate || 25600
+      const sr = d.sample_rate
       const timeData = d.data || []
       const timeX = timeData.map((_, i) => (i / sr).toFixed(4))
 
@@ -1185,26 +1190,60 @@ export function useDataView() {
   }
 
   // ========== 重新诊断 ==========
-  const onReanalyze = async () => {
-    if (!selectedDevice.value || !selectedBatch.value) return
+  const completeReanalyze = async selection => {
+    if (!selectedDevice.value || !selectedBatch.value) return false
+    const deviceId = selectedDevice.value.device_id
+    const sourceBatch = selectedBatch.value.batch_index
     try {
       reanalyzing.value = true
-      const res = await reanalyzeBatch(
-        selectedDevice.value.device_id,
-        selectedBatch.value.batch_index
-      )
+      const res = await reanalyzeBatch(deviceId, sourceBatch, selection)
       const d = res.data || {}
       const view = getDiagnosisView(d)
       ElMessage.success(`重新诊断完成：${view.label}${view.scoreText === '-' ? '' : `，健康度 ${view.scoreText} 分`}`)
-      Object.assign(selectedBatch.value, d)
-      diagnosisDetailData.value = d.channels?.[`ch${selectedChannel.value}`] || null
-      // 刷新设备列表以同步最新状态
       await loadAllDevices()
+      if (selection !== undefined && d.batch_index !== sourceBatch) {
+        const device = deviceTableData.value.find(row => row.device_id === deviceId)
+        const batch = device?.batches.find(row => row.batch_index === d.batch_index)
+        if (device && batch) selectBatch(device, batch)
+      } else {
+        Object.assign(selectedBatch.value, d)
+        diagnosisDetailData.value = d.channels?.[`ch${selectedChannel.value}`] || null
+      }
+      return true
     } catch (e) {
       console.error('重新诊断失败:', e)
       ElMessage.error('重新诊断失败: ' + formatErrorMessage(e))
+      return false
     } finally {
       reanalyzing.value = false
+    }
+  }
+
+  const onReanalyze = () => completeReanalyze(undefined)
+
+  const openReanalyzeDialog = () => {
+    reanalyzeForm.value = {
+      mode: 'time', start: 0, end: null,
+      channels: [...(selectedBatch.value?.channels || [])],
+    }
+    showReanalyzeDialog.value = true
+  }
+
+  const submitReanalyzeSelection = async () => {
+    const form = reanalyzeForm.value
+    if (!Number.isFinite(form.start) || !Number.isFinite(form.end) || form.start >= form.end) {
+      ElMessage.warning('请填写有效的起止范围')
+      return
+    }
+    if (!form.channels.length) {
+      ElMessage.warning('请至少选择一路通道')
+      return
+    }
+    const fields = form.mode === 'samples'
+      ? { start_sample: form.start, end_sample: form.end }
+      : { start_time: form.start, end_time: form.end }
+    if (await completeReanalyze({ ...fields, channels: [...form.channels] })) {
+      showReanalyzeDialog.value = false
     }
   }
 
@@ -1325,6 +1364,7 @@ export function useDataView() {
 
   return {
     loading, deleteLoading, reanalyzing, reanalyzingAll, deviceTableData,
+    showReanalyzeDialog, reanalyzeForm, dc24ChannelOptions,
     selectedDevice, selectedBatch, selectedChannel, maxFreq, channelOptions, enableDetrend,
     envelopeMethod, envelopeMethodLabel, gearMethod, gearMethodLabel, denoiseMethod,
     timeOption, fftOption, stftOption, envelopeOption, windowedOption, orderOption, cepstrumOption,
@@ -1341,7 +1381,7 @@ export function useDataView() {
     computeFFT, clearFFT, computeSTFT, clearSTFT, computeEnvelope, clearEnvelope,
     computeOrder, clearOrder, computeCepstrum, clearCepstrum, computeGear, clearGear,
     computeFullAnalysis, clearFullAnalysis, computeStrategyAnalyze, clearStrategyAnalyze,
-    computeStats, clearStats, onExportCSV, onReanalyze, onReanalyzeAll,
+    computeStats, clearStats, onExportCSV, onReanalyze, openReanalyzeDialog, submitReanalyzeSelection, onReanalyzeAll,
     onDeleteBatch, onDeleteAllSpecial, gotoResearchDiagnosis,
   }
 }

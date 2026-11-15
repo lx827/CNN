@@ -45,7 +45,7 @@ function harness(overrides = {}) {
   vm.runInNewContext(script, context, { filename: 'Acquisition.vue' })
   context.Component.render = function () {
     const state = vue.getCurrentInstance().setupState
-    if (state.view?.channels) for (const c of state.view.channels) for (const kind of state.kinds) {
+    if (state.view?.channels) for (const c of (state.visibleChannels || state.view.channels)) for (const kind of state.kinds) {
       state.bindChart(kind.key, c.channel, state.show[kind.key] ? { key: `${kind.key}-${c.channel}` } : null)
     }
     return vue.h('div')
@@ -82,6 +82,16 @@ test('采集任务保存用户启用的真实通道号', async t => {
   h.state.form.enabled_channels = [2, 4]
   await h.state.startRecording()
   assert.deepEqual(h.records[0].enabled_channels, [2, 4])
+})
+
+test('通道启停同时控制实时显示与诊断，仅存CH4时只创建CH4图表', async t => {
+  const h = harness(); t.after(() => h.app.unmount()); await flush()
+  h.state.form.enabled_channels = [4]
+  await h.state.startPreview(); await h.tick()
+  assert.equal(h.charts.length, 2)
+  assert.ok(h.charts.every(c => c.option.title.text.startsWith('CH4')))
+  await h.state.startRecording()
+  assert.deepEqual(h.records[0].enabled_channels, [4])
 })
 
 test('示波中可以切换显示并设置包络区间；非法频带不发包络请求或保存任务', async t => {
