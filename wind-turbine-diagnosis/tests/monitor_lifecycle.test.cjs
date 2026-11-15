@@ -5,8 +5,12 @@ const { createRequire } = require('node:module')
 const path = require('node:path')
 const test = require('node:test')
 const vm = require('node:vm')
-let getDiagnosisView
-test.before(async () => { ({ getDiagnosisView } = await import('../src/utils/diagnosisStatus.js')) })
+let getDiagnosisView, chartTheme, COLORS
+test.before(async () => {
+  ({ getDiagnosisView } = await import('../src/utils/diagnosisStatus.js'))
+  chartTheme = await import('../src/utils/chartTheme.js')
+  ;({ COLORS } = await import('../src/utils/constants.js'))
+})
 
 const frontendRequire = createRequire(path.resolve(__dirname, '../package.json'))
 const vue = frontendRequire('vue')
@@ -67,7 +71,7 @@ function createHarness({ devicesPromise, fetchData, taskStatus, timers = {} } = 
   }
   const context = {
     ...vue,
-    console, getDiagnosisView,
+    console, getDiagnosisView, ...chartTheme, COLORS,
     setTimeout,
     clearTimeout,
     setInterval,

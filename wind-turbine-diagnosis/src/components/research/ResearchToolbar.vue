@@ -1,6 +1,8 @@
 <template>
-  <div class="toolbar">
-    <div class="selectors">
+  <!-- 工具栏整体卡片化，与全局卡片观感一致 -->
+  <el-card class="toolbar-card" shadow="never">
+    <div class="toolbar">
+      <div class="selectors">
       <el-select :model-value="selectedDeviceId" placeholder="设备" filterable class="select" @update:model-value="$emit('update:selectedDeviceId', $event)">
         <el-option v-for="device in devices" :key="device.device_id" :label="device.device_name || device.device_id" :value="device.device_id" />
       </el-select>
@@ -50,7 +52,7 @@
         <el-option label="全量" value="exhaustive" />
       </el-select>
       <el-input-number :model-value="rotFrequency" :min="0.001" :precision="3" placeholder="已知转频 Hz" controls-position="right" @update:model-value="$emit('update:rotFrequency', $event)" />
-      <span>{{ isComposite ? '机械组合需已知恒定参考轴转频 Hz' : '已知恒定转频 Hz（留空自动估计）' }}</span>
+      <span class="field-hint">{{ isComposite ? '机械组合需已知恒定参考轴转频 Hz' : '已知恒定转频 Hz（留空自动估计）' }}</span>
       <el-input v-if="selectedMethod === 'composite_cvs_med_msb' && runMode === 'single'" :model-value="compositeAlignment" type="textarea" :rows="3"
         class="alignment-input" placeholder="CVS采集对齐记录 JSON（可留空查看缺失前提）" @update:model-value="$emit('update:compositeAlignment', $event)" />
       <template v-if="runMode !== 'single' || selectedMethod === 'mckd'">
@@ -64,14 +66,17 @@
       </template>
     </div>
 
-    <el-button type="primary" :loading="loading" :disabled="!canRun" @click="$emit('run')">
-      <el-icon><Cpu /></el-icon>
-      <span>{{ runMode === 'single' ? '运行方法' : runMode === 'ensemble' ? '集成诊断' : '运行全部' }}</span>
-    </el-button>
-    <el-button type="default" @click="$emit('goto-data')">
-      <el-icon><DataLine /></el-icon> 查看数据
-    </el-button>
+    <div class="toolbar-actions">
+      <el-button type="primary" :loading="loading" :disabled="!canRun" @click="$emit('run')">
+        <el-icon><Cpu /></el-icon>
+        <span>{{ runMode === 'single' ? '运行方法' : runMode === 'ensemble' ? '集成诊断' : '运行全部' }}</span>
+      </el-button>
+      <el-button type="default" @click="$emit('goto-data')">
+        <el-icon><DataLine /></el-icon> 查看数据
+      </el-button>
+    </div>
   </div>
+  </el-card>
 </template>
 
 <script setup>
@@ -108,15 +113,15 @@ defineEmits(['update:selectedDeviceId', 'update:selectedBatchIndex', 'update:sel
 </script>
 
 <style scoped>
+.toolbar-card :deep(.el-card__body) {
+  padding: 16px 20px;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 16px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
 }
 
 .selectors {
@@ -126,6 +131,22 @@ defineEmits(['update:selectedDeviceId', 'update:selectedBatchIndex', 'update:sel
   gap: 10px;
 }
 
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.toolbar-actions .el-button + .el-button {
+  margin-left: 0;
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .select { width: 190px; }
 .select.small { width: 130px; }
 .method-select { width: 220px; }
@@ -133,6 +154,7 @@ defineEmits(['update:selectedDeviceId', 'update:selectedBatchIndex', 'update:sel
 
 @media (max-width: 1100px) {
   .toolbar { align-items: stretch; flex-direction: column; }
+  .toolbar-actions { justify-content: flex-end; }
   .select, .select.small, .method-select { width: 100%; }
 }
 </style>

@@ -5,8 +5,11 @@ const { createRequire } = require('node:module')
 const path = require('node:path')
 const test = require('node:test')
 const vm = require('node:vm')
-let getDiagnosisView
-test.before(async () => { ({ getDiagnosisView } = await import('../src/utils/diagnosisStatus.js')) })
+let getDiagnosisView, chartTheme
+test.before(async () => {
+  ({ getDiagnosisView } = await import('../src/utils/diagnosisStatus.js'))
+  chartTheme = await import('../src/utils/chartTheme.js')
+})
 const requireFrontend = createRequire(path.resolve(__dirname, '../package.json'))
 const vue = requireFrontend('vue')
 const { parse, compileScript } = requireFrontend('@vue/compiler-sfc')
@@ -29,7 +32,7 @@ const flush = async () => { await new Promise(resolve => setImmediate(resolve));
 function harness(fetchData) {
   const timers = new Set(), listeners = new Map(), resize = new Set(), charts = []
   const context = {
-    ...vue, console, getDiagnosisView,
+    ...vue, console, getDiagnosisView, ...chartTheme,
     getDeviceInfo: fetchData,
     // 视图拆分后 __returned__ 引用子组件标识符(import 已剥离),提供空壳桩
     SummaryCards: {}, DeviceCardList: {},

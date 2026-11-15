@@ -156,14 +156,14 @@
                     :key="entry.key"
                     :label="entry.source === 'sc_scoh' ? `SC/SCoh ${entry.name}` : entry.name"
                   >
-                    <span v-if="entry.info.significant || entry.info.critical" style="color: #F5222D; font-weight: 600;">
+                    <span v-if="entry.info.significant || entry.info.critical" class="text-danger">
                       检出 ({{ entry.info.detected_hz ?? entry.info.theory_hz }}Hz,
                       {{ entry.source === 'sc_scoh' ? `SCoh=${entry.info.scoh_peak}, 相干峰背景比=${entry.info.coherence_background_ratio}` : `SNR=${entry.info.snr}` }})
                     </span>
-                    <span v-else-if="entry.info.evaluable === false || entry.info.significant == null" style="color: #999;">
+                    <span v-else-if="entry.info.evaluable === false || entry.info.significant == null" class="text-muted">
                       不可评估（{{ entry.info.reason || '输入或频率覆盖不足' }}）
                     </span>
-                    <span v-else style="color: #999;">
+                    <span v-else class="text-muted">
                       未检出 (理论{{ entry.info.theory_hz }}Hz)
                     </span>
                   </el-descriptions-item>
@@ -275,7 +275,7 @@ const planetaryResults = computed(() => Object.fromEntries(Object.entries(props.
 .chart-title {
   font-weight: 600;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .section-header {
@@ -290,7 +290,22 @@ const planetaryResults = computed(() => Object.fromEntries(Object.entries(props.
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  border-radius: 8px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+}
+
+/* 指标数值的语义状态色 */
+.text-danger {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.text-warning {
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
+.text-muted {
+  color: var(--text-secondary);
 }
 </style>

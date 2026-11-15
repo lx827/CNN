@@ -2,7 +2,7 @@
   <div class="grid">
     <section v-for="evaluation in result.evaluations || []" :key="evaluation.object_id" class="panel">
       <div class="panel-title">{{ evaluation.object_id }} · 对象证据评估</div>
-      <el-tag type="info">{{ evaluationStatusText(evaluation.evaluation_status) }}</el-tag>
+      <el-tag :type="evaluationStatusType(evaluation.evaluation_status)">{{ evaluationStatusText(evaluation.evaluation_status) }}</el-tag>
       <span> · 对象结论 {{ evaluation.diagnosis_conclusion }}</span>
       <p v-if="evaluation.reason">{{ evaluation.reason }}</p>
       <el-descriptions :column="2" border size="small">
@@ -52,7 +52,7 @@
 <script setup>
 import { computed } from 'vue'
 import PlanetaryResult from './PlanetaryResult.vue'
-import { fmt, percent, evaluationStatusText } from '../../utils/researchDisplay'
+import { fmt, percent, evaluationStatusType, evaluationStatusText } from '../../utils/researchDisplay'
 import { getDiagnosisView } from '../../utils/diagnosisStatus'
 const props = defineProps({ result: { type: Object, required: true } })
 const methodRows = computed(() => ['bearing_results', 'gear_results'].flatMap(kind =>
@@ -64,10 +64,33 @@ const planetaryResults = computed(() => Object.fromEntries(Object.entries(props.
 </script>
 <style scoped>
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.panel { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; min-width: 0; }
+/* 结果面板：统一卡片观感（圆角/边框/阴影走令牌），hover 轻微上浮 */
+.panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 20px;
+  min-width: 0;
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+.panel:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .wide { grid-column: 1 / -1; }
-.panel-title { font-weight: 600; margin-bottom: 12px; }
-.hint { color: #64748b; line-height: 1.6; }
-.method-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
+.panel-title { font-weight: 600; font-size: 15px; color: var(--text-primary); margin-bottom: 12px; }
+h4 { font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 14px 0 6px; }
+.hint { color: var(--text-secondary); line-height: 1.6; }
+/* 方法结论行：浅底分条，便于逐行扫读 */
+.method-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+}
+.method-row strong { color: var(--text-primary); }
+.panel :deep(.el-descriptions__body) { font-variant-numeric: tabular-nums; }
 @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
 </style>

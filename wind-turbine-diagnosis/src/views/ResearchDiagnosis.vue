@@ -39,9 +39,9 @@
         <span class="label">状态</span>
         <el-tag :type="getDiagnosisView(result).tagType" size="large">{{ getDiagnosisView(result).text }}</el-tag>
       </div>
-      <div class="metric"><span class="label">健康度</span><strong>{{ getDiagnosisView(result).scoreText }}</strong></div>
+      <div class="metric"><span class="label">健康度</span><strong class="num" :style="{ color: getDiagnosisView(result).color }">{{ getDiagnosisView(result).scoreText }}</strong></div>
       <div class="metric"><span class="label">评估覆盖</span><strong>{{ coverageText(result.coverage) }}</strong></div>
-      <div class="metric"><span class="label">转频</span><strong>{{ result.rot_freq_hz ?? '-' }} Hz</strong></div>
+      <div class="metric"><span class="label">转频</span><strong class="num">{{ result.rot_freq_hz ?? '-' }} Hz</strong></div>
     </div>
 
     <!-- 单方法结果摘要 -->
@@ -50,8 +50,8 @@
         <span class="label">方法</span>
         <el-tag :type="methodCategoryTag" size="large">{{ result.requested_method ? result.method.toUpperCase() + '（' + result.requested_method.toUpperCase() + ' 未指定目标）' : selectedMethodInfo?.label || selectedMethod }}</el-tag>
       </div>
-      <div class="metric"><span class="label">转频</span><strong>{{ result.rot_freq_hz ?? '-' }} Hz</strong></div>
-      <div class="metric" v-if="result.health_score != null"><span class="label">健康度</span><strong>{{ getDiagnosisView(result).scoreText }}</strong></div>
+      <div class="metric"><span class="label">转频</span><strong class="num">{{ result.rot_freq_hz ?? '-' }} Hz</strong></div>
+      <div class="metric" v-if="result.health_score != null"><span class="label">健康度</span><strong class="num" :style="{ color: getDiagnosisView(result).color }">{{ getDiagnosisView(result).scoreText }}</strong></div>
       <div class="metric" v-if="selectedMethodInfo?.category === 'composite'">
         <span class="label">诊断结论</span><el-tag type="info">未知 · 仅供研究</el-tag>
       </div>
@@ -108,30 +108,33 @@ const {
   gap: 16px;
 }
 
+/* 方法说明提示：主色浅底的信息条 */
 .method-desc-card {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: #f0f9ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 8px;
+  background: var(--color-primary-soft);
+  border: 1px solid var(--brand-200);
+  border-radius: var(--radius-md);
 }
 
 .method-desc-text {
-  color: #475569;
+  color: var(--text-regular);
   font-size: 14px;
   line-height: 1.5;
 }
 
+/* 结果摘要带：卡片化承载关键指标 */
 .summary-band {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 12px;
-  padding: 16px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  padding: 18px 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .metric {
@@ -142,8 +145,8 @@ const {
   gap: 8px;
 }
 
-.label { color: #6b7280; font-size: 13px; }
-.metric strong { font-size: 20px; color: #111827; }
+.label { color: var(--text-secondary); font-size: 13px; }
+.metric strong { font-size: 20px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 
 .fault-label-metric {
   grid-column: 1 / -1;

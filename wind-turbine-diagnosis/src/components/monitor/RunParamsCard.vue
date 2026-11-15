@@ -57,41 +57,49 @@ defineEmits(['update:modelValue', 'change'])
 </script>
 
 <style scoped>
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
-  font-size: 16px;
-}
-
+/* .card-header 使用 global.css 全局工具类，此处不重复定义 */
 .params {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
 .param-item {
   text-align: center;
-  padding: 16px;
-  background: linear-gradient(135deg, #165DFF15, #0E42D215);
-  border-radius: 8px;
+  padding: 14px 16px;
+  background: var(--color-primary-soft);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.param-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
 }
 
 .param-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   font-size: 13px;
-  color: #666;
-  margin-bottom: 8px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
 }
 
 .param-value {
-  font-size: 28px;
-  font-weight: bold;
-  color: #165DFF;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .unit {
-  font-size: 14px;
-  color: #999;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-left: 2px;
 }
 </style>

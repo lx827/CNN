@@ -265,15 +265,16 @@ function fmtVal(v, precision = 4) {
 }
 
 .detail-group {
-  background: #f5f7fa;
-  border-radius: 8px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
   padding: 12px 16px;
 }
 
 .group-title {
   font-weight: 600;
   font-size: 14px;
-  color: #1d2129;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
@@ -282,8 +283,8 @@ function fmtVal(v, precision = 4) {
   font-size: 12px;
 }
 
-
-.text-danger { color: #f5222d; font-weight: bold; }
-.text-warning { color: #faad14; font-weight: 600; }
-.text-muted { color: #666; }
+/* 指标数值语义色（走设计令牌） */
+.text-danger { color: var(--color-danger); font-weight: 700; }
+.text-warning { color: var(--color-warning); font-weight: 600; }
+.text-muted { color: var(--text-secondary); }
 </style>

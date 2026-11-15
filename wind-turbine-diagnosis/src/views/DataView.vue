@@ -250,6 +250,7 @@ const {
 .title {
   font-size: 18px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .actions {

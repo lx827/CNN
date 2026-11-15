@@ -73,7 +73,7 @@ defineEmits(['compute', 'clear'])
 .chart-title {
   font-weight: 600;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .section-header {
@@ -88,7 +88,7 @@ defineEmits(['compute', 'clear'])
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  border-radius: 8px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
 }
 </style>

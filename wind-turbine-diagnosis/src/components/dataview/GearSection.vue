@@ -83,7 +83,7 @@
             </template>
           </el-table-column>
         </el-table>
-        <div v-else style="margin-top: 8px; color: #999; font-size: 13px;">
+        <div v-else style="margin-top: 8px; color: var(--text-secondary); font-size: 13px;">
           {{ unavailableMetricReason || '未配置啮合频率参数，无法计算边频带；不可评估不表示健康' }}
         </div>
       </div>
@@ -146,7 +146,7 @@ defineEmits(['compute', 'clear'])
 .chart-title {
   font-weight: 600;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .section-header {
@@ -161,15 +161,15 @@ defineEmits(['compute', 'clear'])
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  border-radius: 8px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
 }
 
 .gear-info {
   margin-bottom: 8px;
   padding: 12px;
-  background: #f6ffed;
-  border: 1px solid #b7eb8f;
-  border-radius: 6px;
+  background: var(--color-success-soft);
+  border: 1px solid var(--el-color-success-light-7);
+  border-radius: var(--radius-sm);
 }
 </style>

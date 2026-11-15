@@ -1,0 +1,158 @@
+/**
+ * 全局元素样式 —— 基于 variables.css 令牌统一 Element Plus 观感
+ * 只放跨页面共享的规则；页面私有样式留在各组件 scoped 中。
+ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-page);
+  color: var(--text-regular);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 数字等宽，仪表/统计值对齐更稳 */
+.el-statistic,
+.stat-value,
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 滚动条 ---------- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- 卡片 ---------- */
+.el-card {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-regular);
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+
+.el-card__header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-light);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.el-card__body {
+  padding: 20px;
+}
+
+/* ---------- 表格 ---------- */
+.el-table {
+  --el-table-header-bg-color: var(--bg-subtle);
+  --el-table-header-text-color: var(--text-regular);
+  --el-table-row-hover-bg-color: var(--color-primary-soft);
+  --el-table-border-color: var(--border-light);
+  border-radius: var(--radius-md);
+}
+
+.el-table th.el-table__cell {
+  font-weight: 600;
+}
+
+/* ---------- 按钮 ---------- */
+.el-button {
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.el-button--primary {
+  --el-button-hover-bg-color: var(--color-primary-hover);
+  --el-button-active-bg-color: var(--color-primary-active);
+}
+
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link) {
+  box-shadow: var(--shadow-brand);
+}
+
+/* ---------- 标签 ---------- */
+.el-tag {
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+/* ---------- 表单 ---------- */
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  border-radius: var(--radius-sm);
+  transition: box-shadow var(--transition-fast);
+}
+
+/* ---------- 弹层 ---------- */
+.el-dialog {
+  border-radius: var(--radius-lg);
+}
+
+.el-message-box {
+  border-radius: var(--radius-lg);
+}
+
+.el-popper.is-light {
+  border-radius: var(--radius-md);
+}
+
+/* ---------- 路由切换动效 ---------- */
+.fade-slide-enter-active {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.fade-slide-leave-active {
+  transition: all 0.15s ease;
+}
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.fade-slide-leave-to {
+  opacity: 0;
+}
+
+/* ---------- 页面脚手架工具类 ---------- */
+/* 卡片头部：标题 + 右侧操作区 */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+/* 统计数值 */
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}

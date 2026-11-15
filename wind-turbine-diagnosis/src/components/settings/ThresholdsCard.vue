@@ -1,5 +1,5 @@
 <template>
-  <el-card style="margin-top: 20px">
+  <el-card class="settings-card" shadow="never">
     <template #header>
       <div class="card-header">
         <span>通道级振动特征告警阈值</span>
@@ -88,11 +88,8 @@ defineEmits(['save', 'reset'])
 </script>
 
 <style scoped>
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
-  font-size: 16px;
+/* 卡片头部使用全局 .card-header 工具类 */
+.settings-card {
+  margin-top: 20px;
 }
 </style>

@@ -15,6 +15,14 @@ const compositeUtilsPromise = import(pathToFileURL(path.join(frontendRoot, 'src/
 const researchDisplayPromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/researchDisplay.js')).href)
 const diagnosisStatusPromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/diagnosisStatus.js')).href)
 const errorMessagePromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/errorMessage.js')).href)
+const chartThemePromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/chartTheme.js')).href)
+const constantsPromise = import(pathToFileURL(path.join(frontendRoot, 'src/utils/constants.js')).href)
+// vm 沙箱剥掉 import，图表主题与语义色以全局注入
+let chartTheme, COLORS
+test.before(async () => {
+  chartTheme = await chartThemePromise
+  ;({ COLORS } = await constantsPromise)
+})
 
 const stripModules = source => source
   .replace(/^import[\s\S]*?from ['"][^'"]+['"]\r?\n/gm, '')
@@ -66,6 +74,8 @@ const gearResult = () => ({
 function composableContext(extra = {}) {
   return {
     console,
+    ...chartTheme,
+    COLORS,
     ref,
     computed,
     watch: noop,
@@ -184,7 +194,7 @@ test('DataView 包络图读取结构化 spectrum，并从 evaluation 生成标�
   assert.match(option.yAxis.name, /single_sided_amplitude/)
   const bpfoLine = option.series[0].markLine.data.find(line => line.name.includes('BPFO'))
   assert.equal(bpfoLine.xAxis, 2)
-  assert.equal(bpfoLine.lineStyle.color, '#F5222D')
+  assert.equal(bpfoLine.lineStyle.color, COLORS.danger)
   assert.equal(state.faultFreqAnnotations.value.some(item => item.name === 'OLD_BEARING'), false)
 })
 

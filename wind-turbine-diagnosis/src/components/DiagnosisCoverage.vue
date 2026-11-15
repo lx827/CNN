@@ -16,5 +16,12 @@ defineProps({ result: { type: Object, default: null } })
 </script>
 
 <style scoped>
-.diagnosis-coverage { display: grid; gap: 6px; margin-top: 8px; }
+/* 覆盖度说明：次级排版，颜色走令牌 */
+.diagnosis-coverage {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-regular);
+}
 </style>

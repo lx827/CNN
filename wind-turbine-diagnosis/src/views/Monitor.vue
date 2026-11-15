@@ -83,16 +83,9 @@ const {
 </script>
 
 <style scoped>
+/* .card-header 使用 global.css 全局工具类，此处不重复定义 */
 .monitor {
   padding: 0;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
-  font-size: 16px;
 }
 
 .sensor-row {

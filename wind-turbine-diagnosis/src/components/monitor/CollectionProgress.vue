@@ -31,6 +31,10 @@ defineProps({
 
 .progress-hint {
   font-size: 12px;
-  color: #999;
+  color: var(--text-secondary);
+}
+
+:deep(.el-alert) {
+  border-radius: var(--radius-md);
 }
 </style>

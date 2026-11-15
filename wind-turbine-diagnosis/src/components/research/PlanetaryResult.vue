@@ -43,4 +43,6 @@ const methodNames = { narrowband: '啮合带包络', fullband: '全带包络', h
 <style scoped>
 .planetary-result { min-width: 0; }
 .details { margin: 12px 0; }
+/* 表格数值等宽数字，读数对齐更稳 */
+.planetary-result :deep(.el-table) { font-variant-numeric: tabular-nums; }
 </style>

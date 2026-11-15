@@ -8,12 +8,12 @@
       <el-card
         class="device-card"
         :class="{ active: selectedId === dev.deviceId, offline: dev.is_offline }"
-        shadow="hover"
+        shadow="never"
         @click="$emit('select', dev)"
       >
         <div class="device-header">
           <div class="device-id">{{ dev.deviceId }}</div>
-          <el-tag :type="getDiagnosisView(dev).tagType" size="small" effect="dark">
+          <el-tag :type="getDiagnosisView(dev).tagType" size="small" effect="light" round>
             {{ getDiagnosisView(dev).label }}
           </el-tag>
         </div>
@@ -33,7 +33,7 @@
             v-else
             :percentage="dev.health_score"
             :status="getDiagnosisView(dev).tone === 'danger' ? 'exception' : getDiagnosisView(dev).tone"
-            :stroke-width="12"
+            :stroke-width="10"
             :format="(p) => p"
           />
         </div>
@@ -67,35 +67,33 @@ defineEmits(['select'])
 
 .device-card {
   cursor: pointer;
-  border-radius: 10px;
-  transition: all 0.3s;
   margin-bottom: 16px;
 }
 
 .device-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-lg);
 }
 
 .device-card.active {
-  border: 2px solid #165DFF;
-  box-shadow: 0 0 0 4px rgba(22, 93, 255, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--brand-100);
 }
 
 .device-card.offline {
-  opacity: 0.7;
-  background: #f5f5f5;
+  opacity: 0.65;
+  background: var(--bg-subtle);
 }
 
 .device-card.offline .device-name,
 .device-card.offline .device-location {
-  color: #999;
+  color: var(--text-secondary);
 }
 
 .offline-hint {
   margin-top: 8px;
   font-size: 12px;
-  color: #909399;
+  color: var(--color-info);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -111,19 +109,19 @@ defineEmits(['select'])
 .device-id {
   font-size: 16px;
   font-weight: 700;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .device-name {
   font-size: 14px;
-  color: #555;
-  margin-bottom: 4px;
+  color: var(--text-regular);
+  margin-bottom: 2px;
 }
 
 .device-location {
   font-size: 12px;
-  color: #999;
-  margin-bottom: 16px;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
 }
 
 .health-section {
@@ -132,7 +130,7 @@ defineEmits(['select'])
 
 .health-label {
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 6px;
 }
 
@@ -141,21 +139,24 @@ defineEmits(['select'])
   justify-content: space-between;
   align-items: center;
   font-size: 12px;
-  color: #999;
-  border-top: 1px solid #f0f0f0;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border-light);
   padding-top: 10px;
 }
 
+.device-footer span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .fault-hint {
-  color: #F5222D;
+  color: var(--color-danger);
   font-weight: 600;
 }
 
 .offline-health {
   font-size: 13px;
-  color: #909399;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  color: var(--color-info);
 }
 </style>

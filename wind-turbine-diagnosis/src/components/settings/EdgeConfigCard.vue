@@ -1,5 +1,5 @@
 <template>
-  <el-card>
+  <el-card shadow="never">
     <template #header>
       <div class="card-header">
         <span>边端采集配置</span>
@@ -177,11 +177,5 @@ defineEmits(['device-change', 'save', 'reset'])
 </script>
 
 <style scoped>
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
-  font-size: 16px;
-}
+/* 卡片头部使用全局 .card-header 工具类 */
 </style>

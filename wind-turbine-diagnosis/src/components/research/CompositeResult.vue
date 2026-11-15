@@ -31,18 +31,30 @@
 import { computed } from 'vue'
 import VibrationChart from '../charts/VibrationChart.vue'
 import { compositeStages, compositeMetrics, compositeReason, compositeValue, compositeCurves, compositeCalculationState } from '../../utils/compositeResearch'
+import { baseCartesianOption, AXIS_STYLE } from '../../utils/chartTheme'
 const props = defineProps({ result: { type: Object, required: true } })
 const data = computed(() => props.result.analysis?.data || {})
 const curves = computed(() => compositeCurves(props.result))
+// 图表统一以 chartTheme 基底构建，配色与坐标轴样式跟全局一致
 const chartOption = curve => ({
-  tooltip: { trigger: 'axis' }, grid: { left: 55, right: 20, bottom: 40, top: 20 },
-  xAxis: { type: 'value', name: curve.axis_unit }, yAxis: { type: 'value', scale: true },
+  ...baseCartesianOption(),
+  grid: { left: 55, right: 20, bottom: 40, top: 20 },
+  xAxis: { type: 'value', name: curve.axis_unit, ...AXIS_STYLE },
+  yAxis: { type: 'value', scale: true, ...AXIS_STYLE },
   series: [{ type: 'line', showSymbol: false, connectNulls: false, data: curve.points }],
 })
 </script>
 <style scoped>
-.composite-result { min-width: 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: white; }
+.composite-result {
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+}
 .metrics { margin-top: 16px; }
-.plots { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
-.reason { color: #64748b; line-height: 1.6; }
+.plots { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 8px; }
+.plots h4 { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+.reason { color: var(--text-secondary); line-height: 1.6; }
 </style>

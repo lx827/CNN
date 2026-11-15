@@ -1,6 +1,6 @@
 <template>
   <div class="acquisition-page">
-    <header><div><h1>DC24 实时示波与采集</h1><p>先看现场信号，随时开始保存。四通道直接来自采集器。</p></div><el-tag :type="view?.fresh ? 'success' : 'info'">{{ stateLabel }}</el-tag></header>
+    <header><div><h1>DC24 实时示波与采集</h1><p>先看现场信号，随时开始保存。四通道直接来自采集器。</p></div><el-tag :type="view?.fresh ? 'success' : 'info'" effect="light" round>{{ stateLabel }}</el-tag></header>
     <div class="console-layout">
       <aside class="control-panel">
         <el-form label-position="top" @submit.prevent>
@@ -38,7 +38,7 @@
         <p class="help">纵轴为 ADC 原始计数（counts），尚未换算为 m/s²。各路单独绘制；可调整波形时间窗查看整体或局部。</p>
       </main>
     </div>
-    <el-card shadow="never" class="history-panel"><template #header><strong>已保存记录</strong></template><el-table :data="jobs" empty-text="还没有保存记录" size="small"><el-table-column label="时间" min-width="180"><template #default="{row}">{{ new Date(row.created_at).toLocaleString() }}</template></el-table-column><el-table-column label="来源"><template #default="{row}">{{ row.source === 'dc24_tcp' ? 'DC24 设备' : '历史回放' }}</template></el-table-column><el-table-column label="采样率"><template #default="{row}">{{ row.sample_rate }} Hz</template></el-table-column><el-table-column label="每路点数"><template #default="{row}">{{ row.metadata?.samples_per_channel?.toLocaleString() || '—' }}</template></el-table-column><el-table-column label="现场保存位置" min-width="260"><template #default="{row}">{{ row.metadata?.saved_directory || '见采集记录' }}</template></el-table-column><el-table-column label="文件" min-width="160"><template #default="{row}"><el-button v-if="row.metadata" link type="primary" @click="download(row.id, 'samples.csv')">原始 CSV</el-button><el-button v-if="row.metadata" link @click="download(row.id, 'metadata.json')">采集记录</el-button></template></el-table-column></el-table></el-card>
+    <el-card shadow="never" class="history-panel"><template #header><div class="card-header"><span>已保存记录</span></div></template><el-table :data="jobs" empty-text="还没有保存记录" size="small"><el-table-column label="时间" min-width="180"><template #default="{row}">{{ new Date(row.created_at).toLocaleString() }}</template></el-table-column><el-table-column label="来源"><template #default="{row}">{{ row.source === 'dc24_tcp' ? 'DC24 设备' : '历史回放' }}</template></el-table-column><el-table-column label="采样率"><template #default="{row}">{{ row.sample_rate }} Hz</template></el-table-column><el-table-column label="每路点数"><template #default="{row}">{{ row.metadata?.samples_per_channel?.toLocaleString() || '—' }}</template></el-table-column><el-table-column label="现场保存位置" min-width="260"><template #default="{row}">{{ row.metadata?.saved_directory || '见采集记录' }}</template></el-table-column><el-table-column label="文件" min-width="160"><template #default="{row}"><el-button v-if="row.metadata" link type="primary" @click="download(row.id, 'samples.csv')">原始 CSV</el-button><el-button v-if="row.metadata" link @click="download(row.id, 'metadata.json')">采集记录</el-button></template></el-table-column></el-table></el-card>
   </div>
 </template>
 
@@ -48,6 +48,7 @@ import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import { getAcquisitionAgents, getAcquisitionJobs, downloadAcquisitionFile, getAcquisitionCapabilities, startLiveSession, getLiveSession, getCurrentLiveSession, stopLiveSession, getLiveView, startLiveRecording, stopLiveRecording, selectAcquisitionDirectory, getAcquisitionDirectory } from '../api/acquisition'
 import { createWebSocketClient } from '../utils/websocket'
+import { baseCartesianOption, AXIS_STYLE, CHART_PALETTE } from '../utils/chartTheme'
 const agents = ref([]), jobs = ref([]), session = ref(null), view = ref(null), nativeRates = ref([]), channels = ref([])
 const connectionError = ref('')
 const starting = ref(false), stopping = ref(false), saving = ref(false), selectingDirectory = ref(false), directoryEdited = ref(false)
@@ -156,7 +157,8 @@ async function draw() {
     const key = `${kind.key}-${c.channel}`, element = containers.get(key); if (!element) continue
     let chart = charts.get(key); if (!chart) { chart = echarts.init(element); charts.set(key, chart) }
     const data = kind.key === 'rms' ? c.rms_curve : c[kind.key]
-    chart.setOption({ animation: false, title: { text: `${c.label} (counts)`, left: 12, top: 8, textStyle: { fontSize: 12, fontWeight: 500 } }, grid: { left: 75, right: 28, top: 42, bottom: 46 }, tooltip: { trigger: 'axis' }, xAxis: { type: 'value', name: kind.axis, scale: kind.axis === 's', min: kind.axis === 's' ? 'dataMin' : 0, max: kind.axis === 's' ? 'dataMax' : undefined, axisLabel: { hideOverlap: true, formatter: kind.axis === 's' ? value => value.toFixed(3) : undefined } }, yAxis: { type: 'value', scale: true }, dataZoom: [{ type: 'inside' }], series: [{ type: 'line', showSymbol: false, smooth: false, lineStyle: { width: 1, color: ['#165DFF', '#008B7A', '#B86B11', '#7854B5'][c.channel] }, data: data || [] }] }, true)
+    // 图表统一以 chartTheme 基底构建；各通道系列色取全局色板
+    chart.setOption({ ...baseCartesianOption(), animation: false, title: { text: `${c.label} (counts)`, left: 12, top: 8, textStyle: { fontSize: 12, fontWeight: 500, color: AXIS_STYLE.axisLabel.color } }, grid: { left: 75, right: 28, top: 42, bottom: 46 }, xAxis: { type: 'value', name: kind.axis, scale: kind.axis === 's', min: kind.axis === 's' ? 'dataMin' : 0, max: kind.axis === 's' ? 'dataMax' : undefined, ...AXIS_STYLE, axisLabel: { ...AXIS_STYLE.axisLabel, hideOverlap: true, formatter: kind.axis === 's' ? value => value.toFixed(3) : undefined } }, yAxis: { type: 'value', scale: true, ...AXIS_STYLE }, dataZoom: [{ type: 'inside' }], series: [{ type: 'line', showSymbol: false, smooth: false, lineStyle: { width: 1, color: CHART_PALETTE[c.channel] }, data: data || [] }] }, true)
   }
 }
 function resize() { charts.forEach(c => c.resize()) }
@@ -207,8 +209,36 @@ onBeforeUnmount(() => { disposed = true; turn++; clearTimeout(timer); closeViewS
 </script>
 
 <style scoped>
-.acquisition-page { max-width:1680px;margin:0 auto; } header { display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:16px; } h1 { margin:0 0 6px;font-size:24px;font-weight:600; } header p,.help,.source-line { color:#586576;font-size:12px;line-height:1.7; } header p { margin:0;font-size:14px; }
-.console-layout { display:grid;grid-template-columns:310px minmax(0,1fr);gap:18px;align-items:start; }.control-panel,.scope-panel { padding:20px;background:white;border:1px solid #e2e7ee;border-radius:6px;min-width:0; }.control-panel :deep(.el-select),.control-panel :deep(.el-input-number) { width:100%; }.actions { display:flex;flex-wrap:wrap;gap:8px; }.actions :deep(.el-button) { margin-left:0;min-height:44px;flex:1; }.display-options { display:grid;grid-template-columns:1fr 1fr;margin:12px 0; }.display-options :deep(.el-checkbox) { margin-right:0;min-height:36px; }.band-fields { border-left:3px solid #165DFF;padding-left:12px; }.error-text { color:#b42318;font-size:12px;line-height:1.7; }.directory-button { margin-top:8px; }
-.status-strip { display:flex;flex-wrap:wrap;gap:20px;align-items:center;padding-bottom:14px;border-bottom:1px solid #e2e7ee;font-size:13px; }.status-dot { display:inline-block;width:8px;height:8px;margin-right:7px;border-radius:50%;background:#8592a3; }.status-dot.live { background:#008B7A; }.source-line { display:flex;flex-wrap:wrap;gap:20px;margin-top:12px;overflow-wrap:anywhere; }.record-strip { margin-top:16px;padding:12px;background:#eff8f5;border-left:3px solid #008B7A;font-size:13px;line-height:1.8;overflow-wrap:anywhere; }.record-strip>span { margin-left:16px; }.record-strip p { margin:4px 0; } section h2 { margin:20px 0 10px;font-size:15px;font-weight:600; }.channel-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }.channel-scope { min-width:0;border:1px solid #e7ecf2;border-radius:4px; }.chart { height:225px; }.history-panel { margin-top:20px; }
-@media(max-width:1100px) { .console-layout { grid-template-columns:280px minmax(0,1fr); }.channel-grid { grid-template-columns:1fr; } } @media(max-width:750px) { .console-layout { grid-template-columns:1fr; } h1 { font-size:21px; }.control-panel,.scope-panel { padding:15px; } }
+.acquisition-page { max-width:1680px;margin:0 auto; }
+header { display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:16px; }
+h1 { margin:0 0 6px;font-size:24px;font-weight:600;color:var(--text-primary); }
+header p,.help,.source-line { color:var(--text-secondary);font-size:12px;line-height:1.7; }
+header p { margin:0;font-size:14px; }
+.console-layout { display:grid;grid-template-columns:310px minmax(0,1fr);gap:18px;align-items:start; }
+/* 控制面板与示波面板：统一卡片观感（圆角/边框/阴影走令牌） */
+.control-panel,.scope-panel { padding:20px;background:var(--bg-surface);border:1px solid var(--border-light);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);min-width:0; }
+.control-panel :deep(.el-select),.control-panel :deep(.el-input-number) { width:100%; }
+.actions { display:flex;flex-wrap:wrap;gap:8px; }
+.actions :deep(.el-button) { margin-left:0;min-height:44px;flex:1; }
+.display-options { display:grid;grid-template-columns:1fr 1fr;margin:12px 0; }
+.display-options :deep(.el-checkbox) { margin-right:0;min-height:36px; }
+.band-fields { border-left:3px solid var(--color-primary);padding-left:12px; }
+.error-text { color:var(--color-danger);font-size:12px;line-height:1.7; }
+.directory-button { margin-top:8px; }
+.status-strip { display:flex;flex-wrap:wrap;gap:20px;align-items:center;padding-bottom:14px;border-bottom:1px solid var(--border-light);font-size:13px;color:var(--text-regular); }
+.status-dot { display:inline-block;width:8px;height:8px;margin-right:7px;border-radius:50%;background:var(--text-secondary); }
+.status-dot.live { background:var(--color-success); }
+.source-line { display:flex;flex-wrap:wrap;gap:20px;margin-top:12px;overflow-wrap:anywhere; }
+/* 保存进度条：成功浅底 + 主语义左边条 */
+.record-strip { margin-top:16px;padding:12px 14px;background:var(--color-success-soft);border-left:3px solid var(--color-success);border-radius:var(--radius-sm);font-size:13px;line-height:1.8;overflow-wrap:anywhere; }
+.record-strip>span { margin-left:16px; }
+.record-strip p { margin:4px 0; }
+section h2 { margin:20px 0 10px;font-size:15px;font-weight:600;color:var(--text-primary); }
+.channel-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
+.channel-scope { min-width:0;border:1px solid var(--border-light);border-radius:var(--radius-md);overflow:hidden; }
+.chart { height:225px; }
+.history-panel { margin-top:20px; }
+.history-panel :deep(.el-table) { font-variant-numeric:tabular-nums; }
+@media(max-width:1100px) { .console-layout { grid-template-columns:280px minmax(0,1fr); }.channel-grid { grid-template-columns:1fr; } }
+@media(max-width:750px) { .console-layout { grid-template-columns:1fr; } h1 { font-size:21px; }.control-panel,.scope-panel { padding:15px; } }
 </style>

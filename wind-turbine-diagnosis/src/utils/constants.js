@@ -10,13 +10,13 @@ export const HEALTH_THRESHOLD_NORMAL = 80
 export const DEFAULT_SAMPLE_RATE = 25600
 export const DEFAULT_DURATION = 10
 
-// 颜色常量（与 Element Plus 主题对齐）
+// 颜色常量（与 styles/variables.css 设计令牌一致，供 JS/图表场景使用）
 export const COLORS = {
-  primary: '#165DFF',
-  success: '#52C41A',
-  warning: '#FAAD14',
-  danger: '#F5222D',
-  info: '#909399',
+  primary: '#4F46E5',
+  success: '#10B981',
+  warning: '#F59E0B',
+  danger: '#EF4444',
+  info: '#64748B',
 }
 
 // 通道默认名称

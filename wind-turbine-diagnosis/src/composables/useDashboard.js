@@ -9,6 +9,7 @@ import * as echarts from 'echarts'
 import { getDeviceInfo } from '../api/dashboard'
 import { getWebSocketClient } from '../utils/websocket'
 import { getDiagnosisView } from '../utils/diagnosisStatus'
+import { baseOption, emptyTitle, TEXT_REGULAR, TEXT_SECONDARY, BORDER_LIGHT } from '../utils/chartTheme'
 
 export function useDashboard() {
   const devices = ref([])
@@ -83,16 +84,23 @@ export function useDashboard() {
     const view = getDiagnosisView(device)
     const hasScore = view.scoreText !== '-'
     gaugeInstance.setOption({
+      ...baseOption(),
       series: [{
         type: 'gauge', min: 0, max: 100,
-        axisLine: { lineStyle: { width: 24, color: [[1, '#e8e8e8']] } },
-        progress: { show: hasScore, width: 24 },
-        pointer: { show: hasScore },
+        startAngle: 210, endAngle: -30,
+        axisLine: { lineStyle: { width: 22, color: [[1, BORDER_LIGHT]] } },
+        progress: { show: hasScore, width: 22, itemStyle: { borderRadius: 11 } },
+        pointer: { show: hasScore, itemStyle: { color: view.color } },
+        axisTick: { show: false },
+        splitLine: { show: false },
+        axisLabel: { show: false },
+        anchor: { show: hasScore, size: 14, itemStyle: { color: view.color } },
         itemStyle: { color: view.color },
-        detail: { formatter: () => view.scoreText, fontSize: 36 },
+        title: { offsetCenter: [0, '32%'], fontSize: 14, color: TEXT_SECONDARY },
+        detail: { formatter: () => view.scoreText, fontSize: 38, fontWeight: 700, color: view.color, offsetCenter: [0, '-4%'] },
         data: hasScore ? [{ value: device.health_score, name: view.label }] : [],
       }],
-      title: { show: !hasScore, text: view.label, left: 'center', top: 'center', textStyle: { color: '#909399' } },
+      title: { show: !hasScore, ...emptyTitle(view.label) },
     }, true)
   }
 
@@ -107,10 +115,19 @@ export function useDashboard() {
     }
     const data = Array.from(counts, ([name, value]) => ({ name, value }))
     pieInstance.setOption({
-      title: { show: !data.length, text: '暂无故障扣分证据', left: 'center', top: 'center', textStyle: { color: '#909399', fontSize: 16 } },
+      ...baseOption(),
+      title: { show: !data.length, ...emptyTitle('暂无故障扣分证据') },
       tooltip: { trigger: 'item', formatter: '{b}: {c} 分' },
-      legend: { show: !!data.length, orient: 'vertical', right: 10, top: 'center' },
-      series: [{ type: 'pie', radius: ['40%', '70%'], data }],
+      legend: { show: !!data.length, orient: 'vertical', right: 10, top: 'center', textStyle: { color: TEXT_REGULAR } },
+      series: [{
+        type: 'pie',
+        radius: ['48%', '72%'],
+        center: ['42%', '50%'],
+        itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+        label: { show: false },
+        emphasis: { scale: true, scaleSize: 6, label: { show: true, fontWeight: 600 } },
+        data,
+      }],
     }, true)
   }
 
