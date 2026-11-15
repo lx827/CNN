@@ -334,8 +334,8 @@ class LiveTests(unittest.TestCase):
             original_update(status)
 
         runner.update = update
-        # 仅模拟未连接就停止的socket外壳；真实执行runner的最终清理与上传等待。
-        with patch("dc24_live.socket.socket"):
+        # 仅模拟未连接就停止的驱动外壳；真实执行runner的最终清理与上传等待。
+        with patch("dc24_driver_python.driver.socket.socket"):
             run = threading.Thread(target=runner.run)
             run.start()
             for _ in range(100):

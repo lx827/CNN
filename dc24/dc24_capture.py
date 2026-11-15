@@ -1,174 +1,62 @@
-"""DC24 独立采集验证脚本：仅标准库，不加载厂商软件或 DLL。
+"""DC24 单次采集宿主：可选驱动 → 四路原始计数文件。
 
-实现原厂支持的采样率档位、四个信号通道、示波模式。
-保存原始 TCP 字节、原始有符号 24 位 ADC 计数和命令记录，不冒充物理单位。
-协议依据及未确认字段见 ../docs/DC24_PROTOCOL.md。运行前让原厂软件脱机以释放 TCP 6800。
+协议与传输分别由 dc24-driver 及所选驱动发行包提供；本模块只编排采集进度、
+停止和现有文件格式，不加载诊断算法，也不进行物理单位转换。
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
-from datetime import datetime, timezone
 import json
 import math
 from pathlib import Path
-import socket
-import struct
 import time
 
-HOST = "192.168.2.100"
-PEER = "192.168.2.101"
-PORT = 6800
-RATE = 10000
-SAMPLES_PER_FRAME = 254
-CONFIG_B2 = bytes.fromhex("00010001000100010301000000")
-INPUT_CONFIGURATION = {
-    "measurement": "IEPE",
-    "coupling": "AC0.2Hz",
-    "upper_frequency": "PASS",
-    "profile_id": "iepe-ac02-pass-20261106",
-}
-# 原厂2026-11-06有效10kHz B5为基准，只替换已验证的采样率字段；未知字段原样保留。
-# 频率仅限此前原厂逐档确认的12档，不把其他档位冒充本次逐档新抓包。
-B5_PROFILES = {
-    int(k): bytes.fromhex(v)
-    for k, v in json.loads(
-        (Path(__file__).resolve().parents[0] / "dc24_profiles.json").read_text()
-    ).items()
-}
+from dc24_driver import (
+    B5_PROFILES,
+    CONFIG_B2,
+    HOST,
+    INPUT_CONFIGURATION,
+    PEER,
+    PORT,
+    RATE,
+    SAMPLES_PER_FRAME,
+    Frames,
+    Link,
+    command,
+    decode,
+    samples,
+)
+
+__all__ = [
+    "B5_PROFILES",
+    "CONFIG_B2",
+    "HOST",
+    "INPUT_CONFIGURATION",
+    "PEER",
+    "PORT",
+    "RATE",
+    "SAMPLES_PER_FRAME",
+    "Frames",
+    "Link",
+    "command",
+    "create_driver",
+    "decode",
+    "record",
+    "samples",
+]
 
 
-class CaptureCancelled(Exception):
-    """等待设备阶段收到停止请求，未启动ADC。"""
+def create_driver(vendor_root=None, host=HOST, peer=PEER, port=PORT):
+    """按显式本机配置创建驱动；未配置原厂目录时保持 Python TCP 默认。"""
+    if vendor_root:
+        from dc24_driver_vendor import VendorDriver
 
+        return VendorDriver(vendor_root, host=host, peer=peer, port=port)
+    from dc24_driver_python import PythonTcpDriver
 
-def command(code: int, payload: bytes = b"") -> bytes:
-    body = bytes([code]) + payload
-    if len(body) > 65535:
-        raise ValueError("Control frame is too long")
-    return b"\x7e" + len(body).to_bytes(2, "big") + body + bytes([(~sum(body)) & 255])
-
-
-class Frames:
-    """TCP 流解析：处理半包、粘包；数据帧尾 FF 与控制帧校验分开验证。"""
-
-    def __init__(self):
-        self.buffer = bytearray()
-
-    def feed(self, chunk: bytes) -> list[bytes]:
-        self.buffer.extend(chunk)
-        result = []
-        while self.buffer:
-            if self.buffer[0] == 0:  # 主机的单字节保活，不是 7E 帧。
-                del self.buffer[0]
-                continue
-            if self.buffer[0] != 0x7E:
-                raise ValueError(f"Unexpected stream prefix: {self.buffer[:16].hex()}")
-            if len(self.buffer) < 4:
-                break
-            size = int.from_bytes(self.buffer[1:3], "big") + 4
-            if size < 5:
-                raise ValueError("Zero-length frame body")
-            if len(self.buffer) < size:
-                break
-            frame = bytes(self.buffer[:size])
-            del self.buffer[:size]
-            if frame[3] == 0x80:
-                if frame[-1] != 0xFF:
-                    raise ValueError(
-                        "Data frame does not have the observed FF terminator"
-                    )
-            elif sum(frame[3:]) & 255 != 255:
-                raise ValueError(f"Invalid control checksum: {frame[:24].hex()}")
-            result.append(frame)
-        return result
-
-
-def samples(frame: bytes):
-    """返回 (帧序号, 四通道原始计数组)；拒绝未验证的帧尺寸和通道排列。"""
-    if frame[3] != 0x80 or len(frame) < 23 or (len(frame) - 7) % 16:
-        raise ValueError("Invalid four-channel data frame size")
-    sequence = int.from_bytes(frame[4:6], "little")
-    data = frame[6:-1]
-    rows = []
-    for offset in range(0, len(data), 16):
-        group = data[offset : offset + 16]
-        if group[::4] != b"\x00\x01\x02\x03":
-            raise ValueError(f"Unverified channel order: {group[::4].hex()}")
-        rows.append(
-            tuple(
-                int.from_bytes(group[j + 1 : j + 4], "little", signed=True)
-                for j in range(0, 16, 4)
-            )
-        )
-    return sequence, rows
-
-
-class Link:
-    def __init__(self, connection, raw, events):
-        self.socket = connection
-        self.socket.settimeout(0.1)
-        self.raw = raw
-        self.events = events
-        self.frames = Frames()
-        self.last_heartbeat = 0.0
-        self.on_data = None
-        self.rx_bytes = 0
-
-    def event(self, **entry):
-        self.events.write(
-            json.dumps(
-                {"host_time_utc": datetime.now(timezone.utc).isoformat(), **entry},
-                ensure_ascii=False,
-            )
-            + "\n"
-        )
-        self.events.flush()
-
-    def send(self, code, payload=b""):
-        frame = command(code, payload)
-        self.socket.sendall(frame)
-        self.event(direction="host_to_device", command=f"{code:02X}", hex=frame.hex())
-
-    def pump(self):
-        if time.monotonic() - self.last_heartbeat >= 1:
-            self.socket.sendall(b"\x00")
-            self.last_heartbeat = time.monotonic()
-            self.event(direction="host_to_device", heartbeat="00")
-        try:
-            chunk = self.socket.recv(65536)
-        except socket.timeout:
-            return []
-        if not chunk:
-            raise ConnectionError("Device closed its TCP connection")
-        self.raw.write(chunk)
-        self.rx_bytes += len(chunk)
-        frames = self.frames.feed(chunk)
-        for frame in frames:
-            if frame[3] == 0x80:
-                if self.on_data:
-                    self.on_data(frame)
-            else:
-                self.event(
-                    direction="device_to_host",
-                    command=f"{frame[3]:02X}",
-                    hex=frame.hex(),
-                )
-        return frames
-
-    def exchange(self, code, payload=b"", timeout=5, status=True):
-        self.send(code, payload)
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            for frame in self.pump():
-                if frame[3] == code:
-                    if status and frame[4:-1] != b"\x00":
-                        raise RuntimeError(
-                            f"Unexpected {code:02X} response: {frame.hex()}"
-                        )
-                    return frame
-        raise TimeoutError(f"No response to command {code:02X}")
+    return PythonTcpDriver(host=host, peer=peer, port=port)
 
 
 def record(
@@ -180,6 +68,7 @@ def record(
     sample_rate=RATE,
     on_progress=None,
     should_stop=None,
+    driver=None,
 ):
     if sample_rate not in B5_PROFILES:
         raise ValueError("Sampling rate must be a supported native profile")
@@ -207,9 +96,8 @@ def record(
         "sequence_gaps": [],
         "complete": False,
     }
-    connection = None
-    link = None
-    started = False
+    driver = driver or create_driver(host=host, peer=peer, port=PORT)
+    metadata["transport"] = driver.transport
     previous_sequence = None
     current_index = 0
     first_frame_time = None
@@ -229,99 +117,80 @@ def record(
             )
 
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-            if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
-                server.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-            server.bind((host, PORT))
-            server.listen(1)
-            notify("waiting_device")
-            deadline = time.monotonic() + wait
-            print(f"Listening on {host}:{PORT}; waiting for {peer} ...", flush=True)
-            while time.monotonic() < deadline:
-                if stopping():
-                    raise CaptureCancelled()
-                server.settimeout(min(0.5, max(0.1, deadline - time.monotonic())))
-                try:
-                    candidate, address = server.accept()
-                except socket.timeout:
-                    continue
-                if address[0] == peer:
-                    connection = candidate
-                    metadata["device_source_port"] = address[1]
-                    break
-                candidate.close()
-            if connection is None:
-                raise TimeoutError("Device did not connect")
-            print(f"Connected: {peer}:{metadata['device_source_port']}", flush=True)
+        notify("waiting_device")
+        if not driver.connect(stopping, wait):
+            metadata["cancelled"] = True
+        else:
+            if driver.device_source_port is not None:
+                metadata["device_source_port"] = driver.device_source_port
             notify("configuring")
             with (
-                connection,
                 (output / "rx_stream.bin").open("xb") as raw,
                 (output / "commands.jsonl").open("x", encoding="utf-8") as events,
                 (output / "samples.csv").open(
                     "x", encoding="utf-8", newline=""
                 ) as csvfile,
             ):
-                writer = csv.writer(csvfile)
-                writer.writerow(
-                    [
-                        "sample_index",
-                        "time_s",
-                        "ch0_counts",
-                        "ch1_counts",
-                        "ch2_counts",
-                        "ch3_counts",
-                    ]
-                )
-                link = Link(connection, raw, events)
-
-                def consume(frame):
-                    nonlocal \
-                        previous_sequence, \
-                        current_index, \
-                        first_frame_time, \
-                        last_frame_time, \
-                        first_frame_samples
-                    sequence, rows = samples(frame)
-                    now = time.monotonic()
-                    if first_frame_time is None:
-                        first_frame_time = now
-                        first_frame_samples = len(rows)
-                    last_frame_time = now
-                    if previous_sequence is None:
-                        if sequence != 0:
-                            raise ValueError(
-                                f"First data sequence is {sequence}, not 0"
-                            )
-                    elif (sequence - previous_sequence) & 0xFFFF != 1:
-                        metadata["sequence_gaps"].append([previous_sequence, sequence])
-                        raise ValueError(
-                            f"Nonconsecutive frame sequence: {previous_sequence} -> {sequence}"
-                        )
-                    for row in rows:
-                        writer.writerow(
-                            [current_index, f"{current_index / sample_rate:.7f}", *row]
-                        )
-                        current_index += 1
-                    previous_sequence = sequence
-                    metadata["data_frames"] += 1
-                    metadata["samples_per_channel"] += len(rows)
-                    notify("capturing")
-
                 try:
-                    identity = link.exchange(0xBA, status=False)
-                    metadata["identity_frame_hex"] = identity.hex()
-                    link.exchange(0xB8)
-                    link.exchange(0xB2, CONFIG_B2)
-                    link.exchange(0xB5, B5_PROFILES[sample_rate])
-                    link.on_data = consume
-                    started = True  # 即使启动应答超时，finally 也必须发送停止。
-                    link.exchange(0xB7, b"\x00")
+                    writer = csv.writer(csvfile)
+                    writer.writerow(
+                        [
+                            "sample_index",
+                            "time_s",
+                            "ch0_counts",
+                            "ch1_counts",
+                            "ch2_counts",
+                            "ch3_counts",
+                        ]
+                    )
+
+                    def consume(block):
+                        nonlocal \
+                            previous_sequence, \
+                            current_index, \
+                            first_frame_time, \
+                            last_frame_time, \
+                            first_frame_samples
+                        sequence, values = block.sequence, block.values
+                        now = time.monotonic()
+                        if first_frame_time is None:
+                            first_frame_time = now
+                            first_frame_samples = len(values)
+                        last_frame_time = now
+                        if previous_sequence is None:
+                            if sequence != 0:
+                                raise ValueError(
+                                    f"First data sequence is {sequence}, not 0"
+                                )
+                        elif (sequence - previous_sequence) & 0xFFFF != 1:
+                            metadata["sequence_gaps"].append(
+                                [previous_sequence, sequence]
+                            )
+                            raise ValueError(
+                                f"Nonconsecutive frame sequence: {previous_sequence} -> {sequence}"
+                            )
+                        for row in values.tolist():
+                            writer.writerow(
+                                [
+                                    current_index,
+                                    f"{current_index / sample_rate:.7f}",
+                                    *row,
+                                ]
+                            )
+                            current_index += 1
+                        previous_sequence = sequence
+                        metadata["data_frames"] += 1
+                        metadata["samples_per_channel"] += len(values)
+                        notify("capturing")
+
+                    driver.start(sample_rate, consume, raw, events)
+                    if driver.identity_frame is not None:
+                        metadata["identity_frame_hex"] = driver.identity_frame.hex()
                     # 主机计时会包含设备启动等待；以实际样本数保证记录时长。
                     until = time.monotonic() + seconds + max(10, seconds * 0.25)
                     next_progress = sample_rate * 10
                     while current_index < target_samples and not stopping():
-                        link.pump()
+                        driver.poll()
                         if current_index >= next_progress:
                             print(
                                 f"Samples/channel: {current_index}/{target_samples}",
@@ -332,10 +201,9 @@ def record(
                             raise TimeoutError(
                                 f"Only {current_index}/{target_samples} samples received"
                             )
-                    link.exchange(0xB8)
-                    started = False
+                    driver.stop()
                     metadata["cancelled"] = bool(stopping())
-                    if link.frames.buffer:
+                    if driver.unparsed_tail_bytes:
                         raise RuntimeError(
                             "Incomplete frame remains after the stop acknowledgement"
                         )
@@ -345,21 +213,16 @@ def record(
                         )
                     metadata["complete"] = not metadata["cancelled"]
                 finally:
-                    if started:
-                        try:
-                            link.send(0xB8)
-                        except OSError as exc:
-                            metadata["emergency_stop_error"] = str(exc)
-                    metadata["received_tcp_bytes"] = link.rx_bytes
-                    metadata["unparsed_tail_bytes"] = len(link.frames.buffer)
-    except CaptureCancelled:
-        metadata["cancelled"] = True
+                    driver.close()
     except BaseException as exc:
         metadata["error"] = f"{type(exc).__name__}: {exc}"
         raise
     finally:
-        if connection:
-            connection.close()
+        driver.close()
+        metadata["received_tcp_bytes"] = driver.received_tcp_bytes
+        metadata["unparsed_tail_bytes"] = driver.unparsed_tail_bytes
+        if driver.emergency_stop_error:
+            metadata["emergency_stop_error"] = driver.emergency_stop_error
         metadata["recorded_sample_duration_s"] = (
             metadata["samples_per_channel"] / sample_rate
         )

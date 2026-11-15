@@ -20,7 +20,7 @@ import zipfile
 from dotenv import load_dotenv
 import requests
 
-from dc24_capture import record, B5_PROFILES, INPUT_CONFIGURATION
+from dc24_capture import create_driver, record, B5_PROFILES, INPUT_CONFIGURATION
 
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(Path(__file__).with_name(".env"))
@@ -229,6 +229,7 @@ class Agent:
                     sample_rate=job["sample_rate"],
                     on_progress=self.progress,
                     should_stop=stop.is_set,
+                    driver=create_driver(self.vendor_root),
                 )
             if meta.get("samples_per_channel", 0) == 0 and meta.get("cancelled"):
                 self.report(job["id"], "cancelled")

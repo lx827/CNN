@@ -23,12 +23,15 @@
 **只允许 uv 命令:`uv sync`、`uv run`、`uv add`、`uv lock`。禁止 `pip`(含 `pip install`/`pip freeze`)、禁止 conda/mamba、禁止手工创建/激活 venv。** Python 运行依赖锁定在根 `uv.lock`；所有项目配置集中在根 `pyproject.toml`。
 
 ```bash
-uv sync                        # 根目录:构建计算扩展,安装 cloud + dc24 + dev 默认组
+uv sync                        # 根目录:构建计算扩展,安装 cloud + dc24 + dc24-python + dev 默认组
 uv run <命令>                   # 保持各模块工作目录,自动向上发现根项目(见 §3)
 uv add --group cloud <包名>     # 应用依赖写入根目录对应组(dc24/dev/benchmark 同理)
+uv sync --no-default-groups --group local --group dc24-python   # 本地工作站 + Python TCP
+uv sync --no-default-groups --group local --group dc24-vendor   # 本地工作站 + 原厂 DLL
 ```
 
 - `cnn-compute` 是独立可安装计算包，只有其运行依赖进入 wheel；cloud、dc24、dev 和 benchmark 分组管理，benchmark 显式启用
+- `local` 汇集应用后端与采集宿主依赖；`dc24-python` / `dc24-vendor` 分别选择独立驱动发行包，二者都依赖公共 `dc24-driver`。`dc24-rust` 留待后续任务，不在当前配置中占位
 - Windows 首次构建和源码变更后的重建使用 Git Bash 的 `vsdev uv sync`；本机默认 `bash` 是 WSL，显式选择 Git Bash。原生构建、目标 ISA 与缓存规则见 [计算库构建说明](docs/native_compute.md)
 - 原生构建依赖在根配置固定版本，Eigen 在 CMake 固定来源和 SHA256，通过 target 链接；编译并行度固定为 1
 - Rust 边端 `edge/` 由 cargo 管理,不经 uv
@@ -106,13 +109,17 @@ cloud/                      # 云端后端(根项目 cloud 依赖组)
 │   └── lifespan.py         # 线程池 + 后台分析 worker
 └── tests/                  # 后端测试 + 诊断测试套件(含 P0 回归)
 
-dc24/                       # DC24 现场采集工具链(根项目 dc24 依赖组,Windows)
-├── dc24_capture.py         # 协议重组、控制命令、单次采集
+dc24/                       # DC24 共用采集宿主(根项目 dc24 依赖组,Windows)
+├── dc24_capture.py         # 单次采集编排；旧协议导入名兼容入口
 ├── dc24_agent.py           # 心跳、控制轮询与采集入口(读 dc24/.env)
 ├── dc24_live.py            # 连续示波、保存与上传
-├── dc24_vendor.py / dc24_vendor_bridge.ps1   # 原厂 DLL 校验与 32 位桥接
-├── dc24_profiles.json      # 原厂 12 档 B5 命令负载
-└── tests/                  # test_dc24_start / test_dc24_vendor
+├── dc24_vendor.py          # 旧原厂 DLL 模块名兼容入口
+└── tests/                  # 驱动接口、启动、DLL 与树莓派回归
+
+drivers/                    # 独立 DC24 驱动发行包(根 uv sources 集中管理)
+├── dc24/                   # dc24-driver:窄接口、样本块、链路状态、协议与12档配置
+├── dc24-python/            # dc24-driver-python:默认纯 Python TCP 适配器
+└── dc24-vendor/            # dc24-driver-vendor:原厂 DLL 与32位桥接,不捆绑原厂软件
 
 edge/                       # Rust 边端(开发稿,目标树莓派;cargo 管理,不经 uv)
 ├── src/ tests/ Cargo.toml / Cargo.lock

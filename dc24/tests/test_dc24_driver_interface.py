@@ -1,0 +1,152 @@
+"""公共驱动接口与现有单次采集宿主的契约回归，不连接硬件。"""
+
+import csv
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "dc24"))
+
+from dc24_capture import record
+from dc24_driver import LinkState, SampleBlock
+from dc24_live import SessionRunner
+
+
+def data_frame(sequence=0, rows=254):
+    values = (-8388608, 8388607, -1, 12345)
+    group = b"".join(
+        bytes([tag]) + value.to_bytes(3, "little", signed=True)
+        for tag, value in enumerate(values)
+    )
+    body = b"\x80" + sequence.to_bytes(2, "little") + group * rows
+    return b"\x7e" + len(body).to_bytes(2, "big") + body + b"\xff"
+
+
+class ScriptedDriver:
+    transport = "contract_fake"
+
+    def __init__(self):
+        self.state = LinkState.WAITING_DEVICE
+        self.identity_frame = None
+        self.device_source_port = None
+        self.received_tcp_bytes = 0
+        self.unparsed_tail_bytes = 0
+        self.emergency_stop_error = None
+        self.on_samples = None
+        self.sent = False
+        self.after_poll = None
+
+    def connect(self, should_stop, wait=45):
+        self.state = LinkState.CONNECTED
+        return True
+
+    def start(self, sample_rate, on_samples, raw, events):
+        self.on_samples = on_samples
+        self.raw = raw
+        self.state = LinkState.STREAMING
+
+    def poll(self):
+        if self.sent:
+            return
+        self.sent = True
+        frame = data_frame()
+        self.raw.write(frame)
+        values = np.array([[-8388608, 8388607, -1, 12345]] * 254, dtype="<i4")
+        self.on_samples(SampleBlock(sequence=0, frame=frame, values=values))
+        if self.after_poll:
+            self.after_poll()
+
+    def stop(self):
+        self.state = LinkState.STOPPED
+
+    def close(self):
+        pass
+
+
+class DriverInterfaceTests(unittest.TestCase):
+    def test_record_consumes_public_sample_blocks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "record"
+            metadata = record(
+                output,
+                0.01,
+                sample_rate=20000,
+                driver=ScriptedDriver(),
+            )
+            self.assertEqual(metadata["samples_per_channel"], 254)
+            self.assertEqual(metadata["transport"], "contract_fake")
+            self.assertTrue(metadata["complete"])
+            self.assertEqual((output / "rx_stream.bin").read_bytes(), data_frame())
+            with (output / "samples.csv").open(encoding="utf-8", newline="") as stream:
+                rows = list(csv.DictReader(stream))
+            self.assertEqual(len(rows), 254)
+            self.assertEqual(
+                [int(rows[0][f"ch{channel}_counts"]) for channel in range(4)],
+                [-8388608, 8388607, -1, 12345],
+            )
+            self.assertEqual(
+                json.loads((output / "metadata.json").read_text(encoding="utf-8")),
+                metadata,
+            )
+
+    def test_live_session_uses_same_driver_interface_and_existing_recording(self):
+        class Agent:
+            agent_id = "contract-agent"
+
+            def __init__(self, session):
+                self.session = session
+                self.calls = []
+
+            def progress(self, state):
+                pass
+
+            def heartbeat(self):
+                pass
+
+            def get_control(self):
+                return {"session": self.session}
+
+            def call(self, method, path, **kwargs):
+                self.calls.append((method, path))
+                return {"status": "completed"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            command = {
+                "id": "job",
+                "duration": 0,
+                "save_directory": directory,
+                "stop_requested": False,
+            }
+            session = {
+                "id": "session",
+                "sample_rate": 20000,
+                "recording": command,
+                "stop_requested": False,
+            }
+            agent = Agent(session)
+            driver = ScriptedDriver()
+            runner = SessionRunner(agent, session, driver=driver)
+            driver.after_poll = runner.stop.set
+            runner.run()
+            output = Path(directory) / "job"
+            metadata = json.loads(
+                (output / "metadata.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(metadata["samples_per_channel"], 254)
+            self.assertEqual(metadata["transport"], "contract_fake")
+            self.assertTrue(metadata["complete"])
+            self.assertEqual((output / "counts.i32").stat().st_size, 254 * 16)
+            self.assertIn(
+                ("POST", "/jobs/job/finish-stream"),
+                [(method, path) for method, path in agent.calls],
+            )
+            self.assertEqual(driver.state, LinkState.STOPPED)
+
+
+if __name__ == "__main__":
+    unittest.main()

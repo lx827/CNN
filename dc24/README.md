@@ -13,23 +13,35 @@
 ## 文件结构
 
 ```
-dc24/
-├── dc24_capture.py            # 纯 Python 连接、帧解析、控制指令、单次采集(协议基础,仅标准库)
-├── dc24_agent.py              # 认证、心跳、控制轮询与采集入口
-├── dc24_live.py               # 持续示波、双接收路径、解码、保存与上传
-├── dc24_vendor.py             # 原厂 DLL 校验(SHA-256)
-├── dc24_vendor_bridge.ps1     # 32 位 PowerShell/C# 桥接调用 JMServer.dll
-├── dc24_profiles.json         # 原厂 12 档完整 B5 命令负载(云端与现场工具共用)
-├── dc24_ffi.py                # 树莓派形态:dc24_edge_core 动态库的 ctypes 绑定(仅标准库)
-├── dc24_edge_pi.py            # 树莓派形态:云端会话编排、五件套落盘、实时窗口与补传上传
-├── tests/                     # 工具链测试(test_dc24_start 入口冒烟 / test_dc24_vendor DLL 回环,
-│                              #   未配置原厂 DLL 时跳过;test_dc24_edge_pi 树莓派驱动回归)
-└── .env                       # 本机配置(不入库):DC24_VENDOR_ROOT 指向原厂安装目录则走 DLL,留空走 Python TCP
+dc24/                              # 共用采集宿主
+├── dc24_capture.py                # 单次采集编排；保留旧协议导入名
+├── dc24_agent.py                  # 认证、心跳、控制轮询与采集入口
+├── dc24_live.py                   # 持续示波、样本窗口、保存与上传
+├── dc24_vendor.py                 # 旧原厂 DLL 模块名兼容入口
+├── dc24_ffi.py                    # 树莓派形态:dc24_edge_core ctypes 绑定
+├── dc24_edge_pi.py                # 树莓派形态:会话编排、落盘与补传
+└── tests/                         # 公共接口、启动、DLL 与树莓派回归
+
+drivers/
+├── dc24/src/dc24_driver/          # 公共接口、SampleBlock、链路状态、协议与12档配置
+├── dc24-python/                   # 独立 Python TCP 驱动发行包(默认)
+└── dc24-vendor/                   # 独立原厂 DLL 驱动发行包及32位桥接
 ```
+
+公共 `Dc24Driver` 接口只负责连接、开始、轮询、停止和关闭；样本块携带完整设备帧、帧序号及 `(N, 4)` int32 原始计数。事件与链路状态由驱动交付，任务控制、显示、保存和上传仍只有 `dc24_agent.py` / `dc24_live.py` 这一套宿主实现。驱动不执行诊断或工程单位转换。
 
 ## 配置(`.env`)
 
-Python 依赖在根项目 dc24 组，根目录 `uv sync` 默认安装。Windows 首次构建计算包或修改原生源码后，在 Git Bash 执行 `vsdev uv sync`；现有采集入口及工作目录保持原样，见 [计算库构建说明](../docs/native_compute.md)。
+Python 依赖由根 `pyproject.toml` 与 `uv.lock` 集中管理。日常 `uv sync` 默认安装应用、采集宿主和 Python TCP 驱动。最小本地工作站按所选驱动安装：
+
+```bash
+uv sync --no-default-groups --group local --group dc24-python
+uv sync --no-default-groups --group local --group dc24-vendor
+```
+
+`local` 包含应用后端、公共驱动接口和采集宿主依赖；`dc24-python` 与 `dc24-vendor` 只选择对应独立发行包。DLL 包不捆绑也不要求安装原厂软件，只有实际选择 DLL 并配置 `DC24_VENDOR_ROOT` 时才在运行时加载已验证版本。当前没有 `dc24-rust` 组，Rust 接入由后续任务完成。
+
+在已选择的最小环境中使用 `uv run --no-sync ...`，避免 `uv run` 自动恢复默认依赖组。Windows 首次构建计算包或修改原生源码后，在 Git Bash 执行 `vsdev uv sync`；现有采集入口及工作目录保持原样，见 [计算库构建说明](../docs/native_compute.md)。
 
 | 键 | 说明 |
 |----|------|
@@ -38,6 +50,8 @@ Python 依赖在根项目 dc24 组，根目录 `uv sync` 默认安装。Windows 
 | `EDGE_API_KEY` | 边端密钥,须与云端 `cloud/.env` 的 `EDGE_API_KEY` 一致 |
 
 采样率、时长、频带等采集参数由"真实采集"页面下发,不在 `.env` 配置。
+
+公共接口与现有宿主接缝回归：`uv run --no-sync python tests/test_dc24_driver_interface.py -v`；现有 Python TCP 回环和示波保存测试仍在 `cloud/tests/test_dc24_driver.py`、`cloud/tests/test_dc24_live.py`。
 
 ## 树莓派边端驱动(Rust 核心 + Python 驱动)
 
