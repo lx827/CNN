@@ -29,7 +29,7 @@ ORM 类型以 `cloud/app/models.py` 为准；外部字段见 [API](../api/backen
 
 完整采集的 `counts.i32` 是诊断文件源。完成时按统一配置窗口和任务 `enabled_channels` 创建 `is_special=1`、`batch_index>=101` 的记录；每个窗口只保存来源对象和实际起止样本，短记录形成一个窗口，末段不补齐。设备以真实 `agent_id` 自动取得或创建，无需用户绑定。
 
-`AcquisitionJob.result_metadata.diagnosis_device_id/diagnosis_batches` 是完成响应中的登记身份。ZIP 上传和流式 `finish-stream` 共用登记服务，在同一数据库事务中写入所有窗口、登记身份和任务终态；任一步失败不会留下“任务已完成但只登记部分窗口”的状态。终态重试直接返回原任务，两个完成入口由同一分析锁串行化，不能重复占用批次号。登记后每批 `is_analyzed=0`，由现有 worker 按统一批次事务逐批完成，已完成的窗口即可查询，不等待同一记录的其他窗口。
+`AcquisitionJob.result_metadata.diagnosis_device_id/diagnosis_batches` 是完成响应中的登记身份。ZIP 上传和流式 `finish-stream` 共用登记服务，在同一数据库事务中写入所有窗口、登记身份和任务终态；任一步失败不会留下“任务已完成但只登记部分窗口”的状态。终态重试直接返回原任务，两个完成入口由同一分析锁串行化，不能重复占用批次号。本地流式任务另在 `result_metadata.local_directory` 保存现场原件绝对目录，诊断来源路径指向其中实际的 `counts.i32`；移动或删除该文件后，既有批次不能继续读取，系统不生成替代副本。登记后每批 `is_analyzed=0`，由现有 worker 按统一批次事务逐批完成，已完成的窗口即可查询，不等待同一记录的其他窗口。
 
 ## 精确键、历史行与摘要
 

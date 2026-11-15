@@ -16,6 +16,9 @@ import webbrowser
 from dotenv import dotenv_values
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "dc24"))
+from dc24_capture import create_driver
+
 BASE = "http://127.0.0.1:8000"
 AGENT = "dc24-" + re.sub(r"[^A-Za-z0-9_-]", "_", socket.gethostname())
 
@@ -68,34 +71,40 @@ def main():
         raise RuntimeError(
             "缺少 uv workspace 环境："
             + str(fallback)
-            + "；请在仓库根目录运行 uv sync（或双击 start_dc24.bat，"
-            "它会经 uv run 自动创建环境后再启动）"
+            + "；请先按 dc24/README.md 选择驱动并运行对应的 "
+            "uv sync --no-default-groups --group local --group dc24-<choice>"
         )
+    dc24_config = dotenv_values(ROOT / "dc24/.env")
     vendor_root = (
-        os.environ.get(
-            "DC24_VENDOR_ROOT",
-            dotenv_values(ROOT / "dc24/.env").get("DC24_VENDOR_ROOT"),
-        )
-        or ""
+        os.environ.get("DC24_VENDOR_ROOT", dc24_config.get("DC24_VENDOR_ROOT")) or ""
     )
-    if vendor_root:
+    choice = os.environ.get("DC24_DRIVER", dc24_config.get("DC24_DRIVER"))
+    if choice is None:
+        choice = "vendor" if vendor_root else "python"
+    os.environ["DC24_DRIVER"] = choice
+    if choice == "vendor":
         vendor_path = Path(vendor_root).expanduser()
         if (
-            not vendor_path.is_absolute()
+            not vendor_root
+            or not vendor_path.is_absolute()
             or not (vendor_path / "dll/JMServer.dll").is_file()
         ):
             raise RuntimeError(
-                "DC24_VENDOR_ROOT 必须指向包含 dll/JMServer.dll 的原厂安装目录"
+                "DC24_DRIVER=vendor 时，DC24_VENDOR_ROOT 必须指向包含 dll/JMServer.dll 的原厂安装目录"
             )
-    transport = "jmserver" if vendor_root else "python_tcp"
+    try:
+        driver = create_driver(vendor_root)
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            f"未安装 DC24_DRIVER={choice} 对应的驱动包；请运行："
+            f"uv sync --no-default-groups --group local --group dc24-{choice}"
+        ) from exc
+    transport = driver.transport
     print(
         "依赖路径检查通过；前端" + ("需要首次构建" if bundle_stale() else "可直接复用"),
         flush=True,
     )
-    print(
-        "边端采集模块：" + ("原厂 JMServer.dll" if vendor_root else "Python TCP"),
-        flush=True,
-    )
+    print("边端采集模块：" + transport, flush=True)
     if args.check:
         return
     if bundle_stale():
@@ -187,7 +196,9 @@ def main():
             dc24_env = {
                 **env,
                 "VIRTUAL_ENV": str(ROOT / ".venv"),
+                "DC24_DRIVER": choice,
                 "DC24_VENDOR_ROOT": vendor_root,
+                "DEPLOYMENT_MODE": "local",
             }
             p = subprocess.Popen(
                 [

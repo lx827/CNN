@@ -8,7 +8,7 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-rem uv run auto-syncs the workspace env (equiv. uv sync) before launching
+rem Use the explicitly installed driver group; never auto-sync another driver.
 set "PYTHONUTF8=1"
-uv run python scripts\dc24_start.py %*
+uv run --no-sync python scripts\dc24_start.py %*
 if errorlevel 1 pause

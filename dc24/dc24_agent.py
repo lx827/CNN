@@ -97,6 +97,7 @@ class Agent:
         self.cloud = cloud.rstrip("/") + "/api/acquisition"
         self.agent_id, self.output, self.replay_dir = agent_id, Path(output), replay_dir
         self.source = "recording_replay" if replay_dir else "dc24_tcp"
+        self.local_originals = os.getenv("DEPLOYMENT_MODE") == "local"
         self.vendor_root = None if replay_dir else os.getenv("DC24_VENDOR_ROOT") or None
         # 与既有上云边端/cloud 保持同一认证配置约定。
         self.headers = {"X-Edge-Key": os.getenv("EDGE_API_KEY", "turbine-edge-secret")}

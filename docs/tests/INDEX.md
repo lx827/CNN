@@ -143,7 +143,7 @@ uv run --group benchmark python -m tests.diagnosis.benchmarks.export --input D:/
 | `test_local_deployment.py` | 云端默认配置、本地回环监听、演示设备初始化、页面部署状态及 HTTP/WS 免认证 |
 | `test_dc24_acquisition.py` | 认证、任务与通道校验、四通道 CSV、下载、显示分析、窗口/末段登记、重复完成幂等及 worker→现有结果页闭环 |
 | `test_dc24_driver.py` | 回环 TCP、控制帧、分片、24 位计数、停止、取消和序号缺口 |
-| `test_dc24_live.py` | 原厂档位、示波窗口、保存、流式完成登记与重试、上传、缓存上限与 WS |
+| `test_dc24_live.py` | 原厂档位、示波窗口、保存、远程流式上传、本地免 PUT 原件登记与直接读取、完成重试、缓存上限与 WS |
 
 ```bash
 uv run python -m unittest tests.test_waveform_source tests.test_analysis_worker_json tests.test_read_paths tests.test_event_loop tests.test_hustbear_registration -v
@@ -160,7 +160,7 @@ uv run python tests/test_dc24_vendor.py -v
 uv run python tests/test_dc24_edge_pi.py -v
 ```
 
-`test_dc24_driver_interface.py` 用公共接口假驱动穿过单次采集与连续示波宿主，核对四路 int32 样本、帧序号、停止和既有保存/上传结果，不测试驱动内部函数。`test_dc24_driver_rust.py` 在安装 `dc24-rust` 组后加载 wheel 内真实 cdylib，以回环模拟设备穿过同一单次采集宿主，逐字节核对原始 `80` 帧、四路计数与事件；它不是实机验收。start 实际调用 Windows 批处理的 `--check`。vendor 需要配置原厂 DLL，使用回环模拟器，未配置时跳过。edge_pi 的纯逻辑测试验证窗口、缺口与重试；集成测试加载真实 cdylib，使用假设备和假云端核对完整收件，无 Rust 工具链时可跳过。MSVC 编译遵守根 AGENTS 的 `vsdev` 约定。
+`test_dc24_driver_interface.py` 用公共接口假驱动穿过单次采集与连续示波宿主，核对四路 int32 样本、帧序号、停止、远程逐文件上传与本地仅登记原件目录，不测试驱动内部函数。`test_dc24_start.py` 覆盖环境/`dc24/.env` 的 python/rust/vendor 显式选择、缺包安装命令、本地配置继承和真实 Windows 批处理 `--check`。`test_dc24_driver_rust.py` 在安装 `dc24-rust` 组后加载 wheel 内真实 cdylib，以回环模拟设备穿过同一单次采集宿主，逐字节核对原始 `80` 帧、四路计数与事件；它不是实机验收。vendor 需要配置原厂 DLL，使用回环模拟器，未配置时跳过。edge_pi 的纯逻辑测试验证窗口、缺口与重试；集成测试加载真实 cdylib，使用假设备和假云端核对完整收件，无 Rust 工具链时可跳过。MSVC 编译遵守根 AGENTS 的 `vsdev` 约定。
 
 ## 前端
 
