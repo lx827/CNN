@@ -29,7 +29,6 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import optional_auth, verify_token_string
 from app.api.acquisition import (
-    NATIVE_RATES,
     ACTIVE,
     ANALYSIS_LOCK,
     AnalysisOptions,
@@ -75,12 +74,13 @@ def online_agent(db, agent_id):
 
 @router.get("/capabilities")
 def capabilities():
+    # 采样率档位表属于采集侧硬件知识,由边端心跳上报(state.sample_rates),
+    # 云端不持有卡片配置;capabilities 只回答服务身份与通道配置。
     return {
         "code": 200,
         "data": {
             "service": "cnn-dc24",
             "version": 2,
-            "sample_rates": NATIVE_RATES,
             "hostname": socket.gethostname(),
             "channel_count": 4,
             "channels": list(DC24_CHANNELS),
@@ -90,7 +90,7 @@ def capabilities():
 
 class StartSession(BaseModel):
     agent_id: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,64}$")
-    sample_rate: int
+    sample_rate: int = Field(gt=0)
 
 
 class RecordRequest(ChannelSelection):
@@ -101,9 +101,12 @@ class RecordRequest(ChannelSelection):
 
 @router.post("/sessions")
 def start(body: StartSession, db: Session = Depends(get_db)):
-    online_agent(db, body.agent_id)
-    if body.sample_rate not in NATIVE_RATES:
-        raise HTTPException(422, "请选择原厂支持的采样率档位")
+    agent = online_agent(db, body.agent_id)
+    rates = agent.state.get("sample_rates") or []
+    if body.sample_rate not in rates:
+        raise HTTPException(
+            422, f"采集端未上报该采样率档位(当前可选: {', '.join(map(str, rates))})"
+        )
     if (
         db.query(AcquisitionJob)
         .filter(

@@ -28,7 +28,7 @@
 | 诊断证据与状态核心 | [证据、评估与诊断](backend/assessment.md) | #77/#84 的依赖融合、两维状态、覆盖和单源评分；公开接入状态在文内标注 |
 | 前端 | [前端索引](frontend/INDEX.md) | 前端模块导航、API 封装与组件/服务说明 |
 | 测试 | [测试索引](tests/INDEX.md) | 测试分层、运行方式、数据依赖和验证边界 |
-| 架构决策 | [ADR 0001](adr/0001-uv-workspace-python-313.md)、[ADR 0002](adr/0002-edge-crossbuild-cloud-systemd.md)、[ADR 0003](adr/0003-module-contract-documentation.md)、[ADR 0004](adr/0004-evidence-and-diagnosis-state.md)、[ADR 0005](adr/0005-diagnosis-native-benchmark-gate.md)、[ADR 0006](adr/0006-native-diagnosis-compute-package.md)、[ADR 0011](adr/0011-shared-cloud-local-workstation.md)、[ADR 0012](adr/0012-top-level-layout-by-deployment-form.md) | uv workspace、部署、模块文档、诊断证据/状态、原生计算库、云端/本地共用应用与顶层目录布局决策 |
+| 架构决策 | [ADR 0001](adr/0001-uv-workspace-python-313.md)、[ADR 0002](adr/0002-edge-crossbuild-cloud-systemd.md)、[ADR 0003](adr/0003-module-contract-documentation.md)、[ADR 0004](adr/0004-evidence-and-diagnosis-state.md)、[ADR 0005](adr/0005-diagnosis-native-benchmark-gate.md)、[ADR 0006](adr/0006-native-diagnosis-compute-package.md)、[ADR 0011](adr/0011-shared-cloud-local-workstation.md)、[ADR 0012](adr/0012-top-level-layout-by-deployment-form.md)、[ADR 0013](adr/0013-cloud-holds-no-card-knowledge.md) | uv workspace、部署、模块文档、诊断证据/状态、原生计算库、云端/本地共用应用、顶层目录布局与云端零卡片知识决策 |
 | Agent 工作流 | [Issue 跟踪](agents/issue-tracker.md)、[Triage 标签](agents/triage-labels.md)、[域文档](agents/domain.md) | Issue、标签、词汇与 ADR 约定 |
 
 ## 算法理论与数据

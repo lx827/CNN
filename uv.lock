@@ -320,7 +320,6 @@ benchmark = [
 cloud = [
     { name = "apscheduler" },
     { name = "cryptography" },
-    { name = "dc24-driver" },
     { name = "fastapi" },
     { name = "msgpack" },
     { name = "pymysql" },
@@ -382,7 +381,6 @@ benchmark = [
 cloud = [
     { name = "apscheduler", specifier = "==3.10.4" },
     { name = "cryptography", specifier = "==42.0.7" },
-    { name = "dc24-driver", editable = "collector/drivers/dc24" },
     { name = "fastapi", specifier = "==0.111.0" },
     { name = "msgpack", specifier = ">=1.0.8" },
     { name = "pymysql", specifier = "==1.1.1" },

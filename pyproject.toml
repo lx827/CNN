@@ -32,7 +32,6 @@ cloud = [
     "python-dotenv==1.0.1",
     "msgpack>=1.0.8",
     "python-jose[cryptography]>=3.3.0",
-    "dc24-driver==0.1.0",
 ]
 dc24 = [
     "requests==2.32.3",
