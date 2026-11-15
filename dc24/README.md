@@ -17,7 +17,6 @@ dc24/                              # 共用采集宿主
 ├── dc24_capture.py                # 单次采集编排；保留旧协议导入名
 ├── dc24_agent.py                  # 认证、心跳、控制轮询与采集入口
 ├── dc24_live.py                   # 持续示波、样本窗口、保存与上传
-├── dc24_vendor.py                 # 旧原厂 DLL 模块名兼容入口
 ├── dc24_ffi.py                    # 树莓派形态:dc24_edge_core ctypes 绑定
 ├── dc24_edge_pi.py                # 树莓派形态:会话编排、落盘与补传
 └── tests/                         # 公共接口、启动、DLL 与树莓派回归
