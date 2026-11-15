@@ -1,5 +1,5 @@
 <template>
-  <el-card style="margin-top: 20px">
+  <el-card class="settings-card" shadow="never">
     <template #header>
       <span>配置说明</span>
     </template>
@@ -23,3 +23,9 @@
     </el-descriptions>
   </el-card>
 </template>
+
+<style scoped>
+.settings-card {
+  margin-top: 20px;
+}
+</style>

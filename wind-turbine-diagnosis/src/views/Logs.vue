@@ -3,7 +3,7 @@
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <span class="title">系统日志</span>
+          <span>系统日志</span>
           <div class="actions">
             <el-input-number v-model="lines" :min="50" :max="1000" :step="50" size="small" style="width: 120px; margin-right: 12px;" />
             <el-button type="primary" size="small" @click="fetchLogs" :loading="loading">
@@ -64,21 +64,11 @@ onUnmounted(() => {
 
 <style scoped>
 .logs-page {
-  max-width: 1400px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
 }
 
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.title {
-  font-size: 18px;
-  font-weight: 600;
-}
-
+/* 卡片头部使用全局 .card-header 工具类 */
 .actions {
   display: flex;
   align-items: center;
@@ -88,9 +78,11 @@ onUnmounted(() => {
   margin-bottom: 16px;
 }
 
+/* 日志区：浅色面板 + 等宽字体，配色走令牌 */
 .log-container {
-  background: #1e1e1e;
-  border-radius: 6px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   padding: 16px;
   max-height: calc(100vh - 220px);
   overflow: auto;
@@ -98,8 +90,8 @@ onUnmounted(() => {
 
 .log-content {
   margin: 0;
-  color: #d4d4d4;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  color: var(--text-regular);
+  font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;

@@ -1,36 +1,42 @@
 <template>
   <div class="alarm">
-    <!-- 统计卡片 -->
-    <el-row :gutter="20" class="stats-row">
+    <!-- 统计卡片（语义色 + 令牌，沿用 SummaryCards 风格） -->
+    <el-row :gutter="16" class="stats-row">
       <el-col :xs="24" :sm="8">
-        <el-card class="stat-card danger">
+        <el-card class="stat-card" shadow="never">
           <div class="stat-content">
-            <el-icon :size="40"><CircleClose /></el-icon>
+            <div class="icon-wrap danger">
+              <el-icon :size="22"><CircleClose /></el-icon>
+            </div>
             <div class="stat-info">
-              <div class="stat-value">{{ dangerCount }}</div>
               <div class="stat-label">严重告警</div>
+              <div class="stat-value danger-text">{{ dangerCount }}</div>
             </div>
           </div>
         </el-card>
       </el-col>
       <el-col :xs="24" :sm="8">
-        <el-card class="stat-card warning">
+        <el-card class="stat-card" shadow="never">
           <div class="stat-content">
-            <el-icon :size="40"><Warning /></el-icon>
+            <div class="icon-wrap warning">
+              <el-icon :size="22"><Warning /></el-icon>
+            </div>
             <div class="stat-info">
-              <div class="stat-value">{{ warnCount }}</div>
               <div class="stat-label">预警信息</div>
+              <div class="stat-value warning-text">{{ warnCount }}</div>
             </div>
           </div>
         </el-card>
       </el-col>
       <el-col :xs="24" :sm="8">
-        <el-card class="stat-card success">
+        <el-card class="stat-card" shadow="never">
           <div class="stat-content">
-            <el-icon :size="40"><CircleCheck /></el-icon>
+            <div class="icon-wrap success">
+              <el-icon :size="22"><CircleCheck /></el-icon>
+            </div>
             <div class="stat-info">
-              <div class="stat-value">{{ handledCount }}</div>
               <div class="stat-label">已处理</div>
+              <div class="stat-value success-text">{{ handledCount }}</div>
             </div>
           </div>
         </el-card>
@@ -38,7 +44,7 @@
     </el-row>
 
     <!-- 告警列表 -->
-    <el-card>
+    <el-card shadow="never">
       <template #header>
         <div class="card-header">
           <span>告警记录列表</span>
@@ -348,59 +354,75 @@ onMounted(() => {
 }
 
 .stat-card {
-  border-radius: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
 }
 
-.stat-card.danger {
-  background: linear-gradient(135deg, #fff1f0, #ffccc7);
-  border: 1px solid #ffa39e;
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
 }
 
-.stat-card.warning {
-  background: linear-gradient(135deg, #fffbe6, #ffe58f);
-  border: 1px solid #ffd666;
-}
-
-.stat-card.success {
-  background: linear-gradient(135deg, #f6ffed, #b7eb8f);
-  border: 1px solid #95de64;
+.stat-card :deep(.el-card__body) {
+  padding: 18px 20px;
 }
 
 .stat-content {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 14px;
 }
 
 .stat-info {
   flex: 1;
+  min-width: 0;
 }
 
-.stat-value {
-  font-size: 32px;
-  font-weight: bold;
-  color: #333;
-}
-
-.stat-label {
-  font-size: 14px;
-  color: #666;
-  margin-top: 4px;
-}
-
-.card-header {
+/* 图标软底色块：语义色走设计令牌 */
+.icon-wrap {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  font-weight: 600;
-  font-size: 16px;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
 }
 
+.icon-wrap.danger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.icon-wrap.warning {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.icon-wrap.success {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+/* 数值着色（stat-value/stat-label 基础样式来自全局 global.css） */
+.stat-value.danger-text {
+  color: var(--color-danger);
+}
+
+.stat-value.warning-text {
+  color: var(--color-warning);
+}
+
+.stat-value.success-text {
+  color: var(--color-success);
+}
+
+/* 卡片头部使用全局 .card-header 工具类 */
 .header-actions {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .pagination {

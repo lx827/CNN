@@ -110,9 +110,29 @@ const scScohItems = computed(() => scScohEntries(props.result))
 
 <style scoped>
 .result-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; min-width: 0; }
+/* 结果面板：统一卡片观感（圆角/边框/阴影走令牌），hover 轻微上浮 */
+.panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 20px;
+  min-width: 0;
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+.panel:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .panel.wide { grid-column: 1 / -1; }
 .wide { grid-column: 1 / -1; }
-.panel-title { display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 12px; }
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+/* 指标数值等宽数字，读数对齐更稳 */
+.panel :deep(.el-descriptions__body) { font-variant-numeric: tabular-nums; }
 @media (max-width: 1100px) { .result-grid { grid-template-columns: 1fr; } }
 </style>
