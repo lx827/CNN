@@ -1,0 +1,21 @@
+[build-system]
+requires = []
+build-backend = "dc24_rust_build"
+backend-path = ["."]
+
+[project]
+name = "dc24-driver-rust"
+version = "0.1.0"
+description = "DC24 Rust dc24_edge_core 可选驱动"
+requires-python = ">=3.13"
+dependencies = ["dc24-driver==0.1.0"]
+
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "dc24_rust_build.py" },
+    { file = "src/**/*.py" },
+    { file = "../../../edge/acquire/Cargo.toml" },
+    { file = "../../../edge/acquire/Cargo.lock" },
+    { file = "../../../edge/acquire/src/**/*.rs" },
+]

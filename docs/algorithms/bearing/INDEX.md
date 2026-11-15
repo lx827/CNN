@@ -2,7 +2,7 @@
 
 > 状态：当前开发契约（标准包络与 #73 高级轴承已集成）。合成向量与业务边界已验证；真实数据效果、校准和性能基线仍需独立评估。
 >
-> 实现导航：`cloud/app/algorithms/bearing/`、`cloud/app/algorithms/pipelines/bearing/`；服务层高级方法由 `cloud/app/services/diagnosis/` 调度。
+> 实现导航：`server/app/algorithms/bearing/`、`server/app/algorithms/pipelines/bearing/`；服务层高级方法由 `server/app/services/diagnosis/` 调度。
 
 ## 数学目的
 
@@ -118,15 +118,15 @@ MED/MCKD、CPW、TEO、SC/SCoh 和实际滤波器组谱峭度已由[原生高级
 
 | 验证资产 | 覆盖向量 |
 |----------|----------|
-| `cloud/tests/diagnosis/algorithms/test_bearing_envelope_analysis.py` | 手工谱唯一归属、偏移真峰、有效阴性、超带宽/共享 bin、可观测边带分母、非谐波负对照、BPFI 边带融合 |
-| `cloud/tests/diagnosis/algorithms/test_bearing_envelope_pipeline.py` | 单边幅值、实际频带、分析/评估分离、展示不影响诊断、无参统计、未知转频和 Engine 集成 |
-| `cloud/tests/diagnosis/algorithms/test_bearing_envelope_api.py` | HTTP 字段与展示截断；外部字段以 API 文档为准 |
+| `server/tests/diagnosis/algorithms/test_bearing_envelope_analysis.py` | 手工谱唯一归属、偏移真峰、有效阴性、超带宽/共享 bin、可观测边带分母、非谐波负对照、BPFI 边带融合 |
+| `server/tests/diagnosis/algorithms/test_bearing_envelope_pipeline.py` | 单边幅值、实际频带、分析/评估分离、展示不影响诊断、无参统计、未知转频和 Engine 集成 |
+| `server/tests/diagnosis/algorithms/test_bearing_envelope_api.py` | HTTP 字段与展示截断；外部字段以 API 文档为准 |
 | `test_bearing_spectral_kurtosis_advanced.py`（同目录） | 复高斯背景、双频带冲击选带、幅值缩放与纯音/噪声负对照 |
 | `test_bearing_deconvolution_advanced.py`（同目录） | MED/MCKD 不同目标、周期更新手算/有限差分、SVD 秩亏、ridge 与幅值缩放 |
 | `test_bearing_cpw_teo_advanced.py`（同目录） | 稳定/空/滑频梳状先验、TEO 负值/交叉项、零能量和平方单位 |
 | `test_bearing_cyclostationary_advanced.py`（同目录） | 已知循环频率、非 bin 频移、载波轴、有效带宽、粗分辨率与专属评估 |
 | `test_bearing_advanced_business.py`、`test_bearing_advanced_api.py`（同目录） | Engine/ensemble 方法路由、实际 MED 回退、前提失败、研究/包络 HTTP 与 JSON |
-| `cloud/tests/diagnosis/foundation/layer1/`、`layer2/` | 现有高级轴承与边带方法的合成信号正确性资产 |
-| `cloud/tests/diagnosis/real_data/` | 原始轴承记录与真实效果评估；来源、采样率和前提见数据集契约 |
+| `server/tests/diagnosis/foundation/layer1/`、`layer2/` | 现有高级轴承与边带方法的合成信号正确性资产 |
+| `server/tests/diagnosis/real_data/` | 原始轴承记录与真实效果评估；来源、采样率和前提见数据集契约 |
 
 当前方法标识与可传先验见 [API 契约](../../api/backend_api.md)；模态方法单独受 [分解质量门控](../decomposition/INDEX.md) 约束。

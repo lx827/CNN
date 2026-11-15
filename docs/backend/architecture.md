@@ -10,7 +10,7 @@ HTTP/WS 路由
   → 持久化 / 严格 JSON / WebSocket
 ```
 
-`cloud/app/algorithms/` 只承担纯计算，不依赖 FastAPI、SQLAlchemy、设备数据库、缓存或全局业务配置。NumPy 到列表、非有限值到 `null`、认证、展示截断和持久化都在业务边界完成。业务服务可以组合算法，但不得在路由包中另藏第二份数学实现。
+`server/app/algorithms/` 只承担纯计算，不依赖 FastAPI、SQLAlchemy、设备数据库、缓存或全局业务配置。NumPy 到列表、非有限值到 `null`、认证、展示截断和持久化都在业务边界完成。业务服务可以组合算法，但不得在路由包中另藏第二份数学实现。
 
 ## 应用生命周期
 
@@ -43,4 +43,4 @@ HTTP/WS 路由
 
 ## 配置与导航
 
-配置键以 `cloud/app/core/config.py` 和 `AGENTS.md` 为准；HTTP 认证、CORS 和端点见 [API 文档](../api/backend_api.md)。部署与 systemd 操作见 [部署指南](../部署指南.md)，边端跨编译决策见 [ADR 0002](../adr/0002-edge-crossbuild-cloud-systemd.md)。
+配置键以 `server/app/core/config.py` 和 `AGENTS.md` 为准；HTTP 认证、CORS 和端点见 [API 文档](../api/backend_api.md)。部署与 systemd 操作见 [部署指南](../部署指南.md)，边端跨编译决策见 [ADR 0002](../adr/0002-edge-crossbuild-cloud-systemd.md)。

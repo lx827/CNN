@@ -111,7 +111,7 @@ POST /api/auth/login
 
 **调用方**：`views/Login.vue` → `api/auth.js::login()`
 
-认证依赖同时兼容 JWT Bearer 与边端 API Key，具体适用端点见下文。令牌生成、校验和认证依赖的函数签名以 `cloud/app/api/auth.py` 源码 docstring 为准，不在 API 文档复制内部函数接口。
+认证依赖同时兼容 JWT Bearer 与边端 API Key，具体适用端点见下文。令牌生成、校验和认证依赖的函数签名以 `server/app/api/auth.py` 源码 docstring 为准，不在 API 文档复制内部函数接口。
 
 ---
 
@@ -246,7 +246,7 @@ GET /api/devices/edge/config?device_id={device_id}
 | `compression_enabled` | `int` | 压缩开关 |
 | `downsample_ratio` | `int` | 降采样比 |
 
-**调用方**：边端（Rust `edge/`；旧 `edge_client.py` 已随 2026-11 布局重构退役）启动时拉取
+**调用方**：边端（Rust `edge/acquire/`；旧 `edge_client.py` 已随 2026-11 布局重构退役）启动时拉取
 
 ---
 
@@ -360,7 +360,7 @@ GET /api/collect/tasks?device_id={device_id}
 
 **响应**：`{ has_task, task_id, device_id, sample_rate, duration }`
 
-**调用方**：边端（Rust `edge/`；旧 `edge_client.py` 已退役）
+**调用方**：边端（Rust `edge/acquire/`；旧 `edge_client.py` 已退役）
 
 ---
 
@@ -370,7 +370,7 @@ GET /api/collect/tasks?device_id={device_id}
 POST /api/collect/tasks/{task_id}/complete?batch_index={batch_index}
 ```
 
-**调用方**：边端（Rust `edge/`；旧 `edge_client.py` 已退役）
+**调用方**：边端（Rust `edge/acquire/`；旧 `edge_client.py` 已退役）
 
 ---
 
@@ -861,7 +861,7 @@ POST /api/ingest/
 - `_decompress_channels(payload)`：支持 `compressed_data`（base64+zlib+msgpack/json）和原图模式
 - `_get_next_batch_index(db, device_id, is_special)`：普通数据 1~16 循环覆盖，特殊数据从 101 起自增永不覆盖
 
-**调用方**：边端（Rust `edge/`；旧 `edge_client.py` 已退役）
+**调用方**：边端（Rust `edge/acquire/`；旧 `edge_client.py` 已退役）
 
 ---
 
@@ -1024,8 +1024,8 @@ WS /ws/acquisition/sessions/{session_id}/view?token={token}
 | 方法 | 路径 | 实际调用方 |
 |------|------|-----------|
 | `GET` | `/` | 浏览器/运维手动访问的服务信息页 |
-| `POST` | `/api/ingest/` | 边端数据上报（Rust `edge/`） |
-| `GET` | `/api/devices/edge/config` | 边端拉取采集配置（Rust `edge/`） |
+| `POST` | `/api/ingest/` | 边端数据上报（Rust `edge/acquire/`） |
+| `GET` | `/api/devices/edge/config` | 边端拉取采集配置（Rust `edge/acquire/`） |
 | `GET` | `/api/collect/tasks` | 待领采集任务列表（边端轮询） |
 | `POST` | `/api/collect/tasks/{task_id}/complete` | 边端完成任务回报 |
 | `POST` | `/api/acquisition/agents/heartbeat` | DC24 边端心跳 |

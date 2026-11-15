@@ -103,7 +103,7 @@ coverage.xml
 *.sqlite3
 
 # ========== Machine Learning Models ==========
-# Model files are usually very large; keep them in cloud/models/ but don't commit
+# Model files are usually very large; keep them in server/models/ but don't commit
 *.onnx
 *.pt
 *.pth
@@ -122,29 +122,29 @@ coverage.xml
 
 # ========== Misc ==========
 *.local
-wind-turbine-diagnosis/package-lock.json
+web/package-lock.json
 .qwen
-wind-turbine-diagnosis/vite.config.js
-cloud/tests/diagnosis/output/**.png
+web/vite.config.js
+server/tests/diagnosis/output/**.png
 
 # Datasets — consolidated under data/ (not committed)
 /data/
 # CW bearing dataset (variable-speed, stored locally under CW/)
 /CW/
 
-cloud/tests/diagnosis/planetary_demod_results.json
-cloud/tests/diagnosis/planetary_e2e_results.json
-cloud/tests/diagnosis/output
-cloud/tests/output
+server/tests/diagnosis/planetary_demod_results.json
+server/tests/diagnosis/planetary_e2e_results.json
+server/tests/diagnosis/output
+server/tests/output
 figures/
-cloud/tests/diagnosis/planetary/planetary_e2e_results.json
-cloud/tests/diagnosis/foundation/output/
-cloud/tests/diagnosis/foundation/layer1/output/
-cloud/tests/diagnosis/foundation/layer2/output/
-cloud/tests/diagnosis/foundation/layer3/output/
-cloud/tests/diagnosis/foundation/layer4/output/
-cloud/tests/diagnosis/foundation/layer5/output/
-cloud/tests/diagnosis/eval_plots/output/
+server/tests/diagnosis/planetary/planetary_e2e_results.json
+server/tests/diagnosis/foundation/output/
+server/tests/diagnosis/foundation/layer1/output/
+server/tests/diagnosis/foundation/layer2/output/
+server/tests/diagnosis/foundation/layer3/output/
+server/tests/diagnosis/foundation/layer4/output/
+server/tests/diagnosis/foundation/layer5/output/
+server/tests/diagnosis/eval_plots/output/
 
 # Local project document
 /docs/dc_modified.docx
@@ -160,11 +160,11 @@ baseline-*.png
 check_api_docs_report.md
 
 # ========== 测试运行产物(图/JSON/输出目录,不入库) ==========
-cloud/tests/**/output/
+server/tests/**/output/
 
 .ruff_cache
 
-# edge-diag aarch64 交叉构建:封装入库,产物目录不入库
-# (上方 Python 段的 build/ 通配会吞掉 edge-diag/build/,需显式豁免)
-!edge-diag/build/
-edge-diag/build/out/
+# edge/diag aarch64 交叉构建:封装入库,产物目录不入库
+# (上方 Python 段的 build/ 通配会吞掉 edge/diag/build/,需显式豁免)
+!edge/diag/build/
+edge/diag/build/out/

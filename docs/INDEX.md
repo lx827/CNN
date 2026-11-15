@@ -15,7 +15,7 @@
 | 云端默认完整业务 EMD 族与原生随机数 | [完整原生业务 EMD](algorithms/decomposition/native_business_emd.md)、[ADR 0010](adr/0010-complete-business-emd-native.md) |
 | 整体系统结构 | [系统架构](系统架构.md) |
 | 域词汇 | [GLOSSARY](../GLOSSARY.md) |
-| 云端、DC24、脚本说明 | [cloud README](../cloud/README.md)、[dc24 README](../dc24/README.md)、[scripts README](../scripts/README.md) |
+| 云端、DC24、脚本说明 | [server README](../server/README.md)、[collector README](../collector/README.md)、[scripts README](../scripts/README.md) |
 
 ## 契约文档
 
@@ -47,7 +47,7 @@
 - [从传感器到 CSV](DC24_SIGNAL_TO_CSV.md)
 - [DC24 实测协议](DC24_PROTOCOL.md)
 - [树莓派直连配置](树莓派直连配置.md)
-- [Rust 边端 README](../edge/README.md) 与 [FFI 契约](../edge/FFI.md)
+- [Rust 边端 README](../edge/acquire/README.md) 与 [FFI 契约](../edge/acquire/FFI.md)
 - [部署指南](部署指南.md)、[操作手册](操作手册.md)、[服务器命令速查](服务器命令速查.md)
 - [边端交叉编译构建](../deploy/edge/README.md)
 - [CQU 训练仓库与系统交付边界](CQU_TRAINING_HANDOFF.md)

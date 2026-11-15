@@ -1,6 +1,6 @@
 # Datasets — 原始离线测试数据
 
-本页记录原始来源、身份、采样率和诊断前提。独立入口为 `cloud/tests/diagnosis/real_data/`，只读取原始记录和生成离线报告，不注册设备、不访问业务数据库、不修改生产算法。
+本页记录原始来源、身份、采样率和诊断前提。独立入口为 `server/tests/diagnosis/real_data/`，只读取原始记录和生成离线报告，不注册设备、不访问业务数据库、不修改生产算法。
 
 数据根默认当前 checkout 的 `data/`，显式 `--data-root` 优先于 `CNN_DATA_ROOT`。独立 worktree 可共享主仓数据目录；源码和提交清单不固定机器盘符。大数据、原文说明和生成报告保留在本地数据根，不提交 Git。
 
@@ -13,7 +13,7 @@
 | `hust_gearbox` | 带文本头 TXT，25600 Hz，262144 点 | time、speed、X/Y/Z | 同速度载荷配对下健康、断齿、缺齿 |
 | `wt_planetary` | MATLAB，48000 Hz | 两振动、编码器及实际文件额外未明通道 | 同标称速度下健康和一种太阳轮故障 |
 
-便携选样清单随代码提交：[轴承清单](../cloud/tests/diagnosis/real_data/manifests/bearing.json)、[齿轮清单](../cloud/tests/diagnosis/real_data/manifests/gear.json)；完整本地实验使用 [冻结效果清单](../cloud/tests/diagnosis/real_data/manifests/effectiveness.json)。各条目保留数据身份、相对原始路径、SHA256、真实采样率、标签、故障部位、分组和证据。清单只描述已选样本，不声称覆盖完整数据集。
+便携选样清单随代码提交：[轴承清单](../server/tests/diagnosis/real_data/manifests/bearing.json)、[齿轮清单](../server/tests/diagnosis/real_data/manifests/gear.json)；完整本地实验使用 [冻结效果清单](../server/tests/diagnosis/real_data/manifests/effectiveness.json)。各条目保留数据身份、相对原始路径、SHA256、真实采样率、标签、故障部位、分组和证据。清单只描述已选样本，不声称覆盖完整数据集。
 
 主仓数据根为 `D:/code/CNN/data`，本地原始材料位于 `DATA_ROOT/raw_sources/<人类原目录名>/`。详细调查保留在 `raw_sources/_bearing_intake/report.txt`、`raw_sources/GEARBOX_INTAKE_20261111.txt` 和 `DATASET_TEST_SELECTION_20261111.md`，它们是本地调查材料。
 
@@ -65,12 +65,12 @@ manifest 顶层为 `schema_version: 1` 和非空 `samples`。条目至少含 `sa
 
 | 位置 | 用途 |
 |------|------|
-| `cloud/tests/diagnosis/real_data/common.py` | `LoadedRecord` 采集窗口对象、数据根、清单与 JSON |
-| `cloud/tests/diagnosis/real_data/bearing.py`、`gear.py` | 四来源原始格式 reader |
-| `cloud/tests/diagnosis/real_data/manifests/` | 提交选样与来源证据 |
-| `cloud/tests/diagnosis/real_data/effectiveness.py` | 按数据身份复用 reader、固定本地测试和规范诊断输出核对 |
+| `server/tests/diagnosis/real_data/common.py` | `LoadedRecord` 采集窗口对象、数据根、清单与 JSON |
+| `server/tests/diagnosis/real_data/bearing.py`、`gear.py` | 四来源原始格式 reader |
+| `server/tests/diagnosis/real_data/manifests/` | 提交选样与来源证据 |
+| `server/tests/diagnosis/real_data/effectiveness.py` | 按数据身份复用 reader、固定本地测试和规范诊断输出核对 |
 
-从 `cloud/` 运行 reader 合同：
+从 `server/` 运行 reader 合同：
 
 ```bash
 uv run python -m unittest tests.diagnosis.real_data.test_common tests.diagnosis.real_data.test_bearing tests.diagnosis.real_data.test_gear -v

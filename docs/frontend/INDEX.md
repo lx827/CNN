@@ -22,14 +22,14 @@
 
 | 文件 | 路径 | 职责 |
 |------|------|------|
-| `main.js` | `wind-turbine-diagnosis/src/main.js` | Vue 应用初始化、路由/状态/Pinia 注册 |
-| `App.vue` | `wind-turbine-diagnosis/src/App.vue` | 根组件、路由出口 |
+| `main.js` | `web/src/main.js` | Vue 应用初始化、路由/状态/Pinia 注册 |
+| `App.vue` | `web/src/App.vue` | 根组件、路由出口 |
 
 ---
 
 ## 2. API 接口层
 
-> 所有 API 函数位于 `wind-turbine-diagnosis/src/api/` 目录下，统一通过 `request` 实例发起请求。
+> 所有 API 函数位于 `web/src/api/` 目录下，统一通过 `request` 实例发起请求。
 
 | 文件 | 路径 | 职责 | 主要函数 |
 |------|------|------|----------|
@@ -44,7 +44,7 @@
 
 ## 3. 页面组件 (Views)
 
-> 所有页面组件位于 `wind-turbine-diagnosis/src/views/` 目录下，通过 Vue Router 路由切换。
+> 所有页面组件位于 `web/src/views/` 目录下，通过 Vue Router 路由切换。
 
 | 文件 | 路径 | 职责 |
 |------|------|------|
@@ -61,7 +61,7 @@
 
 ## 4. 通用组件 (Components)
 
-> 通用组件位于 `wind-turbine-diagnosis/src/components/` 目录下，供多个页面复用。
+> 通用组件位于 `web/src/components/` 目录下，供多个页面复用。
 
 ### 4.1 根级组件
 
@@ -89,7 +89,7 @@
 
 ## 5. 状态管理 (Stores)
 
-> 使用 Pinia 进行状态管理，所有 Store 位于 `wind-turbine-diagnosis/src/stores/` 目录下。
+> 使用 Pinia 进行状态管理，所有 Store 位于 `web/src/stores/` 目录下。
 
 | 文件 | 路径 | 职责 | 主要 State/Actions |
 |------|------|------|-------------------|

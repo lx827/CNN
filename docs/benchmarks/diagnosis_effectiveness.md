@@ -1,12 +1,12 @@
 # 四套原始数据的本地试运行与输出核对
 
-入口为 `cloud/tests/diagnosis/real_data/effectiveness.py`，范围是 Ottawa 轴承、HUSTbear 轴承、HUSTgearbox 定轴齿轮与 WT 行星齿轮。本轮只完成重构后的可复用数据对象、本地固定测试机制及输出核对，不注册设备、不调用 HTTP、不写业务数据库。100%检出是另行处理的目标，不属于本次完成条件；这里不进行诊断质量达标验收。
+入口为 `server/tests/diagnosis/real_data/effectiveness.py`，范围是 Ottawa 轴承、HUSTbear 轴承、HUSTgearbox 定轴齿轮与 WT 行星齿轮。本轮只完成重构后的可复用数据对象、本地固定测试机制及输出核对，不注册设备、不调用 HTTP、不写业务数据库。100%检出是另行处理的目标，不属于本次完成条件；这里不进行诊断质量达标验收。
 
 ## 数据对象与冻结配置
 
 原始记录统一使用 `real_data/common.py` 的 `LoadedRecord`：一次采集包含振动通道、原始采样率、辅助信号和来源元数据。入口复用 `bearing.py` 与 `gear.py` 的原始 reader；辅助编码器/Speed 电信号不直接当作机械 Hz。
 
-样本、原文件 SHA256、标签、采集/拆装组、机械证据、未证实字段与实验条件保存在 [effectiveness.json](../../cloud/tests/diagnosis/real_data/manifests/effectiveness.json)。数据来源契约见 [datasets.md](../datasets.md)。运行时核对源文件哈希，依次读取有限连续窗口并串行分析，不跨 HUST 齿轮的时间归零块拼接。窗口和多通道都不能增加独立采集数。
+样本、原文件 SHA256、标签、采集/拆装组、机械证据、未证实字段与实验条件保存在 [effectiveness.json](../../server/tests/diagnosis/real_data/manifests/effectiveness.json)。数据来源契约见 [datasets.md](../datasets.md)。运行时核对源文件哈希，依次读取有限连续窗口并串行分析，不跨 HUST 齿轮的时间归零块拼接。窗口和多通道都不能增加独立采集数。
 
 `current_contract` 实际调用当前 `DiagnosisEngine`，参数只使用本来源可用机械信息及现有模型默认值，速度按产品自动估计，保留 canonical `evaluation_status` 与 `diagnosis_conclusion`。
 
@@ -18,7 +18,7 @@
 
 ```powershell
 $env:CNN_DATA_ROOT='D:/code/CNN/data'
-cd cloud
+cd server
 uv run python -m tests.diagnosis.real_data.effectiveness --data-root $env:CNN_DATA_ROOT --output D:/code/CNN/data/real_diagnosis/effectiveness/results.json --markdown-output D:/code/CNN/data/real_diagnosis/effectiveness/diagnosis_effectiveness_report.md
 uv run python -m unittest tests.diagnosis.real_data.test_effectiveness
 ```

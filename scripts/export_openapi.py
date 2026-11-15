@@ -14,8 +14,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-# cloud 是 uv workspace 成员(package=false,不做安装),手动加入 sys.path
-sys.path.insert(0, str(ROOT / "cloud"))
+# server 是 uv workspace 成员(package=false,不做安装),手动加入 sys.path
+sys.path.insert(0, str(ROOT / "server"))
 
 from app.main import app  # noqa: E402
 

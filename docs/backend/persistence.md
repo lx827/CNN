@@ -1,6 +1,6 @@
 # 持久化与诊断缓存契约
 
-ORM 类型以 `cloud/app/models.py` 为准；外部字段见 [API](../api/backend_api.md)。诊断状态、Evidence 和重评语义见 [证据契约](assessment.md)，读写唯一入口为 `services/diagnosis_store.py`。
+ORM 类型以 `server/app/models.py` 为准；外部字段见 [API](../api/backend_api.md)。诊断状态、Evidence 和重评语义见 [证据契约](assessment.md)，读写唯一入口为 `services/diagnosis_store.py`。
 
 ## 表与所有权
 

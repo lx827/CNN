@@ -2,7 +2,7 @@
 
 > 状态：#77/#84 类型化核心、生产后端编排/存储/HTTP 与统一前端已完成实现，随本批开发分支交付；验证证据在测试索引和交接中记录，不宣称真实数据效果。
 >
-> 核心导航：`cloud/app/services/diagnosis/domain.py`、`adapters.py`、`assessment.py` 与 `fusion/evidence.py`。数学表示与机械前提仍归 [算法契约](../algorithms/INDEX.md)。
+> 核心导航：`server/app/services/diagnosis/domain.py`、`adapters.py`、`assessment.py` 与 `fusion/evidence.py`。数学表示与机械前提仍归 [算法契约](../algorithms/INDEX.md)。
 
 ## 两维状态与覆盖范围
 

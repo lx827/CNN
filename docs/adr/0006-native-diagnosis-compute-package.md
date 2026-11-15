@@ -7,7 +7,7 @@
 
 诊断计算库首个原生候选采用 C++、Eigen 与 pybind11，优先复用第三方数值基座；插值库与线性代数后端分别按语义适配及实际成本选型。首版覆盖 Windows x64、Ubuntu x64 与项目当前 Python 3.13；ARM64 留待后续验证。现有 Rust 边端继续属于设备通信与采集职责。
 
-首版移植保留当前 Python 算法语义，包括极值精化、镜像规则、PCHIP/cubic、SD/Rilling、CEEMDAN 公式及收敛状态，仅接受事先约定的浮点误差。性能移植与算法改进分别验收；数值误差及元数据比较使用原生比较前确定的 [冻结预算](../../cloud/tests/diagnosis/benchmarks/native_emd_contract.json)。
+首版移植保留当前 Python 算法语义，包括极值精化、镜像规则、PCHIP/cubic、SD/Rilling、CEEMDAN 公式及收敛状态，仅接受事先约定的浮点误差。性能移植与算法改进分别验收；数值误差及元数据比较使用原生比较前确定的 [冻结预算](../../server/tests/diagnosis/benchmarks/native_emd_contract.json)。
 
 根目录保留一个 pyproject.toml，集中项目元数据、构建配置和 Python 依赖配置。计算库的运行依赖进入 project.dependencies；cloud、dc24、开发测试和 benchmark 依赖分别进入 dependency groups，配置日常默认安装组，benchmark 继续显式选择。生成的计算库 wheel 仅携带计算包与其运行依赖，不把整个应用及其服务依赖纳入库的分发边界。现有 cloud/dc24 源码位置及启动工作目录保留。该布局已替换原多成员 workspace 配置，[ADR 0001](0001-uv-workspace-python-313.md) 保留原决策语境并指向本决策。
 
@@ -23,7 +23,7 @@
 
 本决策延续 [ADR 0005](0005-diagnosis-native-benchmark-gate.md) 的固定向量、正确性、状态、所有权和目标资源准入要求。采用源码构建后，目标环境的编译工具链、构建峰值内存及并发限制也需要验证；现有生产分析线程与内存上限继续有效。
 
-当前 Python 实现的 cubic 使用 SciPy 默认 not-a-knot 边界，PCHIP 与 cubic 均允许外推。候选覆盖非等距精化节点、端点、小节点数退化和平台极值规则；不能仅凭插值方法同名宣称兼容。数学行为以 [Python adapter](../../cloud/app/algorithms/decomposition/emd/python_adapter.py) 为对照，原生函数签名由 [包源码 docstring](../../compute/cnn_compute/__init__.py) 维护。
+当前 Python 实现的 cubic 使用 SciPy 默认 not-a-knot 边界，PCHIP 与 cubic 均允许外推。候选覆盖非等距精化节点、端点、小节点数退化和平台极值规则；不能仅凭插值方法同名宣称兼容。数学行为以 [Python adapter](../../server/app/algorithms/decomposition/emd/python_adapter.py) 为对照，原生函数签名由 [包源码 docstring](../../compute/cnn_compute/__init__.py) 维护。
 
 ## 向量化与数值一致性
 

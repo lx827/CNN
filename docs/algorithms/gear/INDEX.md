@@ -2,7 +2,7 @@
 
 > 定轴 #71 已随 PR #85 合并；行星 #72 纯计算与公共业务切片已集成至开发分支/草稿 PR #89。公共接入以 [诊断编排](../../backend/diagnosis.md) 和 [API](../../api/backend_api.md) 为准，未声明真实数据分类效果。
 >
-> 实现导航：`algorithms/gear/fixed_axis/`、`gear/planetary/`、`mechanics/planetary.py` 与 `algorithms/pipelines/gear/`（均相对 `cloud/app/`）。
+> 实现导航：`algorithms/gear/fixed_axis/`、`gear/planetary/`、`mechanics/planetary.py` 与 `algorithms/pipelines/gear/`（均相对 `server/app/`）。
 
 ## 数学目的
 
@@ -100,11 +100,11 @@ Chirp-Z 频率网格为半开区间 `[low,high)`；即使上限为物理 Nyquist
 
 | 资产 | 覆盖 |
 |------|------|
-| `cloud/tests/diagnosis/algorithms/test_fixed_axis_gear.py` | 手算矩/啮合、TSA 恒等式、角域轴、边带/倒谱、缺历史、直接重评 |
-| `cloud/tests/diagnosis/algorithms/test_fixed_axis_gear_api.py` | Engine/API、规范评估和兼容字段 |
-| `cloud/tests/diagnosis/planetary/test_planetary_pipeline.py` | WT 参数手算、参考轴、SER 重叠、角域 residual、覆盖不足、缺基线和重评 |
-| `cloud/tests/diagnosis/planetary/test_planetary_business.py`、`test_planetary_api.py` | Engine/ensemble/评分门控、当前通道完整几何、真实隔离 HTTP 四方法/gear_advanced 与旧标识拒绝 |
-| `cloud/tests/diagnosis/regression/` | None 参数与工况边界 |
-| `cloud/tests/diagnosis/real_data/` | 原始齿轮记录与真实效果评估，依赖有效参数与工况 |
+| `server/tests/diagnosis/algorithms/test_fixed_axis_gear.py` | 手算矩/啮合、TSA 恒等式、角域轴、边带/倒谱、缺历史、直接重评 |
+| `server/tests/diagnosis/algorithms/test_fixed_axis_gear_api.py` | Engine/API、规范评估和兼容字段 |
+| `server/tests/diagnosis/planetary/test_planetary_pipeline.py` | WT 参数手算、参考轴、SER 重叠、角域 residual、覆盖不足、缺基线和重评 |
+| `server/tests/diagnosis/planetary/test_planetary_business.py`、`test_planetary_api.py` | Engine/ensemble/评分门控、当前通道完整几何、真实隔离 HTTP 四方法/gear_advanced 与旧标识拒绝 |
+| `server/tests/diagnosis/regression/` | None 参数与工况边界 |
+| `server/tests/diagnosis/real_data/` | 原始齿轮记录与真实效果评估，依赖有效参数与工况 |
 
 历史端到端数据报告不能外推为当前 Pipeline 的效果。主仓 CW 有 36 个变速 `.npy`，其他数据可用性按实际目录或 `CNN_DATA_ROOT` 分别确认；不能一概写为全部缺失或全部已验证。

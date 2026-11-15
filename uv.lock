@@ -382,7 +382,7 @@ benchmark = [
 cloud = [
     { name = "apscheduler", specifier = "==3.10.4" },
     { name = "cryptography", specifier = "==42.0.7" },
-    { name = "dc24-driver", editable = "drivers/dc24" },
+    { name = "dc24-driver", editable = "collector/drivers/dc24" },
     { name = "fastapi", specifier = "==0.111.0" },
     { name = "msgpack", specifier = ">=1.0.8" },
     { name = "pymysql", specifier = "==1.1.1" },
@@ -395,13 +395,13 @@ cloud = [
     { name = "uvicorn", extras = ["standard"], specifier = "==0.30.0" },
 ]
 dc24 = [
-    { name = "dc24-driver", editable = "drivers/dc24" },
+    { name = "dc24-driver", editable = "collector/drivers/dc24" },
     { name = "python-dotenv", specifier = "==1.0.1" },
     { name = "requests", specifier = "==2.32.3" },
 ]
-dc24-python = [{ name = "dc24-driver-python", editable = "drivers/dc24-python" }]
-dc24-rust = [{ name = "dc24-driver-rust", directory = "drivers/dc24-rust" }]
-dc24-vendor = [{ name = "dc24-driver-vendor", editable = "drivers/dc24-vendor" }]
+dc24-python = [{ name = "dc24-driver-python", editable = "collector/drivers/dc24-python" }]
+dc24-rust = [{ name = "dc24-driver-rust", directory = "collector/drivers/dc24-rust" }]
+dc24-vendor = [{ name = "dc24-driver-vendor", editable = "collector/drivers/dc24-vendor" }]
 dev = [
     { name = "clang-format", specifier = "==23.1.5" },
     { name = "httpx", specifier = ">=0.27" },
@@ -412,7 +412,7 @@ emd-reference = [{ name = "emd", specifier = "==0.8.1" }]
 local = [
     { name = "apscheduler", specifier = "==3.10.4" },
     { name = "cryptography", specifier = "==42.0.7" },
-    { name = "dc24-driver", editable = "drivers/dc24" },
+    { name = "dc24-driver", editable = "collector/drivers/dc24" },
     { name = "fastapi", specifier = "==0.111.0" },
     { name = "msgpack", specifier = ">=1.0.8" },
     { name = "pymysql", specifier = "==1.1.1" },
@@ -549,7 +549,7 @@ wheels = [
 [[package]]
 name = "dc24-driver"
 version = "0.1.0"
-source = { editable = "drivers/dc24" }
+source = { editable = "collector/drivers/dc24" }
 dependencies = [
     { name = "numpy" },
 ]
@@ -560,7 +560,7 @@ requires-dist = [{ name = "numpy", specifier = ">=1.26.4" }]
 [[package]]
 name = "dc24-driver-python"
 version = "0.1.0"
-source = { editable = "drivers/dc24-python" }
+source = { editable = "collector/drivers/dc24-python" }
 dependencies = [
     { name = "dc24-driver" },
 ]
@@ -571,7 +571,7 @@ requires-dist = [{ name = "dc24-driver", specifier = "==0.1.0" }]
 [[package]]
 name = "dc24-driver-rust"
 version = "0.1.0"
-source = { directory = "drivers/dc24-rust" }
+source = { directory = "collector/drivers/dc24-rust" }
 dependencies = [
     { name = "dc24-driver" },
 ]
@@ -582,7 +582,7 @@ requires-dist = [{ name = "dc24-driver", specifier = "==0.1.0" }]
 [[package]]
 name = "dc24-driver-vendor"
 version = "0.1.0"
-source = { editable = "drivers/dc24-vendor" }
+source = { editable = "collector/drivers/dc24-vendor" }
 dependencies = [
     { name = "dc24-driver" },
 ]

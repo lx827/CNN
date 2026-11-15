@@ -2,7 +2,7 @@
 
 > 状态：当前契约（#69 已合并）。
 >
-> 实现导航：`cloud/app/algorithms/order/`；`services/diagnosis/order_tracking.py` 仅是旧 tuple 兼容边界。
+> 实现导航：`server/app/algorithms/order/`；`services/diagnosis/order_tracking.py` 仅是旧 tuple 兼容边界。
 
 ## 原生计算实现（#126）
 
@@ -102,10 +102,10 @@ STFT 可靠脊线 → 连续转速轨迹 → 梯形积分相位
 
 | 验证资产 | 覆盖向量 |
 |----------|----------|
-| `cloud/tests/diagnosis/algorithms/test_order_pipeline.py` | 恒速已知阶次/近频峰、单边幅值、两类阶次轴、解析积分、全记录三角扫频、单帧快扫频、边界与越界、零 MAD、窄带纯音、slow→fast、不同采样率、故障调制不冒充轴频 |
-| `cloud/tests/diagnosis/algorithms/test_native_rotation.py` | 解析相位积分、角域插值、输出生命周期、单圈DFT推导TSA的长记录Hann谱、非FFT网格CZT与序列不变量 |
-| `cloud/tests/diagnosis/algorithms/test_order_integration.py` | Engine/ensemble 快速变速边界、HTTP 不可判定、缓存保护和不伪造健康 |
-| `cloud/tests/diagnosis/regression/test_varying_speed_order.py` | P0 合成回归；已知阶次、解析转速、轨迹和非法输入 |
-| `cloud/tests/diagnosis/foundation/layer2/test_order_tracking_correctness.py` | 分层正确性资产 |
+| `server/tests/diagnosis/algorithms/test_order_pipeline.py` | 恒速已知阶次/近频峰、单边幅值、两类阶次轴、解析积分、全记录三角扫频、单帧快扫频、边界与越界、零 MAD、窄带纯音、slow→fast、不同采样率、故障调制不冒充轴频 |
+| `server/tests/diagnosis/algorithms/test_native_rotation.py` | 解析相位积分、角域插值、输出生命周期、单圈DFT推导TSA的长记录Hann谱、非FFT网格CZT与序列不变量 |
+| `server/tests/diagnosis/algorithms/test_order_integration.py` | Engine/ensemble 快速变速边界、HTTP 不可判定、缓存保护和不伪造健康 |
+| `server/tests/diagnosis/regression/test_varying_speed_order.py` | P0 合成回归；已知阶次、解析转速、轨迹和非法输入 |
+| `server/tests/diagnosis/foundation/layer2/test_order_tracking_correctness.py` | 分层正确性资产 |
 
 这些测试的存在不等于所有机械工况均已验证。当前契约明确保留“无可靠轴频证据即不可判定”的边界。

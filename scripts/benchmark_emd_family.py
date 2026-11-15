@@ -17,7 +17,7 @@ import numpy as np
 from benchmark_emd import peak_memory
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "cloud"))
+sys.path.insert(0, str(ROOT / "server"))
 
 
 def worker(args):

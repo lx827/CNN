@@ -20,13 +20,10 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RootDir = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
 
-# Rust 源码目录:当前为 edge-rust/,平移工单合入后为 edge/。自动探测。
-$SrcDir = $null
-foreach ($cand in @((Join-Path $RootDir "edge-rust"), (Join-Path $RootDir "edge"))) {
-    if (Test-Path (Join-Path $cand "Cargo.toml")) { $SrcDir = $cand; break }
-}
-if (-not $SrcDir) {
-    throw "未找到 Rust 边端源码目录(需含 Cargo.toml,尝试 edge-rust\ 与 edge\)"
+# Rust 边端采集源码目录(edgecquire)
+$SrcDir = Join-Path $RootDir "edgecquire"
+if (-not (Test-Path (Join-Path $SrcDir "Cargo.toml"))) {
+    throw "未找到 Rust 边端源码目录 $SrcDir(需含 Cargo.toml)"
 }
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {

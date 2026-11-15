@@ -349,7 +349,7 @@ $$k_{node} = \left\lfloor \frac{f_{mesh} \pm k \cdot f_r}{\Delta f} \right\rfloo
 **代码实现映射**：
 
 ```python
-# 参考实现位置：cloud/app/services/diagnosis/gear/metrics.py
+# 参考实现位置：server/app/services/diagnosis/gear/metrics.py
 # 小波去噪 → TSA → 齿轮指标 的联合流程
 
 
