@@ -5018,6 +5018,13 @@
       },
       "CreateJob": {
         "properties": {
+          "enabled_channels": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Enabled Channels"
+          },
           "agent_id": {
             "type": "string",
             "pattern": "^[A-Za-z0-9_.-]{1,64}$",
@@ -5318,6 +5325,13 @@
       },
       "RecordRequest": {
         "properties": {
+          "enabled_channels": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Enabled Channels"
+          },
           "duration": {
             "type": "integer",
             "minimum": 0.0,

@@ -193,9 +193,11 @@ Research EnsembleResultPanels 展示对象 Evidence/依赖组/支持量/冲突/�
 | 调用方 | API/工具 | 方式 | 说明 |
 |--------|---------|------|------|
 | `Acquisition.vue` | `api/acquisition.js::getAcquisitionAgents/getAcquisitionJobs` | REST 轮询(每 2s) | 边端列表与保存记录 |
-| `Acquisition.vue` | `api/acquisition.js::startLiveSession/stopLiveSession/...` | REST | 会话生命周期、录制、目录选择 |
+| `Acquisition.vue` | `api/acquisition.js::startLiveSession/stopLiveSession/...` | REST | 会话生命周期、录制、目录选择；录制请求携带 `enabled_channels`，任务快照保存该选择 |
 | `Acquisition.vue` | `utils/websocket.js::createWebSocketClient('/ws/acquisition/sessions/{id}/view')` | **WS 推送** | 连接即上报 options；`view` 推送驱动图表、`session` 推送更新状态;WS 未连上回退 `getLiveView` REST 轮询,断线指数退避重连 |
 | 边端（DC24） | — | HTTP 不变 | `POST /api/acquisition/sessions/{id}/frames` 原始计数帧上报、`POST .../state` 状态上报 |
+
+采集页从 capabilities 的 `channels` 生成诊断通道控件，至少启用一路；原始保存仍为四路。采集完成后后端自动分段登记并诊断，页面不新增本地历史视图。用户通过现有 DataView、Diagnosis、Alarm、Monitor 与 Settings 读取同一设备/批次结果，历史重新分析仍走 `POST /api/data/{device_id}/{batch_index}/reanalyze`。
 
 ---
 

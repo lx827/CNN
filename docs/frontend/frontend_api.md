@@ -240,13 +240,13 @@ const status = await getTaskStatus(task.task_id);
 | 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
 |--------|------|--------|----------|----------|
 | `getAcquisitionAgents()` | 无 | 边端代理列表 | `GET /api/acquisition/agents` | `Acquisition.vue` |
-| `getAcquisitionCapabilities()` | 无 | 服务能力（原厂采样率档位等） | `GET /api/acquisition/capabilities` | `Acquisition.vue` |
+| `getAcquisitionCapabilities()` | 无 | 服务能力（原厂采样率档位、可启用 `channels` 等） | `GET /api/acquisition/capabilities` | `Acquisition.vue` |
 | `startLiveSession(data)` | `{ agent_id, sample_rate }` | 示波会话 | `POST /api/acquisition/sessions` | `Acquisition.vue` |
 | `getLiveSession(id)` | `id: string` | 会话状态（404 静默） | `GET /api/acquisition/sessions/{id}` | `Acquisition.vue` |
 | `getCurrentLiveSession(agent)` | `agent: string` | 边端当前会话（可为 `null`） | `GET /api/acquisition/agents/{agent}/session` | `Acquisition.vue` |
 | `stopLiveSession(id)` | `id: string` | 停止后会话状态 | `POST /api/acquisition/sessions/{id}/stop` | `Acquisition.vue` |
 | `getLiveView(id, params)` | `id: string`<br>`params: object`（波形/频谱/RMS/包络开关） | 实时窗口分析结果（错误静默） | `GET /api/acquisition/sessions/{id}/view` | `Acquisition.vue` |
-| `startLiveRecording(id, data)` | `{ duration, save_directory, analysis }` | 保存任务 | `POST /api/acquisition/sessions/{id}/record` | `Acquisition.vue` |
+| `startLiveRecording(id, data)` | `{ duration, save_directory, enabled_channels, analysis }` | 保存任务（含实际启用通道） | `POST /api/acquisition/sessions/{id}/record` | `Acquisition.vue` |
 | `stopLiveRecording(id)` | `id: string` | 停止保存 | `POST /api/acquisition/sessions/{id}/record/stop` | `Acquisition.vue` |
 | `selectAcquisitionDirectory(agent)` | `agent: string` | 目录选择器 `{ id, status }` | `POST /api/acquisition/agents/{agent}/select-directory` | `Acquisition.vue` |
 | `getAcquisitionDirectory(agent)` | `agent: string` | 目录选择结果 | `GET /api/acquisition/agents/{agent}/directory` | `Acquisition.vue` |
@@ -631,7 +631,7 @@ import {
 | 属性 | 说明 |
 |------|------|
 | **文件路径** | `src/views/Acquisition.vue` |
-| **用途** | DC24 实时示波与采集:选择现场边端与采样率开始示波,四通道波形/频谱/RMS/包络实时显示,随时开始/停止原始数据保存 |
+| **用途** | DC24 实时示波与采集:选择现场边端与采样率开始示波,四通道波形/频谱/RMS/包络实时显示,随时开始/停止原始数据保存；从 capabilities 动态生成诊断通道启用控件，至少一路并随保存任务提交 |
 
 **实时窗口数据流（2026-11-08,issue #51）**：会话激活时经 `utils/websocket.js::createWebSocketClient` 订阅 `WS /ws/acquisition/sessions/{id}/view`;连接建立即发送当前分析选项(显示开关/时间窗/包络带),`view` 推送驱动 ECharts 绘制,`session` 推送更新会话状态;WS 未连上时回退 `api/acquisition.js::getLiveView` REST 轮询,断线由客户端指数退避重连,会话停止/404 恢复/页面卸载时关闭订阅。
 

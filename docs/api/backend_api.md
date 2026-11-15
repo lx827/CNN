@@ -398,7 +398,11 @@ GET /api/collect/history?device_id={device_id}&limit={limit}
 
 ### 5.6 DC24 实时采集边端
 
-`POST /api/acquisition/agents/heartbeat` 的 `state.transport` 可选，真实边端上报 `jmserver` 或 `python_tcp`。`GET /api/acquisition/agents` 返回该字段供本机启动器识别连接方式。没有该字段的旧真实边端按 `python_tcp` 处理。两种方式的采集来源均为 `dc24_tcp`，已保存记录在 `metadata.transport` 中标记本次连接方式。操作见 [DC24 现场采集](../DC24_ACQUISITION.md)。
+`POST /api/acquisition/agents/heartbeat` 的 `state.transport` 可选，真实边端上报 `jmserver` 或 `python_tcp`。`GET /api/acquisition/agents` 返回该字段供本机启动器识别连接方式。没有该字段的旧真实边端按 `python_tcp` 处理。两种方式的采集来源均为 `dc24_tcp`，已保存记录在 `metadata.transport` 中标记本次连接方式。
+
+`POST /api/acquisition/jobs` 与 `POST /api/acquisition/sessions/{session_id}/record` 均接受 `enabled_channels`：非空、无重复的真实通道号数组，默认取 `GET /api/acquisition/capabilities` 返回的 `data.channels`。有效集合由后端统一配置 `DC24_CHANNELS` 决定；硬件原始文件始终保存四路，只有启用通道生成诊断数据。任务快照返回实际 `enabled_channels`。
+
+完整任务经 `POST /api/acquisition/jobs/{job_id}/upload` 或 `POST /api/acquisition/jobs/{job_id}/finish-stream` 完成后，按 `DC24_DIAGNOSIS_WINDOW_SECONDS`（默认 5 秒）自动登记特殊诊断批次并交给现有 worker。响应 `data.metadata.diagnosis_device_id` 为真实 agent 对应的 Device，`data.metadata.diagnosis_batches` 为窗口批次号列表；重复完成通知保持幂等。结果显示继续使用既有 DataView、Diagnosis、Alarm 与 Monitor API，不增加本地专用结果端点。操作见 [DC24 现场采集](../DC24_ACQUISITION.md)。
 
 ## 6. 数据查看与诊断 (data_view)
 

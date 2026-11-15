@@ -16,6 +16,7 @@ from app.services.acquisition_live import live
 from dc24_live import Recording, EventBuffer, decode
 from dc24_live import SessionRunner
 from dc24_capture import command, samples
+from app.models import SensorData
 
 
 def frame(sequence=0, rows=254):
@@ -194,6 +195,18 @@ class LiveTests(unittest.TestCase):
             headers=self.edge,
         )
         self.assertEqual(result.json()["data"]["status"], "completed")
+        self.assertEqual(result.json()["data"]["metadata"]["diagnosis_batches"], [101])
+        # 流式完成通知与 ZIP 完成入口共用同一幂等登记语义。
+        duplicate = self.client.post(
+            f"/api/acquisition/jobs/{request['id']}/finish-stream?agent_id=test",
+            headers=self.edge,
+        )
+        self.assertEqual(duplicate.status_code, 200)
+        with self.fixture.sessions() as db:
+            records = db.query(SensorData).all()
+            self.assertEqual(len(records), 4)
+            self.assertEqual({r.batch_index for r in records}, {101})
+            self.assertTrue(all(r.data["kind"] == "dc24_counts" for r in records))
         self.assertEqual(
             self.client.get(
                 f"/api/acquisition/jobs/{request['id']}/files/samples.csv",

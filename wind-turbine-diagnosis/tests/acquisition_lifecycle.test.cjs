@@ -21,7 +21,7 @@ function harness(overrides = {}) {
     window: { addEventListener: (_, fn) => listeners.add(fn), removeEventListener: (_, fn) => listeners.delete(fn) },
     ElMessage: { success() {}, warning() {} },
     echarts: { init() { const c = { disposed: false, setOption(o) { assert.equal(this.disposed, false); this.option = o }, resize() {}, dispose() { this.disposed = true } }; charts.push(c); return c } },
-    getAcquisitionCapabilities: async () => ({ data: { sample_rates: [50, 2000, 4000, 5000, 10000, 100000] } }),
+    getAcquisitionCapabilities: async () => ({ data: { sample_rates: [50, 2000, 4000, 5000, 10000, 100000], channels: [1, 2, 3, 4] } }),
     getAcquisitionAgents: async () => ({ data: [
       { id: 'dc24', online: true, source: 'dc24_tcp', state: { version: 3, save_directory: 'D:/chosen', sample_rates: [50, 2000, 4000, 5000, 10000, 100000] } },
       { id: 'replay', online: true, source: 'recording_replay', state: { version: 3 } }] }),
@@ -75,6 +75,13 @@ test('长时采集从示波中开始；停止保存保持示波；手动模式�
   assert.equal(h.recordStops, 1); assert.equal(h.stops, 0); assert.equal(h.state.session.status, 'streaming')
   h.state.form.manual = true; await h.state.startRecording()
   assert.equal(h.records[1].duration, 0)
+})
+
+test('采集任务保存用户启用的真实通道号', async t => {
+  const h = harness(); t.after(() => h.app.unmount()); await flush()
+  h.state.form.enabled_channels = [2, 4]
+  await h.state.startRecording()
+  assert.deepEqual(h.records[0].enabled_channels, [2, 4])
 })
 
 test('示波中可以切换显示并设置包络区间；非法频带不发包络请求或保存任务', async t => {

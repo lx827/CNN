@@ -12,15 +12,17 @@ import zipfile
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from dc24_driver import B5_PROFILES
 
 from app.api.auth import optional_auth
+from app.core.config import DC24_CHANNELS
 from app.database import get_db
-from app.models import AcquisitionAgent, AcquisitionJob
+from app.models import AcquisitionAgent, AcquisitionJob, Device
 from app.services.acquisition_analysis import analyze_counts
+from app.services.acquisition_diagnosis import register_completed_acquisition
 
 router = APIRouter(
     prefix="/api/acquisition", tags=["真实采集"], dependencies=[Depends(optional_auth)]
@@ -83,6 +85,7 @@ def snapshot(job):
         "sample_rate": job.sample_rate,
         "duration": job.duration,
         "analysis_options": job.analysis_options,
+        "enabled_channels": job.enabled_channels or list(DC24_CHANNELS),
         "progress": job.progress,
         "metadata": job.result_metadata,
         "cancel_requested": bool(job.cancel_requested),
@@ -105,7 +108,20 @@ class AnalysisOptions(BaseModel):
     band_high: float | None = None
 
 
-class CreateJob(BaseModel):
+class ChannelSelection(BaseModel):
+    enabled_channels: list[int] = Field(default_factory=lambda: list(DC24_CHANNELS))
+
+    @field_validator("enabled_channels")
+    @classmethod
+    def validate_channels(cls, channels):
+        if not channels or len(set(channels)) != len(channels):
+            raise ValueError("至少启用一路采集通道，且通道不能重复")
+        if any(channel not in DC24_CHANNELS for channel in channels):
+            raise ValueError(f"采集通道必须属于 {list(DC24_CHANNELS)}")
+        return sorted(channels)
+
+
+class CreateJob(ChannelSelection):
     agent_id: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,64}$")
     sample_rate: int = 5000
     duration: int = Field(default=60, ge=1)
@@ -146,6 +162,9 @@ def heartbeat(body: Heartbeat, db: Session = Depends(get_db)):
         agent = AcquisitionAgent(id=body.agent_id)
         db.add(agent)
     agent.source, agent.last_seen_at, agent.state = body.source, now(), body.state
+    device = db.query(Device).filter(Device.device_id == body.agent_id).first()
+    if device is not None:
+        device.last_seen_at, device.is_online = agent.last_seen_at, 1
     db.commit()
     return {"code": 200}
 
@@ -192,6 +211,7 @@ def create_job(body: CreateJob, db: Session = Depends(get_db)):
         sample_rate=body.sample_rate,
         duration=body.duration,
         analysis_options=body.analysis.model_dump(),
+        enabled_channels=body.enabled_channels,
         progress={},
         created_at=now(),
         updated_at=now(),
@@ -334,7 +354,7 @@ def save_archive(job, archive):
     p.mkdir(parents=True, exist_ok=True)
     for name, data_bytes in content.items():
         (p / name).write_bytes(data_bytes)
-    np.savez_compressed(p / "counts.npz", counts=values.astype(np.int32))
+    values.astype("<i4").tofile(p / "counts.i32")
     meta["source"] = job.source
     return meta, values.astype(np.int32)
 
@@ -355,6 +375,9 @@ async def upload(
             raise HTTPException(413, "采集归档超过32MB")
     try:
         async with ANALYSIS_LOCK:
+            db.refresh(job)
+            if job.status == "completed":
+                return {"code": 200, "data": snapshot(job)}
             meta, values = await asyncio.to_thread(save_archive, job, archive)
             job.result_metadata, job.updated_at = meta, now()
             job.status = "analyzing"
@@ -371,6 +394,8 @@ async def upload(
                 if arrays:
                     np.savez_compressed(p / "analysis_arrays.npz", **arrays)
             db.refresh(job)
+            if not job.cancel_requested and not meta.get("cancelled"):
+                register_completed_acquisition(db, job, p / "counts.i32")
             job.status = (
                 "cancelled"
                 if job.cancel_requested or meta.get("cancelled")

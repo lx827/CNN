@@ -152,6 +152,15 @@ def init_db():
                         )
                     conn.execute(text(f"UPDATE {table} SET health_score=NULL"))
 
+    # AcquisitionJob 表新增诊断通道选择；旧任务保持四通道语义。
+    if "acquisition_jobs" in inspector.get_table_names():
+        job_cols = {c["name"] for c in inspector.get_columns("acquisition_jobs")}
+        if "enabled_channels" not in job_cols:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE acquisition_jobs ADD COLUMN enabled_channels JSON")
+                )
+
     from app.models import Diagnosis
 
     for index in Diagnosis.__table__.indexes:
