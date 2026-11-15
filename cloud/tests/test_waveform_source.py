@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "cloud"))
 os.environ["USE_SQLITE"] = "true"
 os.environ["DATABASE_URL"] = "sqlite://"
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 from fastapi import FastAPI
@@ -57,6 +57,25 @@ class WaveformSourceTests(unittest.TestCase):
         self.assertEqual(waveform.signals["ch3"].dtype, np.float64)
         np.testing.assert_array_equal(waveform.signals["ch3"], values)
         self.assertEqual(record.data, values)
+
+    def test_missing_sample_rate_is_an_error_without_device_or_global_fallback(self):
+        self.db.add(Device(device_id="LEGACY", sample_rate=2048, is_online=1))
+        self.db.add(
+            SensorData(
+                device_id="LEGACY",
+                batch_index=1,
+                channel=1,
+                data=[0.0, 1.0],
+                sample_rate=None,
+            )
+        )
+        self.db.commit()
+        self.db.execute(text("UPDATE sensor_data SET sample_rate=NULL"))
+        self.db.commit()
+        self.db.expire_all()
+
+        with self.assertRaisesRegex(ValueError, "batch_sample_rate_missing"):
+            load_waveform(self.db, "LEGACY", 1)
 
     def test_dc24_file_reads_sample_window_and_real_channels(self):
         counts = np.array(
@@ -248,6 +267,128 @@ class WaveformSourceTests(unittest.TestCase):
             )
             self.assertEqual(record.is_analyzed, 1)
             self.assertEqual(load.call_count, 1)
+            self.assertEqual(self.db.query(SensorData).count(), 1)
+
+    def test_reanalyze_file_selection_creates_new_special_batches(self):
+        from app.services import diagnosis_workflow as workflow
+        from tests.diagnosis_fixtures import batch_snapshot
+
+        counts = np.arange(8 * 4, dtype="<i4").reshape(8, 4)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "counts.i32"
+            counts.tofile(path)
+            original_bytes = path.read_bytes()
+            source = {
+                "kind": "dc24_counts",
+                "job_id": "acquisition-job",
+                "path": str(path),
+                "start_sample": 0,
+                "end_sample": 8,
+            }
+            self.db.add(Device(device_id="LOCAL", sample_rate=1000, is_online=1))
+            self.db.add(
+                SensorData(
+                    device_id="LOCAL",
+                    batch_index=101,
+                    channel=2,
+                    data=source,
+                    sample_rate=1000,
+                    is_special=1,
+                )
+            )
+            self.db.commit()
+            application = FastAPI()
+            from app.api.data_view import router
+
+            application.include_router(router)
+            application.dependency_overrides[get_db] = lambda: self.db
+            observed = []
+
+            def analyze(signals, sample_rate, device, rot_freq, denoise, batch_index):
+                observed.append((signals, sample_rate, batch_index))
+                return batch_snapshot("LOCAL", batch_index)
+
+            with (
+                patch.object(workflow, "analyze_device", side_effect=analyze),
+                patch.object(workflow, "save_batch"),
+                patch.object(workflow, "generate_alarms", return_value=[]),
+                patch.object(workflow.manager, "broadcast", new=AsyncMock()),
+                TestClient(application) as client,
+            ):
+                by_samples = client.post(
+                    "/api/data/LOCAL/101/reanalyze",
+                    json={
+                        "start_sample": 2,
+                        "end_sample": 6,
+                        "channels": [4, 1],
+                    },
+                )
+                by_time = client.post(
+                    "/api/data/LOCAL/101/reanalyze",
+                    json={"start_time": 0.001, "end_time": 0.004, "channels": [4]},
+                )
+                batches = client.get("/api/data/devices")
+
+            self.assertEqual(by_samples.status_code, 200, by_samples.text)
+            self.assertEqual(by_samples.json()["data"]["batch_index"], 102)
+            self.assertEqual(by_time.status_code, 200, by_time.text)
+            self.assertEqual(by_time.json()["data"]["batch_index"], 103)
+            self.assertEqual(observed[0][2], 102)
+            self.assertEqual(set(observed[0][0]), {"ch1", "ch4"})
+            np.testing.assert_array_equal(observed[0][0]["ch1"], counts[2:6, 0])
+            np.testing.assert_array_equal(observed[0][0]["ch4"], counts[2:6, 3])
+            self.assertEqual(observed[1][2], 103)
+            np.testing.assert_array_equal(observed[1][0]["ch4"], counts[1:4, 3])
+            records = (
+                self.db.query(SensorData)
+                .order_by(SensorData.batch_index, SensorData.channel)
+                .all()
+            )
+            self.assertEqual(
+                [(row.batch_index, row.channel) for row in records],
+                [(101, 2), (102, 1), (102, 4), (103, 4)],
+            )
+            self.assertTrue(all(row.is_special for row in records))
+            self.assertEqual(records[1].data["start_sample"], 2)
+            self.assertEqual(records[1].data["end_sample"], 6)
+            self.assertEqual(records[-1].data["start_sample"], 1)
+            self.assertEqual(records[-1].data["end_sample"], 4)
+            self.assertEqual(path.read_bytes(), original_bytes)
+            listed = batches.json()["data"][0]["batches"]
+            selected = next(row for row in listed if row["batch_index"] == 102)
+            self.assertEqual(selected["channels"], [1, 4])
+            self.assertEqual(selected["source_kind"], "dc24_counts")
+
+    def test_non_file_batch_rejects_reanalysis_selection(self):
+        from app.services import diagnosis_workflow as workflow
+        from tests.diagnosis_fixtures import batch_snapshot
+
+        self.db.add(Device(device_id="DB", sample_rate=1000, is_online=1))
+        self.db.add(
+            SensorData(
+                device_id="DB",
+                batch_index=1,
+                channel=1,
+                data=[0.0] * 64,
+                sample_rate=1000,
+            )
+        )
+        self.db.commit()
+        application = FastAPI()
+        from app.api.data_view import router
+
+        application.include_router(router)
+        application.dependency_overrides[get_db] = lambda: self.db
+        with (
+            patch.object(workflow, "analyze_device", return_value=batch_snapshot("DB", 1)),
+            patch.object(workflow.manager, "broadcast", new=AsyncMock()),
+            TestClient(application) as client,
+        ):
+            response = client.post(
+                "/api/data/DB/1/reanalyze", json={"channels": [1]}
+            )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(self.db.query(SensorData).count(), 1)
 
 
 if __name__ == "__main__":

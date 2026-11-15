@@ -25,7 +25,7 @@
 | `useMonitor.js` | Monitor | 最新数据拉取、传感器状态、采集任务下发与轮询、时域/频域图 |
 | `useSettings.js` | Settings | 设备/配置/阈值加载与保存、机械参数同步 |
 | `useResearchDiagnosis.js` | ResearchDiagnosis | 三模式分析运行、结果行派生、包络评估状态、路由联动 |
-| `useDataView.js` | DataView | 批次选择、七类频谱按需计算、结构化包络图、轴承/齿轮特征频率标注、删除/重诊 |
+| `useDataView.js` | DataView | 按实际 channels 选择批次通道、七类频谱按需计算、结构化包络图、轴承/齿轮特征频率标注、删除/原批复跑/文件选段重诊 |
 
 ---
 
@@ -292,7 +292,8 @@ Research 的单方法/all/ensemble 结果直接读顶层完整 Domain；局部�
 | `update:selectedBatch` | 批次切换 |
 | `update:selectedChannel` | 通道切换 |
 | `update:denoiseMethod` | 去噪方法切换 |
-| `reanalyze` | 重新诊断 |
+| `reanalyze` | 原批重新诊断 |
+| `reanalyze-selection` | 打开 DC24 文件选段重诊对话框 |
 | `reanalyzeAll` | 全部重新诊断 |
 | `deleteBatch` | 删除批次 |
 | `exportCsv` | 导出 CSV |

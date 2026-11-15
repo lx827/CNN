@@ -1,6 +1,6 @@
 """DC24 公共驱动接口、样本块和已验证设备协议。"""
 
-from .driver import Dc24Driver, LinkState, SampleBlock
+from .driver import Dc24Driver, FrameProtocolDriver, LinkState, SampleBlock
 from .protocol import (
     B5_PROFILES,
     CONFIG_B2,
@@ -27,6 +27,7 @@ __all__ = [
     "RATE",
     "SAMPLES_PER_FRAME",
     "Dc24Driver",
+    "FrameProtocolDriver",
     "Frames",
     "Link",
     "LinkState",

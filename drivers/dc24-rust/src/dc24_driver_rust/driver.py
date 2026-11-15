@@ -105,21 +105,16 @@ class RustDriver(Dc24Driver):
                 self._dispatch(message)
 
     def close(self):
-        if self._core is not None:
+        core = self._core
+        if core is None:
+            return
+        try:
             if self.started:
-                try:
-                    self.stop()
-                except Exception as exc:
-                    self.emergency_stop_error = str(exc)
-            self._core.close()
-            self._core = None
-        self.started = False
-        self.state = LinkState.STOPPED
-
-    @property
-    def received_tcp_bytes(self):
-        return 0
-
-    @property
-    def unparsed_tail_bytes(self):
-        return 0
+                self.stop()
+        finally:
+            try:
+                core.close()
+            finally:
+                self._core = None
+                self.started = False
+                self.state = LinkState.STOPPED

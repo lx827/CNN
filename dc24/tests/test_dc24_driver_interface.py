@@ -4,16 +4,19 @@ import csv
 import json
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "dc24"))
 
+from dc24_agent import Agent, FILES
 from dc24_capture import record
-from dc24_driver import LinkState, SampleBlock
+from dc24_driver import Dc24Driver, FrameProtocolDriver, LinkState, SampleBlock
 from dc24_live import SessionRunner
 
 
@@ -34,9 +37,6 @@ class ScriptedDriver:
         self.state = LinkState.WAITING_DEVICE
         self.identity_frame = None
         self.device_source_port = None
-        self.received_tcp_bytes = 0
-        self.unparsed_tail_bytes = 0
-        self.emergency_stop_error = None
         self.on_samples = None
         self.sent = False
         self.after_poll = None
@@ -69,6 +69,30 @@ class ScriptedDriver:
 
 
 class DriverInterfaceTests(unittest.TestCase):
+    def test_public_interface_does_not_impose_frame_protocol_storage_or_statistics(self):
+        class MinimalDriver(Dc24Driver):
+            transport = "minimal"
+
+            def connect(self, should_stop, wait=45):
+                return True
+
+            def start(self, sample_rate, on_samples, raw, events):
+                pass
+
+            def poll(self):
+                pass
+
+            def stop(self):
+                pass
+
+            def close(self):
+                pass
+
+        driver = MinimalDriver()
+        self.assertNotIsInstance(driver, FrameProtocolDriver)
+        for name in ("connection", "link", "received_tcp_bytes", "unparsed_tail_bytes"):
+            self.assertFalse(hasattr(driver, name), name)
+
     def test_record_consumes_public_sample_blocks(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "record"
@@ -80,6 +104,8 @@ class DriverInterfaceTests(unittest.TestCase):
             )
             self.assertEqual(metadata["samples_per_channel"], 254)
             self.assertEqual(metadata["transport"], "contract_fake")
+            self.assertNotIn("received_tcp_bytes", metadata)
+            self.assertNotIn("unparsed_tail_bytes", metadata)
             self.assertTrue(metadata["complete"])
             self.assertEqual((output / "rx_stream.bin").read_bytes(), data_frame())
             with (output / "samples.csv").open(encoding="utf-8", newline="") as stream:
@@ -93,6 +119,55 @@ class DriverInterfaceTests(unittest.TestCase):
                 json.loads((output / "metadata.json").read_text(encoding="utf-8")),
                 metadata,
             )
+
+    def test_local_single_job_registers_original_directory_without_zip_upload(self):
+        def save_original(output, *args, **kwargs):
+            output.mkdir(parents=True)
+            for name in FILES:
+                (output / name).write_text("original", encoding="utf-8")
+            return {
+                "samples_per_channel": 1,
+                "sample_rate_hz": 2000,
+                "cancelled": False,
+                "complete": True,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            agent = Agent.__new__(Agent)
+            agent.agent_id = "local-agent"
+            agent.output = Path(directory)
+            agent.replay_dir = None
+            agent.source = "dc24_tcp"
+            agent.local_originals = True
+            agent.vendor_root = None
+            agent.state = {"stage": "idle"}
+            agent.lock = threading.Lock()
+            agent.call = Mock(return_value={"status": "completed"})
+            agent.heartbeat = Mock()
+            agent.report = Mock(return_value={"cancel_requested": False})
+            job = {
+                "id": "local-job",
+                "source": "dc24_tcp",
+                "sample_rate": 2000,
+                "duration": 1,
+            }
+            with (
+                patch("dc24_agent.record", side_effect=save_original),
+                patch("dc24_agent.create_driver"),
+                patch("dc24_agent.zipfile.ZipFile") as zip_file,
+            ):
+                agent.execute(job)
+            zip_file.assert_not_called()
+            upload = next(
+                call
+                for call in agent.call.call_args_list
+                if call.args[:2] == ("POST", "/jobs/local-job/upload")
+            )
+            self.assertEqual(
+                upload.kwargs["params"]["local_directory"],
+                str(Path(directory) / "local-job"),
+            )
+            self.assertNotIn("data", upload.kwargs)
 
     def test_live_session_uses_same_driver_interface_and_existing_recording(self):
         class Agent:

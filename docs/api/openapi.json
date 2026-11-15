@@ -3050,6 +3050,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ReanalyzeSelection"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Selection"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3804,6 +3821,24 @@
             "schema": {
               "type": "string",
               "title": "Agent Id"
+            }
+          },
+          {
+            "name": "local_directory",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Local Directory"
             }
           }
         ],
@@ -5358,6 +5393,75 @@
           "stage"
         ],
         "title": "Progress"
+      },
+      "ReanalyzeSelection": {
+        "properties": {
+          "start_sample": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Sample"
+          },
+          "end_sample": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Sample"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time"
+          },
+          "channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channels"
+          }
+        },
+        "type": "object",
+        "title": "ReanalyzeSelection",
+        "description": "DC24 文件批次的可选新窗口；空请求保持原批重新分析。"
       },
       "RecordRequest": {
         "properties": {

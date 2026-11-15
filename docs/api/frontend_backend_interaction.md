@@ -66,7 +66,8 @@
 | `DataView.vue::computeFullAnalysis()` | `api/diagnosis.js::getChannelFullAnalysis()` | `GET /api/data/{id}/{batch}/{ch}/full-analysis` | `data_view/gear.py::get_channel_full_analysis` | ⏳ async：全算法综合分析 |
 | `DataView.vue::computeStrategyAnalyze()` | `api/diagnosis.js::getChannelAnalyze()` | `GET /api/data/{id}/{batch}/{ch}/analyze` | `data_view/gear.py::get_channel_analyze` | ⏳ async：策略分析（综合诊断） |
 | `DataView.vue::computeStats()` | `api/data.js::getChannelStats()` | `GET /api/data/{id}/{batch}/{ch}/stats` | `data_view/spectrum.py::get_channel_stats` | 计算时域统计指标 |
-| `DataView.vue::onReanalyze()` | `api/diagnosis.js::reanalyzeBatch()` | `POST /api/data/{id}/{batch}/reanalyze` | `data_view/diagnosis_ops.py::reanalyze_batch` | ⏳ async：单批次重新诊断 |
+| `DataView.vue::onReanalyze()` | `api/diagnosis.js::reanalyzeBatch()` | `POST /api/data/{id}/{batch}/reanalyze` | `data_view/diagnosis_ops.py::reanalyze_batch` | ⏳ async：无请求体，原批次重新诊断 |
+| `DataView.vue::submitReanalyzeSelection()` | `api/diagnosis.js::reanalyzeBatch()` | `POST /api/data/{id}/{batch}/reanalyze` | `data_view/diagnosis_ops.py::reanalyze_batch` | ⏳ async：文件批次选时间/样本范围与通道，创建并选择新特殊批次 |
 | `DataView.vue::onReanalyzeAll()` | `api/diagnosis.js::reanalyzeAllDevice()` | `POST /api/data/{id}/reanalyze-all` | `data_view/diagnosis_ops.py::reanalyze_all_batches` | ⏳ async：全部批次重新诊断 |
 | `DataView.vue::onDeleteBatch()` | `api/data.js::deleteBatch()` | `DELETE /api/data/{id}/{batch}` | `data_view/core.py::delete_batch` | 删除指定批次数据 |
 | `DataView.vue::exportChannelCSV()` | `window.open()` 直接打开 | `GET /api/data/{id}/{batch}/{ch}/export` | `data_view/export.py::export_channel_csv` | 导出通道数据为 CSV 文件 |
@@ -95,7 +96,7 @@
 
 - **实时分析**：Research 运行 → research-analysis → 对象 Pipeline 与统一 assessment → 顶层 Domain、局部完整结果与依赖融合；不返回旧 votes/best 协议。
 - **缓存读取**：DataView 使用真实 channel+denoise_method → GET diagnosis → 精确四元键最新 engine_result；没有缓存 404，旧 JSON 返回规范 unknown/null 与需重新分析原因，不跨方法/通道回退。
-- **两种重新计算**：POST reevaluate 只重评已有规范 Evidence，旧 JSON 为 409；POST reanalyze 运行统一批次事务并返回 Domain+channels，随后前端选择实际通道。PUT diagnosis 只发 `{rot_freq}`，不写旧 order_analysis。
+- **两种重新计算**：POST reevaluate 只重评已有规范 Evidence，旧 JSON 为 409；POST reanalyze 运行统一批次事务并返回 Domain+channels，随后前端选择实际通道。无选择 body 保持原批复跑；DC24 文件批次可在现有 DataView 对话框发送样本/秒区间和 CH1～CH4 集合，响应的新 `batch_index` 用于切换新特殊批次。批次选择优先使用后端实际 `channels`，仅存 CH4 时显示并请求 CH4。PUT diagnosis 只发 `{rot_freq}`，不写旧 order_analysis。
 
 > **⚠️ 影响前端**：`ResearchDiagnosis.vue` 依赖 `method-info` 返回的方法元数据来动态渲染分析选项，修改方法列表结构需同步前端。
 
@@ -197,7 +198,7 @@ Research EnsembleResultPanels 展示对象 Evidence/依赖组/支持量/冲突/�
 | `Acquisition.vue` | `utils/websocket.js::createWebSocketClient('/ws/acquisition/sessions/{id}/view')` | **WS 推送** | 连接即上报 options；`view` 推送驱动图表、`session` 推送更新状态;WS 未连上回退 `getLiveView` REST 轮询,断线指数退避重连 |
 | 边端（DC24） | — | HTTP 不变 | `POST /api/acquisition/sessions/{id}/frames` 原始计数帧上报、`POST .../state` 状态上报 |
 
-采集页从 capabilities 的 `channels` 生成诊断通道控件，至少启用一路；原始保存仍为四路。采集完成后后端自动分段登记并诊断，页面不新增本地历史视图。用户通过现有 DataView、Diagnosis、Alarm、Monitor 与 Settings 读取同一设备/批次结果，历史重新分析仍走 `POST /api/data/{device_id}/{batch_index}/reanalyze`。
+采集页从 capabilities 的 `channels` 生成显示与诊断通道控件，至少启用一路；`visibleChannels` 只渲染启用通道的波形、频谱和统计，保存任务沿用同一 `enabled_channels`，原始帧与文件仍为四路。采集完成后后端自动分段登记并诊断，页面不新增本地历史视图。本地单次与流式任务均只登记现场原件，远程任务保留 ZIP/逐文件上传。用户通过现有 DataView、Diagnosis、Alarm、Monitor 与 Settings 读取同一设备/批次结果，历史重新分析仍走 `POST /api/data/{device_id}/{batch_index}/reanalyze`。
 
 ---
 

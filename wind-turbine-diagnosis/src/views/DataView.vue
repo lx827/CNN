@@ -41,6 +41,7 @@
           :reanalyzingAll="reanalyzingAll"
           @export-csv="onExportCSV"
           @reanalyze="onReanalyze"
+          @reanalyze-selection="openReanalyzeDialog"
           @reanalyze-all="onReanalyzeAll"
           @delete-batch="onDeleteBatch(selectedDevice.device_id, selectedBatch.batch_index)"
           @goto-research="gotoResearchDiagnosis"
@@ -161,6 +162,33 @@
 
     <el-empty v-else description="点击上方表格中的批次时间，查看详细数据" />
 
+    <el-dialog v-model="showReanalyzeDialog" title="选择原始记录范围重新诊断" width="520px">
+      <el-form label-position="top" @submit.prevent>
+        <el-form-item label="范围单位">
+          <el-radio-group v-model="reanalyzeForm.mode">
+            <el-radio-button value="time">时间（秒）</el-radio-button>
+            <el-radio-button value="samples">样本序号</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item :label="reanalyzeForm.mode === 'samples' ? '起始样本（含）' : '起始时间（秒，含）'">
+          <el-input-number v-model="reanalyzeForm.start" :min="0" :precision="reanalyzeForm.mode === 'samples' ? 0 : 6" controls-position="right" />
+        </el-form-item>
+        <el-form-item :label="reanalyzeForm.mode === 'samples' ? '结束样本（不含）' : '结束时间（秒，不含）'">
+          <el-input-number v-model="reanalyzeForm.end" :min="0" :precision="reanalyzeForm.mode === 'samples' ? 0 : 6" controls-position="right" />
+        </el-form-item>
+        <el-form-item label="诊断通道">
+          <el-checkbox-group v-model="reanalyzeForm.channels">
+            <el-checkbox v-for="channel in dc24ChannelOptions" :key="channel" :value="channel">CH{{ channel }}</el-checkbox>
+          </el-checkbox-group>
+          <p>可选择原任务未启用的通道；新选段创建特殊批次，原始文件与原批次不变。</p>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showReanalyzeDialog = false">取消</el-button>
+        <el-button type="primary" :loading="reanalyzing" @click="submitReanalyzeSelection">创建批次并诊断</el-button>
+      </template>
+    </el-dialog>
+
 
   </div>
 </template>
@@ -182,6 +210,7 @@ import { useDataView } from '../composables/useDataView'
 
 const {
   loading, deleteLoading, reanalyzing, reanalyzingAll, deviceTableData,
+  showReanalyzeDialog, reanalyzeForm, dc24ChannelOptions,
   selectedDevice, selectedBatch, selectedChannel, maxFreq, channelOptions, enableDetrend,
   envelopeMethod, envelopeMethodLabel, gearMethod, gearMethodLabel, denoiseMethod,
   timeOption, fftOption, stftOption, envelopeOption, windowedOption, orderOption, cepstrumOption,
@@ -198,7 +227,7 @@ const {
   computeFFT, clearFFT, computeSTFT, clearSTFT, computeEnvelope, clearEnvelope,
   computeOrder, clearOrder, computeCepstrum, clearCepstrum, computeGear, clearGear,
   computeFullAnalysis, clearFullAnalysis, computeStrategyAnalyze, clearStrategyAnalyze,
-  computeStats, clearStats, onExportCSV, onReanalyze, onReanalyzeAll,
+  computeStats, clearStats, onExportCSV, onReanalyze, openReanalyzeDialog, submitReanalyzeSelection, onReanalyzeAll,
   onDeleteBatch, onDeleteAllSpecial, gotoResearchDiagnosis,
 } = useDataView()
 </script>

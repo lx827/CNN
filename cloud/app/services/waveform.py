@@ -4,8 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from app.models import Device, SensorData
-from app.core.config import SENSOR_SAMPLE_RATE
+from app.models import SensorData
 
 
 class WaveformNotFoundError(ValueError):
@@ -31,15 +30,14 @@ def _read_signal(record):
     return np.asarray(source, dtype=np.float64)
 
 
-def waveform_from_records(records, device=None):
-    """从已加载 records 组成批次，供列表读路径复用且不增加 SQL。"""
+def waveform_from_records(records):
+    """从已加载 records 组成批次；缺失采样率必须已由启动迁移明确处理。"""
     if not records:
         raise WaveformNotFoundError("batch_data_not_found")
     rates = {record.sample_rate for record in records}
     if not all(rates):
-        fallback = (device.sample_rate if device else None) or SENSOR_SAMPLE_RATE
-        rates = {record.sample_rate or fallback for record in records}
-    if len(rates) != 1 or not next(iter(rates)):
+        raise ValueError("batch_sample_rate_missing")
+    if len(rates) != 1:
         raise ValueError("batch_channel_sample_rates_must_match")
     return WaveformBatch(
         signals={
@@ -65,7 +63,4 @@ def load_waveform(db, device_id, batch_index, channel=None):
     records = query.order_by(SensorData.channel.asc()).all()
     if not records:
         raise WaveformNotFoundError("batch_data_not_found")
-    device = None
-    if any(not record.sample_rate for record in records):
-        device = db.query(Device).filter(Device.device_id == device_id).first()
-    return waveform_from_records(records, device)
+    return waveform_from_records(records)

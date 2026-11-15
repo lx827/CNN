@@ -135,13 +135,13 @@ uv run --group benchmark python -m tests.diagnosis.benchmarks.export --input D:/
 
 | 入口（`cloud/tests/`） | 覆盖 |
 |-----------------------|------|
-| `test_read_paths.py` | 摘要查询、排序、JSON、缓存、索引迁移与 HTTP |
-| `test_waveform_source.py` | 数据库数组不变、DC24 int32 文件区段与真实通道映射、DataView/Monitor/reanalyze 统一读取 |
+| `test_read_paths.py` | 摘要查询、真实稀疏 channels、排序、JSON、缓存、索引迁移与 HTTP |
+| `test_waveform_source.py` | 缺失采样率读取错误、数据库数组不变、DC24 int32 文件区段与真实通道映射、DataView/Monitor/reanalyze 统一读取及选段新批次 |
 | `test_event_loop.py` | 慢去噪期间 STFT、倒谱、阶次端点的协程调度 |
 | `test_analysis_worker_json.py` | NumPy 入库、通道缓存、批次标记、告警输入与 JSON 推送 |
 | `test_hustbear_registration.py` | 内存 SQLite 注册、幂等和冲突整批回滚 |
 | `test_local_deployment.py` | 云端默认配置、本地回环监听、演示设备初始化、页面部署状态及 HTTP/WS 免认证 |
-| `test_dc24_acquisition.py` | 认证、任务与通道校验、四通道 CSV、下载、显示分析、窗口/末段登记、重复完成幂等及 worker→现有结果页闭环 |
+| `test_dc24_acquisition.py` | 认证、任务与通道校验、远程 ZIP、本地单次原件无后端副本及 counts 生成、显示分析、窗口/末段登记、重复完成幂等及 worker→现有结果页闭环 |
 | `test_dc24_driver.py` | 回环 TCP、控制帧、分片、24 位计数、停止、取消和序号缺口 |
 | `test_dc24_live.py` | 原厂档位、示波窗口、保存、远程流式上传、本地免 PUT 原件登记与直接读取、完成重试、缓存上限与 WS |
 
@@ -160,7 +160,7 @@ uv run python tests/test_dc24_vendor.py -v
 uv run python tests/test_dc24_edge_pi.py -v
 ```
 
-`test_dc24_driver_interface.py` 用公共接口假驱动穿过单次采集与连续示波宿主，核对四路 int32 样本、帧序号、停止、远程逐文件上传与本地仅登记原件目录，不测试驱动内部函数。`test_dc24_start.py` 覆盖环境/`dc24/.env` 的 python/rust/vendor 显式选择、缺包安装命令、本地配置继承和真实 Windows 批处理 `--check`。`test_dc24_driver_rust.py` 在安装 `dc24-rust` 组后加载 wheel 内真实 cdylib，以回环模拟设备穿过同一单次采集宿主，逐字节核对原始 `80` 帧、四路计数与事件；它不是实机验收。vendor 需要配置原厂 DLL，使用回环模拟器，未配置时跳过。edge_pi 的纯逻辑测试验证窗口、缺口与重试；集成测试加载真实 cdylib，使用假设备和假云端核对完整收件，无 Rust 工具链时可跳过。MSVC 编译遵守根 AGENTS 的 `vsdev` 约定。
+`test_dc24_driver_interface.py` 用公共接口假驱动穿过单次采集与连续示波宿主，核对最小接口无帧协议/恒零统计要求、四路 int32 样本、帧序号、停止、远程逐文件上传、本地单次不创建 ZIP，以及流式仅登记原件目录，不测试驱动内部函数。`test_dc24_start.py` 覆盖环境/`dc24/.env` 的 python/rust/vendor 显式选择、缺包安装命令、本地配置继承和真实 Windows 批处理 `--check`。`test_dc24_driver_rust.py` 在安装 `dc24-rust` 组后检查 Rust 直接实现最小接口、close 错误传播与资源释放，并加载 wheel 内真实 cdylib，以回环模拟设备穿过同一单次采集宿主，逐字节核对原始 `80` 帧、四路计数与事件；它不是实机验收。vendor 需要配置原厂 DLL，使用回环模拟器，未配置时跳过。edge_pi 的纯逻辑测试验证窗口、缺口与重试；集成测试加载真实 cdylib，使用假设备和假云端核对完整收件，无 Rust 工具链时可跳过。MSVC 编译遵守根 AGENTS 的 `vsdev` 约定。
 
 ## 前端
 
@@ -171,7 +171,7 @@ node --test tests/*.test.cjs
 npm run build
 ```
 
-测试使用真实 Vue setup/watch/卸载及受控 API/ECharts/WS 替身，覆盖诊断状态、coverage、研究结果、机械表单、监测/看板刷新、采集保存与停止、登录返回和错误消息。它们不验证浏览器像素或真实设备检出效果。
+测试使用真实 Vue setup/watch/卸载及受控 API/ECharts/WS 替身，覆盖诊断状态、coverage、研究结果、机械表单、监测/看板刷新、采集保存与停止、登录返回和错误消息。`dataview_reanalysis.test.cjs` 验证仅存 CH4 的真实通道选择与选段重诊新批次切换；`acquisition_lifecycle.test.cjs` 验证通道启停同时控制显示和诊断，原始帧契约不变。它们不验证浏览器像素或真实设备检出效果。
 
 ## 按改动选择验证
 

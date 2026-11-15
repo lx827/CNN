@@ -17,19 +17,21 @@ ORM 类型以 `cloud/app/models.py` 为准；外部字段见 [API](../api/backen
 
 ## 波形来源与统一读取
 
-`sensor_data.data` 沿用现有 JSON 列表达两类来源，旧库不需要新增列、迁移或改写数据：
+`sensor_data.data` 沿用现有 JSON 列表达两类来源，来源对象不需要新增波形列或改写云端数值数组；旧记录缺失的 `sample_rate` 由启动迁移单独处理：
 
 - 云端既有记录继续保存数值数组，读取时仅在内存转换为 float64，原 JSON 数值不变。
 - DC24 文件记录保存来源对象，包含 `kind=dc24_counts`、采集任务 `job_id`、原始 `counts.i32` 路径以及半开样本区段 `start_sample`/`end_sample`。文件是四路交错 little-endian int32；`SensorData.channel` 的 1~4 对应文件列 0~3。
 - 文件只按区段和真实通道读入内存并转为 float64，不保存浮点波形副本，不做统一归一化或工程单位转换。
 
-`services/waveform.py::load_waveform` 统一返回通道数组、采样率和 records。DataView 各数值/研究/导出接口、Monitor 最新/历史接口与 `diagnosis_workflow.process_batch` 均经此模块读取；诊断缓存键和最新记录查询规则不变。Monitor 历史列表将已批量查询的 records 交给同一转换边界，保持常数 SQL 查询数。
+`services/waveform.py::load_waveform` 统一返回通道数组、采样率和 records。DataView 各数值/研究/导出接口、Monitor 最新/历史接口与 `diagnosis_workflow.process_batch` 均经此模块读取；诊断缓存键和最新记录查询规则不变。Monitor 历史列表将已批量查询的 records 交给同一转换边界，保持常数 SQL 查询数。读取层不再查询 Device 或套用全局采样率；记录仍有缺失采样率时抛出 `batch_sample_rate_missing`，通道采样率不一致时拒绝混合。
 
 ## DC24 完成登记事务
 
 完整采集的 `counts.i32` 是诊断文件源。完成时按统一配置窗口和任务 `enabled_channels` 创建 `is_special=1`、`batch_index>=101` 的记录；每个窗口只保存来源对象和实际起止样本，短记录形成一个窗口，末段不补齐。设备以真实 `agent_id` 自动取得或创建，无需用户绑定。
 
-`AcquisitionJob.result_metadata.diagnosis_device_id/diagnosis_batches` 是完成响应中的登记身份。ZIP 上传和流式 `finish-stream` 共用登记服务，在同一数据库事务中写入所有窗口、登记身份和任务终态；任一步失败不会留下“任务已完成但只登记部分窗口”的状态。终态重试直接返回原任务，两个完成入口由同一分析锁串行化，不能重复占用批次号。本地流式任务另在 `result_metadata.local_directory` 保存现场原件绝对目录，诊断来源路径指向其中实际的 `counts.i32`；移动或删除该文件后，既有批次不能继续读取，系统不生成替代副本。登记后每批 `is_analyzed=0`，由现有 worker 按统一批次事务逐批完成，已完成的窗口即可查询，不等待同一记录的其他窗口。
+`AcquisitionJob.result_metadata.diagnosis_device_id/diagnosis_batches` 是完成响应中的登记身份。远程 ZIP `/upload`、本地单次原件 `/upload?local_directory=...` 和流式 `finish-stream` 共用登记服务，在同一数据库事务中写入所有窗口、登记身份和任务终态；任一步失败不会留下“任务已完成但只登记部分窗口”的状态。终态重试直接返回原任务，两个完成入口由同一分析锁串行化，不能重复占用批次号。本地单次与流式任务均在 `result_metadata.local_directory` 保存现场原件绝对目录，诊断来源路径指向其中实际的 `counts.i32`；单次 record 缺少该文件时，后端在同一现场目录从已校验 CSV 生成它，系统不生成后端或浮点波形副本。移动或删除原件后，既有批次不能继续读取。登记后每批 `is_analyzed=0`，由现有 worker 按统一批次事务逐批完成，已完成的窗口即可查询，不等待同一记录的其他窗口。
+
+DC24 文件批次的选段重诊复用 `next_special_batch_index` 与 `register_counts_window`，在同一原件上登记新的半开区间和真实通道集合，可重新启用原任务未选通道。新记录使用新的永久特殊批次号并进入统一批次事务；无选择参数的重诊仍直接处理原批次。数据库数组批次不接收文件选段参数。
 
 ## 精确键、历史行与摘要
 
@@ -55,7 +57,9 @@ devices 与 diagnosis 新增 `evaluation_status`、`diagnosis_conclusion`、`cov
 
 当首次添加任一两维状态列时，该表旧 health_score 清空为 NULL，MySQL 同步将 health_score 改为 FLOAT NULL。状态列已存在的后续启动不再重复清空新分数；只缺 coverage 时补列不触发两维迁移的分数清空。SQLite 依动态类型保存 nullable 值，不为新模型类型机械重建旧表。
 
-其他缺失列和索引继续按现有增量建表/补列/checkfirst 规则处理。`acquisition_jobs.enabled_channels` 为新增 JSON 列；旧任务该列为 NULL，读取与完成登记沿用统一配置的全部有效通道，不改写历史任务。保留原采样、历史 JSON、旧状态列与记录，不为旧 NULL 通道或去噪列推造身份。迁移并不代表旧诊断已重新评估，首次部署后旧记录等待显式重新分析；真实生产数据库迁移未在文档轮次执行。
+其他缺失列和索引继续按现有增量建表/补列/checkfirst 规则处理。旧 `sensor_data` 缺少 `sample_rate` 列时先补为可空 INTEGER；启动迁移按旧 `diagnosis_workflow` 的 `record.sample_rate or device.sample_rate` 语义，仅把 NULL 记录回填为同 `device_id` 的设备采样率，已有记录值不覆盖。设备也没有采样率时保留 NULL，由公共波形读取明确报错，不写入全局配置值。
+
+`acquisition_jobs.enabled_channels` 为新增 JSON 列；旧任务该列为 NULL，读取与完成登记沿用统一配置的全部有效通道，不改写历史任务。保留原采样、历史 JSON、旧状态列与记录，不为旧 NULL 通道或去噪列推造身份。迁移并不代表旧诊断已重新评估，首次部署后旧记录等待显式重新分析；真实生产数据库迁移未在文档轮次执行。
 
 ## 统一批次事务与通知
 

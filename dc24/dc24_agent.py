@@ -240,20 +240,31 @@ class Agent:
                 json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
             )
             self.progress({"stage": "uploading", "hardware_connected": False})
-            payload = io.BytesIO()
-            with zipfile.ZipFile(payload, "w", zipfile.ZIP_DEFLATED) as archive:
-                for name in FILES:
-                    if (output / name).is_file():
-                        archive.write(output / name, name)
-            # 网络重试只重传同一份已保存数据，不重新采集。
+            if self.local_originals:
+                completion = {
+                    "params": {
+                        "agent_id": self.agent_id,
+                        "local_directory": str(output),
+                    }
+                }
+            else:
+                payload = io.BytesIO()
+                with zipfile.ZipFile(payload, "w", zipfile.ZIP_DEFLATED) as archive:
+                    for name in FILES:
+                        if (output / name).is_file():
+                            archive.write(output / name, name)
+                completion = {
+                    "params": {"agent_id": self.agent_id},
+                    "data": payload.getvalue(),
+                }
+            # 网络重试只登记/重传同一份已保存数据，不重新采集。
             for attempt in range(3):
                 try:
                     self.call(
                         "POST",
                         f"/jobs/{job['id']}/upload",
-                        params={"agent_id": self.agent_id},
-                        data=payload.getvalue(),
                         timeout=(5, 180),
+                        **completion,
                     )
                     break
                 except requests.RequestException:

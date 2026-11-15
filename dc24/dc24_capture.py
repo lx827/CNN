@@ -134,8 +134,9 @@ def record(
         if not driver.connect(stopping, wait):
             metadata["cancelled"] = True
         else:
-            if driver.device_source_port is not None:
-                metadata["device_source_port"] = driver.device_source_port
+            source_port = getattr(driver, "device_source_port", None)
+            if source_port is not None:
+                metadata["device_source_port"] = source_port
             notify("configuring")
             with (
                 (output / "rx_stream.bin").open("xb") as raw,
@@ -216,7 +217,8 @@ def record(
                             )
                     driver.stop()
                     metadata["cancelled"] = bool(stopping())
-                    if driver.unparsed_tail_bytes:
+                    unparsed_tail = getattr(driver, "unparsed_tail_bytes", None)
+                    if unparsed_tail:
                         raise RuntimeError(
                             "Incomplete frame remains after the stop acknowledgement"
                         )
@@ -232,10 +234,13 @@ def record(
         raise
     finally:
         driver.close()
-        metadata["received_tcp_bytes"] = driver.received_tcp_bytes
-        metadata["unparsed_tail_bytes"] = driver.unparsed_tail_bytes
-        if driver.emergency_stop_error:
-            metadata["emergency_stop_error"] = driver.emergency_stop_error
+        # 帧协议驱动提供真实接收统计；其他核心没有该能力时省略，不能写成恒零。
+        received_tcp_bytes = getattr(driver, "received_tcp_bytes", None)
+        unparsed_tail_bytes = getattr(driver, "unparsed_tail_bytes", None)
+        if received_tcp_bytes is not None:
+            metadata["received_tcp_bytes"] = received_tcp_bytes
+        if unparsed_tail_bytes is not None:
+            metadata["unparsed_tail_bytes"] = unparsed_tail_bytes
         metadata["recorded_sample_duration_s"] = (
             metadata["samples_per_channel"] / sample_rate
         )

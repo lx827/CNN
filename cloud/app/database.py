@@ -161,6 +161,24 @@ def init_db():
                     text("ALTER TABLE acquisition_jobs ADD COLUMN enabled_channels JSON")
                 )
 
+    # 旧 diagnosis_workflow 使用 record.sample_rate or device.sample_rate。
+    # 将该历史语义一次性物化到波形记录；设备也没有采样率时保留 NULL，读取时明确报错。
+    if "sensor_data" in inspector.get_table_names():
+        sensor_cols = {c["name"] for c in inspect(engine).get_columns("sensor_data")}
+        device_cols = {c["name"] for c in inspect(engine).get_columns("devices")}
+        with engine.begin() as conn:
+            if "sample_rate" not in sensor_cols:
+                conn.execute(text("ALTER TABLE sensor_data ADD COLUMN sample_rate INTEGER"))
+            if "sample_rate" in device_cols:
+                conn.execute(
+                    text(
+                        "UPDATE sensor_data SET sample_rate = "
+                        "(SELECT devices.sample_rate FROM devices "
+                        "WHERE devices.device_id = sensor_data.device_id) "
+                        "WHERE sensor_data.sample_rate IS NULL"
+                    )
+                )
+
     from app.models import Diagnosis
 
     for index in Diagnosis.__table__.indexes:
