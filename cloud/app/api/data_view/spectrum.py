@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session
 from app.algorithms.statistics import analyze_time_domain
 from app.algorithms.transforms import compute_spectrum, compute_stft
 from app.database import get_db
-from app.models import SensorData, Device
+from app.models import Device
 from app.services.diagnosis.signal_utils import denoise_signal, DenoisingError
 from .errors import denoising_http_error
-from . import router, prepare_signal, _get_channel_name
+from . import router, prepare_signal, _get_channel_name, _load_channel_waveform
 
 import asyncio
 import logging
@@ -17,11 +17,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def _limited_signal(record, detrend: bool):
+def _limited_signal(waveform, channel, detrend: bool):
     """DataView 业务上限为 5 秒；必须先截断再执行去趋势和慢去噪。"""
-    sample_rate = record.sample_rate or 25600
+    sample_rate = waveform.sample_rate
     max_samples = int(sample_rate * 5)
-    return prepare_signal(record.data[:max_samples], detrend=detrend), sample_rate
+    signal = waveform.signals[f"ch{channel}"][:max_samples]
+    return prepare_signal(signal, detrend=detrend), sample_rate
 
 
 @router.get("/{device_id}/{batch_index}/{channel}/fft")
@@ -38,21 +39,11 @@ async def get_channel_fft(
     db: Session = Depends(get_db),
 ):
     """实时计算 Hann 单边峰值幅值谱；响应字段保持兼容。"""
-    record = (
-        db.query(SensorData)
-        .filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index,
-            SensorData.channel == channel,
-        )
-        .first()
-    )
-
-    if not record or not record.data:
-        raise HTTPException(status_code=404, detail="数据不存在")
+    waveform = _load_channel_waveform(db, device_id, batch_index, channel)
+    record = waveform.records[0]
 
     try:
-        signal, sample_rate = _limited_signal(record, detrend)
+        signal, sample_rate = _limited_signal(waveform, channel, detrend)
         signal = await asyncio.to_thread(denoise_signal, signal, denoise)
         spectrum = await asyncio.to_thread(compute_spectrum, signal, sample_rate)
         if max_freq is not None:
@@ -99,21 +90,11 @@ async def get_channel_stft(
     db: Session = Depends(get_db),
 ):
     """实时 STFT；time 为帧中心秒，freq 为 Hz，magnitude 为单边幅值 dB。"""
-    record = (
-        db.query(SensorData)
-        .filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index,
-            SensorData.channel == channel,
-        )
-        .first()
-    )
-
-    if not record or not record.data:
-        raise HTTPException(status_code=404, detail="数据不存在")
+    waveform = _load_channel_waveform(db, device_id, batch_index, channel)
+    record = waveform.records[0]
 
     try:
-        signal, sample_rate = _limited_signal(record, detrend)
+        signal, sample_rate = _limited_signal(waveform, channel, detrend)
         signal = await asyncio.to_thread(denoise_signal, signal, denoise)
 
         ns = min(nperseg, len(signal))
@@ -180,21 +161,11 @@ async def get_channel_stats(
     db: Session = Depends(get_db),
 ):
     """实时总体统计与周期 Hann 加窗序列；算法层不序列化数组。"""
-    record = (
-        db.query(SensorData)
-        .filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index,
-            SensorData.channel == channel,
-        )
-        .first()
-    )
-
-    if not record or not record.data:
-        raise HTTPException(status_code=404, detail="数据不存在")
+    waveform = _load_channel_waveform(db, device_id, batch_index, channel)
+    record = waveform.records[0]
 
     try:
-        signal, sample_rate = _limited_signal(record, detrend)
+        signal, sample_rate = _limited_signal(waveform, channel, detrend)
         signal = await asyncio.to_thread(denoise_signal, signal, denoise)
         analysis = await asyncio.to_thread(
             analyze_time_domain,

@@ -83,7 +83,7 @@ class SensorData(Base):
     device_id = Column(String(50), index=True, comment="设备编号")
     batch_index = Column(Integer, default=1, comment="批次序号")
     channel = Column(Integer, comment="通道号 1/2/3/...")
-    data = Column(JSON, comment="振动信号数组")
+    data = Column(JSON, comment="振动信号数组，或带时间区段的原始文件来源描述")
     sample_rate = Column(Integer, default=25600, comment="采样率 Hz")
     is_analyzed = Column(Integer, default=0, comment="是否已检测 0/1")
     is_special = Column(Integer, default=0, comment="是否特殊采集 0=普通 1=特殊")

@@ -29,7 +29,7 @@ from app.services.diagnosis.adapters import adapt_method_result
 from app.services.diagnosis.domain import DiagnosisKey
 
 from app.database import get_db
-from app.models import SensorData, Device
+from app.models import Device
 from app.services.diagnosis import (
     DiagnosisEngine,
     DiagnosisStrategy,
@@ -42,6 +42,7 @@ from . import (
     _get_channel_name,
     _extract_device_param,
     _sanitize_for_json,
+    _load_channel_waveform,
 )
 
 logger = logging.getLogger(__name__)
@@ -203,7 +204,7 @@ class CompositeResearchRequest(BaseModel):
 
 
 def _run_composite_method(
-    record, device, method, rot_freq_hz, options=None, alignment=None
+    record, device, signal, sample_rate, method, rot_freq_hz, options=None, alignment=None
 ):
     """同一研究调度边界，GET与POST复用；不写生产缓存或调用生产聚合。"""
     import numpy as np
@@ -247,8 +248,8 @@ def _run_composite_method(
                 raise ValueError("invalid_CVS_alignment_record") from exc
         diagnosis = analyze_composite_research(
             internal,
-            record.data,
-            record.sample_rate or 25600,
+            signal,
+            sample_rate,
             geometry=geometry,
             speed=ScalarSpeed(rot_freq_hz, "explicit_research_input")
             if rot_freq_hz
@@ -262,7 +263,7 @@ def _run_composite_method(
         "batch_index": record.batch_index,
         "channel": record.channel,
         "channel_name": _get_channel_name(device, record.channel),
-        "sample_rate": record.sample_rate or 25600,
+        "sample_rate": sample_rate,
         "analysis_method": method,
         "method_info": METHOD_INFO[method],
         "rot_freq_hz": rot_freq_hz,
@@ -278,23 +279,16 @@ async def post_channel_composite_analysis(
     db: Session = Depends(get_db),
 ):
     """显式研究组合；CVS相位记录放请求体，既不猜空间零位也不存诊断缓存。"""
-    record = (
-        db.query(SensorData)
-        .filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index,
-            SensorData.channel == channel,
-        )
-        .first()
-    )
-    if not record or not record.data:
-        raise HTTPException(status_code=404, detail="数据不存在")
+    waveform = _load_channel_waveform(db, device_id, batch_index, channel)
+    record = waveform.records[0]
     device = db.query(Device).filter(Device.device_id == device_id).first()
     try:
         result = await asyncio.to_thread(
             _run_composite_method,
             record,
             device,
+            waveform.signals[f"ch{channel}"],
+            waveform.sample_rate,
             request.method,
             request.rot_freq_hz,
             request.options,
@@ -335,17 +329,8 @@ async def get_channel_method_analysis(
     - 齿轮方法: gear_standard / gear_advanced
     - 行星箱方法: planetary_narrowband / planetary_fullband / planetary_tsa_residual / planetary_highpass
     """
-    record = (
-        db.query(SensorData)
-        .filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index,
-            SensorData.channel == channel,
-        )
-        .first()
-    )
-    if not record or not record.data:
-        raise HTTPException(status_code=404, detail="数据不存在")
+    waveform = _load_channel_waveform(db, device_id, batch_index, channel)
+    record = waveform.records[0]
 
     device = db.query(Device).filter(Device.device_id == device_id).first()
 
@@ -357,7 +342,13 @@ async def get_channel_method_analysis(
             )
         try:
             result = await asyncio.to_thread(
-                _run_composite_method, record, device, method, rot_freq_hz
+                _run_composite_method,
+                record,
+                device,
+                waveform.signals[f"ch{channel}"],
+                waveform.sample_rate,
+                method,
+                rot_freq_hz,
             )
             return {"code": 200, "data": _sanitize_for_json(result)}
         except ValueError as exc:
@@ -366,8 +357,10 @@ async def get_channel_method_analysis(
             ) from exc
 
     try:
-        sample_rate = record.sample_rate or 25600
-        signal = prepare_signal(record.data[: int(sample_rate * 5)], detrend=detrend)
+        sample_rate = waveform.sample_rate
+        signal = prepare_signal(
+            waveform.signals[f"ch{channel}"][: int(sample_rate * 5)], detrend=detrend
+        )
 
         bearing_params = {}
         gear_teeth = {}
@@ -566,17 +559,10 @@ async def get_channel_research_analysis(
     This endpoint is intentionally separate from real-time monitoring because
     filter_bank_sk, MED, TEO and TSA metrics are CPU-heavy.
     """
-    record = (
-        db.query(SensorData)
-        .filter(
-            SensorData.device_id == device_id,
-            SensorData.batch_index == batch_index,
-            SensorData.channel == channel,
-        )
-        .first()
+    waveform = _load_channel_waveform(
+        db, device_id, batch_index, channel, detail="data not found"
     )
-    if not record or not record.data:
-        raise HTTPException(status_code=404, detail="data not found")
+    record = waveform.records[0]
 
     device = db.query(Device).filter(Device.device_id == device_id).first()
 
@@ -585,9 +571,12 @@ async def get_channel_research_analysis(
     )
 
     try:
-        sample_rate = record.sample_rate or 25600
+        sample_rate = waveform.sample_rate
         signal = prepare_signal(
-            record.data[: int(sample_rate * min(max_seconds, 5.0))], detrend=detrend
+            waveform.signals[f"ch{channel}"][
+                : int(sample_rate * min(max_seconds, 5.0))
+            ],
+            detrend=detrend,
         )
 
         bearing_params = {}
