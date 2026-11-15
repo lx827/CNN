@@ -136,7 +136,7 @@ uv run --group benchmark python -m tests.diagnosis.benchmarks.export --input D:/
 | 入口（`cloud/tests/`） | 覆盖 |
 |-----------------------|------|
 | `test_read_paths.py` | 摘要查询、真实稀疏 channels、排序、JSON、缓存、索引迁移与 HTTP |
-| `test_waveform_source.py` | 普通记录显示/诊断采样率一致、历史 override 双语义与 0 不可诊断、DC24 int32 文件区段与真实通道映射、DataView/Monitor/reanalyze 统一读取及选段新批次 |
+| `test_waveform_source.py` | 普通记录显示/诊断采样率一致、48000 历史覆盖、override=0 时 DataView/Monitor 按 25600 显示而诊断函数/reanalyze 拒绝、DC24 文件区段与选段新批次 |
 | `test_event_loop.py` | 慢去噪期间 STFT、倒谱、阶次端点的协程调度 |
 | `test_analysis_worker_json.py` | NumPy 入库、通道缓存、批次标记、告警输入与 JSON 推送 |
 | `test_hustbear_registration.py` | 内存 SQLite 注册、幂等和冲突整批回滚 |
