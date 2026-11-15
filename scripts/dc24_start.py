@@ -182,11 +182,11 @@ def main():
         online = next((a for a in agents if a["id"] == AGENT and a["online"]), None)
         if online and online["state"].get("version", 0) < 3:
             raise RuntimeError(
-                "旧输入配置的边端仍在运行，请先退出旧边端窗口，再双击start_dc24.bat加载IEPE配置；未停止已有进程"
+                "旧输入配置的边端仍在运行，请先退出旧边端窗口，再双击start.bat加载IEPE配置；未停止已有进程"
             )
         if online and online["state"].get("transport", "python_tcp") != transport:
             raise RuntimeError(
-                "已运行的边端使用另一种采集模块，请先退出其启动窗口，再双击start_dc24.bat"
+                "已运行的边端使用另一种采集模块，请先退出其启动窗口，再双击start.bat"
             )
         if not online:
             output = ROOT / "tmp/dc24_live"

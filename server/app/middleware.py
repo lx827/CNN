@@ -36,7 +36,7 @@ def setup_static_files(app):
             / "web/dist/index.html"
         )
         if not index.exists():
-            raise HTTPException(503, "采集页面尚未构建，请使用根目录start_dc24.bat启动")
+            raise HTTPException(503, "采集页面尚未构建，请使用根目录start.bat启动")
         content = index.read_text(encoding="utf-8")
         # 本机一键启动时，由同一后端提供前端；不修改既有Vite代理或浏览器保存配置。
         # 同一构建产物由后端注入部署状态，云端静态托管不注入时仍按云端认证。
