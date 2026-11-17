@@ -47,6 +47,8 @@ uv sync --no-default-groups --group local --group dc24-vendor
 | 键 | 说明 |
 |----|------|
 | `DC24_DRIVER` | 显式选择 `python`、`rust` 或 `vendor`；环境变量优先于本文件，未设置时保持旧行为：配置原厂目录走 DLL，否则走 Python TCP。启动器通过公共 `create_driver` 校验对应包并复用其 transport，不会静默切换 |
+| `DC24_HOST` | 可选的本机监听地址覆盖，默认 `192.168.2.100`；显式 `host` 参数优先于环境变量 |
+| `DC24_PEER` | 可选的采集设备来源地址覆盖，默认 `192.168.2.101`；显式 `peer` 参数优先于环境变量 |
 | `DC24_VENDOR_ROOT` | 原厂软件安装目录绝对路径(含 `dll/JMServer.dll`);选择 DLL 时必填 |
 | `DEPLOYMENT_MODE` | 由本机启动器向采集进程显式设为 `local`，使单次与流式保存在关闭文件后仅登记原件目录；普通远程边端不要设置 |
 | `DC24_EDGE_LIB` | 可选的 Rust 原生库显式路径；默认加载 wheel 内携带的库，仅开发联调时覆盖 |
@@ -56,6 +58,17 @@ uv sync --no-default-groups --group local --group dc24-vendor
 采样率、时长、频带等采集参数由"真实采集"页面下发,不在 `.env` 配置。保存目录同样由页面选择；本地单次和流式任务只在该目录下保留任务原件，任务下载、波形和自动诊断直接读取实际 `counts.i32`，不生成 `data/acquisitions` 或浮点波形副本。单次 record 未写 counts 时由本机后端从已校验 CSV 在同一目录生成。移动或删除原件后，既有任务与诊断批次将无法重新读取。远程 ZIP 上传、独立 CLI 和树莓派边端不借用该本机登记路径。
 
 公共接口与现有宿主接缝回归：`uv run --no-sync python tests/test_dc24_driver_interface.py -v`；Rust adapter 的同一接缝及原始帧回归：`uv run --no-sync python tests/test_dc24_driver_rust.py -v`。现有 Python TCP 回环和示波保存测试仍在 `cloud/tests/test_dc24_driver.py`、`cloud/tests/test_dc24_live.py`。Rust Windows 实机采集、停止、保存与诊断尚未验收，回环模拟设备不能替代该项。
+
+## CQU TIM 独立回放替身
+
+在仓库根目录通过根项目启动独立进程；不传目录时读取 `D:/大创/CQU数据/正常-200-1`，也可指定其他同名四通道 TIM 采集目录：
+
+```bash
+uv run python scripts/cqu_dc24_replay.py
+uv run python scripts/cqu_dc24_replay.py "D:/大创/CQU数据/另一个采集目录"
+```
+
+替身直接交织四个 TIM 文件的 packed word，以 10kHz 循环发送原始 counts，不归一化或换算工程单位。使用 Python TCP 驱动，并让回放参数与采集端地址一致：默认连接 `192.168.2.100:6800`、绑定 `192.168.2.101` 临时端口；本机回环联调可在 `collector/.env` 设置 `DC24_DRIVER=python`、`DC24_HOST=127.0.0.1`、`DC24_PEER=127.0.0.1`，并给回放命令添加 `--host 127.0.0.1 --peer 127.0.0.1`。页面停止采集后替身继续等待下一次连接，`Ctrl+C` 退出。
 
 ## 树莓派边端驱动(Rust 核心 + Python 驱动)
 
