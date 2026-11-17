@@ -49,8 +49,18 @@ __all__ = [
 ]
 
 
-def create_driver(vendor_root=None, host=HOST, peer=PEER, port=PORT):
+def resolve_endpoint(host=None, peer=None):
+    """显式参数优先，其次环境变量，最后使用协议默认地址。"""
+    if host is None:
+        host = os.environ.get("DC24_HOST", HOST)
+    if peer is None:
+        peer = os.environ.get("DC24_PEER", PEER)
+    return host, peer
+
+
+def create_driver(vendor_root=None, host=None, peer=None, port=PORT):
     """按显式 DC24_DRIVER 创建驱动；未配置时保留原厂目录/Python TCP 旧行为。"""
+    host, peer = resolve_endpoint(host, peer)
     selected = os.environ.get("DC24_DRIVER")
     if selected is None:
         selected = "vendor" if vendor_root else "python"
@@ -75,14 +85,15 @@ def create_driver(vendor_root=None, host=HOST, peer=PEER, port=PORT):
 def record(
     output: Path,
     seconds: float,
-    host=HOST,
-    peer=PEER,
+    host=None,
+    peer=None,
     wait=45,
     sample_rate=RATE,
     on_progress=None,
     should_stop=None,
     driver=None,
 ):
+    host, peer = resolve_endpoint(host, peer)
     if sample_rate not in B5_PROFILES:
         raise ValueError("Sampling rate must be a supported native profile")
     target_samples = math.ceil(seconds * sample_rate)
