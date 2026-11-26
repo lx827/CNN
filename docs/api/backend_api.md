@@ -398,6 +398,8 @@ GET /api/collect/history?device_id={device_id}&limit={limit}
 
 ### 5.6 DC24 实时采集边端
 
+`POST /api/acquisition/remote-recordings` 接受 `{agent_id, sample_rate?, duration?}`，返回统一采集任务快照。省略时使用所选设备的有效配置；采样率必须是边端报告的档位。原件暂存路径由边端心跳提供，用户不填写。请求可复用同采样率示波，或自动创建临时会话并在录制结束后关闭；不会打断不同档位的示波。`GET /api/acquisition/jobs/{id}` 返回实际进度与错误。采集完成后走已有流式上传、云端文件保存和数据库登记诊断批次；旧 `/api/collect` 不再是监测页的 DC24 入口。
+
 `POST /api/acquisition/agents/heartbeat` 的 `state.transport` 可选，真实边端上报 `jmserver`、`python_tcp` 或 `rust_tcp`。`GET /api/acquisition/agents` 返回该字段供本机启动器识别连接方式。没有该字段的旧真实边端按 `python_tcp` 处理。三种方式的采集来源均为 `dc24_tcp`，已保存记录在 `metadata.transport` 中标记本次连接方式。
 
 采样率档位表是采集侧硬件知识，云端不持有：边端心跳在 `state.sample_rates` 上报支持档位，`GET /api/acquisition/capabilities` 只回答服务身份与通道配置（不返回 `sample_rates`）。实时示波 `POST /sessions` 按所选边端上报的档位当场校验（不在列 422）；保存任务创建时不预知档位，非法档位由采集端执行时拒绝并置任务 `failed`（`error_message` 携带原因），前端两者均可见。

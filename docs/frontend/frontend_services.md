@@ -22,7 +22,7 @@
 | 文件 | 服务视图 | 职责 |
 |------|---------|------|
 | `useDashboard.js` | Dashboard | 总览拉取(推送/轮询共享串行刷新)、状态统计、仪表盘/饼图 |
-| `useMonitor.js` | Monitor | 最新数据拉取、传感器状态、采集任务下发与轮询、时域/频域图 |
+| `useMonitor.js` | Monitor | 最新数据拉取、传感器状态、真实边端与采样率选择、远程采集任务提交与状态轮询、时域/频域图 |
 | `useSettings.js` | Settings | 设备/配置/阈值加载与保存、机械参数同步 |
 | `useResearchDiagnosis.js` | ResearchDiagnosis | 三模式分析运行、结果行派生、包络评估状态、路由联动 |
 | `useDataView.js` | DataView | 按实际 channels 选择批次通道、七类频谱按需计算、结构化包络图、轴承/齿轮特征频率标注、删除/原批复跑/文件选段重诊 |
