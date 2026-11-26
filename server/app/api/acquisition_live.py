@@ -38,12 +38,13 @@ from app.api.acquisition import (
     job_or_404,
     owned,
     now,
+    expire_remote_wait,
     snapshot,
 )
 from app.database import get_db
 from app.core import config
 from app.core.config import DC24_CHANNELS
-from app.models import AcquisitionAgent, AcquisitionJob
+from app.models import AcquisitionAgent, AcquisitionJob, Device
 from app.services.acquisition_live import live
 from app.services.acquisition_analysis import analyze_counts, display_points
 from app.services.acquisition_diagnosis import register_completed_acquisition
@@ -99,27 +100,38 @@ class RecordRequest(ChannelSelection):
     analysis: AnalysisOptions = Field(default_factory=AnalysisOptions)
 
 
+def validate_rate(agent, sample_rate):
+    rates = agent.state.get("sample_rates") or []
+    if sample_rate not in rates:
+        raise HTTPException(
+            422, f"请选择采集端支持的采样率(当前可选: {', '.join(map(str, rates))})"
+        )
+
+
+def ensure_no_active_recording(db, agent_id):
+    job = db.query(AcquisitionJob).filter(
+        AcquisitionJob.agent_id == agent_id, AcquisitionJob.status.in_(ACTIVE)
+    ).first()
+    if job is not None:
+        s = live.current(agent_id)
+        if s is not None and (s.get("recording") or {}).get("id") != job.id:
+            s = None
+        expire_remote_wait(job, s, db)
+        if job.status in ACTIVE:
+            raise HTTPException(409, "边端还有未完成的保存任务")
+
+
 @router.post("/sessions")
 def start(body: StartSession, db: Session = Depends(get_db)):
     agent = online_agent(db, body.agent_id)
-    rates = agent.state.get("sample_rates") or []
-    if body.sample_rate not in rates:
-        raise HTTPException(
-            422, f"采集端未上报该采样率档位(当前可选: {', '.join(map(str, rates))})"
-        )
-    if (
-        db.query(AcquisitionJob)
-        .filter(
-            AcquisitionJob.agent_id == body.agent_id, AcquisitionJob.status.in_(ACTIVE)
-        )
-        .first()
-    ):
-        raise HTTPException(409, "边端还有未完成的保存任务")
-    try:
-        s = live.create(body.agent_id, body.sample_rate)
-    except ValueError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    return {"code": 200, "data": live.snapshot(s)}
+    validate_rate(agent, body.sample_rate)
+    with live.lock:
+        ensure_no_active_recording(db, body.agent_id)
+        try:
+            s = live.create(body.agent_id, body.sample_rate)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"code": 200, "data": live.snapshot(s)}
 
 
 @router.get("/sessions/{session_id}")
@@ -137,12 +149,8 @@ def stop(session_id: str):
     return {"code": 200, "data": live.snapshot(s)}
 
 
-@router.post("/sessions/{session_id}/record")
-def record(session_id: str, body: RecordRequest, db: Session = Depends(get_db)):
-    s = get_session(session_id)
-    online_agent(db, s["agent_id"])
-    if s["stop_requested"] or s["status"] in ("stopped", "failed"):
-        raise HTTPException(409, "示波已经停止，请重新启动")
+def begin_recording(db, s, body, *, remote=False):
+    """在持有会话锁时登记任务，再将同一个任务发布给边端控制轮询。"""
     a = body.analysis
     if a.envelope and (
         a.band_low is None
@@ -150,33 +158,81 @@ def record(session_id: str, body: RecordRequest, db: Session = Depends(get_db)):
         or not 0 < a.band_low < a.band_high < s["sample_rate"] / 2
     ):
         raise HTTPException(422, "包络频带须满足 0 < 下限 < 上限 < 采样率/2")
-    with live.lock:
-        if s["recording"] and s["recording"]["status"] in ACTIVE:
-            raise HTTPException(409, "上一次采集仍在保存，请稍候")
-        job = AcquisitionJob(
-            id=uuid.uuid4().hex,
-            agent_id=s["agent_id"],
-            source="dc24_tcp",
-            status="waiting_device",
-            sample_rate=s["sample_rate"],
-            duration=body.duration,
-            analysis_options=body.analysis.model_dump(),
-            enabled_channels=body.enabled_channels,
-            progress={},
-            created_at=now(),
-            updated_at=now(),
-        )
-        db.add(job)
-        db.commit()
-        s["recording"] = dict(
-            id=job.id,
-            duration=body.duration,
-            save_directory=body.save_directory,
-            status=job.status,
-            stop_requested=False,
-            samples_per_channel=0,
-        )
+    initial = "pending" if remote else "waiting_device"
+    job = AcquisitionJob(
+        id=uuid.uuid4().hex,
+        agent_id=s["agent_id"],
+        source="dc24_tcp",
+        status=initial,
+        sample_rate=s["sample_rate"],
+        duration=body.duration,
+        analysis_options=body.analysis.model_dump(),
+        enabled_channels=body.enabled_channels,
+        progress={"remote_request": True} if remote else {},
+        created_at=now(),
+        updated_at=now(),
+    )
+    db.add(job)
+    db.commit()
+    s["recording"] = dict(
+        id=job.id,
+        remote_request=remote,
+        duration=body.duration,
+        save_directory=body.save_directory,
+        status=job.status,
+        stop_requested=False,
+        samples_per_channel=0,
+    )
     return {"code": 200, "data": snapshot(job)}
+
+
+@router.post("/sessions/{session_id}/record")
+def record(session_id: str, body: RecordRequest, db: Session = Depends(get_db)):
+    s = get_session(session_id)
+    online_agent(db, s["agent_id"])
+    with live.lock:
+        if s["stop_requested"] or s["status"] in ("stopped", "failed", "stopping"):
+            raise HTTPException(409, "示波已经停止，请重新启动")
+        ensure_no_active_recording(db, s["agent_id"])
+        return begin_recording(db, s, body)
+
+
+class RemoteRecording(BaseModel):
+    agent_id: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,64}$")
+    sample_rate: int | None = Field(default=None, gt=0)
+    duration: int | None = Field(default=None, gt=0)
+
+
+@router.post("/remote-recordings")
+def request_remote_recording(body: RemoteRecording, db: Session = Depends(get_db)):
+    agent = online_agent(db, body.agent_id)
+    device = db.query(Device).filter_by(device_id=body.agent_id).first()
+    rate = body.sample_rate or (device.sample_rate if device is not None else None)
+    validate_rate(agent, rate)
+    directory = agent.state.get("save_directory")
+    if not directory:
+        raise HTTPException(409, "边端未上报原件保存目录，请检查边端配置")
+    request = RecordRequest(
+        duration=body.duration or (device.window_seconds if device is not None else None)
+        or config.SENSOR_WINDOW_SECONDS,
+        save_directory=directory,
+    )
+    with live.lock:
+        ensure_no_active_recording(db, body.agent_id)
+        s = live.current(body.agent_id)
+        if s is not None:
+            if s["stop_requested"] or s["status"] == "stopping":
+                raise HTTPException(409, "边端正在结束上一个会话，请稍后重试")
+            if s["sample_rate"] != rate:
+                raise HTTPException(409, f"当前示波为 {s['sample_rate']} Hz，请选同一档位或先停止示波")
+            return begin_recording(db, s, request, remote=True)
+        s = live.create(body.agent_id, rate)
+        s["stop_after_recording"] = True
+        try:
+            return begin_recording(db, s, request, remote=True)
+        except Exception:
+            del live.sessions[s["id"]]
+            raise
 
 
 @router.post("/sessions/{session_id}/record/stop")
@@ -189,15 +245,21 @@ def stop_record(session_id: str):
 
 
 @router.get("/agents/{agent_id}/control", dependencies=[Depends(edge_only)])
-def control(agent_id: str):
-    s = live.current(agent_id)
-    return {
-        "code": 200,
-        "data": {
-            "session": live.snapshot(s) if s else None,
-            "picker": live.pickers.get(agent_id),
-        },
-    }
+def control(agent_id: str, db: Session = Depends(get_db)):
+    with live.lock:
+        s = live.current(agent_id)
+        recording = s["recording"] if s else None
+        if recording and recording["remote_request"] and recording["status"] in (
+            "pending", "waiting_device", "configuring"
+        ):
+            expire_remote_wait(job_or_404(db, recording["id"]), s, db)
+        return {
+            "code": 200,
+            "data": {
+                "session": live.snapshot(s) if s else None,
+                "picker": live.pickers.get(agent_id),
+            },
+        }
 
 
 @router.get("/agents/{agent_id}/session")
@@ -235,7 +297,7 @@ def selected_directory(agent_id: str):
 
 
 @router.post("/sessions/{session_id}/state", dependencies=[Depends(edge_only)])
-def state(session_id: str, body: dict, agent_id: str):
+def state(session_id: str, body: dict, agent_id: str, db: Session = Depends(get_db)):
     s = get_session(session_id)
     if s["agent_id"] != agent_id:
         raise HTTPException(403, "边端不匹配")
@@ -250,12 +312,46 @@ def state(session_id: str, body: dict, agent_id: str):
         ):
             s["status"] = body["status"]
         s["error"] = str(body["error"])[:500] if body.get("error") else None
-        if (
-            s["recording"]
-            and body.get("recording")
-            and body["recording"].get("id") == s["recording"]["id"]
+        recording = s["recording"]
+        if recording:
+            report = body.get("recording") or {}
+            matching = report.get("id") == recording["id"]
+            if not recording["remote_request"]:
+                if matching:
+                    recording.update(report)
+            elif recording["status"] in ("pending", "waiting_device", "configuring", "capturing"):
+                stage = report.get("status") if matching else None
+                count = report.get("samples_per_channel", 0) if matching else 0
+                error = report.get("error") if matching else None
+                if stage not in ("capturing", "uploading", "failed"):
+                    if s["status"] in ("failed", "stopped"):
+                        stage = "failed"
+                        error = s["error"] or (
+                            "采集已停止" if recording["stop_requested"]
+                            else "采集卡未连接或未返回数据，请检查供电和接线"
+                        )
+                    elif s["status"] == "waiting_device" and recording["status"] == "pending":
+                        stage = "waiting_device"
+                    elif s["status"] == "configuring":
+                        stage = "configuring"
+                if stage in ("waiting_device", "configuring", "capturing", "uploading", "failed"):
+                    job = job_or_404(db, recording["id"])
+                    if job.status in ("pending", "waiting_device", "configuring", "capturing"):
+                        previous = job.progress or {}
+                        # 不逐帧写 SQLite；采集进度至多每秒持久化一次，阶段跃迁立即落库。
+                        if job.status != stage or (
+                            count != previous.get("samples_per_channel")
+                            and now() - job.updated_at >= timedelta(seconds=1)
+                        ):
+                            job.status, job.updated_at = stage, now()
+                            job.progress = dict(previous, stage=stage, samples_per_channel=count)
+                            job.error_message = str(error)[:500] if stage == "failed" and error else None
+                            db.commit()
+                        recording.update(status=stage, samples_per_channel=count, error=error)
+        if recording and s.get("stop_after_recording") and recording["status"] in (
+            "uploading", "completed", "failed"
         ):
-            s["recording"].update(body["recording"])
+            s["stop_requested"] = True
     return {"code": 200}
 
 
@@ -438,6 +534,8 @@ async def finish(
                     samples_per_channel=count,
                     saved_directory=meta.get("saved_directory"),
                 )
+                if s.get("stop_after_recording"):
+                    s["stop_requested"] = True
     return {"code": 200, "data": snapshot(job)}
 
 

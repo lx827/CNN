@@ -10,6 +10,8 @@ export const HEALTH_THRESHOLD_NORMAL = 80
 export const DEFAULT_SAMPLE_RATE = 25600
 export const DEFAULT_DURATION = 10
 
+export const ACQUISITION_STATUS_POLL_MS = 2000
+
 // 颜色常量（与 styles/variables.css 设计令牌一致，供 JS/图表场景使用）
 export const COLORS = {
   primary: '#4F46E5',

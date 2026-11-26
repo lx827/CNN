@@ -7,24 +7,44 @@
           <el-tag v-if="lastDataSource === 'special'" type="danger" effect="dark" class="special-tag">
             <el-icon><Star-Filled /></el-icon> 特殊采集
           </el-tag>
-          <el-select :model-value="selectedDevice" placeholder="选择设备" style="width: 160px" size="default" @update:model-value="$emit('update:selectedDevice', $event)">
+          <el-select
+            :model-value="selectedDevice"
+            :disabled="isCollecting || loadingAgents"
+            placeholder="选择采集边端"
+            aria-label="采集边端"
+            style="width: 160px"
+            @update:model-value="$emit('update:selectedDevice', $event)"
+          >
             <el-option
-              v-for="d in devices"
-              :key="d.device_id"
-              :label="d.name"
-              :value="d.device_id"
+              v-for="agent in agents"
+              :key="agent.id"
+              :label="`${agent.name}${agent.online ? '' : '（离线）'}`"
+              :value="agent.id"
+              :disabled="!agent.online"
             />
+          </el-select>
+          <el-select
+            :model-value="sampleRate"
+            :disabled="isCollecting || loadingAgents || !sampleRates.length"
+            placeholder="选择采样率"
+            aria-label="采样率"
+            style="width: 137px"
+            @update:model-value="$emit('update:sampleRate', $event)"
+          >
+            <el-option v-for="rate in sampleRates" :key="rate" :label="`${rate.toLocaleString()} Hz`" :value="rate" />
           </el-select>
           <el-button
             type="primary"
             :loading="isCollecting"
-            :disabled="isCollecting || !selectedDevice"
+            :disabled="isCollecting || !!collectionUnavailable"
             @click="$emit('collect')"
-          >
-            <el-icon v-if="!isCollecting"><Video-Play /></el-icon>
-            {{ isCollecting ? collectionStatus : '请求采集' }}
-          </el-button>
+          >请求采集</el-button>
         </div>
+      </div>
+      <div class="collection-hint">
+        <span v-if="collectionUnavailable">{{ collectionUnavailable }}</span>
+        <span v-else>采集时长：{{ collectionDuration ? `${collectionDuration} 秒` : '使用服务端默认值' }}</span>
+        <el-button link type="primary" :disabled="isCollecting || loadingAgents" @click="$emit('reloadAgents')">刷新边端</el-button>
       </div>
     </template>
     <el-row :gutter="20">
@@ -44,22 +64,38 @@
 <script setup>
 defineProps({
   sensors: { type: Array, default: () => [] },
-  devices: { type: Array, default: () => [] },
+  agents: { type: Array, default: () => [] },
+  loadingAgents: { type: Boolean, default: false },
   selectedDevice: { type: String, default: '' },
+  sampleRate: { type: Number, default: null },
+  sampleRates: { type: Array, default: () => [] },
   isCollecting: { type: Boolean, default: false },
-  collectionStatus: { type: String, default: '' },
+  collectionUnavailable: { type: String, default: '' },
+  collectionDuration: { type: Number, default: null },
   lastDataSource: { type: String, default: 'normal' },
 })
 
-defineEmits(['update:selectedDevice', 'collect'])
+defineEmits(['update:selectedDevice', 'update:sampleRate', 'collect', 'reloadAgents'])
 </script>
 
 <style scoped>
-/* .card-header 使用 global.css 全局工具类，此处不重复定义 */
+.card-header,
 .header-actions {
+  flex-wrap: wrap;
+}
+
+.header-actions,
+.collection-hint {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.collection-hint {
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .special-tag {

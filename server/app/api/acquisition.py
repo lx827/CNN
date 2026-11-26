@@ -21,6 +21,7 @@ from app.core.config import DC24_CHANNELS
 from app.database import get_db
 from app.models import AcquisitionAgent, AcquisitionJob, Device
 from app.services.acquisition_analysis import analyze_counts
+from app.services.acquisition_live import live
 from app.services.acquisition_diagnosis import (
     register_completed_acquisition,
     validate_channels as validate_channel_numbers,
@@ -81,6 +82,26 @@ def owned(db, job_id, agent_id):
     if job.agent_id != agent_id:
         raise HTTPException(403, "任务不属于此边端")
     return job
+
+
+def expire_remote_wait(job, s, db):
+    """任务未开始时收回边端录制指令，避免页面关闭后任务无期限悬挂。"""
+    if job.status not in ("pending", "waiting_device", "configuring") or not (job.progress or {}).get("remote_request"):
+        return
+    if now() - job.created_at < timedelta(seconds=config.DC24_REMOTE_START_TIMEOUT_SECONDS):
+        return
+    messages = {
+        "pending": "边端未确认采集请求，请检查树莓派连接后重试",
+        "waiting_device": "等待采集卡连接超时，请检查采集卡供电和接线",
+        "configuring": "采集卡配置超时，请检查设备连接后重试",
+    }
+    job.error_message = messages[job.status]
+    job.status, job.updated_at = "failed", now()
+    if s is not None:
+        s["recording"].update(status="failed", stop_requested=True, error=job.error_message)
+        if s.get("stop_after_recording"):
+            s["stop_requested"] = True
+    db.commit()
 
 
 def snapshot(job):
@@ -240,6 +261,7 @@ def claim(agent_id: str, db: Session = Depends(get_db)):
     job = (
         db.query(AcquisitionJob)
         .filter_by(agent_id=agent_id, status="pending")
+        .filter(AcquisitionJob.progress["remote_request"].as_boolean().is_not(True))
         .order_by(AcquisitionJob.created_at)
         .first()
     )
@@ -261,7 +283,13 @@ def claim(agent_id: str, db: Session = Depends(get_db)):
 
 @router.get("/jobs/{job_id}")
 def get_job(job_id: str, db: Session = Depends(get_db)):
-    return {"code": 200, "data": snapshot(job_or_404(db, job_id))}
+    with live.lock:
+        job = job_or_404(db, job_id)
+        s = live.current(job.agent_id)
+        if s is not None and (s.get("recording") or {}).get("id") != job.id:
+            s = None
+        expire_remote_wait(job, s, db)
+        return {"code": 200, "data": snapshot(job)}
 
 
 @router.post("/jobs/{job_id}/cancel")
