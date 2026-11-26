@@ -122,7 +122,6 @@ coverage.xml
 
 # ========== Misc ==========
 *.local
-web/package-lock.json
 .qwen
 web/vite.config.js
 server/tests/diagnosis/output/**.png

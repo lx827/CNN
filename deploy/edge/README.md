@@ -34,7 +34,7 @@
 .\build.ps1 -WithTests
 ```
 
-脚本自动探测 Rust 边端源码目录(**当前为 `edge-rust/`,目录平移工单合入后为 `edge/`**,按 `Cargo.toml` 存在与否判断),并以该目录为构建上下文调用 docker。
+本机的 WSL Ubuntu-22.04 克隆位于 `/root/code/CNN`（从该克隆执行 `bash deploy/edge/build.sh`）。脚本以 `edge/acquire/` 为 Docker 构建上下文；默认只交叉编译并导出 ARM64 产物，不连接或更新树莓派。
 
 ### 等价的手动命令
 
@@ -45,10 +45,10 @@ docker buildx build \
   --target export \
   --build-arg TARGET_TRIPLE=aarch64-unknown-linux-gnu \
   --output type=local,dest=deploy/edge/out/aarch64-unknown-linux-gnu \
-  edge-rust/        # 目录平移后改为 edge/
+  edge/acquire/
 
 # 可选:容器内测试(x86_64)
-docker buildx build -f deploy/edge/Dockerfile --target test edge-rust/
+docker buildx build -f deploy/edge/Dockerfile --target test edge/acquire/
 ```
 
 ## 目标架构
@@ -115,15 +115,15 @@ journalctl -u dc24-edge -f
 
 `./build.sh --with-tests`(或 `.\build.ps1 -WithTests`)先执行 `--target test` 层:在 x86_64 容器内跑 `cargo test --locked`(含 `tests/end_to_end.rs` 回环模拟,不需外设)。这验证源码逻辑,**不等于 ARM64 二进制可运行**——ARM64 产物在 x64 容器内无法执行,跨架构运行需 qemu-user,未内置;最终行为以树莓派上 `--check` 与实机为准。
 
-## 目录平移兼容
+## 构建与更新边界
 
-本目录所有文件均不含 Rust 源码目录名:构建上下文由脚本探测传入(当前 `edge-rust/`,平移工单合入后 `edge/`),`Dockerfile` 内只有 `/build` 这样的容器内路径。**目录平移后本目录零改动。** 文中以"Rust 边端源码目录"指代该目录。
+云端部署不构建也不分发树莓派二进制。仅云端路由、前端或 Nginx 更新且保留现有边端协议时，不需要更新树莓派。
 
 ## 本机验证状态
 
-**2026-11-11 全链路实机验证通过**:WSL(Ubuntu-22.04)Docker 29.x + buildx,`./build.sh` 产出 ARM64 产物(2.1MB,stripped)→ 部署树莓派 MIC-DT-Pi(Debian 13,glibc 兼容)→ `--check` PASS → DC24 采集卡主动连入保持 ESTAB(含断线自动重连)→ 云端下发 2000Hz 会话,实时窗口推流全部 200。部署用 [edge/deploy/pi/deploy_pi.sh](../../edge/deploy/pi/deploy_pi.sh) 一条命令完成,现场与链路记录见 [树莓派直连配置](../../docs/树莓派直连配置.md)。
+**2026-11-11 全链路实机验证通过**:WSL(Ubuntu-22.04)Docker 29.x + buildx,`./build.sh` 产出 ARM64 产物(2.1MB,stripped)→ 部署树莓派 MIC-DT-Pi(Debian 13,glibc 兼容)→ `--check` PASS → DC24 采集卡主动连入保持 ESTAB(含断线自动重连)→ 云端下发 2000Hz 会话,实时窗口推流全部 200。部署用 [deploy_pi.sh](../../edge/acquire/deploy/pi/deploy_pi.sh) 一条命令完成,现场与链路记录见 [树莓派直连配置](../../docs/树莓派直连配置.md)。
 
-2026-11-07 记录(历史):彼时本机与 WSL 均未装 Docker,构建未验证;Rust 源码状态以 [edge/README.md](../../edge/README.md) 为准。
+2026-11-07 记录(历史):彼时本机与 WSL 均未装 Docker,构建未验证;Rust 源码状态以 [Rust 边端 README](../../edge/acquire/README.md) 为准。
 
 ## 常见问题
 

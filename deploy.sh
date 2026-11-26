@@ -19,6 +19,7 @@
 # 环境变量(一般无需修改;本地演练时可覆盖):
 #   CNN_DEPLOY_ROOT  部署目录,默认 /opt/CNN
 #   CNN_SERVICE      systemd 服务名,默认 CNN
+#   CNN_NGINX_SITE   已启用的生产站点,默认 /etc/nginx/sites-enabled/CNN
 #
 # 约定:Python 环境全程 uv(铁律,AGENTS.md §2)——不存在则官方脚本安装,
 # 依赖只经 `uv sync --frozen` 按 uv.lock 安装,禁 pip / 手工 venv。
@@ -27,6 +28,9 @@ set -euo pipefail
 
 DEPLOY_ROOT="${CNN_DEPLOY_ROOT:-/opt/CNN}"
 SERVICE="${CNN_SERVICE:-CNN}"
+NGINX_SITE="${CNN_NGINX_SITE:-/etc/nginx/sites-enabled/CNN}"
+PUBLIC_ROOT="$DEPLOY_ROOT/web/dist"
+LEGACY_ROOT="$DEPLOY_ROOT/wind-turbine-diagnosis/dist"
 SKIP_FRONTEND=false
 DRY_RUN=false
 for arg in "$@"; do
@@ -60,16 +64,38 @@ else
     run curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh
     run sh /tmp/uv-install.sh
     export PATH="$HOME/.local/bin:$PATH"
-    command -v uv >/dev/null 2>&1 && uv --version >/dev/null 2>&1 \
-        || { echo "uv 安装失败或不可用;请手动安装后重试(https://docs.astral.sh/uv/)"; exit 1; }
+    if ! $DRY_RUN; then
+        uv --version
+    fi
 fi
 
-# 2) 停止后端,进入部署窗口(2G 红线:编译与前端构建必须拿到服务占用的内存
+# 2) 在停机前同步代码；新版改动了脚本本身时以新版执行剩余步骤。
+if $DRY_RUN; then
+    run git switch main
+    run git pull --ff-only
+else
+    git switch main
+    before=$(git rev-parse HEAD:deploy.sh)
+    git pull --ff-only
+    if [ "$before" != "$(git rev-parse HEAD:deploy.sh)" ]; then
+        exec bash "$DEPLOY_ROOT/deploy.sh" "$@"
+    fi
+    if ! $SKIP_FRONTEND; then
+        command -v npm >/dev/null || { echo '完整部署需要 Node.js/npm'; exit 1; }
+        sudo test -f "$NGINX_SITE" || { echo "未启用 Nginx 站点: $NGINX_SITE"; exit 1; }
+    fi
+fi
+
+# 3) 停止后端,进入部署窗口(2G 红线:编译与前端构建必须拿到服务占用的内存
 #    余量,否则与运行中的服务互相挤压触发 swap 颠簸,部署假死——2026-11-13
 #    生产 uv sync 卡死诱因)。窗口内任一步失败经 EXIT trap 尽力恢复服务;
 #    成功路径在服务确认启动后解除恢复。
 SERVICE_STOPPED=false
+FRONTEND_STAGE=
 restore_service_on_abort() {
+    if [[ "$FRONTEND_STAGE" == "$DEPLOY_ROOT/web/.dist."* ]] && [ -d "$FRONTEND_STAGE" ]; then
+        rm -rf -- "$FRONTEND_STAGE"
+    fi
     if [ "$SERVICE_STOPPED" = true ]; then
         echo "!! 部署中止,尝试恢复 ${SERVICE}(环境为中止时的实际状态)"
         if sudo systemctl start "$SERVICE" 2>/dev/null && sudo systemctl is-active --quiet "$SERVICE"; then
@@ -87,10 +113,6 @@ else
     sudo systemctl stop "$SERVICE"
     SERVICE_STOPPED=true
 fi
-
-# 3) 同步代码(保留 main 分支直进的方式;--ff-only 避免意外合并提交)
-run git switch main
-run git pull --ff-only
 
 # 3.5) 一次性目录迁移(2026-11 重组 cloud/→server/):生产状态文件跟随新目录名。
 #      .env 与 turbine.db 不入库,git pull 不会移动它们;只在目标不存在时迁移。
@@ -152,32 +174,88 @@ if ! $DRY_RUN; then
     fi
 fi
 
-# 6) 前端构建(默认执行;传 -s / --skip-frontend 跳过)。仍在停机窗口内完成:
-#    Node/Vite 构建同为内存大户,失败时 EXIT trap 恢复后端(此时依赖已就绪)
-if [ "$SKIP_FRONTEND" = false ]; then
-    echo "==> 构建前端"
-    run npm --prefix "$DEPLOY_ROOT/web" run build
+# 6) 完整部署按锁文件安装前端依赖，再由 Vite 构建到 web/dist。
+if ! $SKIP_FRONTEND; then
+    echo "==> 安装并构建前端: $PUBLIC_ROOT"
+    run npm --prefix "$DEPLOY_ROOT/web" ci --include=dev --no-audit --no-fund
+    if $DRY_RUN; then
+        FRONTEND_STAGE="$DEPLOY_ROOT/web/.dist.XXXXXX"
+    else
+        FRONTEND_STAGE=$(mktemp -d "$DEPLOY_ROOT/web/.dist.XXXXXX")
+    fi
+    run npm --prefix "$DEPLOY_ROOT/web" run build -- --outDir "$FRONTEND_STAGE"
+    run test -s "$FRONTEND_STAGE/index.html"
 else
-    echo "==> 跳过前端构建"
+    echo "==> 跳过前端安装、构建及 Nginx 迁移"
 fi
 
-# 7) 启动后端,退出部署窗口(2G 红线:启动前后均不引入额外并发,单服务单进程)
+migrate_nginx_root() (
+    set -e
+    local site legacy_count current_count backup next
+    site=$(sudo realpath -e "$NGINX_SITE")
+    root_count() {
+        sudo awk -v target="$1;" '$1 == "root" && $2 == target { n++ } END { print n+0 }' "$site"
+    }
+    legacy_count=$(root_count "$LEGACY_ROOT")
+    current_count=$(root_count "$PUBLIC_ROOT")
+    if [ "$legacy_count" = 0 ] && [ "$current_count" = 1 ]; then
+        return
+    fi
+    if [ "$legacy_count" != 1 ] || [ "$current_count" != 0 ]; then
+        echo "无法定位唯一的 CNN 静态根目录，请检查 $NGINX_SITE" >&2
+        return 1
+    fi
+    next=$(mktemp)
+    trap 'rm -f -- "$next"' EXIT
+    sudo awk -v legacy="$LEGACY_ROOT" -v current="$PUBLIC_ROOT" '
+        $1 == "root" && $2 == legacy ";" {
+            pos = index($0, legacy)
+            $0 = substr($0, 1, pos-1) current substr($0, pos+length(legacy))
+        }
+        { print }
+    ' "$site" > "$next"
+    backup=$(sudo mktemp /var/backups/cnn-nginx.XXXXXX)
+    sudo cp -- "$site" "$backup"
+    if ! sudo tee "$site" < "$next" >/dev/null ||
+        ! sudo nginx -t || ! sudo systemctl reload nginx; then
+        sudo cp -- "$backup" "$site"
+        sudo nginx -t && sudo systemctl reload nginx
+        return 1
+    fi
+    echo "==> Nginx 静态根目录: $PUBLIC_ROOT（旧配置备份: $backup）"
+)
+
+# 7) 后端 HTTP 就绪后才发布单文件网页，不让旧网页在构建失败时消失。
 echo "==> 启动后端"
 run sudo systemctl start "$SERVICE"
-SERVICE_STOPPED=false
-# 7.1) 等待真正进入 active(2G 机器冷启动可达数秒;systemctl start 返回≠服务已就绪)
 if ! $DRY_RUN; then
-    waited=""
+    ready=false
     for _ in $(seq 1 30); do
-        if sudo systemctl is-active --quiet "$SERVICE"; then waited=1; break; fi
+        if sudo systemctl is-active --quiet "$SERVICE" &&
+            curl -fsS --max-time 1 http://127.0.0.1:8000/openapi.json >/dev/null 2>&1; then
+            ready=true
+            break
+        fi
         sleep 1
     done
-    if [ -z "$waited" ]; then
-        echo "!! $SERVICE 启动后 30 秒未进入 active,最近日志:"
+    if ! $ready; then
+        echo "!! $SERVICE 未就绪，最近日志:"
         sudo journalctl -u "$SERVICE" -n 15 --no-pager || true
         exit 1
     fi
-    echo "==> $SERVICE 已 active"
+    echo "==> $SERVICE 的 HTTP 服务已就绪"
+fi
+SERVICE_STOPPED=false
+
+if ! $SKIP_FRONTEND; then
+    run mkdir -p "$PUBLIC_ROOT"
+    run mv -f -- "$FRONTEND_STAGE/index.html" "$PUBLIC_ROOT/index.html"
+    if $DRY_RUN; then
+        FRONTEND_STAGE=
+        echo "[dry-run] 迁移站点 $NGINX_SITE 的旧根目录至 $PUBLIC_ROOT，nginx -t 后重载"
+    else
+        migrate_nginx_root
+    fi
 fi
 
 # 8) 查看状态
