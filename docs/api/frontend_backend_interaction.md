@@ -124,9 +124,8 @@ Research EnsembleResultPanels 展示对象 Evidence/依赖组/支持量/冲突/�
 |-----------|---------|----------------|-------------|------|
 | `Monitor.vue::loadLatestData()` | `api/monitor.js::getRealtimeVibrationData()` | `GET /api/monitor/latest` | `monitor.py::get_latest_monitor` | 获取最新监测数据 |
 | `Monitor.vue::loadHistory()` | `api/monitor.js::getMonitorHistory()` | `GET /api/monitor/history` | `monitor.py::get_monitor_history` | 获取某通道最近N批次历史数据 |
-| `Monitor.vue::requestCollect()` | `api/system.js::requestCollection()` | `POST /api/collect/request` | `collect.py::request_collection` | 发起手动采集任务 |
-| `Monitor.vue::startPolling()` | `api/system.js::getTaskStatus()` | `GET /api/collect/tasks/{id}/status` | `collect.py::get_task_status` | 轮询采集任务状态 |
-| 待接入页面 | `api/system.js::getCollectionHistory()` | `GET /api/collect/history` | `collect.py::get_collection_history` | 查询采集历史记录 |
+| `Monitor.vue` 请求采集 | `api/acquisition.js` | `POST /api/acquisition/remote-recordings` | `acquisition_live.py::request_remote_recording` | 使用边端上报的档位下发云端录制，不要求提前示波或填写目录 |
+| `Monitor.vue` 轮询进度 | `api/acquisition.js` | `GET /api/acquisition/jobs/{id}` | `acquisition.py::get_job` | 显示边端实际阶段，完成后刷新云端诊断批次 |
 | `Monitor.vue` → WebSocket | — | `WS /ws/monitor` | `main.py` WebSocket 端点 | 🌐 WebSocket 推送：`sensor_update`, `diagnosis_update` |
 
 > **⚠️ 影响前端**：`Monitor.vue` 同时依赖 HTTP 轮询和 WebSocket 推送，修改推送消息格式需同步前端 WebSocket 处理器。

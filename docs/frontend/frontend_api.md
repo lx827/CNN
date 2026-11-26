@@ -220,8 +220,8 @@ await deleteAlarm(42);
 | 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
 |--------|------|--------|----------|----------|
 | `getSystemLogs(lines)` | `lines?: number`（默认 `100`） | 日志文本数组 | `GET /api/logs/?lines=...` | `Logs.vue` |
-| `requestCollection(deviceId)` | `deviceId: string` | 任务对象 `{ task_id }` | `POST /api/collect/request?device_id=...` | `Monitor.vue` |
-| `getTaskStatus(taskId)` | `taskId: string` | 任务状态对象 | `GET /api/collect/tasks/{taskId}/status` | `Monitor.vue` |
+| `requestCollection(deviceId)` | `deviceId: string` | 旧任务对象 `{ task_id }` | `POST /api/collect/request?device_id=...` | 旧接口，监测页不再调用 |
+| `getTaskStatus(taskId)` | `taskId: string` | 旧任务状态对象 | `GET /api/collect/tasks/{taskId}/status` | 旧接口，监测页不再调用 |
 | `getCollectionHistory(deviceId, limit)` | `deviceId?: string`（默认 `null`，不传则查所有设备）<br>`limit?: number`（默认 `20`） | `{ code, data: [{task_id, device_id, status, ...}] }` | `GET /api/collect/history?device_id=...&limit=...` | 预留（当前无视图调用） |
 
 ```javascript
@@ -239,7 +239,7 @@ const status = await getTaskStatus(task.task_id);
 
 | 函数名 | 参数 | 返回值 | 后端 URL | 调用组件 |
 |--------|------|--------|----------|----------|
-| `getAcquisitionAgents()` | 无 | 边端代理列表 | `GET /api/acquisition/agents` | `Acquisition.vue` |
+| `getAcquisitionAgents()` | 无 | 边端代理列表及上报的采样率档位 | `GET /api/acquisition/agents` | `Acquisition.vue`, `Monitor.vue` |
 | `getAcquisitionCapabilities()` | 无 | 服务能力（原厂采样率档位、可启用 `channels` 等） | `GET /api/acquisition/capabilities` | `Acquisition.vue` |
 | `startLiveSession(data)` | `{ agent_id, sample_rate }` | 示波会话 | `POST /api/acquisition/sessions` | `Acquisition.vue` |
 | `getLiveSession(id)` | `id: string` | 会话状态（404 静默） | `GET /api/acquisition/sessions/{id}` | `Acquisition.vue` |
@@ -252,7 +252,8 @@ const status = await getTaskStatus(task.task_id);
 | `getAcquisitionDirectory(agent)` | `agent: string` | 目录选择结果 | `GET /api/acquisition/agents/{agent}/directory` | `Acquisition.vue` |
 | `getAcquisitionJobs()` | 无 | 已保存任务列表 | `GET /api/acquisition/jobs` | `Acquisition.vue` |
 | `createAcquisition(data)` | 任务参数 | 新任务 | `POST /api/acquisition/jobs` | 预留（回放任务族，当前无视图调用） |
-| `getAcquisition(id)` | `id: string` | 任务详情 | `GET /api/acquisition/jobs/{id}` | 预留 |
+| `createRemoteRecording(data)` | `{ agent_id, sample_rate?, duration? }` | 标准采集任务快照 | `POST /api/acquisition/remote-recordings` | `Monitor.vue` |
+| `getAcquisition(id, options)` | 任务 ID 与可选请求配置 | 标准采集任务快照 | `GET /api/acquisition/jobs/{id}` | `Monitor.vue` |
 | `stopAcquisition(id)` | `id: string` | 取消结果 | `POST /api/acquisition/jobs/{id}/cancel` | 预留 |
 | `getAcquisitionAnalysis(id)` | `id: string` | 任务分析结果 | `GET /api/acquisition/jobs/{id}/analysis` | 预留 |
 | `getAcquisitionWaveform(id, params)` | `id: string`<br>`params: object` | 波形数据 | `GET /api/acquisition/jobs/{id}/waveform` | 预留 |
@@ -491,7 +492,9 @@ import { getSystemLogs } from '@/api/system';
 
 **2026-10-21 请求调度**：WebSocket 只响应当前设备的事件，将 100 ms 内的连续事件合并；同一页面最多一个监测刷新请求在途，在途事件保留一次后续刷新。`refreshLatestData(preferSpecial=false)` 供初始化、设备切换和采集完成复用，后续刷新保留特殊采集优先请求。切换设备后丢弃旧设备响应，通道数减少时重置无效通道选择，空数据清空图表。卸载取消待执行定时器。
 
-**采集轮询**：完成一次状态查询后再等待 2 秒，避免慢请求重叠；卸载后忽略响应且不再安排下一轮。成功/失败/最多 60 次的终止条件保留。
+**请求采集**：采集选择与运行参数中的监测设备选择独立。只向真实 DC24 边端提交任务；历史/模拟设备仍可监测但不能从此处提交。采样率只使用所选边端上报的档位，优先设备配置中的有效值，否则由用户选定；已有设备沿用配置时长，无需填写目录或先开启示波。
+
+**采集轮询**：显示任务快照中的等待、配置、采集、上传、处理与终态；采集阶段仅按实际样本数显示百分比。串行查询直到任务终态或离开页面；查询失联时明确提示状态暂不可用，不误报任务失败。完成后切换到采集设备并优先加载特殊批次。
 
 | 属性 | 说明 |
 |------|------|
@@ -515,9 +518,8 @@ import { getSystemLogs } from '@/api/system';
 
 | 方法名 | 说明 |
 |--------|------|
-| `loadCollectDevices()` | 加载可用于采集的设备列表 |
-| `requestCollect()` | 发起手动采集请求 |
-| `startPolling(taskId)` | 启动任务状态轮询 |
+| `reloadCollectAgents()` | 重新查询真实边端及其在线状态、支持的档位 |
+| `requestCollect()` | 发起远程采集，并按任务 ID 串行查询状态 |
 | `loadLatestData()` | 加载最新实时振动数据 |
 | `updateCharts()` | 更新时域和频谱图表 |
 | `initCharts()` | 挂载后先创建时域和频谱实例，再加载设备和波形数据 |
@@ -532,7 +534,7 @@ import { getSystemLogs } from '@/api/system';
 
 ```javascript
 import { getRealtimeVibrationData } from '@/api/monitor';
-import { requestCollection, getTaskStatus } from '@/api/system';
+import { getAcquisitionAgents, createRemoteRecording, getAcquisition } from '@/api/acquisition';
 import { getDevices } from '@/api/devices';
 ```
 
@@ -817,7 +819,7 @@ import {
 | 文件 | 服务视图 | 返回内容(概要) | 模块级导出 |
 |------|---------|---------------|-----------|
 | `useDashboard.js` | `Dashboard.vue` | 串行刷新、选择与图表，读取完整 Domain；不补默认分或部件偏移 | 诊断展示统一使用 getDiagnosisView |
-| `useMonitor.js` | `Monitor.vue` | `channels/params/sensors/collectDevices`、`requestCollect()`、`startPolling(taskId)`、`refreshLatestData()`(推送合并串行)、`onMonitorDeviceChange()`、图表 ref | — |
+| `useMonitor.js` | `Monitor.vue` | `channels/params/sensors/devices`、真实边端与采样率选择、`requestCollect()`、任务状态、`onMonitorDeviceChange()`、图表 ref | — |
 | `useSettings.js` | `Settings.vue` | `form/channelNames/thresholds/thresholdEnabled`、三级加载、`onSaveEdgeConfig/onSaveMechanical/onSaveThresholds/onSyncMechanical`、`intervalValue/intervalUnit` 与 `computedSeconds` | `unitOptions`(采集间隔单位)、`thresholdItems`(阈值指标定义) |
 | `useResearchDiagnosis.js` | `ResearchDiagnosis.vue` | 三模式运行/组合 POST/顶层局部结果；规范 Evidence 汇总，研究不投票 | runModeOptions；原始格式在 researchDisplay，诊断统一 getDiagnosisView |
 | `useDataView.js` | `DataView.vue` | 设备批次表格数据与实际 channels 选择、时域自动加载、FFT/STFT/结构化包络谱/阶次/倒谱/统计/齿轮 `computeX/clearX`、轴承与齿轮特征频率标注、综合/策略诊断、删除/原批复跑/文件选段重诊/导出、路由联动 | `dc24ChannelOptions`、`bearingMethodLabel`、`statsGroups`、`statsDisplay`(预留) |

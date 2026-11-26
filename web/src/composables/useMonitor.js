@@ -4,16 +4,25 @@
  * 职责:最新振动数据拉取(推送合并串行刷新)、传感器状态、手动采集任务
  *       下发与轮询、时域/频域图表初始化与销毁、生命周期清理。
  */
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
 import { getRealtimeVibrationData } from '../api/monitor'
-import { requestCollection, getTaskStatus } from '../api/system'
+import { createRemoteRecording, getAcquisition, getAcquisitionAgents } from '../api/acquisition'
 import { getDevices } from '../api/devices'
 import { getWebSocketClient } from '../utils/websocket'
-import { ElMessage } from 'element-plus'
 import { getDiagnosisView } from '../utils/diagnosisStatus'
+import { formatErrorMessage } from '../utils/errorMessage'
 import { baseCartesianOption, AXIS_STYLE, emptyTitle } from '../utils/chartTheme'
-import { COLORS } from '../utils/constants'
+import { COLORS, ACQUISITION_STATUS_POLL_MS } from '../utils/constants'
+
+const collectionStage = {
+  pending: '任务已创建，等待边端领取',
+  waiting_device: '等待采集设备',
+  configuring: '正在配置采集设备',
+  capturing: '边端正在采集',
+  uploading: '正在上传采集记录',
+  analyzing: '正在处理采集记录',
+}
 
 // 由语义色派生带透明度的 rgba，用于渐变面积填充，避免散落裸色值
 const withAlpha = (hex, alpha) => {
@@ -32,19 +41,50 @@ export function useMonitor() {
   let pollTimer = null
   let isUnmounted = false
 
-  // 采集状态
   const isCollecting = ref(false)
-  const collectionStatus = ref('')
-  const collectionProgress = ref(0)
-  const currentTaskId = ref(null)
-  const lastDataSource = ref('normal') // 'normal' | 'special'
+  const collectionResult = ref(null)
+  const job = ref(null)
+  const lastDataSource = computed(() => channels.value[0]?.is_special ? 'special' : 'normal')
+  const collectionStatus = computed(() => collectionResult.value?.text ||
+    (job.value ? collectionStage[job.value.status] : isCollecting.value ? '正在创建采集任务' : ''))
+  const collectionType = computed(() => collectionResult.value?.type || 'info')
+  const collectionProgress = computed(() => {
+    const samples = job.value?.progress?.samples_per_channel
+    if (collectionResult.value || job.value?.status !== 'capturing' || !job.value.duration || samples == null) return null
+    return Math.min(100, Math.floor(100 * samples / (job.value.sample_rate * job.value.duration)))
+  })
+  const collectionDetails = computed(() => job.value ?
+    `${job.value.agent_id} · ${job.value.sample_rate.toLocaleString()} Hz · ${job.value.duration} 秒` : '')
 
-  // 设备选择（采集用）
-  const collectDevices = ref([])
-  const selectedCollectDevice = ref('')
-
-  // 设备选择（监测显示用）
+  const devices = ref([])
   const selectedMonitorDevice = ref('')
+  const agents = ref([])
+  const loadingAgents = ref(false)
+  const agentsError = ref('')
+  const selectedCollectDevice = ref('')
+  const selectedSampleRate = ref(null)
+  const collectAgents = computed(() => agents.value.filter(agent => agent.source === 'dc24_tcp' && agent.state?.version >= 3)
+    .map(agent => ({ ...agent, name: devices.value.find(d => d.device_id === agent.id)?.name || agent.id })))
+  const selectedAgent = computed(() => collectAgents.value.find(agent => agent.id === selectedCollectDevice.value))
+  const sampleRates = computed(() => selectedAgent.value?.state?.sample_rates || [])
+  const collectDevice = computed(() => devices.value.find(device => device.device_id === selectedCollectDevice.value))
+  const collectionDuration = computed(() => collectDevice.value?.window_seconds)
+  const collectionUnavailable = computed(() => {
+    if (loadingAgents.value) return '正在查询边端'
+    if (agentsError.value) return agentsError.value
+    if (!collectAgents.value.some(agent => agent.online)) return '没有在线的 DC24 采集边端'
+    if (!selectedAgent.value?.online) return '请选择在线的 DC24 采集边端'
+    if (!selectedAgent.value.state.save_directory) return '边端未配置保存目录，无法请求采集'
+    if (!sampleRates.value.length) return '边端未上报支持的采样率'
+    if (!sampleRates.value.includes(selectedSampleRate.value)) return '请从边端上报的档位中选择采样率'
+    return ''
+  })
+
+  watch([selectedCollectDevice, sampleRates], ([deviceId, rates], [previousDeviceId]) => {
+    if (deviceId === previousDeviceId && rates.includes(selectedSampleRate.value)) return
+    const configured = collectDevice.value?.sample_rate
+    selectedSampleRate.value = rates.includes(configured) ? configured : null
+  })
 
   const sensors = ref([])
 
@@ -63,127 +103,91 @@ export function useMonitor() {
     sensors.value = list
   }
 
-  // ============ 请求采集 ============
-  // 加载设备列表（用于采集选择）
-  const loadCollectDevices = async () => {
+  const loadDevices = async () => {
     try {
       const res = await getDevices()
       if (isUnmounted) return
-      collectDevices.value = res.data || []
-      if (collectDevices.value.length > 0) {
-        if (!selectedCollectDevice.value) {
-          selectedCollectDevice.value = collectDevices.value[0].device_id
-        }
-        if (!selectedMonitorDevice.value) {
-          selectedMonitorDevice.value = collectDevices.value[0].device_id
-        }
+      devices.value = res.data
+      selectedMonitorDevice.value = devices.value[0]?.device_id || ''
+    } catch (error) {
+      console.error('加载设备列表失败:', error)
+    }
+  }
+
+  const reloadCollectAgents = async () => {
+    if (loadingAgents.value) return
+    loadingAgents.value = true
+    agentsError.value = ''
+    try {
+      const { data } = await getAcquisitionAgents()
+      if (isUnmounted) return
+      agents.value = data
+      if (!selectedAgent.value) {
+        const online = collectAgents.value.filter(agent => agent.online)
+        const preferred = online.find(agent => agent.id === selectedMonitorDevice.value)
+        selectedCollectDevice.value = (preferred || (online.length === 1 ? online[0] : null))?.id || ''
       }
-    } catch (e) {
-      console.error('加载设备列表失败:', e)
+    } catch (error) {
+      agentsError.value = `无法查询采集边端：${formatErrorMessage(error)}`
+    } finally {
+      loadingAgents.value = false
+    }
+  }
+
+  const showCollectionJob = (snapshot) => {
+    job.value = snapshot
+    collectionResult.value = null
+    if (snapshot.status === 'completed') {
+      collectionResult.value = { type: 'success', text: '采集及上传已完成' }
+      const deviceId = snapshot.agent_id
+      if (!devices.value.some(device => device.device_id === deviceId)) {
+        devices.value = [...devices.value, { device_id: deviceId, name: deviceId }]
+      }
+      selectedMonitorDevice.value = deviceId
+      refreshLatestData(true)
+    } else if (snapshot.status === 'failed') {
+      collectionResult.value = { type: 'error', text: snapshot.error ? `采集失败：${snapshot.error}` : '采集失败' }
+    } else if (snapshot.status === 'cancelled') {
+      collectionResult.value = { type: 'info', text: '采集已取消' }
+    }
+    if (collectionResult.value) isCollecting.value = false
+  }
+
+  const pollCollection = async () => {
+    pollTimer = null
+    try {
+      const { data } = await getAcquisition(job.value.id, { silentError: true })
+      if (!isUnmounted) showCollectionJob(data)
+    } catch (error) {
+      if (!isUnmounted) {
+        collectionResult.value = { type: 'warning', text: `暂时无法查询采集状态：${formatErrorMessage(error)}` }
+      }
+    } finally {
+      if (!isUnmounted && isCollecting.value) {
+        pollTimer = setTimeout(pollCollection, ACQUISITION_STATUS_POLL_MS)
+      }
     }
   }
 
   const requestCollect = async () => {
-    if (isCollecting.value) return
-    if (!selectedCollectDevice.value) {
-      ElMessage.warning('请先选择设备')
-      return
-    }
-
+    if (isCollecting.value || collectionUnavailable.value) return
+    isCollecting.value = true
+    job.value = null
+    collectionResult.value = null
     try {
-      isCollecting.value = true
-      collectionStatus.value = '正在创建采集任务...'
-      collectionProgress.value = 10
-      currentTaskId.value = null
-
-      // 1. 向云端发送采集请求
-      const res = await requestCollection(selectedCollectDevice.value)
+      const { data } = await createRemoteRecording({
+        agent_id: selectedCollectDevice.value,
+        sample_rate: selectedSampleRate.value,
+        duration: collectionDuration.value || undefined,
+      })
       if (isUnmounted) return
-      const taskData = res.data
-
-      if (!taskData) {
-        throw new Error('创建任务失败')
-      }
-
-      currentTaskId.value = taskData.task_id
-      collectionStatus.value = '任务已创建，等待边端响应...'
-      collectionProgress.value = 25
-
-      // 2. 开始轮询任务状态
-      startPolling(taskData.task_id)
-
-      ElMessage.success('采集任务已下发，等待边端执行')
-    } catch (e) {
-      console.error('请求采集失败:', e)
-      collectionStatus.value = '创建任务失败'
-      collectionProgress.value = 0
+      showCollectionJob(data)
+      if (isCollecting.value) pollTimer = setTimeout(pollCollection, ACQUISITION_STATUS_POLL_MS)
+    } catch (error) {
+      if (isUnmounted) return
+      collectionResult.value = { type: 'error', text: `未能创建采集任务：${formatErrorMessage(error)}` }
       isCollecting.value = false
-      ElMessage.error('创建采集任务失败')
     }
-  }
-
-  // ============ 轮询任务状态 ============
-  const startPolling = (taskId) => {
-    if (pollTimer) clearTimeout(pollTimer)
-    let pollCount = 0
-    const maxPolls = 60  // 最多轮询60次（约2分钟）
-
-    const doPoll = async () => {
-      if (isUnmounted) return
-      try {
-        pollCount++
-        const res = await getTaskStatus(taskId)
-        if (isUnmounted) return
-        const task = res.data
-
-        if (!task) {
-          throw new Error('任务不存在')
-        }
-
-        if (task.status === 'pending') {
-          collectionStatus.value = `等待边端响应... (${pollCount}s)`
-          collectionProgress.value = 25 + Math.min(pollCount, 20)
-        } else if (task.status === 'processing') {
-          collectionStatus.value = `边端采集中... (${pollCount}s)`
-          collectionProgress.value = 50 + Math.min(pollCount, 30)
-        } else if (task.status === 'completed') {
-          collectionStatus.value = '采集完成，正在加载数据...'
-          collectionProgress.value = 90
-          // 任务完成，刷新数据
-          await refreshLatestData(true) // true = 优先特殊数据
-          if (isUnmounted) return
-          collectionStatus.value = '采集完成！'
-          collectionProgress.value = 100
-          isCollecting.value = false
-          lastDataSource.value = 'special'
-          clearTimeout(pollTimer)
-          pollTimer = null
-          ElMessage.success('特殊采集完成，数据已加载')
-          return
-        } else if (task.status === 'failed') {
-          throw new Error(task.error_message || '采集失败')
-        }
-
-        if (pollCount >= maxPolls) {
-          throw new Error('采集超时，请检查边端是否在线')
-        }
-      } catch (e) {
-        if (isUnmounted) return
-        console.error('轮询失败:', e)
-        collectionStatus.value = e.message || '采集异常'
-        collectionProgress.value = 0
-        isCollecting.value = false
-        clearTimeout(pollTimer)
-        pollTimer = null
-        ElMessage.error(e.message || '采集异常')
-      } finally {
-        // 上轮完成后再等待 2 秒，慢请求不会与下一轮重叠。
-        if (!isUnmounted && isCollecting.value) pollTimer = setTimeout(doPoll, 2000)
-      }
-    }
-
-    // 立即执行一次，后续由完成回调调度。
-    doPoll()
   }
 
   // ============ 加载最新数据 ============
@@ -378,8 +382,9 @@ export function useMonitor() {
     initCharts()
     window.addEventListener('resize', handleResize)
 
-    await loadCollectDevices()
+    await loadDevices()
     if (isUnmounted) return
+    reloadCollectAgents()
     await refreshLatestData()
     if (isUnmounted) return
     setupWebSocket()
@@ -414,13 +419,21 @@ export function useMonitor() {
     frequencyChart,
     isCollecting,
     collectionStatus,
+    collectionType,
     collectionProgress,
+    collectionDetails,
+    collectionUnavailable,
+    collectionDuration,
     lastDataSource,
-    collectDevices,
+    devices,
+    collectAgents,
+    loadingAgents,
     selectedCollectDevice,
+    selectedSampleRate,
+    sampleRates,
     selectedMonitorDevice,
+    reloadCollectAgents,
     requestCollect,
-    startPolling,
     onMonitorDeviceChange,
   }
 }

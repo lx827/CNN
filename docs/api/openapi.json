@@ -4256,6 +4256,50 @@
         }
       }
     },
+    "/api/acquisition/remote-recordings": {
+      "post": {
+        "tags": [
+          "实时示波"
+        ],
+        "summary": "Request Remote Recording",
+        "operationId": "request_remote_recording_api_acquisition_remote_recordings_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteRecording"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/acquisition/sessions/{session_id}/record/stop": {
       "post": {
         "tags": [
@@ -5494,6 +5538,44 @@
           "save_directory"
         ],
         "title": "RecordRequest"
+      },
+      "RemoteRecording": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,64}$",
+            "title": "Agent Id"
+          },
+          "sample_rate": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Rate"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_id"
+        ],
+        "title": "RemoteRecording"
       },
       "RequestValidationIssue": {
         "properties": {

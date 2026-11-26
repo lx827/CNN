@@ -5,11 +5,12 @@ const { createRequire } = require('node:module')
 const path = require('node:path')
 const test = require('node:test')
 const vm = require('node:vm')
-let getDiagnosisView, chartTheme, COLORS
+let getDiagnosisView, formatErrorMessage, chartTheme, constants
 test.before(async () => {
   ({ getDiagnosisView } = await import('../src/utils/diagnosisStatus.js'))
   chartTheme = await import('../src/utils/chartTheme.js')
-  ;({ COLORS } = await import('../src/utils/constants.js'))
+  ;({ formatErrorMessage } = await import('../src/utils/errorMessage.js'))
+  constants = await import('../src/utils/constants.js')
 })
 
 const frontendRequire = createRequire(path.resolve(__dirname, '../package.json'))
@@ -25,6 +26,10 @@ const composable = readFileSync(path.resolve(__dirname, '../src/composables/useM
   .replace(/^import .*\r?\n/gm, '')
   .replace(/^export /gm, '')
   .replace(/^function useMonitor/m, 'globalThis.useMonitor = function useMonitor')
+
+const acquisitionApi = readFileSync(path.resolve(__dirname, '../src/api/acquisition.js'), 'utf8')
+  .replace(/^import .*\r?\n/gm, '')
+  .replace(/^export const (\w+) = /gm, 'globalThis.$1 = ')
 
 const renderer = vue.createRenderer({
   createElement: () => ({ children: [] }),
@@ -54,7 +59,13 @@ const flush = async () => {
   await vue.nextTick()
 }
 
-function createHarness({ devicesPromise, fetchData, taskStatus, timers = {} } = {}) {
+const activeAgent = {
+  id: 'dc24-pi', source: 'dc24_tcp', online: true,
+  state: { version: 3, sample_rates: [50, 5000, 10000], save_directory: '/device/records' }
+}
+const activeDevice = { device_id: 'dc24-pi', name: '实机', sample_rate: 10000, window_seconds: 10 }
+
+function createHarness({ devicesPromise, fetchData, getAgents = async () => [], createRecording, jobStatus, timers = {} } = {}) {
   const charts = []
   const listeners = new Map()
   const resizeListeners = new Set()
@@ -71,7 +82,7 @@ function createHarness({ devicesPromise, fetchData, taskStatus, timers = {} } = 
   }
   const context = {
     ...vue,
-    console, getDiagnosisView, ...chartTheme, COLORS,
+    console, getDiagnosisView, formatErrorMessage, ...chartTheme, ...constants,
     setTimeout,
     clearTimeout,
     setInterval,
@@ -105,13 +116,24 @@ function createHarness({ devicesPromise, fetchData, taskStatus, timers = {} } = 
       if (fetchData) return fetchData(...args)
       return { data: { channels, sensorParams: { estimated_rpm: 1200 } } }
     },
-    requestCollection: async () => { throw new Error('本测试禁止创建采集任务') },
-    getTaskStatus: taskStatus || (async () => { throw new Error('本测试禁止查询采集任务') }),
+    request: {
+      async post(url, body) {
+        assert.equal(url, '/api/acquisition/remote-recordings')
+        return { data: await createRecording(body) }
+      },
+      async get(url) {
+        if (url === '/api/acquisition/agents') return { data: await getAgents() }
+        assert.equal(url, '/api/acquisition/jobs/remote-job')
+        return { data: await jobStatus() }
+      }
+    },
+    requestCollection: async device => { throw new Error(`错误地调用旧采集入口：${device}`) },
     getWebSocketClient: () => socket,
     ElMessage: { success() {}, warning() {}, error() {} },
     // 视图拆分后 __returned__ 引用子组件标识符(import 已剥离),提供空壳桩
     SensorStatusCard: {}, RunParamsCard: {}, CollectionProgress: {}
   }
+  vm.runInNewContext(acquisitionApi, context, { filename: 'acquisition.js' })
   vm.runInNewContext(composable, context, { filename: 'useMonitor.js' })
   vm.runInNewContext(script, context, { filename: 'Monitor.vue' })
   // 只替换模板容器；setup、异步挂载、watch 和卸载使用实际组件代码与 Vue 运行时。
@@ -276,37 +298,98 @@ test('数据尚未返回就离开页面，不应在卸载后创建图表或连�
   assert.equal(harness.resizeListeners.size, 0)
 })
 
-test('慢任务查询期间不启动重复轮询，卸载后不再调度下一轮', async () => {
+test('真实边端按上报档位提交远程采集，按 job 状态更新并加载采集批次', async t => {
+  const requests = []
   const timers = new Map()
   let timerId = 0, resolveStatus, calls = 0
+  const job = { id: 'remote-job', agent_id: 'dc24-pi', sample_rate: 10000, duration: 10, status: 'pending' }
   const harness = createHarness({
+    devicesPromise: Promise.resolve({ data: [{ device_id: 'WTG-001' }, activeDevice] }),
+    getAgents: async () => [
+      { ...activeAgent, id: 'replay-agent', source: 'recording_replay' },
+      { ...activeAgent, id: 'other-hardware' },
+      activeAgent,
+    ],
+    fetchData: async (device, preferSpecial) => {
+      requests.push([device, preferSpecial])
+      return { data: { channels, sensorParams: {} } }
+    },
+    createRecording: body => {
+      assert.deepEqual({ ...body }, { agent_id: 'dc24-pi', sample_rate: 10000, duration: 10 })
+      return job
+    },
+    jobStatus: () => { calls++; return new Promise(resolve => { resolveStatus = resolve }) },
+    timers: {
+      setTimeout: callback => { timers.set(++timerId, callback); return timerId },
+      clearTimeout: id => timers.delete(id)
+    },
+  })
+  const { app, state } = harness.mount()
+  t.after(() => app.unmount())
+  await flush()
+  assert.deepEqual(Array.from(state.collectAgents, agent => agent.id), ['other-hardware', 'dc24-pi'])
+  state.selectedCollectDevice = 'dc24-pi'
+  await vue.nextTick()
+  await state.requestCollect()
+  const poll = () => {
+    assert.equal(timers.size, 1)
+    const [id, callback] = [...timers.entries()][0]
+    timers.delete(id)
+    callback()
+  }
+  assert.match(state.collectionStatus, /等待边端/)
+  poll()
+  assert.equal(calls, 1)
+  assert.equal(timers.size, 0, '上次查询未返回时不能预约下一轮查询')
+  resolveStatus({ ...job, status: 'capturing', progress: { samples_per_channel: 50000 } })
+  await flush()
+  assert.match(state.collectionStatus, /采集/)
+  assert.equal(state.collectionProgress, 50)
+  poll()
+  resolveStatus({ ...job, status: 'uploading' })
+  await flush()
+  assert.match(state.collectionStatus, /上传/)
+  poll()
+  resolveStatus({ ...job, status: 'completed', metadata: { diagnosis_device_id: 'dc24-pi' } })
+  await flush()
+  assert.equal(state.isCollecting, false)
+  assert.match(state.collectionStatus, /已完成/)
+  assert.deepEqual(requests.at(-1), ['dc24-pi', true])
+  assert.equal(timers.size, 0)
+})
+
+test('禁止回放和未选档位的采集请求，卸载后停止任务状态查询', async () => {
+  const timers = new Map()
+  let timerId = 0, resolveStatus, calls = 0, creations = 0
+  const job = { id: 'remote-job', agent_id: 'dc24-pi', sample_rate: 10000, duration: 10, status: 'pending' }
+  const harness = createHarness({
+    devicesPromise: Promise.resolve({ data: [{ ...activeDevice, sample_rate: 25600 }] }),
+    getAgents: async () => [activeAgent, { ...activeAgent, id: 'dc24-replay', source: 'recording_replay' }],
+    createRecording: () => { creations++; return job },
+    jobStatus: () => { calls++; return new Promise(resolve => { resolveStatus = resolve }) },
     timers: {
       setTimeout: callback => { timers.set(++timerId, callback); return timerId },
       clearTimeout: id => timers.delete(id),
-      setInterval: callback => { timers.set(++timerId, callback); return timerId },
-      clearInterval: id => timers.delete(id)
     },
-    taskStatus: () => { calls++; return new Promise(resolve => { resolveStatus = resolve }) }
   })
-  const page = harness.mount()
+  const { app, state } = harness.mount()
   await flush()
-  page.state.isCollecting = true
-  page.state.startPolling(1)
-  try {
-    assert.equal(calls, 1)
-    assert.equal(timers.size, 0, '上次查询未返回时不能预约下一轮查询')
-    resolveStatus({ data: { status: 'pending' } })
-    await flush()
-    assert.equal(timers.size, 1)
-    const callback = [...timers.values()][0]
-    timers.clear()
-    callback()
-    assert.equal(calls, 2)
-    page.app.unmount()
-    resolveStatus({ data: { status: 'pending' } })
-    await flush()
-    assert.equal(timers.size, 0)
-  } finally {
-    page.app.unmount()
-  }
+  state.selectedCollectDevice = 'dc24-replay'
+  await state.requestCollect()
+  assert.equal(creations, 0)
+  state.selectedCollectDevice = 'dc24-pi'
+  await vue.nextTick()
+  await state.requestCollect()
+  assert.equal(creations, 0, '设备设置不在边端档位时不得静默选择')
+  state.selectedSampleRate = 10000
+  await state.requestCollect()
+  assert.equal(creations, 1)
+  const [id, callback] = [...timers.entries()][0]
+  timers.delete(id)
+  callback()
+  assert.equal(calls, 1)
+  app.unmount()
+  resolveStatus(job)
+  await flush()
+  assert.equal(timers.size, 0)
 })

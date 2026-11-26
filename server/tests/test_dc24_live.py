@@ -67,6 +67,46 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()["data"]["id"]
 
+    def test_remote_request_reaches_edge_and_reports_progress(self):
+        self.client.post(
+            "/api/acquisition/agents/heartbeat",
+            headers=self.edge,
+            json={"agent_id": "test", "source": "dc24_tcp", "state": {
+                "version": 3, "sample_rates": [10000],
+                "save_directory": self.fixture.temp.name,
+            }},
+        ).raise_for_status()
+        request = self.client.post(
+            "/api/acquisition/remote-recordings", headers=self.user,
+            json={"agent_id": "test", "sample_rate": 10000, "duration": 1},
+        )
+        self.assertEqual(request.status_code, 200, request.text)
+        job = request.json()["data"]
+        self.assertEqual(job["status"], "pending")
+        s = self.client.get(
+            "/api/acquisition/agents/test/control", headers=self.edge,
+        ).json()["data"]["session"]
+        self.assertEqual(s["recording"]["id"], job["id"])
+        self.assertEqual(s["recording"]["save_directory"], self.fixture.temp.name)
+        self.assertIsNone(self.client.get(
+            "/api/acquisition/agents/test/next", headers=self.edge,
+        ).json()["data"])
+        self.client.post(
+            f"/api/acquisition/sessions/{s['id']}/state?agent_id=test",
+            headers=self.edge, json={"status": "streaming", "recording": {
+                "id": job["id"], "status": "capturing", "samples_per_channel": 254,
+            }},
+        ).raise_for_status()
+        observed = self.client.get(
+            f"/api/acquisition/jobs/{job['id']}", headers=self.user,
+        ).json()["data"]
+        self.assertEqual(observed["status"], "capturing")
+        self.assertEqual(observed["progress"]["samples_per_channel"], 254)
+        self.assertEqual(self.client.post(
+            "/api/acquisition/remote-recordings", headers=self.user,
+            json={"agent_id": "test", "sample_rate": 10000, "duration": 1},
+        ).status_code, 409)
+
     def test_native_rates_duration_and_source_guard(self):
         # 档位表是采集侧硬件知识,云端 capabilities 不再携带;非法档位
         # 由云端按采集端心跳上报的 sample_rates 当场 422,不静默。

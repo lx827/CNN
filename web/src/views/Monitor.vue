@@ -5,11 +5,16 @@
       <el-col :xs="24" :md="16">
         <SensorStatusCard
           v-model:selected-device="selectedCollectDevice"
+          v-model:sample-rate="selectedSampleRate"
           :sensors="sensors"
-          :devices="collectDevices"
+          :agents="collectAgents"
+          :loading-agents="loadingAgents"
+          :sample-rates="sampleRates"
           :is-collecting="isCollecting"
-          :collection-status="collectionStatus"
+          :collection-unavailable="collectionUnavailable"
+          :collection-duration="collectionDuration"
           :last-data-source="lastDataSource"
+          @reload-agents="reloadCollectAgents"
           @collect="requestCollect"
         />
       </el-col>
@@ -17,16 +22,16 @@
         <RunParamsCard
           v-model="selectedMonitorDevice"
           :params="params"
-          :devices="collectDevices"
+          :devices="devices"
           @change="onMonitorDeviceChange"
         />
       </el-col>
     </el-row>
 
     <!-- 采集进度提示 -->
-    <el-row v-if="isCollecting" :gutter="20" class="progress-row">
+    <el-row v-if="collectionStatus" :gutter="20" class="progress-row">
       <el-col :span="24">
-        <CollectionProgress :status="collectionStatus" :progress="collectionProgress" />
+        <CollectionProgress :status="collectionStatus" :type="collectionType" :details="collectionDetails" :progress="collectionProgress" />
       </el-col>
     </el-row>
 
@@ -76,9 +81,10 @@ import { useMonitor } from '../composables/useMonitor'
 
 const {
   activeChannel, channels, params, sensors, timeDomainChart, frequencyChart,
-  isCollecting, collectionStatus, collectionProgress, lastDataSource,
-  collectDevices, selectedCollectDevice, selectedMonitorDevice,
-  requestCollect, startPolling, onMonitorDeviceChange,
+  isCollecting, collectionStatus, collectionType, collectionDetails, collectionProgress, lastDataSource,
+  devices, collectAgents, loadingAgents, selectedCollectDevice, selectedSampleRate, sampleRates,
+  collectionUnavailable, collectionDuration, selectedMonitorDevice,
+  reloadCollectAgents, requestCollect, onMonitorDeviceChange,
 } = useMonitor()
 </script>
 

@@ -1,14 +1,15 @@
 <template>
   <el-alert
     :title="status"
-    type="info"
+    :type="type"
     :closable="false"
     show-icon
+    role="status"
   >
-    <template #default>
+    <template v-if="details || progress != null" #default>
       <div class="progress-detail">
-        <el-progress :percentage="progress" :stroke-width="8" />
-        <span class="progress-hint">边端正在按 25600Hz 采集 10s 数据...</span>
+        <span v-if="details" class="progress-hint">{{ details }}</span>
+        <el-progress v-if="progress != null" :percentage="progress" :stroke-width="8" />
       </div>
     </template>
   </el-alert>
@@ -17,7 +18,9 @@
 <script setup>
 defineProps({
   status: { type: String, default: '' },
-  progress: { type: Number, default: 0 },
+  type: { type: String, default: 'info' },
+  details: { type: String, default: '' },
+  progress: { type: Number, default: null },
 })
 </script>
 
